@@ -1,4 +1,4 @@
-# 🌟 ESSENCE - Sistema de Gestión de Distribuidores...
+# 🌟 ESSENCE - Sistema de Gestión de Distribuidores.
 
 Sistema completo de gestión para distribuidores de vaporizadores con control de inventario, ventas y analíticas en tiempo real.
 
