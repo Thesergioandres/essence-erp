@@ -1,4 +1,4 @@
-# 🌟 ESSENCE - Sistema de Gestión de Distribuidores
+# 🌟 ESSENCE - Sistema de Gestión de Distribuidores.
 
 Sistema completo de gestión para distribuidores de vaporizadores con control de inventario, ventas y analíticas en tiempo real.
 
@@ -27,6 +27,7 @@ Sistema completo de gestión para distribuidores de vaporizadores con control de
 ## ✨ Características
 
 ### Para Administradores
+
 - 📦 **Gestión de Productos**: CRUD completo con imágenes en Cloudinary
 - 👥 **Gestión de Distribuidores**: Control de usuarios y permisos
 - 📊 **Stock Multi-nivel**: Bodega central + inventarios por distribuidor
@@ -37,6 +38,7 @@ Sistema completo de gestión para distribuidores de vaporizadores con control de
 - 📱 **Diseño Responsive**: Optimizado para móvil y desktop
 
 ### Para Distribuidores
+
 - 🛒 **Catálogo de Productos**: Ver precios y disponibilidad
 - 📝 **Registro de Ventas**: Con foto de comprobante de pago
 - 📦 **Mi Inventario**: Control de stock personal en tiempo real
@@ -48,6 +50,7 @@ Sistema completo de gestión para distribuidores de vaporizadores con control de
 ## 🛠 Stack Tecnológico
 
 ### Frontend
+
 - **React 19.1.0** + **TypeScript**
 - **Vite 6.4.1** - Build tool
 - **TailwindCSS 4.1** - Estilos
@@ -58,6 +61,7 @@ Sistema completo de gestión para distribuidores de vaporizadores con control de
 - **jsPDF + xlsx** - Exportación de reportes
 
 ### Backend
+
 - **Node.js 22.11.0** + **Express**
 - **MongoDB + Mongoose** - Base de datos
 - **JWT** - Autenticación
@@ -67,8 +71,8 @@ Sistema completo de gestión para distribuidores de vaporizadores con control de
 - **date-fns 4.1.0** - Zona horaria Colombia
 
 ### DevOps
-- **Vercel** - Frontend (auto-deploy desde main)
-- **Railway** - Backend (auto-deploy desde main)
+
+- **Clouding (VM)** - Frontend y Backend desplegados en una VM usando `docker compose`. Ver [deploy/README.md](deploy/README.md) para instrucciones.
 - **MongoDB Atlas** - Base de datos en la nube
 - **Cloudinary** - CDN de imágenes
 
@@ -103,12 +107,14 @@ essence-landing-page/
 ## 🚀 Instalación
 
 ### Prerrequisitos
+
 - Node.js 22.x o superior
 - MongoDB (local o Atlas)
 - Cuenta de Cloudinary
 - Git
 
 ### Paso 1: Clonar el repositorio
+
 ```bash
 git clone https://github.com/Thesergioandres/essence-landing-page.git
 cd essence-landing-page
@@ -117,12 +123,14 @@ cd essence-landing-page
 ### Paso 2: Instalar dependencias
 
 #### Backend
+
 ```bash
 cd server
 npm install
 ```
 
 #### Frontend
+
 ```bash
 cd client
 npm install
@@ -131,6 +139,7 @@ npm install
 ### Paso 3: Configurar variables de entorno
 
 #### Backend (.env)
+
 ```env
 # Server
 PORT=5000
@@ -153,6 +162,7 @@ REDIS_URL=redis://localhost:6379
 ```
 
 #### Frontend (.env)
+
 ```env
 VITE_API_URL=http://localhost:5000/api
 ```
@@ -160,6 +170,7 @@ VITE_API_URL=http://localhost:5000/api
 ### Paso 4: Iniciar servidores
 
 #### Backend
+
 ```bash
 cd server
 npm run dev  # Desarrollo con nodemon
@@ -168,12 +179,14 @@ npm start    # Producción
 ```
 
 #### Frontend
+
 ```bash
 cd client
 npm run dev  # http://localhost:5173
 ```
 
 ### Paso 5: Seed de datos (opcional)
+
 ```bash
 cd server
 node seedAdmin.js          # Crea usuario admin
@@ -186,11 +199,14 @@ node seedDistributor.js    # Crea distribuidores
 ## 👥 Roles y Permisos
 
 ### 🔑 Administrador
+
 **Credenciales por defecto:**
+
 - Email: `laura@example.com`
 - Password: `admin123`
 
 **Permisos:**
+
 - ✅ CRUD de productos y categorías
 - ✅ Gestión de distribuidores
 - ✅ Asignar/retirar stock
@@ -199,7 +215,9 @@ node seedDistributor.js    # Crea distribuidores
 - ✅ Auditoría de acciones
 
 ### 🚚 Distribuidor
+
 **Permisos:**
+
 - ✅ Ver catálogo de productos
 - ✅ Registrar ventas propias
 - ✅ Ver su inventario
@@ -214,6 +232,7 @@ node seedDistributor.js    # Crea distribuidores
 ### 1. 📦 **Gestión de Productos (Admin)**
 
 #### Crear Producto
+
 ```
 1. Admin → "Productos" → "Nuevo producto"
 2. Completar formulario:
@@ -230,6 +249,7 @@ node seedDistributor.js    # Crea distribuidores
 ```
 
 **Resultado:**
+
 - ✅ Producto creado
 - ✅ 100 unidades en bodega
 - ✅ Imagen en Cloudinary
@@ -252,6 +272,7 @@ node seedDistributor.js    # Crea distribuidores
 ```
 
 **Resultado:**
+
 ```
 Bodega:
   MTRX Pro: 100 → 80 unidades
@@ -276,6 +297,7 @@ María:
 ```
 
 **Resultado:**
+
 ```
 Stock María:
   MTRX Pro: 20 → 17 unidades (temporal)
@@ -309,6 +331,7 @@ Si admin rechaza:
 ```
 
 **Cálculo automático al aprobar:**
+
 ```javascript
 // Venta: 3 MTRX Pro a $40,000 c/u
 Precio Venta: $40,000
@@ -349,6 +372,7 @@ Admin → "Analítica Avanzada"
 ### 6. 🔄 **Flujo Completo de Ejemplo**
 
 #### **DÍA 1 - Setup Inicial**
+
 ```
 1. Admin crea producto "MTRX Pro"
    → Compra: $15,000 | Distribuidor: $22,000 | Cliente: $40,000
@@ -360,6 +384,7 @@ Admin → "Analítica Avanzada"
 ```
 
 #### **DÍA 2 - Primera Venta**
+
 ```
 3. María vende 3 MTRX a $40,000 c/u
    → Registra con comprobante
@@ -373,6 +398,7 @@ Admin → "Analítica Avanzada"
 ```
 
 #### **DÍA 3 - Analíticas**
+
 ```
 5. Admin ve en "Analítica Avanzada":
    → Ventas día: $120,000
@@ -381,6 +407,7 @@ Admin → "Analítica Avanzada"
 ```
 
 #### **DÍA 10 - Restock**
+
 ```
 6. Alerta: María solo tiene 5 MTRX
    → Admin asigna 15 más
@@ -395,6 +422,7 @@ Admin → "Analítica Avanzada"
 ### Fórmula Base
 
 #### **Venta con Distribuidor**
+
 ```javascript
 // Ejemplo: MTRX Pro
 Precio Venta = $40,000
@@ -409,6 +437,7 @@ Total Ganancia = $25,000
 ```
 
 #### **Venta Directa (Admin sin distribuidor)**
+
 ```javascript
 Ganancia Admin = (40,000 - 15,000) × 1 = $25,000
 Ganancia Distribuidor = $0
@@ -418,14 +447,15 @@ Ganancia Distribuidor = $0
 
 Los distribuidores pueden tener porcentajes variables según su desempeño:
 
-| Posición | Comisión | Icono |
-|----------|----------|-------|
-| 🥇 1er lugar | 25% | Top vendedor del mes |
-| 🥈 2do lugar | 23% | Segundo mejor |
-| 🥉 3er lugar | 21% | Tercer mejor |
-| 👤 Normal | 20% | Resto de distribuidores |
+| Posición     | Comisión | Icono                   |
+| ------------ | -------- | ----------------------- |
+| 🥇 1er lugar | 25%      | Top vendedor del mes    |
+| 🥈 2do lugar | 23%      | Segundo mejor           |
+| 🥉 3er lugar | 21%      | Tercer mejor            |
+| 👤 Normal    | 20%      | Resto de distribuidores |
 
 **Ejemplo con 25%:**
+
 ```javascript
 Precio Venta = $40,000
 Ganancia Distribuidor = (40,000 × 25%) = $10,000
@@ -447,9 +477,14 @@ saleSchema.pre("save", function (next) {
   } else {
     // Venta distribuidor
     const profitPercentage = this.distributorProfitPercentage || 20;
-    
-    this.distributorProfit = (this.salePrice * profitPercentage / 100) * this.quantity;
-    this.adminProfit = ((this.salePrice - (this.salePrice * profitPercentage / 100) - this.purchasePrice) * this.quantity);
+
+    this.distributorProfit =
+      ((this.salePrice * profitPercentage) / 100) * this.quantity;
+    this.adminProfit =
+      (this.salePrice -
+        (this.salePrice * profitPercentage) / 100 -
+        this.purchasePrice) *
+      this.quantity;
     this.totalProfit = this.distributorProfit + this.adminProfit;
   }
   next();
@@ -461,6 +496,7 @@ saleSchema.pre("save", function (next) {
 ## 🌐 API Endpoints
 
 ### **Autenticación**
+
 ```
 POST   /api/auth/login          # Login
 POST   /api/auth/register       # Registro (solo admin puede crear)
@@ -468,6 +504,7 @@ GET    /api/auth/profile        # Perfil del usuario
 ```
 
 ### **Productos**
+
 ```
 GET    /api/products            # Listar (paginado)
 GET    /api/products/:id        # Ver uno
@@ -477,6 +514,7 @@ DELETE /api/products/:id        # Eliminar (admin)
 ```
 
 ### **Categorías**
+
 ```
 GET    /api/categories          # Listar todas
 POST   /api/categories          # Crear (admin)
@@ -485,6 +523,7 @@ DELETE /api/categories/:id      # Eliminar (admin)
 ```
 
 ### **Stock**
+
 ```
 POST   /api/stock/assign        # Asignar a distribuidor (admin)
 POST   /api/stock/withdraw      # Retirar de distribuidor (admin)
@@ -493,6 +532,7 @@ GET    /api/stock/alerts        # Alertas de stock bajo
 ```
 
 ### **Ventas**
+
 ```
 GET    /api/sales               # Listar (filtros: estado, fecha, distribuidor)
 POST   /api/sales               # Registrar venta (distribuidor)
@@ -502,6 +542,7 @@ DELETE /api/sales/:id           # Eliminar (admin)
 ```
 
 ### **Distribuidores**
+
 ```
 GET    /api/distributors        # Listar (admin)
 GET    /api/distributors/:id    # Ver uno (admin)
@@ -509,6 +550,7 @@ PUT    /api/distributors/:id    # Actualizar (admin)
 ```
 
 ### **Analíticas**
+
 ```
 GET    /api/analytics/profit-by-product      # Ganancia por producto
 GET    /api/analytics/profit-by-distributor  # Ganancia por distribuidor
@@ -528,11 +570,13 @@ GET    /api/analytics/comparative-analysis   # Comparativo mensual
 ### **Frontend (Vercel)**
 
 1. **Conectar repositorio:**
+
    - Ve a [vercel.com](https://vercel.com)
    - Import git repository
    - Selecciona el repositorio
 
 2. **Configurar:**
+
    ```
    Framework Preset: Vite
    Root Directory: client
@@ -541,6 +585,7 @@ GET    /api/analytics/comparative-analysis   # Comparativo mensual
    ```
 
 3. **Variables de entorno:**
+
    ```
    VITE_API_URL=https://tu-backend.railway.app/api
    ```
@@ -551,17 +596,20 @@ GET    /api/analytics/comparative-analysis   # Comparativo mensual
 ### **Backend (Railway)**
 
 1. **Crear proyecto:**
+
    - Ve a [railway.app](https://railway.app)
    - New Project → Deploy from GitHub
    - Selecciona el repositorio
 
 2. **Configurar:**
+
    ```
    Root Directory: server
    Start Command: npm start
    ```
 
 3. **Variables de entorno:**
+
    ```
    NODE_ENV=production
    PORT=5000
@@ -582,21 +630,23 @@ GET    /api/analytics/comparative-analysis   # Comparativo mensual
 ## 🔐 Variables de Entorno
 
 ### Backend
-| Variable | Descripción | Ejemplo |
-|----------|-------------|---------|
-| `NODE_ENV` | Entorno | `production` |
-| `PORT` | Puerto del servidor | `5000` |
-| `MONGODB_URI` | URI de MongoDB | `mongodb+srv://...` |
-| `JWT_SECRET` | Clave secreta JWT | `mi_clave_super_segura` |
-| `FRONTEND_URL` | URL del frontend | `https://essence.vercel.app` |
-| `CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name | `dbcwjghqb` |
-| `CLOUDINARY_API_KEY` | Cloudinary API key | `292249115585871` |
-| `CLOUDINARY_API_SECRET` | Cloudinary API secret | `N1agNu...` |
-| `REDIS_URL` | Redis URL (opcional) | `redis://...` |
+
+| Variable                | Descripción           | Ejemplo                      |
+| ----------------------- | --------------------- | ---------------------------- |
+| `NODE_ENV`              | Entorno               | `production`                 |
+| `PORT`                  | Puerto del servidor   | `5000`                       |
+| `MONGODB_URI`           | URI de MongoDB        | `mongodb+srv://...`          |
+| `JWT_SECRET`            | Clave secreta JWT     | `mi_clave_super_segura`      |
+| `FRONTEND_URL`          | URL del frontend      | `https://essence.vercel.app` |
+| `CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name | `dbcwjghqb`                  |
+| `CLOUDINARY_API_KEY`    | Cloudinary API key    | `292249115585871`            |
+| `CLOUDINARY_API_SECRET` | Cloudinary API secret | `N1agNu...`                  |
+| `REDIS_URL`             | Redis URL (opcional)  | `redis://...`                |
 
 ### Frontend
-| Variable | Descripción | Ejemplo |
-|----------|-------------|---------|
+
+| Variable       | Descripción     | Ejemplo                       |
+| -------------- | --------------- | ----------------------------- |
 | `VITE_API_URL` | URL del backend | `https://api.railway.app/api` |
 
 ---
@@ -604,7 +654,9 @@ GET    /api/analytics/comparative-analysis   # Comparativo mensual
 ## ⚙️ Características Técnicas
 
 ### **Zona Horaria Colombia (UTC-5)**
+
 Todo el sistema usa la zona horaria de Colombia:
+
 - Día empieza: `00:00:00 Colombia = 05:00:00 UTC`
 - Filtros "Hoy" buscan desde `5 AM UTC`
 - KPIs calculan con offset `-5 horas`
@@ -616,6 +668,7 @@ const colombiaTime = new Date(now.getTime() + colombiaOffset * 60000);
 ```
 
 ### **Sistema de Stock Multi-nivel**
+
 ```
 totalStock = warehouseStock + Σ(distributorStock)
 
@@ -624,15 +677,18 @@ totalStock = warehouseStock + Σ(distributorStock)
 ```
 
 ### **Estados de Venta**
+
 ```typescript
 enum PaymentStatus {
-  PENDIENTE = 'pendiente',  // Esperando aprobación
-  CONFIRMADO = 'confirmado' // Aprobada por admin
+  PENDIENTE = "pendiente", // Esperando aprobación
+  CONFIRMADO = "confirmado", // Aprobada por admin
 }
 ```
 
 ### **Caché con Redis**
+
 Opcional para optimizar consultas frecuentes:
+
 ```javascript
 // Endpoints cacheados:
 - GET /api/products
@@ -645,6 +701,7 @@ Opcional para optimizar consultas frecuentes:
 ## 📊 Modelos de Datos
 
 ### **User**
+
 ```typescript
 {
   _id: ObjectId,
@@ -658,6 +715,7 @@ Opcional para optimizar consultas frecuentes:
 ```
 
 ### **Product**
+
 ```typescript
 {
   _id: ObjectId,
@@ -679,6 +737,7 @@ Opcional para optimizar consultas frecuentes:
 ```
 
 ### **Sale**
+
 ```typescript
 {
   _id: ObjectId,
@@ -699,6 +758,7 @@ Opcional para optimizar consultas frecuentes:
 ```
 
 ### **DistributorStock**
+
 ```typescript
 {
   _id: ObjectId,
@@ -714,12 +774,14 @@ Opcional para optimizar consultas frecuentes:
 ## 🧪 Testing
 
 ### Ejecutar tests
+
 ```bash
 cd server
 node tests/calculations.test.js
 ```
 
 ### Scripts de verificación
+
 ```bash
 # Verificar ventas de hoy
 node checkTodaySales.js
@@ -742,18 +804,22 @@ node recalculateSales.js
 ## 🐛 Troubleshooting
 
 ### Error 500 al crear producto
+
 **Causa:** Faltan variables de Cloudinary  
 **Solución:** Configurar `CLOUDINARY_*` en Railway
 
 ### Las ventas no aparecen en "Hoy"
+
 **Causa:** Zona horaria incorrecta  
 **Solución:** Verificar que el backend use UTC-5 para Colombia
 
 ### Stock negativo en bodega
+
 **Causa:** Validación insuficiente  
 **Solución:** El sistema previene esto, verificar logs
 
 ### Imágenes no se cargan
+
 **Causa:** URL de Cloudinary incorrecta o imagen eliminada  
 **Solución:** Re-subir imagen del producto
 
@@ -768,6 +834,7 @@ Este proyecto es privado y confidencial.
 ## 👨‍💻 Autor
 
 **Sergio Andrés**
+
 - GitHub: [@Thesergioandres](https://github.com/Thesergioandres)
 - Email: info@essenceshop.com
 
@@ -786,6 +853,7 @@ Este proyecto es privado y confidencial.
 ## 📅 Historial de Versiones
 
 ### v2.0.0 (Diciembre 2025)
+
 - ✅ Sistema completo de gestión de distribuidores
 - ✅ Dashboard analítico avanzado
 - ✅ Sistema de ganancias automatizado
@@ -797,5 +865,6 @@ Este proyecto es privado y confidencial.
 ---
 
 **🌟 Sistema en producción:**
+
 - Frontend: https://essence-landing-page.vercel.app
 - Backend: https://essence-landing-page-production.up.railway.app
