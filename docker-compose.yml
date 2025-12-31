@@ -50,7 +50,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=5000
-      - MONGODB_URI=mongodb+srv://sergio:sergio123@cluster0.ztdix.mongodb.net/essence?retryWrites=true&w=majority&appNa
+      - MONGODB_URI=mongodb+srv://sergio:sergio123@cluster0.ztdix.mongodb.net/essence?retryWrites=true&w=majority&appName=essence
       - JWT_SECRET=tu_clave_secreta_super_segura
       - CLOUDINARY_CLOUD_NAME=dbcwjghb
       - CLOUDINARY_API_KEY=292249115558871
