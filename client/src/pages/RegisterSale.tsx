@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { saleService, stockService, productService, authService } from "../api/services";
+import {
+  authService,
+  productService,
+  saleService,
+  stockService,
+} from "../api/services";
 import { Button } from "../components/Button";
 import type { DistributorStock, Product } from "../types";
 
@@ -59,7 +64,9 @@ export default function RegisterSale() {
     }
 
     const stockItem = stock.find(
-      item => (typeof item.product === "object" ? item.product._id : item.product) === selectedProductId
+      item =>
+        (typeof item.product === "object" ? item.product._id : item.product) ===
+        selectedProductId
     );
 
     if (!stockItem || typeof stockItem.product !== "object") return;
@@ -77,7 +84,10 @@ export default function RegisterSale() {
 
       if (currentUser) {
         try {
-          const pricing = await productService.getDistributorPrice(selectedProductId, currentUser._id);
+          const pricing = await productService.getDistributorPrice(
+            selectedProductId,
+            currentUser._id
+          );
           profitPercentage = pricing.profitPercentage;
         } catch (err) {
           console.error("Error obteniendo precio dinámico:", err);
@@ -106,31 +116,46 @@ export default function RegisterSale() {
   };
 
   const updateItemQuantity = (productId: string, quantity: number) => {
-    setItems(items.map(item =>
-      item.productId === productId ? { ...item, quantity: Math.max(1, Math.min(quantity, item.availableStock)) } : item
-    ));
+    setItems(
+      items.map(item =>
+        item.productId === productId
+          ? {
+              ...item,
+              quantity: Math.max(1, Math.min(quantity, item.availableStock)),
+            }
+          : item
+      )
+    );
   };
 
   const updateItemPrice = (productId: string, price: number) => {
-    setItems(items.map(item =>
-      item.productId === productId ? { ...item, salePrice: Math.max(0, price) } : item
-    ));
+    setItems(
+      items.map(item =>
+        item.productId === productId
+          ? { ...item, salePrice: Math.max(0, price) }
+          : item
+      )
+    );
   };
 
   const calculateTotal = () => {
-    return items.reduce((total, item) => total + item.salePrice * item.quantity, 0);
+    return items.reduce(
+      (total, item) => total + item.salePrice * item.quantity,
+      0
+    );
   };
 
   const calculateTotalProfit = () => {
     return items.reduce((total, item) => {
-      const profit = item.salePrice * (item.profitPercentage || 20) / 100;
+      const profit = (item.salePrice * (item.profitPercentage || 20)) / 100;
       return total + profit * item.quantity;
     }, 0);
   };
 
   const calculateTotalPayment = () => {
     return items.reduce((total, item) => {
-      const payment = item.salePrice * (100 - (item.profitPercentage || 20)) / 100;
+      const payment =
+        (item.salePrice * (100 - (item.profitPercentage || 20))) / 100;
       return total + payment * item.quantity;
     }, 0);
   };
@@ -229,7 +254,9 @@ export default function RegisterSale() {
       }, 2000);
     } catch (err) {
       const error = err as { response?: { data?: { message?: string } } };
-      setError(error.response?.data?.message || "Error al registrar las ventas");
+      setError(
+        error.response?.data?.message || "Error al registrar las ventas"
+      );
     } finally {
       setLoading(false);
     }
@@ -307,17 +334,28 @@ export default function RegisterSale() {
               <div className="flex-1">
                 <select
                   value={selectedProductId}
-                  onChange={(e) => setSelectedProductId(e.target.value)}
+                  onChange={e => setSelectedProductId(e.target.value)}
                   className="w-full rounded-lg border border-gray-600 bg-gray-900/50 px-4 py-3 text-white focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">Selecciona un producto</option>
                   {stock
-                    .filter(item => !items.some(i => i.productId === (typeof item.product === "object" ? item.product._id : item.product)))
+                    .filter(
+                      item =>
+                        !items.some(
+                          i =>
+                            i.productId ===
+                            (typeof item.product === "object"
+                              ? item.product._id
+                              : item.product)
+                        )
+                    )
                     .map(item => {
-                      const product = typeof item.product === "object" ? item.product : null;
+                      const product =
+                        typeof item.product === "object" ? item.product : null;
                       return (
                         <option key={item._id} value={product?._id}>
-                          {product?.name} | Stock: {item.quantity} | {formatCurrency(product?.clientPrice || 0)}
+                          {product?.name} | Stock: {item.quantity} |{" "}
+                          {formatCurrency(product?.clientPrice || 0)}
                         </option>
                       );
                     })}
@@ -342,7 +380,7 @@ export default function RegisterSale() {
               </h2>
 
               <div className="space-y-4">
-                {items.map((item) => (
+                {items.map(item => (
                   <div
                     key={item.productId}
                     className="rounded-lg border border-blue-500/30 bg-blue-900/10 p-4"
@@ -369,10 +407,29 @@ export default function RegisterSale() {
                               type="number"
                               min="1"
                               max={item.availableStock}
-                              value={item.quantity}
-                              onChange={(e) =>
-                                updateItemQuantity(item.productId, Number(e.target.value))
-                              }
+                              value={item.quantity === 0 ? "" : item.quantity}
+                              onChange={e => {
+                                const val = e.target.value;
+                                // Permitir vacío temporalmente
+                                setItems(items =>
+                                  items.map(it =>
+                                    it.productId === item.productId
+                                      ? {
+                                          ...it,
+                                          quantity:
+                                            val === "" ? 0 : Number(val),
+                                        }
+                                      : it
+                                  )
+                                );
+                              }}
+                              onBlur={e => {
+                                let val = Number(e.target.value);
+                                if (isNaN(val) || val < 1) val = 1;
+                                if (val > item.availableStock)
+                                  val = item.availableStock;
+                                updateItemQuantity(item.productId, val);
+                              }}
                               className="w-full rounded-lg border border-gray-600 bg-gray-900/50 px-3 py-2 text-white focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                           </div>
@@ -386,8 +443,11 @@ export default function RegisterSale() {
                               min="0"
                               step="100"
                               value={item.salePrice}
-                              onChange={(e) =>
-                                updateItemPrice(item.productId, Number(e.target.value))
+                              onChange={e =>
+                                updateItemPrice(
+                                  item.productId,
+                                  Number(e.target.value)
+                                )
                               }
                               className="w-full rounded-lg border border-gray-600 bg-gray-900/50 px-3 py-2 text-white focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
@@ -405,17 +465,29 @@ export default function RegisterSale() {
                           </div>
                         </div>
 
-                        <div className="mt-3 space-y-1 rounded-lg bg-blue-900/10 border border-blue-500/20 p-3">
+                        <div className="mt-3 space-y-1 rounded-lg border border-blue-500/20 bg-blue-900/10 p-3">
                           <div className="flex justify-between text-xs">
-                            <span className="text-gray-400">Pagar al admin:</span>
+                            <span className="text-gray-400">
+                              Pagar al admin:
+                            </span>
                             <span className="font-semibold text-blue-400">
-                              {formatCurrency((item.salePrice * (100 - (item.profitPercentage || 20)) / 100) * item.quantity)}
+                              {formatCurrency(
+                                ((item.salePrice *
+                                  (100 - (item.profitPercentage || 20))) /
+                                  100) *
+                                  item.quantity
+                              )}
                             </span>
                           </div>
                           <div className="flex justify-between text-xs">
                             <span className="text-gray-400">Tu ganancia:</span>
                             <span className="font-semibold text-green-400">
-                              {formatCurrency((item.salePrice * (item.profitPercentage || 20) / 100) * item.quantity)}
+                              {formatCurrency(
+                                ((item.salePrice *
+                                  (item.profitPercentage || 20)) /
+                                  100) *
+                                  item.quantity
+                              )}
                             </span>
                           </div>
                         </div>
@@ -529,7 +601,9 @@ export default function RegisterSale() {
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-400">Productos:</span>
-                  <span className="font-semibold text-white">{items.length}</span>
+                  <span className="font-semibold text-white">
+                    {items.length}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">Unidades totales:</span>
@@ -537,19 +611,19 @@ export default function RegisterSale() {
                     {items.reduce((sum, item) => sum + item.quantity, 0)}
                   </span>
                 </div>
-                <div className="flex justify-between text-lg border-t border-gray-700 pt-2 mt-2">
+                <div className="mt-2 flex justify-between border-t border-gray-700 pt-2 text-lg">
                   <span className="text-gray-300">Total venta:</span>
                   <span className="font-bold text-green-400">
                     {formatCurrency(calculateTotal())}
                   </span>
                 </div>
-                <div className="flex justify-between text-base bg-blue-900/20 border border-blue-500/30 rounded-lg p-2">
+                <div className="flex justify-between rounded-lg border border-blue-500/30 bg-blue-900/20 p-2 text-base">
                   <span className="text-blue-300">A pagar al admin:</span>
                   <span className="font-bold text-blue-400">
                     {formatCurrency(calculateTotalPayment())}
                   </span>
                 </div>
-                <div className="flex justify-between text-base bg-green-900/20 border border-green-500/30 rounded-lg p-2">
+                <div className="flex justify-between rounded-lg border border-green-500/30 bg-green-900/20 p-2 text-base">
                   <span className="text-green-300">Tu ganancia total:</span>
                   <span className="font-bold text-green-400">
                     {formatCurrency(calculateTotalProfit())}
@@ -569,8 +643,14 @@ export default function RegisterSale() {
             >
               Cancelar
             </Button>
-            <Button type="submit" disabled={loading || items.length === 0} className="flex-1">
-              {loading ? "Registrando..." : `Registrar ${items.length} Venta(s)`}
+            <Button
+              type="submit"
+              disabled={loading || items.length === 0}
+              className="flex-1"
+            >
+              {loading
+                ? "Registrando..."
+                : `Registrar ${items.length} Venta(s)`}
             </Button>
           </div>
         </form>
