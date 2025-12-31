@@ -49,7 +49,13 @@ services:
       - "5000:5000"
     environment:
       - NODE_ENV=production
-      # Otras variables de entorno necesarias
+      - PORT=5000
+      - MONGODB_URI=mongodb+srv://sergio:sergio123@cluster0.ztdix.mongodb.net/essence?retryWrites=true&w=majority&appNa
+      - JWT_SECRET=tu_clave_secreta_super_segura
+      - CLOUDINARY_CLOUD_NAME=dbcwjghb
+      - CLOUDINARY_API_KEY=292249115558871
+      - CLOUDINARY_API_SECRET=N1agMUQN_D5OI_BJ8PUzKNBCLfU
+      - FRONTEND_URL=http://93.189.89.195
     volumes:
       - ./server:/usr/src/app
 

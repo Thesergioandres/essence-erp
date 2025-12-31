@@ -24,5 +24,8 @@ jobs:
             git pull origin main &&
             cd client && npm install && npm run build &&
             cd .. &&
+            docker-compose down --remove-orphans &&
+            docker system prune -af &&
+            docker volume prune -f &&
             docker-compose up -d --build
           '
