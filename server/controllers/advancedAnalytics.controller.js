@@ -63,21 +63,46 @@ export const getSalesTimeline = async (req, res) => {
     }
     const businessObjectId = new mongoose.Types.ObjectId(businessId);
 
+    const timezone = "America/Bogota";
     let groupBy;
 
     // Determinar agrupación según período
     switch (period) {
       case "day":
-        groupBy = { $dateToString: { format: "%Y-%m-%d", date: "$saleDate" } };
+        groupBy = {
+          $dateToString: {
+            format: "%Y-%m-%d",
+            date: "$saleDate",
+            timezone,
+          },
+        };
         break;
       case "week":
-        groupBy = { $dateToString: { format: "%Y-W%V", date: "$saleDate" } };
+        groupBy = {
+          $dateToString: {
+            format: "%Y-W%V",
+            date: "$saleDate",
+            timezone,
+          },
+        };
         break;
       case "month":
-        groupBy = { $dateToString: { format: "%Y-%m", date: "$saleDate" } };
+        groupBy = {
+          $dateToString: {
+            format: "%Y-%m",
+            date: "$saleDate",
+            timezone,
+          },
+        };
         break;
       default:
-        groupBy = { $dateToString: { format: "%Y-%m", date: "$saleDate" } };
+        groupBy = {
+          $dateToString: {
+            format: "%Y-%m",
+            date: "$saleDate",
+            timezone,
+          },
+        };
     }
 
     // Construir filtro - SIN restricción de fecha por defecto
@@ -87,14 +112,12 @@ export const getSalesTimeline = async (req, res) => {
     };
 
     // Solo aplicar filtros de fecha si se proporcionan explícitamente
-    if (customStartDate || customEndDate) {
-      matchFilter.saleDate = {};
-      if (customStartDate) {
-        matchFilter.saleDate.$gte = new Date(customStartDate);
-      }
-      if (customEndDate) {
-        matchFilter.saleDate.$lte = new Date(customEndDate);
-      }
+    const saleDateFilter = buildColombiaSaleDateFilter(
+      customStartDate,
+      customEndDate
+    );
+    if (saleDateFilter) {
+      matchFilter.saleDate = saleDateFilter;
     }
 
     const timeline = await Sale.aggregate([

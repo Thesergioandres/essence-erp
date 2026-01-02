@@ -147,7 +147,12 @@ export default function AdminRegisterSale() {
 
       // Registrar cada venta del pedido
       for (const item of saleItems) {
-        if (user && (user.role === "admin" || user.role === "super_admin")) {
+        if (
+          user &&
+          (user.role === "admin" ||
+            user.role === "super_admin" ||
+            user.role === "god")
+        ) {
           await saleService.registerAdmin({
             productId: item.productId,
             quantity: item.quantity,
@@ -189,8 +194,10 @@ export default function AdminRegisterSale() {
         setSuccess(prev => prev + " Redirigiendo al dashboard...");
         setTimeout(() => navigate("/admin/dashboard"), 1000);
       }, 2000);
-    } catch {
-      setError("Error al registrar las ventas");
+    } catch (err) {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      const msg = axiosErr.response?.data?.message;
+      setError(msg || "Error al registrar las ventas");
     } finally {
       setLoading(false);
     }

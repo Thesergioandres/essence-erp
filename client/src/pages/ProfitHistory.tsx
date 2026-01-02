@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { authService, profitHistoryService } from "../api/services";
+import { businessService, profitHistoryService } from "../api/services";
+import { useBusiness } from "../context/BusinessContext";
 import type {
   ComparativeAnalysis,
   ProfitHistoryEntry,
@@ -33,7 +34,11 @@ export default function ProfitHistory() {
 
   // Admin check
   const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
-  const isAdmin = currentUser.role === "admin";
+  const { businessId } = useBusiness();
+  const isAdminRole =
+    currentUser.role === "admin" ||
+    currentUser.role === "super_admin" ||
+    currentUser.role === "god";
 
   const loadData = async () => {
     if (!selectedUser) return;
@@ -47,6 +52,10 @@ export default function ProfitHistory() {
         ...(typeFilter && { type: typeFilter }),
         ...(dateRange.startDate && { startDate: dateRange.startDate }),
         ...(dateRange.endDate && { endDate: dateRange.endDate }),
+        // Si no hay filtros, pedir explícitamente el día de hoy para evitar pérdidas por timezone
+        ...(dateRange.startDate === "" && dateRange.endDate === ""
+          ? { today: true }
+          : {}),
       };
 
       // Cargar historial y balance en paralelo
@@ -84,7 +93,7 @@ export default function ProfitHistory() {
       setTotalCount(historyRes.pagination.total);
 
       // Load comparative if admin (no bloquear si falla)
-      if (isAdmin) {
+      if (isAdminRole) {
         profitHistoryService
           .getComparativeAnalysis({ userId: selectedUser })
           .then(comparativeRes => setComparative(comparativeRes))
@@ -99,17 +108,57 @@ export default function ProfitHistory() {
 
   useEffect(() => {
     const loadUsers = async () => {
-      try {
-        const response = await authService.getAllUsers();
-        // Incluir admin y distribuidores
-        const relevantUsers = response.data.filter(
-          (u: User) => u.role === "distribuidor" || u.role === "admin"
-        );
-        setUsers(relevantUsers);
+      if (!businessId) {
+        setUsers([]);
+        setSelectedUser("");
+        return;
+      }
 
-        // Si es admin, seleccionar el primer usuario (puede ser él mismo)
-        if (relevantUsers.length > 0) {
-          setSelectedUser(relevantUsers[0]._id);
+      try {
+        const members = await businessService.listMembers(businessId);
+        const relevantUsers = members
+          .filter(m => {
+            const user = m.user as User | undefined;
+            const role = user?.role || (m as unknown as { role?: string }).role;
+            return (
+              !!user &&
+              (role === "distribuidor" ||
+                role === "admin" ||
+                role === "super_admin" ||
+                role === "god")
+            );
+          })
+          .map(m => m.user as User);
+
+        // Si el god/admin actual no tiene membership pero debe poder verse a sí mismo
+        const selfId = currentUser?._id;
+        const hasSelf = selfId && relevantUsers.some(u => u._id === selfId);
+        const withSelf =
+          isAdminRole && selfId && !hasSelf
+            ? [...relevantUsers, currentUser as User]
+            : relevantUsers;
+
+        setUsers(withSelf);
+
+        if (!isAdminRole) {
+          if (currentUser?._id) {
+            setSelectedUser(currentUser._id);
+          }
+          return;
+        }
+
+        if (withSelf.length > 0) {
+          setSelectedUser(prev => {
+            if (prev && withSelf.some(u => u._id === prev)) {
+              return prev;
+            }
+
+            if (selfId && withSelf.some(u => u._id === selfId)) {
+              return selfId;
+            }
+
+            return withSelf[0]._id;
+          });
         } else {
           setLoading(false);
         }
@@ -119,20 +168,16 @@ export default function ProfitHistory() {
       }
     };
 
-    if (isAdmin) {
-      loadUsers();
-    } else {
-      setSelectedUser(currentUser._id);
-    }
+    void loadUsers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [businessId, isAdminRole]);
 
   useEffect(() => {
     if (selectedUser) {
       loadData();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedUser, currentPage, typeFilter, dateRange]);
+  }, [selectedUser, currentPage, typeFilter, dateRange, businessId]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("es-CO", {
@@ -242,7 +287,7 @@ export default function ProfitHistory() {
       )}
 
       {/* Comparative Analysis */}
-      {isAdmin && comparative && (
+      {isAdminRole && comparative && (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-4">
             <p className="text-sm font-medium text-gray-400">Mes Actual</p>
@@ -290,7 +335,7 @@ export default function ProfitHistory() {
       {/* Filters */}
       <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-4">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
-          {isAdmin && (
+          {isAdminRole && (
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-300">
                 Distribuidor
@@ -306,7 +351,7 @@ export default function ProfitHistory() {
                 <option value="">Seleccionar...</option>
                 {users.map(user => (
                   <option key={user._id} value={user._id}>
-                    {user.name}
+                    {user.name || user.email || "Mi cuenta"}
                   </option>
                 ))}
               </select>

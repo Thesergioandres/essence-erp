@@ -33,12 +33,13 @@ export const register = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Registrar como super_admin por defecto (para control total)
     const user = await User.create({
       name,
       email,
       password: hashedPassword,
-      role: "super_admin",
+      role: "user",
+      status: "pending",
+      active: false,
       ...(phone ? { phone } : {}),
       ...(address ? { address } : {}),
     });
@@ -49,6 +50,8 @@ export const register = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        status: user.status,
+        subscriptionExpiresAt: user.subscriptionExpiresAt,
         phone: user.phone,
         address: user.address,
         token: generateToken(user._id),
@@ -78,6 +81,8 @@ export const login = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        status: user.status,
+        subscriptionExpiresAt: user.subscriptionExpiresAt,
         token: generateToken(user._id),
       });
     } else {

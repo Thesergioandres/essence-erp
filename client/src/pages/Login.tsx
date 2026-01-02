@@ -23,7 +23,11 @@ export default function Login() {
       // Redirect based on role
       if (user.role === "distribuidor") {
         navigate("/distributor/dashboard", { replace: true });
-      } else if (user.role === "admin" || user.role === "super_admin") {
+      } else if (
+        user.role === "admin" ||
+        user.role === "super_admin" ||
+        user.role === "god"
+      ) {
         navigate("/admin/dashboard", { replace: true });
       } else {
         navigate("/", { replace: true });
@@ -59,7 +63,7 @@ export default function Login() {
 
       if (
         userType === "admin" &&
-        !["admin", "super_admin"].includes(response.role)
+        !["admin", "super_admin", "god"].includes(response.role)
       ) {
         setError("Esta cuenta no es de tipo Administrador");
         authService.logout();
@@ -70,7 +74,11 @@ export default function Login() {
       // Redirect based on user role
       if (response.role === "distribuidor") {
         navigate("/distributor/dashboard");
-      } else if (response.role === "admin" || response.role === "super_admin") {
+      } else if (
+        response.role === "admin" ||
+        response.role === "super_admin" ||
+        response.role === "god"
+      ) {
         navigate("/admin/dashboard");
       } else {
         navigate("/");

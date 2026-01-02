@@ -1,6 +1,45 @@
+import mongoose from "mongoose";
 import DefectiveProduct from "../models/DefectiveProduct.js";
 import Sale from "../models/Sale.js";
 import SpecialSale from "../models/SpecialSale.js";
+
+// Construye un rango de fechas usando la zona horaria de Colombia (UTC-5)
+const buildColombiaRange = (startStr, endStr) => {
+  if (!startStr && !endStr) return null;
+
+  const range = {};
+
+  if (startStr) {
+    const date = new Date(startStr);
+    range.$gte = new Date(
+      Date.UTC(
+        date.getUTCFullYear(),
+        date.getUTCMonth(),
+        date.getUTCDate(),
+        5,
+        0,
+        0,
+        0
+      )
+    );
+  }
+  if (endStr) {
+    const date = new Date(endStr);
+    range.$lte = new Date(
+      Date.UTC(
+        date.getUTCFullYear(),
+        date.getUTCMonth(),
+        date.getUTCDate() + 1,
+        4,
+        59,
+        59,
+        999
+      )
+    );
+  }
+
+  return range;
+};
 
 // @desc    Obtener resumen de ganancias del mes actual
 // @route   GET /api/analytics/monthly-profit
@@ -9,112 +48,102 @@ export const getMonthlyProfit = async (req, res) => {
   try {
     const businessFilter = req.businessId ? { business: req.businessId } : {};
 
-    // Obtener fecha actual ajustada al timezone de Colombia (UTC-5)
+    // Límites de mes en UTC para evitar desfaces por timezone
     const now = new Date();
-    const colombiaOffset = 5 * 60; // Colombia es UTC-5 (5 horas * 60 minutos)
-    const localOffset = now.getTimezoneOffset(); // Offset del servidor en minutos (positivo al oeste de UTC)
-    const colombiaTime = new Date(
-      now.getTime() - (localOffset + colombiaOffset) * 60000
-    );
+    const year = now.getUTCFullYear();
+    const month = now.getUTCMonth();
 
-    const startOfMonth = new Date(
-      colombiaTime.getFullYear(),
-      colombiaTime.getMonth(),
-      1
-    );
-    const endOfMonth = new Date(
-      colombiaTime.getFullYear(),
-      colombiaTime.getMonth() + 1,
-      0,
-      23,
-      59,
-      59
-    );
+    const startOfMonth = new Date(Date.UTC(year, month, 1, 0, 0, 0, 0));
+    const endOfMonth = new Date(Date.UTC(year, month + 1, 1, 0, 0, 0, 0) - 1);
 
-    // Mes anterior para comparación
-    const startOfLastMonth = new Date(
-      colombiaTime.getFullYear(),
-      colombiaTime.getMonth() - 1,
-      1
-    );
-    const endOfLastMonth = new Date(
-      colombiaTime.getFullYear(),
-      colombiaTime.getMonth(),
-      0,
-      23,
-      59,
-      59
-    );
+    const startOfLastMonth = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0));
+    const endOfLastMonth = new Date(Date.UTC(year, month, 1, 0, 0, 0, 0) - 1);
 
-    // Ventas del mes actual
-    const currentMonthSales = await Sale.find({
-      saleDate: { $gte: startOfMonth, $lte: endOfMonth },
+    const businessMatch = businessFilter.business
+      ? { business: new mongoose.Types.ObjectId(businessFilter.business) }
+      : {};
+
+    const baseSaleMatch = {
       paymentStatus: "confirmado",
-      ...businessFilter,
-    });
-
-    // Ventas especiales del mes actual
-    const currentMonthSpecialSales = await SpecialSale.find({
-      saleDate: { $gte: startOfMonth, $lte: endOfMonth },
-      status: "active",
-      ...businessFilter,
-    });
-
-    // Ventas del mes anterior
-    const lastMonthSales = await Sale.find({
-      saleDate: { $gte: startOfLastMonth, $lte: endOfLastMonth },
-      paymentStatus: "confirmado",
-      ...businessFilter,
-    });
-
-    // Ventas especiales del mes anterior
-    const lastMonthSpecialSales = await SpecialSale.find({
-      saleDate: { $gte: startOfLastMonth, $lte: endOfLastMonth },
-      status: "active",
-      ...businessFilter,
-    });
-
-    const calculateTotals = (sales, specialSales) => {
-      const normalTotals = sales.reduce(
-        (acc, sale) => {
-          acc.adminProfit += sale.adminProfit;
-          acc.distributorProfit += sale.distributorProfit;
-          acc.totalProfit += sale.totalProfit;
-          acc.revenue += sale.salePrice * sale.quantity;
-          acc.cost += sale.purchasePrice * sale.quantity;
-          acc.salesCount += 1;
-          acc.unitsCount += sale.quantity;
-          return acc;
-        },
-        {
-          adminProfit: 0,
-          distributorProfit: 0,
-          totalProfit: 0,
-          revenue: 0,
-          cost: 0,
-          salesCount: 0,
-          unitsCount: 0,
-        }
-      );
-
-      // Agregar totales de ventas especiales
-      const specialTotals = specialSales.reduce((acc, sale) => {
-        acc.totalProfit += sale.totalProfit;
-        acc.revenue += sale.specialPrice * sale.quantity;
-        acc.cost += sale.cost * sale.quantity;
-        acc.salesCount += 1;
-        acc.unitsCount += sale.quantity;
-        return acc;
-      }, normalTotals);
-
-      return specialTotals;
+      ...businessMatch,
     };
 
-    const currentMonth = calculateTotals(
-      currentMonthSales,
-      currentMonthSpecialSales
-    );
-    const lastMonth = calculateTotals(lastMonthSales, lastMonthSpecialSales);
+    const sumPipeline = (start, end) => [
+      { $match: { ...baseSaleMatch } },
+      {
+        $addFields: {
+          opDate: { $ifNull: ["$saleDate", "$createdAt"] },
+        },
+      },
+      {
+        $match: {
+          opDate: { $gte: start, $lte: end },
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          adminProfit: { $sum: "$adminProfit" },
+          distributorProfit: { $sum: "$distributorProfit" },
+          totalProfit: { $sum: "$totalProfit" },
+          revenue: { $sum: { $multiply: ["$salePrice", "$quantity"] } },
+          cost: { $sum: { $multiply: ["$purchasePrice", "$quantity"] } },
+          salesCount: { $sum: 1 },
+          unitsCount: { $sum: "$quantity" },
+        },
+      },
+    ];
+
+    const sumSpecialPipeline = (start, end) => [
+      { $match: { status: "active", ...businessFilter } },
+      {
+        $addFields: {
+          opDate: { $ifNull: ["$saleDate", "$createdAt"] },
+        },
+      },
+      {
+        $match: {
+          opDate: { $gte: start, $lte: end },
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalProfit: { $sum: "$totalProfit" },
+          revenue: { $sum: { $multiply: ["$specialPrice", "$quantity"] } },
+          cost: { $sum: { $multiply: ["$cost", "$quantity"] } },
+          salesCount: { $sum: 1 },
+          unitsCount: { $sum: "$quantity" },
+        },
+      },
+    ];
+
+    const [currentSaleAgg, lastSaleAgg, currentSpecialAgg, lastSpecialAgg] =
+      await Promise.all([
+        Sale.aggregate(sumPipeline(startOfMonth, endOfMonth)),
+        Sale.aggregate(sumPipeline(startOfLastMonth, endOfLastMonth)),
+        SpecialSale.aggregate(sumSpecialPipeline(startOfMonth, endOfMonth)),
+        SpecialSale.aggregate(
+          sumSpecialPipeline(startOfLastMonth, endOfLastMonth)
+        ),
+      ]);
+
+    const normalize = (main = {}, special = {}) => {
+      const m = main || {};
+      const s = special || {};
+      return {
+        adminProfit: m.adminProfit || 0,
+        distributorProfit: m.distributorProfit || 0,
+        totalProfit: (m.totalProfit || 0) + (s.totalProfit || 0),
+        revenue: (m.revenue || 0) + (s.revenue || 0),
+        cost: (m.cost || 0) + (s.cost || 0),
+        salesCount: (m.salesCount || 0) + (s.salesCount || 0),
+        unitsCount: (m.unitsCount || 0) + (s.unitsCount || 0),
+      };
+    };
+
+    const currentMonth = normalize(currentSaleAgg[0], currentSpecialAgg[0]);
+    const lastMonth = normalize(lastSaleAgg[0], lastSpecialAgg[0]);
 
     // Calcular porcentaje de crecimiento
     const growthPercentage =
@@ -137,13 +166,13 @@ export const getMonthlyProfit = async (req, res) => {
       // Debug info
       _debug: {
         nowUTC: now.toISOString(),
-        nowColombia: colombiaTime.toISOString(),
+        nowColombia: now.toISOString(),
         startOfMonth: startOfMonth.toISOString(),
         endOfMonth: endOfMonth.toISOString(),
         startOfLastMonth: startOfLastMonth.toISOString(),
         endOfLastMonth: endOfLastMonth.toISOString(),
-        currentMonthSalesCount: currentMonthSales.length,
-        lastMonthSalesCount: lastMonthSales.length,
+        currentMonthSalesCount: currentMonth.salesCount,
+        lastMonthSalesCount: lastMonth.salesCount,
       },
     });
   } catch (error) {
@@ -516,43 +545,6 @@ export const getSalesTimeline = async (req, res) => {
       endDate: endDateStr,
     } = req.query;
 
-    const buildColombiaRange = (startStr, endStr) => {
-      if (!startStr && !endStr) return null;
-
-      const range = {};
-
-      if (startStr) {
-        const date = new Date(startStr);
-        range.$gte = new Date(
-          Date.UTC(
-            date.getUTCFullYear(),
-            date.getUTCMonth(),
-            date.getUTCDate(),
-            5,
-            0,
-            0,
-            0
-          )
-        );
-      }
-      if (endStr) {
-        const date = new Date(endStr);
-        range.$lte = new Date(
-          Date.UTC(
-            date.getUTCFullYear(),
-            date.getUTCMonth(),
-            date.getUTCDate() + 1,
-            4,
-            59,
-            59,
-            999
-          )
-        );
-      }
-
-      return range;
-    };
-
     let dateFilter;
     if (startDateStr || endDateStr) {
       dateFilter = buildColombiaRange(startDateStr, endDateStr);
@@ -583,6 +575,7 @@ export const getSalesTimeline = async (req, res) => {
       return colombia.toISOString().split("T")[0];
     };
     sales.forEach((sale) => {
+      if (!sale.saleDate) return; // omit invalid records
       const day = toColombiaDayKey(sale.saleDate);
       if (!salesByDay[day]) {
         salesByDay[day] = {
@@ -603,6 +596,7 @@ export const getSalesTimeline = async (req, res) => {
 
     // Agregar ventas especiales
     specialSales.forEach((sale) => {
+      if (!sale.saleDate) return; // omit invalid records
       const day = toColombiaDayKey(sale.saleDate);
       if (!salesByDay[day]) {
         salesByDay[day] = {
@@ -706,11 +700,12 @@ export const getFinancialSummary = async (req, res) => {
 
     const specialSales = await SpecialSale.find(specialFilter);
 
+    const defectiveDateRange = buildColombiaRange(startDate, endDate);
+
     const defectiveProducts = await DefectiveProduct.find({
       status: "confirmado",
       ...businessFilter,
-      ...(startDate && { reportDate: { $gte: new Date(startDate) } }),
-      ...(endDate && { reportDate: { $lte: new Date(endDate) } }),
+      ...(defectiveDateRange ? { reportDate: defectiveDateRange } : {}),
     });
 
     // Calcular totales

@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+﻿import mongoose from "mongoose";
 import { invalidateCache } from "../middleware/cache.middleware.js";
 import DistributorStock from "../models/DistributorStock.js";
 import Product from "../models/Product.js";
@@ -8,7 +8,25 @@ import { recordSaleProfit } from "../services/profitHistory.service.js";
 import { getDistributorCommissionInfo } from "../utils/distributorPricing.js";
 
 const resolveBusinessId = (req) =>
-  req.businessId || req.headers["x-business-id"] || req.query.businessId;
+  req?.businessId || req?.headers?.["x-business-id"] || req?.query?.businessId;
+
+// Normaliza una fecha (YYYY-MM-DD) a inicio de día en Colombia (05:00 UTC)
+const toColombiaStartOfDay = (dateStr) => {
+  if (!dateStr) return null;
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Date(
+    Date.UTC(
+      date.getUTCFullYear(),
+      date.getUTCMonth(),
+      date.getUTCDate(),
+      5,
+      0,
+      0,
+      0
+    )
+  );
+};
 
 // @desc    Eliminar una venta (admin)
 // @route   DELETE /api/sales/:id
@@ -16,14 +34,11 @@ const resolveBusinessId = (req) =>
 export const deleteSale = async (req, res) => {
   try {
     const businessId = resolveBusinessId(req);
-    if (!businessId) {
-      return res.status(400).json({ message: "Falta x-business-id" });
-    }
+    const saleFilter = businessId
+      ? { _id: req.params.id, business: businessId }
+      : { _id: req.params.id };
 
-    const sale = await Sale.findOne({
-      _id: req.params.id,
-      business: businessId,
-    });
+    const sale = await Sale.findOne(saleFilter);
     if (!sale) {
       return res.status(404).json({ message: "Venta no encontrada" });
     }
@@ -40,11 +55,12 @@ export const deleteSale = async (req, res) => {
     // Restaurar stock del producto
     const product = await Product.findById(sale.product);
     if (product) {
-      product.totalStock += sale.quantity;
-      await product.save();
+      product.totalStock = (product.totalStock || 0) + sale.quantity;
+      product.warehouseStock = (product.warehouseStock || 0) + sale.quantity;
+      await product.save({ validateBeforeSave: false });
     }
 
-    // Invalidar caché (si está activo)
+    // Invalidar cach├® (si est├í activo)
     await invalidateCache("cache:analytics:*");
     await invalidateCache("cache:gamification:*");
     await invalidateCache("cache:sales:*");
@@ -95,7 +111,7 @@ export const fixAdminSales = async (req, res) => {
     for (const sale of adminSales) {
       let needsUpdate = false;
 
-      // Actualizar estado de pago si está pendiente
+      // Actualizar estado de pago si est├í pendiente
       if (sale.paymentStatus === "pendiente") {
         sale.paymentStatus = "confirmado";
         sale.paymentConfirmedAt = new Date();
@@ -104,7 +120,7 @@ export const fixAdminSales = async (req, res) => {
       }
 
       // Solo actualizar fechas si la venta es del mes anterior inmediato
-      // NO tocar ventas de meses más antiguos (histórico)
+      // NO tocar ventas de meses m├ís antiguos (hist├│rico)
       const saleDate = new Date(sale.saleDate);
       if (saleDate >= startOfLastMonth && saleDate <= endOfLastMonth) {
         // La venta es del mes anterior, moverla al mes actual
@@ -121,7 +137,7 @@ export const fixAdminSales = async (req, res) => {
         datesUpdated++;
       }
 
-      // Recalcular ganancias (el pre-save hook lo hará automáticamente)
+      // Recalcular ganancias (el pre-save hook lo har├í autom├íticamente)
       if (
         needsUpdate ||
         sale.distributorProfit !== 0 ||
@@ -146,7 +162,7 @@ export const fixAdminSales = async (req, res) => {
     });
 
     res.json({
-      message: `✅ ${updated} ventas admin actualizadas`,
+      message: `Ô£à ${updated} ventas admin actualizadas`,
       totalAdminSales: adminSales.length,
       confirmed: confirmedSales.length,
       pending: pendingSales.length,
@@ -168,7 +184,7 @@ export const fixAdminSales = async (req, res) => {
 export const registerAdminSale = async (req, res) => {
   const reqId = Date.now() + Math.random();
   try {
-    console.log(`[${reqId}] 📝 registerAdminSale START`);
+    console.log(`[${reqId}] ­ƒôØ registerAdminSale START`);
     console.log(`[${reqId}] User:`, req.user);
     console.log(`[${reqId}] Body:`, req.body);
 
@@ -187,9 +203,11 @@ export const registerAdminSale = async (req, res) => {
       paymentProofMimeType,
     } = req.body;
 
+    const normalizedSaleDate = toColombiaStartOfDay(saleDate);
+
     if (!productId || !quantity || !salePrice) {
       console.warn(
-        `[${reqId}] ❌ Campos faltantes - productId: ${productId}, quantity: ${quantity}, salePrice: ${salePrice}`
+        `[${reqId}] ÔØî Campos faltantes - productId: ${productId}, quantity: ${quantity}, salePrice: ${salePrice}`
       );
       return res.status(400).json({
         message: "Campos obligatorios: productId, quantity, salePrice",
@@ -197,21 +215,21 @@ export const registerAdminSale = async (req, res) => {
     }
 
     // Validar producto
-    console.log(`[${reqId}] 🔍 Buscando producto:`, productId);
+    console.log(`[${reqId}] ­ƒöì Buscando producto:`, productId);
     const product = await Product.findOne({
       _id: productId,
       business: businessId,
     });
     if (!product) {
-      console.warn(`[${reqId}] ❌ Producto no encontrado:`, productId);
+      console.warn(`[${reqId}] ÔØî Producto no encontrado:`, productId);
       return res.status(404).json({ message: "Producto no encontrado" });
     }
-    console.log(`[${reqId}] ✅ Producto encontrado:`, product.name);
+    console.log(`[${reqId}] Ô£à Producto encontrado:`, product.name);
 
     // Validar stock general
     if (product.totalStock < quantity) {
       console.warn(
-        `[${reqId}] ❌ Stock insuficiente. Disponible: ${product.totalStock}, solicitado: ${quantity}`
+        `[${reqId}] ÔØî Stock insuficiente. Disponible: ${product.totalStock}, solicitado: ${quantity}`
       );
       return res.status(400).json({
         message: `Stock insuficiente. Disponible: ${product.totalStock}`,
@@ -219,7 +237,7 @@ export const registerAdminSale = async (req, res) => {
     }
 
     // Crear la venta (sin distribuidor)
-    console.log(`[${reqId}] 💾 Creando venta...`);
+    console.log(`[${reqId}] ­ƒÆ¥ Creando venta...`);
     const saleData = {
       business: businessId,
       distributor: null,
@@ -229,12 +247,12 @@ export const registerAdminSale = async (req, res) => {
       distributorPrice: product.distributorPrice,
       salePrice,
       notes,
-      saleDate: saleDate || new Date(),
+      saleDate: normalizedSaleDate || toColombiaStartOfDay(new Date()),
       paymentProof,
       paymentProofMimeType: paymentProof
         ? paymentProofMimeType || "image/jpeg"
         : undefined,
-      paymentStatus: "confirmado", // Las ventas admin están confirmadas automáticamente
+      paymentStatus: "confirmado", // Las ventas admin est├ín confirmadas autom├íticamente
       paymentConfirmedAt: new Date(),
       paymentConfirmedBy: req.user?.id || req.user?.userId,
       commissionBonus: 0, // Admin no tiene bonus
@@ -243,38 +261,38 @@ export const registerAdminSale = async (req, res) => {
     console.log(`[${reqId}] Sale data:`, saleData);
 
     const sale = await Sale.create(saleData);
-    console.log(`[${reqId}] ✅ Venta creada:`, sale._id);
+    console.log(`[${reqId}] Ô£à Venta creada:`, sale._id);
 
     // Descontar del stock total del producto
-    console.log(`[${reqId}] 📦 Actualizando stock...`);
+    console.log(`[${reqId}] ­ƒôª Actualizando stock...`);
     product.totalStock -= quantity;
     await product.save();
     console.log(
-      `[${reqId}] ✅ Stock actualizado. Nuevo stock:`,
+      `[${reqId}] Ô£à Stock actualizado. Nuevo stock:`,
       product.totalStock
     );
 
-    console.log(`[${reqId}] 🔄 Obteniendo venta con populate...`);
+    console.log(`[${reqId}] ­ƒöä Obteniendo venta con populate...`);
     const populatedSale = await Sale.findById(sale._id).populate(
       "product",
       "name image"
     );
-    console.log(`[${reqId}] ✅ Venta obtenida`);
+    console.log(`[${reqId}] Ô£à Venta obtenida`);
 
     // Registrar en historial de ganancias (no bloquear si falla)
     try {
-      console.log(`[${reqId}] 📊 Registrando ganancia...`);
+      console.log(`[${reqId}] ­ƒôè Registrando ganancia...`);
       await recordSaleProfit(sale._id);
-      console.log(`[${reqId}] ✅ Ganancia registrada`);
+      console.log(`[${reqId}] Ô£à Ganancia registrada`);
     } catch (historyError) {
       console.error(
-        `[${reqId}] ⚠️ Error registrando historial de ganancias:`,
+        `[${reqId}] ÔÜá´©Å Error registrando historial de ganancias:`,
         historyError?.message
       );
       // Continuar sin bloquear la venta
     }
 
-    console.log(`[${reqId}] ✅ registerAdminSale SUCCESS`);
+    console.log(`[${reqId}] Ô£à registerAdminSale SUCCESS`);
 
     await AuditService.log({
       user: req.user,
@@ -299,7 +317,7 @@ export const registerAdminSale = async (req, res) => {
       remainingStock: product.totalStock,
     });
   } catch (error) {
-    console.error(`[${reqId}] ❌ FATAL ERROR:`, error?.message);
+    console.error(`[${reqId}] ÔØî FATAL ERROR:`, error?.message);
     console.error(`[${reqId}] Stack:`, error?.stack);
     res.status(500).json({
       message: error?.message || "Error interno al registrar venta",
@@ -326,8 +344,11 @@ export const registerSale = async (req, res) => {
       notes,
       paymentProof,
       paymentProofMimeType,
+      saleDate,
     } = req.body;
     const distributorId = req.user.id;
+
+    const normalizedSaleDate = toColombiaStartOfDay(saleDate);
 
     // Verificar que el distribuidor tenga el producto
     const distributorStock = await DistributorStock.findOne({
@@ -369,7 +390,7 @@ export const registerSale = async (req, res) => {
       });
     }
 
-    // Obtener el bonus/porcentaje del distribuidor según el ranking (misma lógica que usa el frontend)
+    // Obtener el bonus/porcentaje del distribuidor seg├║n el ranking (misma l├│gica que usa el frontend)
     const commissionInfo = await getDistributorCommissionInfo(
       distributorId,
       businessId
@@ -401,10 +422,16 @@ export const registerSale = async (req, res) => {
       distributorProfitPercentage,
     };
 
-    // Agregar comprobante de pago si se proporcionó
+    saleData.saleDate = normalizedSaleDate || toColombiaStartOfDay(new Date());
+
+    // Agregar comprobante de pago si se proporcion├│
     if (paymentProof) {
       saleData.paymentProof = paymentProof;
       saleData.paymentProofMimeType = paymentProofMimeType || "image/jpeg";
+    }
+
+    if (normalizedSaleDate) {
+      saleData.saleDate = normalizedSaleDate;
     }
 
     const sale = await Sale.create(saleData);
@@ -421,7 +448,7 @@ export const registerSale = async (req, res) => {
       .populate("product", "name image")
       .populate("distributor", "name email");
 
-    // Invalidar caché de analytics y gamificación
+    // Invalidar cach├® de analytics y gamificaci├│n
     await invalidateCache("cache:analytics:*");
     await invalidateCache("cache:gamification:*");
     await invalidateCache("cache:sales:*");
@@ -477,7 +504,7 @@ export const getDistributorSales = async (req, res) => {
 
     const distributorId = req.params.distributorId || req.user.id;
 
-    // Si no es admin y está consultando otro distribuidor, denegar
+    // Si no es admin y est├í consultando otro distribuidor, denegar
     if (req.user.role !== "admin" && distributorId !== req.user.id) {
       return res
         .status(403)
@@ -551,6 +578,7 @@ export const getAllSales = async (req, res) => {
       sortBy,
       page = 1,
       limit = 50,
+      statsOnly,
     } = req.query;
 
     const filter = { business: businessId };
@@ -570,7 +598,7 @@ export const getAllSales = async (req, res) => {
     if (paymentStatus) filter.paymentStatus = paymentStatus;
 
     // Determinar ordenamiento
-    let sortOption = { saleDate: -1 }; // default: más reciente primero
+    let sortOption = { saleDate: -1 }; // default: m├ís reciente primero
     if (sortBy === "date-asc") {
       sortOption = { saleDate: 1 };
     } else if (sortBy === "distributor") {
@@ -581,20 +609,57 @@ export const getAllSales = async (req, res) => {
     const limitNum = parseInt(limit);
     const skip = (pageNum - 1) * limitNum;
 
-    const [sales, total] = await Promise.all([
-      Sale.find(filter)
-        .populate("product", "name image")
-        .populate("distributor", "name email")
-        .sort(sortOption)
-        .skip(skip)
-        .limit(limitNum)
-        .lean(),
-      Sale.countDocuments(filter),
-    ]);
+    const shouldReturnList = String(statsOnly) !== "true";
 
+    let sales = [];
+    let total = 0;
+
+    const projection = {
+      saleId: 1,
+      saleDate: 1,
+      paymentStatus: 1,
+      paymentConfirmedAt: 1,
+      paymentConfirmedBy: 1,
+      paymentProof: 1,
+      paymentProofMimeType: 1,
+      quantity: 1,
+      salePrice: 1,
+      purchasePrice: 1,
+      distributorPrice: 1,
+      adminProfit: 1,
+      distributorProfit: 1,
+      totalProfit: 1,
+      distributorProfitPercentage: 1,
+      notes: 1,
+      distributor: 1,
+      product: 1,
+      createdAt: 1,
+      updatedAt: 1,
+    };
+
+    if (shouldReturnList) {
+      const [foundSales, totalCount] = await Promise.all([
+        Sale.find(filter, projection)
+          .populate("product", "name image description")
+          .populate("distributor", "name email phone address")
+          .sort(sortOption)
+          .skip(skip)
+          .limit(limitNum)
+          .lean(),
+        Sale.countDocuments(filter),
+      ]);
+
+      sales = foundSales;
+      total = totalCount;
+    }
     // Calcular estadísticas
     const statsAgg = await Sale.aggregate([
-      { $match: filter },
+      {
+        $match: {
+          ...filter,
+          business: new mongoose.Types.ObjectId(businessId),
+        },
+      },
       {
         $group: {
           _id: null,
@@ -609,9 +674,7 @@ export const getAllSales = async (req, res) => {
           pendingSales: {
             $sum: { $cond: [{ $eq: ["$paymentStatus", "pendiente"] }, 1, 0] },
           },
-          totalProfit: {
-            $sum: { $add: ["$distributorProfit", "$adminProfit"] },
-          },
+          totalProfit: { $sum: "$totalProfit" },
         },
       },
     ]);
@@ -630,13 +693,15 @@ export const getAllSales = async (req, res) => {
     res.json({
       sales,
       stats,
-      pagination: {
-        page: pageNum,
-        limit: limitNum,
-        total,
-        pages: Math.ceil(total / limitNum),
-        hasMore: pageNum < Math.ceil(total / limitNum),
-      },
+      pagination: shouldReturnList
+        ? {
+            page: pageNum,
+            limit: limitNum,
+            total,
+            pages: Math.ceil(total / limitNum),
+            hasMore: pageNum < Math.ceil(total / limitNum),
+          }
+        : null,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -764,40 +829,43 @@ export const confirmPayment = async (req, res) => {
       return res.status(404).json({ message: "Venta no encontrada" });
     }
 
-    if (sale.paymentStatus === "confirmado") {
-      // PUT idempotente: si ya está confirmado, responder 200
-      const populatedSale = await Sale.findOne({
-        _id: sale._id,
-        business: businessId,
-      })
-        .populate("product", "name image")
-        .populate("distributor", "name email")
-        .populate("paymentConfirmedBy", "name email");
+    // Calcular estadísticas
+    const statsAgg = await Sale.aggregate([
+      {
+        $match: {
+          ...filter,
+          business: new mongoose.Types.ObjectId(businessId),
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalSales: { $sum: 1 },
+          totalQuantity: { $sum: "$quantity" },
+          totalDistributorProfit: { $sum: "$distributorProfit" },
+          totalAdminProfit: { $sum: "$adminProfit" },
+          totalRevenue: { $sum: { $multiply: ["$salePrice", "$quantity"] } },
+          confirmedSales: {
+            $sum: { $cond: [{ $eq: ["$paymentStatus", "confirmado"] }, 1, 0] },
+          },
+          pendingSales: {
+            $sum: { $cond: [{ $eq: ["$paymentStatus", "pendiente"] }, 1, 0] },
+          },
+          totalProfit: { $sum: "$totalProfit" },
+        },
+      },
+    ]);
 
-      await invalidateCache("cache:analytics:*");
-      await invalidateCache("cache:gamification:*");
-      await invalidateCache("cache:sales:*");
-      await invalidateCache("cache:distributors:*");
-      await invalidateCache("cache:businessAssistant:*");
-
-      return res.json({
-        message: "El pago ya estaba confirmado",
-        sale: populatedSale,
-      });
-    }
-
-    sale.paymentStatus = "confirmado";
-    sale.paymentConfirmedAt = Date.now();
-    sale.paymentConfirmedBy = req.user._id;
-
-    await sale.save();
-
-    // Invalidar caché (si está activo)
-    await invalidateCache("cache:analytics:*");
-    await invalidateCache("cache:gamification:*");
-    await invalidateCache("cache:sales:*");
-    await invalidateCache("cache:distributors:*");
-    await invalidateCache("cache:businessAssistant:*");
+    const stats = statsAgg[0] || {
+      totalSales: 0,
+      totalQuantity: 0,
+      totalDistributorProfit: 0,
+      totalAdminProfit: 0,
+      totalRevenue: 0,
+      confirmedSales: 0,
+      pendingSales: 0,
+      totalProfit: 0,
+    };
 
     const populatedSale = await Sale.findOne({
       _id: sale._id,

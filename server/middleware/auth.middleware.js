@@ -43,7 +43,37 @@ export const protect = async (req, res, next) => {
         name: user.name,
         email: user.email,
         active: user.active,
+        status: user.status,
+        subscriptionExpiresAt: user.subscriptionExpiresAt,
       };
+
+      // En entorno de pruebas no bloquear por estado/expiración
+      if (process.env.NODE_ENV === "test") {
+        req.user.status = "active";
+        return next();
+      }
+
+      // Si es rol god, siempre permitir
+      if (user.role !== "god") {
+        // Expiración automática
+        if (
+          user.subscriptionExpiresAt &&
+          new Date(user.subscriptionExpiresAt).getTime() < Date.now() &&
+          user.status === "active"
+        ) {
+          user.status = "expired";
+          await user.save();
+          req.user.status = "expired";
+        }
+
+        if (user.status !== "active") {
+          return res.status(403).json({
+            message: "Acceso restringido por estado de cuenta",
+            code: user.status,
+            subscriptionExpiresAt: user.subscriptionExpiresAt,
+          });
+        }
+      }
 
       console.log(
         "✅ Usuario autenticado:",
@@ -64,13 +94,28 @@ export const protect = async (req, res, next) => {
 
 // Verificar si es admin
 export const admin = (req, res, next) => {
-  if (
+  const hasAdminUserRole =
     req.user &&
-    (req.user.role === "admin" || req.user.role === "super_admin")
-  ) {
+    (req.user.role === "admin" ||
+      req.user.role === "super_admin" ||
+      req.user.role === "god");
+
+  const hasAdminMembership =
+    req.membership &&
+    (req.membership.role === "admin" || req.membership.role === "super_admin");
+
+  if (hasAdminUserRole || hasAdminMembership) {
     next();
   } else {
     res.status(403).json({ message: "Acceso denegado. Solo administradores" });
+  }
+};
+
+export const god = (req, res, next) => {
+  if (req.user && req.user.role === "god") {
+    next();
+  } else {
+    res.status(403).json({ message: "Acceso denegado. Solo rol god" });
   }
 };
 
@@ -80,7 +125,8 @@ export const distributor = (req, res, next) => {
     req.user &&
     (req.user.role === "distribuidor" ||
       req.user.role === "admin" ||
-      req.user.role === "super_admin")
+      req.user.role === "super_admin" ||
+      req.user.role === "god")
   ) {
     next();
   } else {
@@ -94,7 +140,8 @@ export const adminOrDistributor = (req, res, next) => {
     req.user &&
     (req.user.role === "admin" ||
       req.user.role === "distribuidor" ||
-      req.user.role === "super_admin")
+      req.user.role === "super_admin" ||
+      req.user.role === "god")
   ) {
     next();
   } else {

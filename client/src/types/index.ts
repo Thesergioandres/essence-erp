@@ -41,7 +41,9 @@ export interface User {
   _id: string;
   name: string;
   email: string;
-  role: "user" | "admin" | "distribuidor" | "super_admin";
+  role: "user" | "admin" | "distribuidor" | "super_admin" | "god";
+  status?: "pending" | "active" | "expired" | "suspended" | "paused";
+  subscriptionExpiresAt?: string | null;
   active?: boolean;
   phone?: string;
   address?: string;

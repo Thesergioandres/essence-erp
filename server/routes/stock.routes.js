@@ -13,6 +13,7 @@ import {
   businessContext,
   requireFeature,
 } from "../middleware/business.middleware.js";
+import { cacheMiddleware } from "../middleware/cache.middleware.js";
 
 const router = express.Router();
 
@@ -39,6 +40,7 @@ router.get(
   businessContext,
   admin,
   requireFeature("inventory"),
+  cacheMiddleware(60, "stock:all"),
   getAllDistributorsStock
 );
 router.get(
@@ -47,6 +49,7 @@ router.get(
   businessContext,
   admin,
   requireFeature("inventory"),
+  cacheMiddleware(30, "stock:alerts"),
   getStockAlerts
 );
 router.get(

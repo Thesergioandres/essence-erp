@@ -65,6 +65,7 @@ router.get(
   businessContext,
   requireFeature("sales"),
   admin,
+  cacheMiddleware(15, "sales:list"),
   cacheMiddleware(60, "sales"),
   getAllSales
 );

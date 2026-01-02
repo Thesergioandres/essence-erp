@@ -2,25 +2,29 @@ import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import BusinessGate from "./components/BusinessGate";
 import LoadingProgress from "./components/LoadingProgress";
+import QuickGodAccess from "./components/QuickGodAccess";
 import ProtectedRoute from "./routes/ProtectedRoute";
 
-// Loading component con barra de progreso
+// Loading component con duración corta para minimizar pantalla en blanco
 const PageLoader = () => (
-  <LoadingProgress message="Cargando aplicación..." duration={1500} />
+  <LoadingProgress message="Cargando aplicación..." duration={400} />
 );
 
 // Lazy load all pages
 const Home = lazy(() => import("./pages/Home"));
+const AccountHold = lazy(() => import("./pages/AccountHold"));
 const Catalog = lazy(() => import("./pages/Catalog"));
 const ProductDetail = lazy(() => import("./pages/ProductDetail"));
 const CategoryProducts = lazy(() => import("./pages/CategoryProducts"));
 const Login = lazy(() => import("./pages/Login"));
 const LoginAdmin = lazy(() => import("./pages/LoginAdmin"));
 const LoginDistributor = lazy(() => import("./pages/LoginDistributor"));
+const LoginGod = lazy(() => import("./pages/LoginGod"));
 const Register = lazy(() => import("./pages/Register"));
 const BusinessSettings = lazy(() => import("./pages/BusinessSettings"));
 const UserSettings = lazy(() => import("./pages/UserSettings"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
+const GodPanel = lazy(() => import("./pages/GodPanel"));
 
 // Admin pages
 const DashboardLayout = lazy(() => import("./pages/DashboardLayout"));
@@ -66,9 +70,11 @@ const TransferHistory = lazy(() => import("./pages/TransferHistory"));
 export default function App() {
   return (
     <Suspense fallback={<PageLoader />}>
+      <QuickGodAccess />
       <Routes>
         {/* Public Routes */}
         <Route path="/" element={<Home />} />
+        <Route path="/account-hold" element={<AccountHold />} />
         <Route path="/productos" element={<Catalog />} />
         <Route path="/producto/:id" element={<ProductDetail />} />
         <Route path="/categoria/:slug" element={<CategoryProducts />} />
@@ -76,6 +82,7 @@ export default function App() {
         {/* Auth Routes */}
         <Route path="/login" element={<Login />} />
         <Route path="/login/admin" element={<LoginAdmin />} />
+        <Route path="/login/god" element={<LoginGod />} />
         <Route path="/login/distributor" element={<LoginDistributor />} />
         <Route path="/register" element={<Register />} />
         <Route
@@ -89,6 +96,15 @@ export default function App() {
           }
         />
 
+        <Route
+          path="/god"
+          element={
+            <ProtectedRoute allowedRoles={["god"]}>
+              <GodPanel />
+            </ProtectedRoute>
+          }
+        />
+
         {/* Shared authenticated route - accessible by admin and distributor */}
         <Route path="/catalog" element={<Catalog />} />
 
@@ -96,7 +112,7 @@ export default function App() {
         <Route
           path="/admin"
           element={
-            <ProtectedRoute allowedRoles={["admin", "super_admin"]}>
+            <ProtectedRoute allowedRoles={["admin", "super_admin", "god"]}>
               <DashboardLayout />
             </ProtectedRoute>
           }
@@ -235,7 +251,7 @@ export default function App() {
           <Route
             path="register-sale"
             element={
-              <ProtectedRoute allowedRoles={["admin", "super_admin"]}>
+              <ProtectedRoute allowedRoles={["admin", "super_admin", "god"]}>
                 <BusinessGate requiredFeature="sales">
                   <AdminRegisterSale />
                 </BusinessGate>

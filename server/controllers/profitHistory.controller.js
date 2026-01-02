@@ -10,18 +10,64 @@ import {
 const resolveBusinessId = (req) =>
   req.businessId || req.headers["x-business-id"] || req.query.businessId;
 
+const buildColombiaDateRange = (startDateStr, endDateStr) => {
+  if (!startDateStr && !endDateStr) return null;
+
+  const range = {};
+
+  if (startDateStr) {
+    const date = new Date(startDateStr);
+    range.$gte = new Date(
+      Date.UTC(
+        date.getUTCFullYear(),
+        date.getUTCMonth(),
+        date.getUTCDate(),
+        5,
+        0,
+        0,
+        0
+      )
+    );
+  }
+
+  if (endDateStr) {
+    const date = new Date(endDateStr);
+    range.$lte = new Date(
+      Date.UTC(
+        date.getUTCFullYear(),
+        date.getUTCMonth(),
+        date.getUTCDate() + 1,
+        4,
+        59,
+        59,
+        999
+      )
+    );
+  }
+
+  return range;
+};
+
+const buildColombiaSingleDay = (dateStr) => {
+  if (!dateStr) return null;
+  return buildColombiaDateRange(dateStr, dateStr);
+};
+
 // @desc    Obtener historial de ganancias de un usuario
 // @route   GET /api/profit-history/user/:userId
 // @access  Private/Admin o propio usuario
 export const getUserProfitHistory = async (req, res) => {
   try {
     const businessId = resolveBusinessId(req);
-    if (!businessId && req.user.role !== "super_admin") {
+    const isGodOrSuper =
+      req.user?.role === "god" || req.user?.role === "super_admin";
+
+    if (!businessId && !isGodOrSuper) {
       return res.status(400).json({ message: "Falta x-business-id" });
     }
 
     const { userId } = req.params;
-    const { startDate, endDate, type, page = 1, limit = 50 } = req.query;
+    const { startDate, endDate, type, page = 1, limit = 50, today } = req.query;
 
     // Verificar que el usuario existe
     const user = await User.findById(userId);
@@ -30,15 +76,19 @@ export const getUserProfitHistory = async (req, res) => {
     }
 
     // Construir filtro
+    const shouldScopeBusiness = !isGodOrSuper || req.user.id !== userId;
+
     const filter = {
       user: userId,
-      ...(businessId ? { business: businessId } : {}),
+      ...(shouldScopeBusiness && businessId ? { business: businessId } : {}),
     };
 
-    if (startDate || endDate) {
-      filter.date = {};
-      if (startDate) filter.date.$gte = new Date(startDate);
-      if (endDate) filter.date.$lte = new Date(endDate);
+    const dateRange =
+      today === "true"
+        ? buildColombiaSingleDay(new Date().toISOString().slice(0, 10))
+        : buildColombiaDateRange(startDate, endDate);
+    if (dateRange) {
+      filter.date = dateRange;
     }
 
     if (type) filter.type = type;
@@ -104,7 +154,10 @@ export const getUserProfitHistory = async (req, res) => {
 export const getUserBalance = async (req, res) => {
   try {
     const businessId = resolveBusinessId(req);
-    if (!businessId && req.user.role !== "super_admin") {
+    const isGodOrSuper =
+      req.user?.role === "god" || req.user?.role === "super_admin";
+
+    if (!businessId && !isGodOrSuper) {
       return res.status(400).json({ message: "Falta x-business-id" });
     }
 
@@ -116,9 +169,11 @@ export const getUserBalance = async (req, res) => {
     }
 
     // Obtener el último registro para el balance actual
+    const shouldScopeBusiness = !isGodOrSuper || req.user.id !== userId;
+
     const lastEntry = await ProfitHistory.findOne({
       user: userId,
-      ...(businessId ? { business: businessId } : {}),
+      ...(shouldScopeBusiness && businessId ? { business: businessId } : {}),
     })
       .sort({ date: -1 })
       .lean();
@@ -128,7 +183,7 @@ export const getUserBalance = async (req, res) => {
       {
         $match: {
           user: new mongoose.Types.ObjectId(userId),
-          ...(businessId
+          ...(shouldScopeBusiness && businessId
             ? { business: new mongoose.Types.ObjectId(businessId) }
             : {}),
         },
@@ -187,10 +242,9 @@ export const getProfitSummary = async (req, res) => {
     const filter = businessId
       ? { business: new mongoose.Types.ObjectId(businessId) }
       : {};
-    if (startDate || endDate) {
-      filter.date = {};
-      if (startDate) filter.date.$gte = new Date(startDate);
-      if (endDate) filter.date.$lte = new Date(endDate);
+    const dateRange = buildColombiaDateRange(startDate, endDate);
+    if (dateRange) {
+      filter.date = dateRange;
     }
 
     // Agrupar por período
@@ -371,10 +425,9 @@ export const backfillProfitHistoryFromSales = async (req, res) => {
       salesFilter.distributor = new mongoose.Types.ObjectId(distributorId);
     }
 
-    if (startDate || endDate) {
-      salesFilter.saleDate = {};
-      if (startDate) salesFilter.saleDate.$gte = new Date(startDate);
-      if (endDate) salesFilter.saleDate.$lte = new Date(endDate);
+    const saleDateRange = buildColombiaDateRange(startDate, endDate);
+    if (saleDateRange) {
+      salesFilter.saleDate = saleDateRange;
     }
 
     const sales = await Sale.find(salesFilter)

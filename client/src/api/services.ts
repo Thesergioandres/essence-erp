@@ -46,6 +46,27 @@ interface AuthResponse extends User {
   token: string;
 }
 
+async function trySetBusinessForGod(role: string) {
+  if (role !== "god") return;
+  try {
+    const { data } = await api.get<{ memberships: Membership[] }>(
+      "/business/me/memberships"
+    );
+    const memberships = data?.memberships || [];
+    if (memberships.length === 1 && memberships[0]?.business?._id) {
+      localStorage.setItem("businessId", memberships[0].business._id);
+    }
+  } catch (error) {
+    console.warn("No se pudo asignar businessId para god", error);
+  }
+}
+
+type DurationPayload = {
+  days?: number;
+  months?: number;
+  years?: number;
+};
+
 type ProductPayload = {
   name: string;
   description: string;
@@ -92,6 +113,7 @@ export const authService = {
     if (response.data.token) {
       localStorage.setItem("token", response.data.token);
       localStorage.setItem("user", JSON.stringify(response.data));
+      await trySetBusinessForGod(response.data.role);
     }
 
     return response.data;
@@ -116,6 +138,56 @@ export const authService = {
   async getAllUsers(): Promise<{ success: boolean; data: User[] }> {
     const response = await api.get("/users");
     return response.data;
+  },
+};
+
+export const userAccessService = {
+  async list(): Promise<User[]> {
+    const response = await api.get<{ success: boolean; data: User[] }>(
+      "/users/god/all"
+    );
+    return response.data.data || [];
+  },
+
+  async activate(id: string, duration?: DurationPayload): Promise<User> {
+    const response = await api.post<{ success: boolean; user: User }>(
+      `/users/god/${id}/activate`,
+      duration || {}
+    );
+    return response.data.user;
+  },
+
+  async suspend(id: string): Promise<User> {
+    const response = await api.post<{ success: boolean; user: User }>(
+      `/users/god/${id}/suspend`
+    );
+    return response.data.user;
+  },
+
+  async remove(id: string): Promise<void> {
+    await api.post(`/users/god/${id}/delete`);
+  },
+
+  async extend(id: string, duration?: DurationPayload): Promise<User> {
+    const response = await api.post<{ success: boolean; user: User }>(
+      `/users/god/${id}/extend`,
+      duration || {}
+    );
+    return response.data.user;
+  },
+
+  async pause(id: string): Promise<User> {
+    const response = await api.post<{ success: boolean; user: User }>(
+      `/users/god/${id}/pause`
+    );
+    return response.data.user;
+  },
+
+  async resume(id: string): Promise<User> {
+    const response = await api.post<{ success: boolean; user: User }>(
+      `/users/god/${id}/resume`
+    );
+    return response.data.user;
   },
 };
 
@@ -182,6 +254,13 @@ export const businessService = {
       { features }
     );
     return response.data;
+  },
+
+  async listMembers(businessId: string): Promise<Membership[]> {
+    const response = await api.get<{ members: Membership[] }>(
+      `/business/${businessId}/members`
+    );
+    return response.data.members || [];
   },
 };
 
@@ -673,6 +752,7 @@ export const saleService = {
     sortBy?: string;
     page?: number;
     limit?: number;
+    statsOnly?: boolean;
   }): Promise<{
     sales: Sale[];
     stats: SaleStats & {

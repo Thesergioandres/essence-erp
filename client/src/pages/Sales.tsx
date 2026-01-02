@@ -42,6 +42,12 @@ export default function Sales() {
     endDate: "",
   });
 
+  const currentUser = authService.getCurrentUser();
+  const canDeleteSales =
+    currentUser?.role === "admin" ||
+    currentUser?.role === "super_admin" ||
+    currentUser?.role === "god";
+
   useEffect(() => {
     loadSales();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -516,7 +522,7 @@ export default function Sales() {
                               </span>
                             )}
                             {/* Botón eliminar solo para admin */}
-                            {authService.getCurrentUser()?.role === "admin" && (
+                            {canDeleteSales && (
                               <button
                                 onClick={() => handleDeleteSale(sale._id)}
                                 disabled={deletingId === sale._id}

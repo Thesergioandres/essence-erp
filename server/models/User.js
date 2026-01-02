@@ -22,8 +22,21 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ["user", "admin", "distribuidor", "super_admin"],
+      enum: ["user", "admin", "distribuidor", "super_admin", "god"],
       default: "user",
+    },
+    status: {
+      type: String,
+      enum: ["pending", "active", "expired", "suspended", "paused"],
+      default: "pending",
+    },
+    subscriptionExpiresAt: {
+      type: Date,
+      default: null,
+    },
+    pausedRemainingMs: {
+      type: Number,
+      default: 0,
     },
     active: {
       type: Boolean,

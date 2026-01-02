@@ -111,7 +111,7 @@ export default function Dashboard() {
         categoryService.getAll(),
         distributorService.getAll(),
         stockService.getAlerts(),
-        saleService.getAllSales(),
+        saleService.getAllSales({ statsOnly: true, limit: 1 }),
         analyticsService.getMonthlyProfit(),
       ]);
 
