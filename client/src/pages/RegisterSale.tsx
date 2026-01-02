@@ -128,16 +128,6 @@ export default function RegisterSale() {
     );
   };
 
-  const updateItemPrice = (productId: string, price: number) => {
-    setItems(
-      items.map(item =>
-        item.productId === productId
-          ? { ...item, salePrice: Math.max(0, price) }
-          : item
-      )
-    );
-  };
-
   const calculateTotal = () => {
     return items.reduce(
       (total, item) => total + item.salePrice * item.quantity,

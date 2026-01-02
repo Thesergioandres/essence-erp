@@ -41,7 +41,7 @@ export interface User {
   _id: string;
   name: string;
   email: string;
-  role: "user" | "admin" | "distribuidor";
+  role: "user" | "admin" | "distribuidor" | "super_admin";
   active?: boolean;
   phone?: string;
   address?: string;
