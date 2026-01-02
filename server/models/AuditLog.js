@@ -2,6 +2,12 @@ import mongoose from "mongoose";
 
 const auditLogSchema = new mongoose.Schema(
   {
+    business: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Business",
+      required: false,
+      index: true,
+    },
     // Usuario que realizó la acción
     user: {
       type: mongoose.Schema.Types.ObjectId,
@@ -18,7 +24,7 @@ const auditLogSchema = new mongoose.Schema(
     },
     userRole: {
       type: String,
-      enum: ["admin", "distribuidor", "user"],
+      enum: ["admin", "distribuidor", "user", "super_admin"],
       required: true,
     },
 
@@ -97,7 +103,15 @@ const auditLogSchema = new mongoose.Schema(
     // Entidad afectada
     entityType: {
       type: String,
-      enum: ["Product", "Category", "User", "Sale", "DistributorStock", "DefectiveProduct", null],
+      enum: [
+        "Product",
+        "Category",
+        "User",
+        "Sale",
+        "DistributorStock",
+        "DefectiveProduct",
+        null,
+      ],
     },
     entityId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -145,6 +159,7 @@ auditLogSchema.index({ action: 1, createdAt: -1 });
 auditLogSchema.index({ module: 1, createdAt: -1 });
 auditLogSchema.index({ entityType: 1, entityId: 1 });
 auditLogSchema.index({ createdAt: -1 });
+auditLogSchema.index({ business: 1, createdAt: -1 });
 
 const AuditLog = mongoose.model("AuditLog", auditLogSchema);
 

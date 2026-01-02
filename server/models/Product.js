@@ -2,6 +2,11 @@ import mongoose from "mongoose";
 
 const productSchema = new mongoose.Schema(
   {
+    business: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Business",
+      index: true,
+    },
     name: {
       type: String,
       required: [true, "El nombre del producto es obligatorio"],
@@ -75,8 +80,9 @@ const productSchema = new mongoose.Schema(
 
 // Índices para optimizar consultas
 productSchema.index({ category: 1, createdAt: -1 });
+productSchema.index({ business: 1, createdAt: -1 });
 productSchema.index({ featured: 1 });
-productSchema.index({ name: 'text', description: 'text' });
+productSchema.index({ name: "text", description: "text" });
 productSchema.index({ warehouseStock: 1 });
 
 export default mongoose.model("Product", productSchema);

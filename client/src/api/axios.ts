@@ -13,9 +13,26 @@ const api = axios.create({
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const token = localStorage.getItem("token");
+    const businessId = localStorage.getItem("businessId");
+
+    const url = config.url || "";
+    const allowsWithoutBusiness =
+      url.startsWith("/auth") ||
+      url.startsWith("/business/me/memberships") ||
+      (config.method === "post" && url === "/business");
 
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    }
+
+    if (!businessId && token && !allowsWithoutBusiness) {
+      return Promise.reject(
+        new Error("Debes seleccionar un negocio antes de continuar")
+      );
+    }
+
+    if (businessId) {
+      config.headers["x-business-id"] = businessId;
     }
 
     return config;

@@ -2,9 +2,13 @@ import mongoose from "mongoose";
 
 const saleSchema = new mongoose.Schema(
   {
+    business: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Business",
+      index: true,
+    },
     saleId: {
       type: String,
-      unique: true,
       required: true,
     },
     distributor: {
@@ -101,8 +105,11 @@ const saleSchema = new mongoose.Schema(
 
 // Índices para acelerar listados y filtros comunes
 saleSchema.index({ saleDate: -1 });
+saleSchema.index({ business: 1, saleDate: -1 });
 saleSchema.index({ distributor: 1, saleDate: -1 });
 saleSchema.index({ paymentStatus: 1, saleDate: -1 });
+// Unicidad por negocio
+saleSchema.index({ business: 1, saleId: 1 }, { unique: true });
 
 // Generar saleId único antes de guardar (DEBE SER SINCRÓNICO Y ANTES DE VALIDACIONES)
 saleSchema.pre("validate", function (next) {

@@ -2,10 +2,14 @@ import mongoose from "mongoose";
 
 const categorySchema = new mongoose.Schema(
   {
+    business: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Business",
+      index: true,
+    },
     name: {
       type: String,
       required: [true, "El nombre de la categoría es obligatorio"],
-      unique: true,
       trim: true,
     },
     description: {
@@ -14,7 +18,6 @@ const categorySchema = new mongoose.Schema(
     },
     slug: {
       type: String,
-      unique: true,
       lowercase: true,
     },
   },
@@ -35,5 +38,7 @@ categorySchema.pre("save", function (next) {
   }
   next();
 });
+
+categorySchema.index({ business: 1, name: 1 }, { unique: true });
 
 export default mongoose.model("Category", categorySchema);

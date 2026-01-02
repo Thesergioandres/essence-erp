@@ -15,24 +15,26 @@ export const protect = async (req, res, next) => {
 
       // Verificar token
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      
+
       console.log("🔑 Token decodificado:", decoded);
 
       // Obtener usuario del token (soportar tanto 'id' como 'userId')
       const userId = decoded.id || decoded.userId;
-      
+
       if (!userId) {
         console.log("❌ Token no contiene 'id' ni 'userId'");
-        return res.status(401).json({ message: "Token inválido: falta ID de usuario" });
+        return res
+          .status(401)
+          .json({ message: "Token inválido: falta ID de usuario" });
       }
 
       const user = await User.findById(userId).select("-password");
-      
+
       if (!user) {
         console.log("❌ Usuario no encontrado:", userId);
         return res.status(401).json({ message: "Usuario no encontrado" });
       }
-      
+
       // Agregar información del usuario a req.user
       req.user = {
         userId: user._id.toString(),
@@ -40,10 +42,14 @@ export const protect = async (req, res, next) => {
         role: user.role,
         name: user.name,
         email: user.email,
-        active: user.active
+        active: user.active,
       };
-      
-      console.log("✅ Usuario autenticado:", req.user.name, `(${req.user.role})`);
+
+      console.log(
+        "✅ Usuario autenticado:",
+        req.user.name,
+        `(${req.user.role})`
+      );
 
       next();
     } catch (error) {
@@ -58,7 +64,10 @@ export const protect = async (req, res, next) => {
 
 // Verificar si es admin
 export const admin = (req, res, next) => {
-  if (req.user && req.user.role === "admin") {
+  if (
+    req.user &&
+    (req.user.role === "admin" || req.user.role === "super_admin")
+  ) {
     next();
   } else {
     res.status(403).json({ message: "Acceso denegado. Solo administradores" });
@@ -67,7 +76,12 @@ export const admin = (req, res, next) => {
 
 // Verificar si es distribuidor
 export const distributor = (req, res, next) => {
-  if (req.user && req.user.role === "distribuidor") {
+  if (
+    req.user &&
+    (req.user.role === "distribuidor" ||
+      req.user.role === "admin" ||
+      req.user.role === "super_admin")
+  ) {
     next();
   } else {
     res.status(403).json({ message: "Acceso denegado. Solo distribuidores" });
@@ -76,7 +90,12 @@ export const distributor = (req, res, next) => {
 
 // Verificar si es admin o distribuidor
 export const adminOrDistributor = (req, res, next) => {
-  if (req.user && (req.user.role === "admin" || req.user.role === "distribuidor")) {
+  if (
+    req.user &&
+    (req.user.role === "admin" ||
+      req.user.role === "distribuidor" ||
+      req.user.role === "super_admin")
+  ) {
     next();
   } else {
     res.status(403).json({ message: "Acceso denegado" });

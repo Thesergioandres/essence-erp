@@ -1,11 +1,22 @@
 import { invalidateCache } from "../middleware/cache.middleware.js";
 import Expense from "../models/Expense.js";
 
+const resolveBusinessId = (req) =>
+  req.businessId ||
+  req.headers["x-business-id"] ||
+  req.query.businessId ||
+  req.body.businessId;
+
 // @desc    Registrar un gasto (inversión)
 // @route   POST /api/expenses
 // @access  Private/Admin
 export const createExpense = async (req, res) => {
   try {
+    const businessId = resolveBusinessId(req);
+    if (!businessId && req.user.role !== "super_admin") {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
     const { type, category, amount, description, expenseDate } = req.body;
 
     const resolvedType =
@@ -31,6 +42,7 @@ export const createExpense = async (req, res) => {
       description: typeof description === "string" ? description.trim() : "",
       expenseDate: expenseDate ? new Date(expenseDate) : new Date(),
       createdBy: req.user.id,
+      business: businessId,
     });
 
     const populated = await Expense.findById(expense._id)
@@ -51,9 +63,14 @@ export const createExpense = async (req, res) => {
 // @access  Private/Admin
 export const getExpenses = async (req, res) => {
   try {
+    const businessId = resolveBusinessId(req);
+    if (!businessId && req.user.role !== "super_admin") {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
     const { startDate, endDate, type, category } = req.query;
 
-    const filter = {};
+    const filter = businessId ? { business: businessId } : {};
 
     const resolvedType =
       (typeof type === "string" && type.trim()) ||
@@ -87,7 +104,15 @@ export const getExpenses = async (req, res) => {
 // @access  Private/Admin
 export const getExpenseById = async (req, res) => {
   try {
-    const expense = await Expense.findById(req.params.id)
+    const businessId = resolveBusinessId(req);
+    if (!businessId && req.user.role !== "super_admin") {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
+    const expense = await Expense.findOne({
+      _id: req.params.id,
+      ...(businessId ? { business: businessId } : {}),
+    })
       .populate("createdBy", "name email")
       .lean();
 
@@ -106,6 +131,11 @@ export const getExpenseById = async (req, res) => {
 // @access  Private/Admin
 export const updateExpense = async (req, res) => {
   try {
+    const businessId = resolveBusinessId(req);
+    if (!businessId && req.user.role !== "super_admin") {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
     const { type, category, amount, description, expenseDate } = req.body;
 
     const update = {};
@@ -146,9 +176,13 @@ export const updateExpense = async (req, res) => {
       update.expenseDate = expenseDate ? new Date(expenseDate) : new Date();
     }
 
-    const expense = await Expense.findByIdAndUpdate(req.params.id, update, {
-      new: true,
-    })
+    const expense = await Expense.findOneAndUpdate(
+      { _id: req.params.id, ...(businessId ? { business: businessId } : {}) },
+      update,
+      {
+        new: true,
+      }
+    )
       .populate("createdBy", "name email")
       .lean();
 
@@ -170,7 +204,15 @@ export const updateExpense = async (req, res) => {
 // @access  Private/Admin
 export const deleteExpense = async (req, res) => {
   try {
-    const expense = await Expense.findById(req.params.id);
+    const businessId = resolveBusinessId(req);
+    if (!businessId && req.user.role !== "super_admin") {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
+    const expense = await Expense.findOne({
+      _id: req.params.id,
+      ...(businessId ? { business: businessId } : {}),
+    });
 
     if (!expense) {
       return res.status(404).json({ message: "Gasto no encontrado" });

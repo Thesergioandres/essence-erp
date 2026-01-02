@@ -8,9 +8,13 @@ import Product from "../models/Product.js";
 export const reportDefectiveProductAdmin = async (req, res) => {
   try {
     const { productId, quantity, reason, images } = req.body;
+    const businessId = req.businessId;
 
     // Verificar que el producto exista y tenga stock en bodega
-    const product = await Product.findById(productId);
+    const product = await Product.findOne({
+      _id: productId,
+      business: businessId,
+    });
 
     if (!product) {
       return res.status(404).json({ message: "Producto no encontrado" });
@@ -26,6 +30,7 @@ export const reportDefectiveProductAdmin = async (req, res) => {
     const defectiveReport = await DefectiveProduct.create({
       distributor: null, // Admin no tiene distribuidor asociado
       product: productId,
+      business: businessId,
       quantity,
       reason,
       images: images || [],
@@ -60,11 +65,13 @@ export const reportDefectiveProduct = async (req, res) => {
   try {
     const { productId, quantity, reason, images } = req.body;
     const distributorId = req.user.id;
+    const businessId = req.businessId;
 
     // Verificar que el distribuidor tenga el producto
     const distributorStock = await DistributorStock.findOne({
       distributor: distributorId,
       product: productId,
+      business: businessId,
     });
 
     if (!distributorStock) {
@@ -83,6 +90,7 @@ export const reportDefectiveProduct = async (req, res) => {
     const defectiveReport = await DefectiveProduct.create({
       distributor: distributorId,
       product: productId,
+      business: businessId,
       quantity,
       reason,
       images: images || [],
@@ -120,17 +128,14 @@ export const getDistributorDefectiveReports = async (req, res) => {
 
     // Verificar permisos
     const currentUserId = req.user.userId || req.user.id;
-    if (
-      req.user.role !== "admin" &&
-      currentUserId !== distributorId
-    ) {
+    if (req.user.role !== "admin" && currentUserId !== distributorId) {
       return res.status(403).json({
         message: "No puedes ver reportes de otros distribuidores",
       });
     }
 
     const { status } = req.query;
-    const filter = { distributor: distributorId };
+    const filter = { distributor: distributorId, business: req.businessId };
 
     if (status) filter.status = status;
 
@@ -152,7 +157,7 @@ export const getDistributorDefectiveReports = async (req, res) => {
 export const getAllDefectiveReports = async (req, res) => {
   try {
     const { status, distributorId, productId } = req.query;
-    const filter = {};
+    const filter = { business: req.businessId };
 
     if (status) filter.status = status;
     if (distributorId) filter.distributor = distributorId;
@@ -185,7 +190,10 @@ export const getAllDefectiveReports = async (req, res) => {
 export const confirmDefectiveProduct = async (req, res) => {
   try {
     const { adminNotes } = req.body;
-    const report = await DefectiveProduct.findById(req.params.id);
+    const report = await DefectiveProduct.findOne({
+      _id: req.params.id,
+      business: req.businessId,
+    });
 
     if (!report) {
       return res.status(404).json({ message: "Reporte no encontrado" });
@@ -230,7 +238,10 @@ export const confirmDefectiveProduct = async (req, res) => {
 export const rejectDefectiveProduct = async (req, res) => {
   try {
     const { adminNotes } = req.body;
-    const report = await DefectiveProduct.findById(req.params.id);
+    const report = await DefectiveProduct.findOne({
+      _id: req.params.id,
+      business: req.businessId,
+    });
 
     if (!report) {
       return res.status(404).json({ message: "Reporte no encontrado" });
@@ -243,13 +254,16 @@ export const rejectDefectiveProduct = async (req, res) => {
     }
 
     if (report.status === "rechazado") {
-      return res.status(400).json({ message: "Este reporte ya está rechazado" });
+      return res
+        .status(400)
+        .json({ message: "Este reporte ya está rechazado" });
     }
 
     // Devolver el stock al distribuidor
     const distributorStock = await DistributorStock.findOne({
       distributor: report.distributor,
       product: report.product,
+      business: report.business,
     });
 
     if (distributorStock) {

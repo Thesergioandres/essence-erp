@@ -2,6 +2,11 @@ import mongoose from "mongoose";
 
 const expenseSchema = new mongoose.Schema(
   {
+    business: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Business",
+      index: true,
+    },
     // Campo actual (UI): tipo de gasto. Mantenemos compatibilidad con datos antiguos
     // que pudieron guardarse como `category`.
     type: {

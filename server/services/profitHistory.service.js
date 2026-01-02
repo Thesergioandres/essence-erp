@@ -25,10 +25,14 @@ export const recordProfitHistory = async (data) => {
       productId,
       metadata = {},
       date,
+      businessId,
     } = data;
 
     // Obtener balance actual del usuario
-    const lastEntry = await ProfitHistory.findOne({ user: userId })
+    const lastEntry = await ProfitHistory.findOne({
+      user: userId,
+      ...(businessId ? { business: businessId } : {}),
+    })
       .sort({ date: -1 })
       .lean();
 
@@ -47,6 +51,7 @@ export const recordProfitHistory = async (data) => {
       balanceAfter: newBalance,
       metadata,
       date: date || new Date(),
+      business: businessId,
     });
 
     return entry;
@@ -80,6 +85,8 @@ export const recordSaleProfit = async (sale) => {
       saleId: saleDoc.saleId,
     };
 
+    const businessId = saleDoc.business;
+
     // Registrar ganancia del distribuidor (si existe)
     if (saleDoc.distributor && saleDoc.distributorProfit > 0) {
       await recordProfitHistory({
@@ -95,6 +102,7 @@ export const recordSaleProfit = async (sale) => {
           commissionBonus: saleDoc.commissionBonus,
         },
         date: saleDoc.saleDate,
+        businessId,
       });
     }
 
@@ -102,7 +110,9 @@ export const recordSaleProfit = async (sale) => {
     if (saleDoc.adminProfit > 0) {
       // Obtener ID del admin
       const User = mongoose.model("User");
-      const admin = await User.findOne({ role: "admin" });
+      const admin = await User.findOne({
+        role: { $in: ["admin", "super_admin"] },
+      });
 
       if (admin) {
         await recordProfitHistory({
@@ -116,6 +126,7 @@ export const recordSaleProfit = async (sale) => {
           productId: saleDoc.product,
           metadata,
           date: saleDoc.saleDate,
+          businessId,
         });
       }
     }
@@ -153,6 +164,8 @@ export const recordSpecialSaleProfit = async (specialSaleIdOrDoc) => {
       eventName: specialSale.eventName,
     };
 
+    const businessId = specialSale.business;
+
     // Registrar ganancia para cada distribuidor en la distribución
     for (const dist of specialSale.distribution) {
       // Buscar usuario por nombre (puede mejorarse con ID directo)
@@ -187,6 +200,7 @@ export const recordSpecialSaleProfit = async (specialSaleIdOrDoc) => {
             distributionNotes: dist.notes,
           },
           date: specialSale.saleDate,
+          businessId,
         });
       }
     }
@@ -198,10 +212,14 @@ export const recordSpecialSaleProfit = async (specialSaleIdOrDoc) => {
 /**
  * Recalcula el balance acumulado de un usuario
  * @param {mongoose.Types.ObjectId} userId - ID del usuario
+ * @param {mongoose.Types.ObjectId} businessId - ID del negocio (opcional)
  */
-export const recalculateUserBalance = async (userId) => {
+export const recalculateUserBalance = async (userId, businessId) => {
   try {
-    const entries = await ProfitHistory.find({ user: userId })
+    const entries = await ProfitHistory.find({
+      user: userId,
+      ...(businessId ? { business: businessId } : {}),
+    })
       .sort({ date: 1 })
       .lean();
 

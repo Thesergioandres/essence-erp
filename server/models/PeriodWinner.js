@@ -8,6 +8,11 @@ const periodWinnerSchema = new mongoose.Schema(
       enum: ["daily", "weekly", "biweekly", "monthly", "custom"],
       required: true,
     },
+    business: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Business",
+      index: true,
+    },
     startDate: {
       type: Date,
       required: true,
@@ -80,6 +85,7 @@ const periodWinnerSchema = new mongoose.Schema(
 // Índices
 periodWinnerSchema.index({ startDate: -1, endDate: -1 });
 periodWinnerSchema.index({ winner: 1 });
+periodWinnerSchema.index({ business: 1, endDate: -1 });
 
 const PeriodWinner = mongoose.model("PeriodWinner", periodWinnerSchema);
 

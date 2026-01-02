@@ -1,27 +1,33 @@
 import express from "express";
-import { protect, admin } from "../middleware/auth.middleware.js";
 import {
-  getSalesTimeline,
-  getTopProducts,
-  getSalesByCategory,
+  getComparativeAnalysis,
   getDistributorRankings,
+  getFinancialKPIs,
   getLowStockVisual,
   getProductRotation,
-  getFinancialKPIs,
-  getComparativeAnalysis,
-  getSalesFunnel
+  getSalesByCategory,
+  getSalesFunnel,
+  getSalesTimeline,
+  getTopProducts,
 } from "../controllers/advancedAnalytics.controller.js";
+import { admin, protect } from "../middleware/auth.middleware.js";
+import {
+  businessContext,
+  requireFeature,
+} from "../middleware/business.middleware.js";
 
 const router = express.Router();
 
-router.get("/sales-timeline", protect, admin, getSalesTimeline);
-router.get("/top-products", protect, admin, getTopProducts);
-router.get("/sales-by-category", protect, admin, getSalesByCategory);
-router.get("/distributor-rankings", protect, admin, getDistributorRankings);
-router.get("/low-stock-visual", protect, admin, getLowStockVisual);
-router.get("/product-rotation", protect, admin, getProductRotation);
-router.get("/financial-kpis", protect, admin, getFinancialKPIs);
-router.get("/comparative-analysis", protect, admin, getComparativeAnalysis);
-router.get("/sales-funnel", protect, admin, getSalesFunnel);
+router.use(protect, businessContext, requireFeature("reports"), admin);
+
+router.get("/sales-timeline", getSalesTimeline);
+router.get("/top-products", getTopProducts);
+router.get("/sales-by-category", getSalesByCategory);
+router.get("/distributor-rankings", getDistributorRankings);
+router.get("/low-stock-visual", getLowStockVisual);
+router.get("/product-rotation", getProductRotation);
+router.get("/financial-kpis", getFinancialKPIs);
+router.get("/comparative-analysis", getComparativeAnalysis);
+router.get("/sales-funnel", getSalesFunnel);
 
 export default router;

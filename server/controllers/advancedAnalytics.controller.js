@@ -1,6 +1,10 @@
 import { subDays } from "date-fns";
+import mongoose from "mongoose";
 import Product from "../models/Product.js";
 import Sale from "../models/Sale.js";
+
+const resolveBusinessId = (req) =>
+  req.businessId || req.headers["x-business-id"] || req.query.businessId;
 
 const buildColombiaSaleDateFilter = (startDateStr, endDateStr) => {
   if (!startDateStr && !endDateStr) return null;
@@ -53,6 +57,12 @@ export const getSalesTimeline = async (req, res) => {
       endDate: customEndDate,
     } = req.query;
 
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+    const businessObjectId = new mongoose.Types.ObjectId(businessId);
+
     let groupBy;
 
     // Determinar agrupación según período
@@ -71,7 +81,10 @@ export const getSalesTimeline = async (req, res) => {
     }
 
     // Construir filtro - SIN restricción de fecha por defecto
-    const matchFilter = { paymentStatus: "confirmado" };
+    const matchFilter = {
+      paymentStatus: "confirmado",
+      business: businessObjectId,
+    };
 
     // Solo aplicar filtros de fecha si se proporcionan explícitamente
     if (customStartDate || customEndDate) {
@@ -121,7 +134,16 @@ export const getTopProducts = async (req, res) => {
   try {
     const { limit = 10, startDate, endDate } = req.query;
 
-    const matchFilter = { paymentStatus: "confirmado" };
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+    const businessObjectId = new mongoose.Types.ObjectId(businessId);
+
+    const matchFilter = {
+      paymentStatus: "confirmado",
+      business: businessObjectId,
+    };
     const saleDateFilter = buildColombiaSaleDateFilter(startDate, endDate);
     if (saleDateFilter) {
       matchFilter.saleDate = saleDateFilter;
@@ -171,7 +193,16 @@ export const getTopProducts = async (req, res) => {
 export const getSalesByCategory = async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
-    const matchFilter = { paymentStatus: "confirmado" };
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+    const businessObjectId = new mongoose.Types.ObjectId(businessId);
+
+    const matchFilter = {
+      paymentStatus: "confirmado",
+      business: businessObjectId,
+    };
     const saleDateFilter = buildColombiaSaleDateFilter(startDate, endDate);
     if (saleDateFilter) {
       matchFilter.saleDate = saleDateFilter;
@@ -223,9 +254,16 @@ export const getDistributorRankings = async (req, res) => {
     const { startDate, endDate } = req.query;
     const saleDateFilter = buildColombiaSaleDateFilter(startDate, endDate);
 
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+    const businessObjectId = new mongoose.Types.ObjectId(businessId);
+
     const confirmedMatch = {
       paymentStatus: "confirmado",
       distributor: { $exists: true, $ne: null },
+      business: businessObjectId,
     };
 
     if (saleDateFilter) {
@@ -279,6 +317,7 @@ export const getDistributorRankings = async (req, res) => {
     // Calculate conversion rate
     const allMatch = {
       distributor: { $exists: true, $ne: null },
+      business: businessObjectId,
     };
     if (saleDateFilter) {
       allMatch.saleDate = saleDateFilter;
@@ -324,7 +363,13 @@ export const getDistributorRankings = async (req, res) => {
 // @access  Private/Admin
 export const getLowStockVisual = async (req, res) => {
   try {
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
     const lowStockProducts = await Product.find({
+      business: businessId,
       $expr: { $lte: ["$warehouseStock", "$lowStockAlert"] },
     })
       .populate("category", "name")
@@ -369,6 +414,11 @@ export const getLowStockVisual = async (req, res) => {
 export const getProductRotation = async (req, res) => {
   try {
     const { days = 30 } = req.query;
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+    const businessObjectId = new mongoose.Types.ObjectId(businessId);
     const startDate = subDays(new Date(), parseInt(days));
 
     const rotation = await Sale.aggregate([
@@ -376,6 +426,7 @@ export const getProductRotation = async (req, res) => {
         $match: {
           paymentStatus: "confirmado",
           saleDate: { $gte: startDate },
+          business: businessObjectId,
         },
       },
       {
@@ -394,6 +445,7 @@ export const getProductRotation = async (req, res) => {
         },
       },
       { $unwind: "$productInfo" },
+      { $match: { "productInfo.business": businessObjectId } },
       {
         $project: {
           name: "$productInfo.name",
@@ -422,6 +474,12 @@ export const getProductRotation = async (req, res) => {
 // @access  Private/Admin
 export const getFinancialKPIs = async (req, res) => {
   try {
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+    const businessObjectId = new mongoose.Types.ObjectId(businessId);
+
     const today = new Date();
 
     // Ajustar a zona horaria de Colombia (UTC-5)
@@ -476,6 +534,7 @@ export const getFinancialKPIs = async (req, res) => {
             $match: {
               saleDate: { $gte: startOfToday },
               paymentStatus: "confirmado",
+              business: businessObjectId,
             },
           },
           {
@@ -493,6 +552,7 @@ export const getFinancialKPIs = async (req, res) => {
             $match: {
               saleDate: { $gte: startOfThisWeek },
               paymentStatus: "confirmado",
+              business: businessObjectId,
             },
           },
           {
@@ -510,6 +570,7 @@ export const getFinancialKPIs = async (req, res) => {
             $match: {
               saleDate: { $gte: startOfThisMonth },
               paymentStatus: "confirmado",
+              business: businessObjectId,
             },
           },
           {
@@ -523,7 +584,12 @@ export const getFinancialKPIs = async (req, res) => {
         ]),
         // Average ticket
         Sale.aggregate([
-          { $match: { paymentStatus: "confirmado" } },
+          {
+            $match: {
+              paymentStatus: "confirmado",
+              business: businessObjectId,
+            },
+          },
           {
             $group: {
               _id: null,
@@ -549,6 +615,11 @@ export const getFinancialKPIs = async (req, res) => {
 // @access  Private/Admin
 export const getComparativeAnalysis = async (req, res) => {
   try {
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+    const businessObjectId = new mongoose.Types.ObjectId(businessId);
     const now = new Date();
 
     // Ajustar a zona horaria de Colombia (UTC-5)
@@ -595,6 +666,7 @@ export const getComparativeAnalysis = async (req, res) => {
           $match: {
             saleDate: { $gte: lastMonthStart, $lte: lastMonthEnd },
             paymentStatus: "confirmado",
+            business: businessObjectId,
           },
         },
         {
@@ -611,6 +683,7 @@ export const getComparativeAnalysis = async (req, res) => {
           $match: {
             saleDate: { $gte: thisMonthStart },
             paymentStatus: "confirmado",
+            business: businessObjectId,
           },
         },
         {
@@ -660,11 +733,17 @@ export const getComparativeAnalysis = async (req, res) => {
 export const getSalesFunnel = async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+    const businessObjectId = new mongoose.Types.ObjectId(businessId);
     const matchFilter = {};
     const saleDateFilter = buildColombiaSaleDateFilter(startDate, endDate);
     if (saleDateFilter) {
       matchFilter.saleDate = saleDateFilter;
     }
+    matchFilter.business = businessObjectId;
 
     const funnelData = await Sale.aggregate([
       {

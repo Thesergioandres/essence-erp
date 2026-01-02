@@ -11,6 +11,7 @@ import advancedAnalyticsRoutes from "./routes/advancedAnalytics.routes.js";
 import analyticsRoutes from "./routes/analytics.routes.js";
 import auditRoutes from "./routes/audit.routes.js";
 import authRoutes from "./routes/auth.routes.js";
+import businessRoutes from "./routes/business.routes.js";
 import businessAssistantRoutes from "./routes/businessAssistant.routes.js";
 import categoryRoutes from "./routes/category.routes.js";
 import defectiveProductRoutes from "./routes/defectiveProduct.routes.js";
@@ -36,11 +37,7 @@ const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:5173",
   "http://93.189.89.195",
-  "https://essence-landing-page-client.vercel.app",
-  "https://ssence-landing-page-client.vercel.app", // URL con doble 's'
-  "https://essence-landing-page-production.up.railway.app",
-  /\.vercel\.app$/, // Todos los subdominios de Vercel
-  /\.railway\.app$/, // Todos los subdominios de Railway
+  "https://93.189.89.195",
 ];
 
 // Conectar a MongoDB y Redis
@@ -91,7 +88,13 @@ app.use(
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-Requested-With",
+      "x-business-id",
+      "X-Business-Id",
+    ],
     exposedHeaders: ["Content-Length", "X-Requested-With"],
     maxAge: 86400, // 24 horas de cache para preflight
   })
@@ -128,12 +131,13 @@ app.get("/", (req, res) => {
   res.json({
     message: "🚀 Essence API funcionando correctamente",
     version: "2.0.0",
-    cors: "enabled-for-all-vercel-domains",
+    cors: "enabled",
     timestamp: new Date().toISOString(),
   });
 });
 
 app.use("/api/auth", authRoutes);
+app.use("/api/business", businessRoutes);
 app.use("/api/business-assistant", businessAssistantRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/categories", categoryRoutes);
@@ -183,8 +187,7 @@ app.use((err, req, res, next) => {
 export default app;
 
 // Iniciar servidor (evitar escuchar en entorno de tests)
-// En Vercel (@vercel/node) el handler es serverless y NO debe hacer listen().
-if (process.env.NODE_ENV !== "test" && !process.env.VERCEL) {
+if (process.env.NODE_ENV !== "test") {
   app.listen(PORT, () => {
     console.log(`✅ Servidor corriendo en http://localhost:${PORT}`);
   });

@@ -2,6 +2,11 @@ import mongoose from "mongoose";
 
 const defectiveProductSchema = new mongoose.Schema(
   {
+    business: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Business",
+      index: true,
+    },
     distributor: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

@@ -5,9 +5,11 @@ import type {
   AuditLogsResponse,
   AuditStats,
   Averages,
+  Business,
   BusinessAssistantConfig,
   BusinessAssistantJobStatus,
   BusinessAssistantRecommendationsResponse,
+  BusinessFeatures,
   Category,
   ComparativeAnalysis,
   DailySummary,
@@ -19,6 +21,7 @@ import type {
   Expense,
   FinancialSummary,
   GamificationConfig,
+  Membership,
   MonthlyProfitData,
   PeriodWinner,
   Product,
@@ -62,6 +65,24 @@ type ProductPayload = {
 };
 
 export const authService = {
+  async register(payload: {
+    name: string;
+    email: string;
+    password: string;
+    phone?: string;
+    address?: string;
+    logo?: { url: string; publicId: string } | null;
+  }): Promise<AuthResponse> {
+    const response = await api.post<AuthResponse>("/auth/register", payload);
+
+    if (response.data.token) {
+      localStorage.setItem("token", response.data.token);
+      localStorage.setItem("user", JSON.stringify(response.data));
+    }
+
+    return response.data;
+  },
+
   async login(email: string, password: string): Promise<AuthResponse> {
     const response = await api.post<AuthResponse>("/auth/login", {
       email,
@@ -79,6 +100,7 @@ export const authService = {
   logout(): void {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
+    localStorage.removeItem("businessId");
   },
 
   getCurrentUser(): (AuthResponse & { token: string }) | null {
@@ -93,6 +115,70 @@ export const authService = {
 
   async getAllUsers(): Promise<{ success: boolean; data: User[] }> {
     const response = await api.get("/users");
+    return response.data;
+  },
+};
+
+export const businessService = {
+  async create(payload: {
+    name: string;
+    description?: string;
+    contactEmail?: string;
+    contactPhone?: string;
+    contactWhatsapp?: string;
+    contactLocation?: string;
+    features?: BusinessFeatures;
+  }): Promise<{ business: Business }> {
+    const response = await api.post<{ business: Business }>(
+      "/business",
+      payload
+    );
+    return response.data;
+  },
+
+  async getMyMemberships(): Promise<{ memberships: Membership[] }> {
+    const response = await api.get<{ memberships: Membership[] }>(
+      "/business/me/memberships"
+    );
+    return response.data;
+  },
+
+  async updateBusiness(
+    businessId: string,
+    payload: Partial<{
+      name: string;
+      description: string;
+      contactEmail: string;
+      contactPhone: string;
+      contactWhatsapp: string;
+      contactLocation: string;
+    }>
+  ): Promise<{ business: unknown }> {
+    const response = await api.patch<{ business: unknown }>(
+      `/business/${businessId}`,
+      payload
+    );
+    return response.data;
+  },
+
+  async updateBusinessFeatures(
+    businessId: string,
+    features: {
+      products?: boolean;
+      inventory?: boolean;
+      sales?: boolean;
+      gamification?: boolean;
+      incidents?: boolean;
+      expenses?: boolean;
+      assistant?: boolean;
+      reports?: boolean;
+      transfers?: boolean;
+    }
+  ): Promise<{ business: unknown }> {
+    const response = await api.patch<{ business: unknown }>(
+      `/business/${businessId}/features`,
+      { features }
+    );
     return response.data;
   },
 };
@@ -927,6 +1013,7 @@ export const gamificationService = {
     period?: string;
     startDate?: string;
     endDate?: string;
+    businessId?: string;
   }): Promise<RankingResponse> {
     const response = await api.get<RankingResponse>("/gamification/ranking", {
       params,
@@ -949,6 +1036,7 @@ export const gamificationService = {
   async getWinners(params?: {
     limit?: number;
     page?: number;
+    businessId?: string;
   }): Promise<WinnersResponse> {
     const response = await api.get<WinnersResponse>("/gamification/winners", {
       params,

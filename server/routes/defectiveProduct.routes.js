@@ -8,17 +8,20 @@ import {
   reportDefectiveProductAdmin,
 } from "../controllers/defectiveProduct.controller.js";
 import { admin, protect } from "../middleware/auth.middleware.js";
+import { businessContext } from "../middleware/business.middleware.js";
 
 const router = express.Router();
 
+router.use(protect, businessContext);
+
 // Rutas para distribuidores
-router.post("/", protect, reportDefectiveProduct);
-router.get("/distributor/:distributorId?", protect, getDistributorDefectiveReports);
+router.post("/", reportDefectiveProduct);
+router.get("/distributor/:distributorId?", getDistributorDefectiveReports);
 
 // Rutas de administrador
-router.post("/admin", protect, admin, reportDefectiveProductAdmin);
-router.get("/", protect, admin, getAllDefectiveReports);
-router.put("/:id/confirm", protect, admin, confirmDefectiveProduct);
-router.put("/:id/reject", protect, admin, rejectDefectiveProduct);
+router.post("/admin", admin, reportDefectiveProductAdmin);
+router.get("/", admin, getAllDefectiveReports);
+router.put("/:id/confirm", admin, confirmDefectiveProduct);
+router.put("/:id/reject", admin, rejectDefectiveProduct);
 
 export default router;

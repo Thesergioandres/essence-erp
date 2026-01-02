@@ -1,16 +1,29 @@
+import mongoose from "mongoose";
 import { invalidateCache } from "../middleware/cache.middleware.js";
 import DistributorStock from "../models/DistributorStock.js";
 import Product from "../models/Product.js";
 import Sale from "../models/Sale.js";
+import AuditService from "../services/audit.service.js";
 import { recordSaleProfit } from "../services/profitHistory.service.js";
 import { getDistributorCommissionInfo } from "../utils/distributorPricing.js";
+
+const resolveBusinessId = (req) =>
+  req.businessId || req.headers["x-business-id"] || req.query.businessId;
 
 // @desc    Eliminar una venta (admin)
 // @route   DELETE /api/sales/:id
 // @access  Private/Admin
 export const deleteSale = async (req, res) => {
   try {
-    const sale = await Sale.findById(req.params.id);
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
+    const sale = await Sale.findOne({
+      _id: req.params.id,
+      business: businessId,
+    });
     if (!sale) {
       return res.status(404).json({ message: "Venta no encontrada" });
     }
@@ -52,6 +65,11 @@ export const deleteSale = async (req, res) => {
 // @access  Private/Admin
 export const fixAdminSales = async (req, res) => {
   try {
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -65,7 +83,10 @@ export const fixAdminSales = async (req, res) => {
     );
 
     // Obtener todas las ventas admin
-    const adminSales = await Sale.find({ distributor: null });
+    const adminSales = await Sale.find({
+      distributor: null,
+      business: businessId,
+    });
 
     let updated = 0;
     let datesUpdated = 0;
@@ -114,11 +135,13 @@ export const fixAdminSales = async (req, res) => {
     // Obtener resumen actualizado
     const confirmedSales = await Sale.find({
       distributor: null,
+      business: businessId,
       paymentStatus: "confirmado",
       saleDate: { $gte: startOfMonth },
     });
     const pendingSales = await Sale.find({
       distributor: null,
+      business: businessId,
       paymentStatus: "pendiente",
     });
 
@@ -149,6 +172,11 @@ export const registerAdminSale = async (req, res) => {
     console.log(`[${reqId}] User:`, req.user);
     console.log(`[${reqId}] Body:`, req.body);
 
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
     const {
       productId,
       quantity,
@@ -170,7 +198,10 @@ export const registerAdminSale = async (req, res) => {
 
     // Validar producto
     console.log(`[${reqId}] 🔍 Buscando producto:`, productId);
-    const product = await Product.findById(productId);
+    const product = await Product.findOne({
+      _id: productId,
+      business: businessId,
+    });
     if (!product) {
       console.warn(`[${reqId}] ❌ Producto no encontrado:`, productId);
       return res.status(404).json({ message: "Producto no encontrado" });
@@ -190,6 +221,7 @@ export const registerAdminSale = async (req, res) => {
     // Crear la venta (sin distribuidor)
     console.log(`[${reqId}] 💾 Creando venta...`);
     const saleData = {
+      business: businessId,
       distributor: null,
       product: productId,
       quantity,
@@ -243,6 +275,24 @@ export const registerAdminSale = async (req, res) => {
     }
 
     console.log(`[${reqId}] ✅ registerAdminSale SUCCESS`);
+
+    await AuditService.log({
+      user: req.user,
+      action: "sale_registered",
+      module: "sales",
+      description: `Venta admin registrada de ${quantity} ${product.name}`,
+      entityType: "Sale",
+      entityId: sale._id,
+      entityName: product.name,
+      newValues: sale,
+      business: businessId,
+      req,
+      metadata: {
+        quantity,
+        salePrice,
+        distributor: null,
+      },
+    });
     res.status(201).json({
       message: "Venta registrada exitosamente (admin)",
       sale: populatedSale,
@@ -264,6 +314,11 @@ export const registerAdminSale = async (req, res) => {
 // @access  Private/Distribuidor
 export const registerSale = async (req, res) => {
   try {
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
     const {
       productId,
       quantity,
@@ -278,6 +333,7 @@ export const registerSale = async (req, res) => {
     const distributorStock = await DistributorStock.findOne({
       distributor: distributorId,
       product: productId,
+      business: businessId,
     });
 
     if (!distributorStock) {
@@ -293,7 +349,10 @@ export const registerSale = async (req, res) => {
     }
 
     // Obtener precios del producto
-    const product = await Product.findById(productId);
+    const product = await Product.findOne({
+      _id: productId,
+      business: businessId,
+    });
     if (!product) {
       return res.status(404).json({ message: "Producto no encontrado" });
     }
@@ -311,13 +370,17 @@ export const registerSale = async (req, res) => {
     }
 
     // Obtener el bonus/porcentaje del distribuidor según el ranking (misma lógica que usa el frontend)
-    const commissionInfo = await getDistributorCommissionInfo(distributorId);
+    const commissionInfo = await getDistributorCommissionInfo(
+      distributorId,
+      businessId
+    );
     const commissionBonus = commissionInfo.bonusCommission;
     const distributorProfitPercentage = commissionInfo.profitPercentage;
 
     // Generar saleId manualmente por seguridad
     const year = new Date().getFullYear();
     const saleCount = await Sale.countDocuments({
+      business: businessId,
       saleId: { $regex: `^VTA-${year}-` },
     });
     const sequentialNumber = String(saleCount + 1).padStart(4, "0");
@@ -325,6 +388,7 @@ export const registerSale = async (req, res) => {
 
     // Crear la venta
     const saleData = {
+      business: businessId,
       saleId,
       distributor: distributorId,
       product: productId,
@@ -378,6 +442,24 @@ export const registerSale = async (req, res) => {
       remainingStock: distributorStock.quantity,
       commissionBonus: commissionBonus > 0 ? `+${commissionBonus}%` : null,
     });
+
+    await AuditService.log({
+      user: req.user,
+      action: "sale_registered",
+      module: "sales",
+      description: `Venta registrada de ${quantity} ${product.name}`,
+      entityType: "Sale",
+      entityId: sale._id,
+      entityName: product.name,
+      newValues: sale,
+      business: businessId,
+      req,
+      metadata: {
+        quantity,
+        salePrice,
+        distributor: distributorId,
+      },
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -388,6 +470,11 @@ export const registerSale = async (req, res) => {
 // @access  Private
 export const getDistributorSales = async (req, res) => {
   try {
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
     const distributorId = req.params.distributorId || req.user.id;
 
     // Si no es admin y está consultando otro distribuidor, denegar
@@ -399,7 +486,7 @@ export const getDistributorSales = async (req, res) => {
 
     const { startDate, endDate, productId } = req.query;
 
-    const filter = { distributor: distributorId };
+    const filter = { distributor: distributorId, business: businessId };
 
     if (startDate || endDate) {
       filter.saleDate = {};
@@ -450,6 +537,11 @@ export const getDistributorSales = async (req, res) => {
 // @access  Private/Admin
 export const getAllSales = async (req, res) => {
   try {
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
     const {
       startDate,
       endDate,
@@ -461,7 +553,7 @@ export const getAllSales = async (req, res) => {
       limit = 50,
     } = req.query;
 
-    const filter = {};
+    const filter = { business: businessId };
 
     if (startDate || endDate) {
       filter.saleDate = {};
@@ -556,7 +648,13 @@ export const getAllSales = async (req, res) => {
 // @access  Private/Admin
 export const getSalesByProduct = async (req, res) => {
   try {
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
     const salesByProduct = await Sale.aggregate([
+      { $match: { business: new mongoose.Types.ObjectId(businessId) } },
       {
         $group: {
           _id: "$product",
@@ -601,7 +699,13 @@ export const getSalesByProduct = async (req, res) => {
 // @access  Private/Admin
 export const getSalesByDistributor = async (req, res) => {
   try {
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
     const salesByDistributor = await Sale.aggregate([
+      { $match: { business: new mongoose.Types.ObjectId(businessId) } },
       {
         $group: {
           _id: "$distributor",
@@ -646,7 +750,15 @@ export const getSalesByDistributor = async (req, res) => {
 // @access  Private/Admin
 export const confirmPayment = async (req, res) => {
   try {
-    const sale = await Sale.findById(req.params.id);
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
+    const sale = await Sale.findOne({
+      _id: req.params.id,
+      business: businessId,
+    });
 
     if (!sale) {
       return res.status(404).json({ message: "Venta no encontrada" });
@@ -654,7 +766,10 @@ export const confirmPayment = async (req, res) => {
 
     if (sale.paymentStatus === "confirmado") {
       // PUT idempotente: si ya está confirmado, responder 200
-      const populatedSale = await Sale.findById(sale._id)
+      const populatedSale = await Sale.findOne({
+        _id: sale._id,
+        business: businessId,
+      })
         .populate("product", "name image")
         .populate("distributor", "name email")
         .populate("paymentConfirmedBy", "name email");
@@ -684,7 +799,10 @@ export const confirmPayment = async (req, res) => {
     await invalidateCache("cache:distributors:*");
     await invalidateCache("cache:businessAssistant:*");
 
-    const populatedSale = await Sale.findById(sale._id)
+    const populatedSale = await Sale.findOne({
+      _id: sale._id,
+      business: businessId,
+    })
       .populate("product", "name image")
       .populate("distributor", "name email")
       .populate("paymentConfirmedBy", "name email");

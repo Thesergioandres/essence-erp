@@ -51,22 +51,29 @@ export default function Dashboard() {
   }, []);
 
   const handleFixAdminSales = async () => {
-    if (!confirm("¿Actualizar ventas admin?\n\n• Confirmar ventas pendientes\n• Recalcular ganancias correctamente\n• Mover solo ventas del MES ANTERIOR al mes actual\n\nNOTA: No afecta el histórico de ventas antiguas.")) {
+    if (
+      !confirm(
+        "¿Actualizar ventas admin?\n\n• Confirmar ventas pendientes\n• Recalcular ganancias correctamente\n• Mover solo ventas del MES ANTERIOR al mes actual\n\nNOTA: No afecta el histórico de ventas antiguas."
+      )
+    ) {
       return;
     }
 
     try {
       setFixingAdminSales(true);
-      const response = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:5000/api"}/sales/fix-admin-sales`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${localStorage.getItem("token")}`,
-          "Content-Type": "application/json"
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL || "http://localhost:5000/api"}/sales/fix-admin-sales`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            "Content-Type": "application/json",
+          },
         }
-      });
-      
+      );
+
       const data = await response.json();
-      
+
       let message = `✅ ${data.message}\n\n`;
       message += `📊 Resumen:\n`;
       message += `• Total ventas admin: ${data.totalAdminSales}\n`;
@@ -77,9 +84,9 @@ export default function Dashboard() {
         message += `• Fechas actualizadas: ${data.datesUpdated}\n`;
       }
       message += `\n${data.note}`;
-      
+
       alert(message);
-      
+
       // Recargar stats
       await loadStats();
     } catch (error) {
@@ -92,19 +99,29 @@ export default function Dashboard() {
 
   const loadStats = async () => {
     try {
-      const [productsResponse, categories, distributorsResponse, alerts, salesResponse, monthly] =
-        await Promise.all([
-          productService.getAll(),
-          categoryService.getAll(),
-          distributorService.getAll(),
-          stockService.getAlerts(),
-          saleService.getAllSales(),
-          analyticsService.getMonthlyProfit(),
-        ]);
+      const [
+        productsResponse,
+        categories,
+        distributorsResponse,
+        alerts,
+        salesResponse,
+        monthly,
+      ] = await Promise.all([
+        productService.getAll(),
+        categoryService.getAll(),
+        distributorService.getAll(),
+        stockService.getAlerts(),
+        saleService.getAllSales(),
+        analyticsService.getMonthlyProfit(),
+      ]);
 
       const products = productsResponse.data || productsResponse;
-      const distributors = Array.isArray(distributorsResponse) ? distributorsResponse : distributorsResponse.data;
-      const salesData = salesResponse.sales ? salesResponse : { stats: { totalSales: 0, totalRevenue: 0 }, sales: salesResponse };
+      const distributors = Array.isArray(distributorsResponse)
+        ? distributorsResponse
+        : distributorsResponse.data;
+      const salesData = salesResponse.sales
+        ? salesResponse
+        : { stats: { totalSales: 0, totalRevenue: 0 }, sales: salesResponse };
 
       setMonthlyData(monthly);
 
@@ -173,7 +190,11 @@ export default function Dashboard() {
   if (loading) {
     return (
       <div className="flex h-96 items-center justify-center">
-        <LoadingSpinner size="lg" variant="pulse" message="Cargando estadísticas..." />
+        <LoadingSpinner
+          size="lg"
+          variant="pulse"
+          message="Cargando estadísticas..."
+        />
       </div>
     );
   }
@@ -202,23 +223,11 @@ export default function Dashboard() {
 
       {/* Resumen Financiero Mensual */}
       {monthlyData && (
-        <div className="rounded-lg border border-gray-700 bg-linear-to-br from-green-900/50 to-gray-800/50 p-4 backdrop-blur-lg sm:rounded-xl sm:p-6">
+        <div className="bg-linear-to-br rounded-lg border border-gray-700 from-green-900/50 to-gray-800/50 p-4 backdrop-blur-lg sm:rounded-xl sm:p-6">
           <h2 className="mb-3 text-lg font-bold text-white sm:mb-4 sm:text-xl md:text-2xl">
             💰 Resumen del Mes
           </h2>
-          
-          {/* Debug Info - TEMPORAL */}
-          {monthlyData._debug && (
-            <div className="mb-4 rounded border border-yellow-500 bg-yellow-900/30 p-3 text-xs text-yellow-200">
-              <p className="font-bold">🐛 DEBUG INFO (Backend):</p>
-              <p>Hora UTC: {new Date(monthlyData._debug.nowUTC).toLocaleString("es-CO")}</p>
-              <p>Hora Colombia: {new Date(monthlyData._debug.nowColombia).toLocaleString("es-CO")}</p>
-              <p>Rango mes actual: {new Date(monthlyData._debug.startOfMonth).toLocaleDateString("es-CO")} - {new Date(monthlyData._debug.endOfMonth).toLocaleDateString("es-CO")}</p>
-              <p>Ventas encontradas mes actual: {monthlyData._debug.currentMonthSalesCount}</p>
-              <p>Ventas encontradas mes anterior: {monthlyData._debug.lastMonthSalesCount}</p>
-            </div>
-          )}
-          
+
           <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             <div>
               <p className="text-xs text-gray-400 sm:text-sm">Ganancia Total</p>
@@ -268,7 +277,7 @@ export default function Dashboard() {
       {/* Stats Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 lg:grid-cols-4">
         {/* Total Products */}
-        <div className="rounded-xl border border-gray-700 bg-linear-to-br from-purple-900/50 to-gray-800/50 p-6 backdrop-blur-lg transition hover:border-purple-500">
+        <div className="bg-linear-to-br rounded-xl border border-gray-700 from-purple-900/50 to-gray-800/50 p-6 backdrop-blur-lg transition hover:border-purple-500">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-400">Total Productos</p>
@@ -295,7 +304,7 @@ export default function Dashboard() {
         </div>
 
         {/* Total Distributors */}
-        <div className="rounded-xl border border-gray-700 bg-linear-to-br from-blue-900/50 to-gray-800/50 p-6 backdrop-blur-lg transition hover:border-blue-500">
+        <div className="bg-linear-to-br rounded-xl border border-gray-700 from-blue-900/50 to-gray-800/50 p-6 backdrop-blur-lg transition hover:border-blue-500">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-400">Distribuidores</p>
@@ -325,7 +334,7 @@ export default function Dashboard() {
         </div>
 
         {/* Total Sales */}
-        <div className="rounded-xl border border-gray-700 bg-linear-to-br from-green-900/50 to-gray-800/50 p-6 backdrop-blur-lg transition hover:border-green-500">
+        <div className="bg-linear-to-br rounded-xl border border-gray-700 from-green-900/50 to-gray-800/50 p-6 backdrop-blur-lg transition hover:border-green-500">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-400">Ventas Totales</p>
@@ -356,7 +365,7 @@ export default function Dashboard() {
 
         {/* Stock Alerts */}
         <div
-          className="cursor-pointer rounded-xl border border-gray-700 bg-linear-to-br from-red-900/50 to-gray-800/50 p-6 backdrop-blur-lg transition hover:border-red-500"
+          className="bg-linear-to-br cursor-pointer rounded-xl border border-gray-700 from-red-900/50 to-gray-800/50 p-6 backdrop-blur-lg transition hover:border-red-500"
           onClick={() => navigate("/admin/stock-management")}
         >
           <div className="flex items-center justify-between">

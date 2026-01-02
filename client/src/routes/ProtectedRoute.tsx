@@ -7,7 +7,10 @@ interface ProtectedRouteProps {
   allowedRoles?: string[];
 }
 
-export default function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
+export default function ProtectedRoute({
+  children,
+  allowedRoles,
+}: ProtectedRouteProps) {
   const location = useLocation();
   const token = localStorage.getItem("token");
   const user = authService.getCurrentUser();
@@ -21,12 +24,13 @@ export default function ProtectedRoute({ children, allowedRoles }: ProtectedRout
   if (allowedRoles && allowedRoles.length > 0) {
     if (!allowedRoles.includes(user.role)) {
       // Redirect to appropriate dashboard based on user's actual role
-      const targetPath = user.role === "distribuidor" 
-        ? "/distributor/dashboard" 
-        : user.role === "admin" 
-        ? "/admin/dashboard" 
-        : "/";
-      
+      const targetPath =
+        user.role === "distribuidor"
+          ? "/distributor/dashboard"
+          : user.role === "admin" || user.role === "super_admin"
+            ? "/admin/dashboard"
+            : "/";
+
       // Avoid redirect loop - only redirect if not already on target path
       if (location.pathname !== targetPath) {
         return <Navigate to={targetPath} replace />;

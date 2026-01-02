@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 
 const connectDB = async () => {
   try {
-    // Soportar tanto MONGODB_URI (Vercel) como MONGO_URI (legacy)
+    // Soportar tanto MONGODB_URI como MONGO_URI (legacy)
     const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI;
 
     if (!mongoUri) {

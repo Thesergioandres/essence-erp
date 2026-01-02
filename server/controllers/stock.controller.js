@@ -1,13 +1,25 @@
 import DistributorStock from "../models/DistributorStock.js";
+import Membership from "../models/Membership.js";
 import Product from "../models/Product.js";
-import User from "../models/User.js";
 import StockTransfer from "../models/StockTransfer.js";
+import User from "../models/User.js";
+
+const resolveBusinessId = (req) =>
+  req.businessId ||
+  req.headers["x-business-id"] ||
+  req.query.businessId ||
+  req.body.businessId;
 
 // @desc    Asignar stock a un distribuidor
 // @route   POST /api/stock/assign
 // @access  Private/Admin
 export const assignStockToDistributor = async (req, res) => {
   try {
+    const businessId = resolveBusinessId(req);
+    if (!businessId && req.user.role !== "super_admin") {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
     const { distributorId, productId, quantity } = req.body;
 
     // Validar que sea distribuidor
@@ -16,8 +28,23 @@ export const assignStockToDistributor = async (req, res) => {
       return res.status(400).json({ message: "Usuario no es distribuidor" });
     }
 
+    const distributorMembership = await Membership.findOne({
+      business: businessId,
+      user: distributorId,
+      status: "active",
+    });
+
+    if (!distributorMembership) {
+      return res
+        .status(403)
+        .json({ message: "Distribuidor no pertenece a este negocio" });
+    }
+
     // Verificar stock en bodega
-    const product = await Product.findById(productId);
+    const product = await Product.findOne({
+      _id: productId,
+      business: businessId,
+    });
     if (!product) {
       return res.status(404).json({ message: "Producto no encontrado" });
     }
@@ -32,6 +59,7 @@ export const assignStockToDistributor = async (req, res) => {
     let distributorStock = await DistributorStock.findOne({
       distributor: distributorId,
       product: productId,
+      business: businessId,
     });
 
     if (distributorStock) {
@@ -42,6 +70,7 @@ export const assignStockToDistributor = async (req, res) => {
         distributor: distributorId,
         product: productId,
         quantity,
+        business: businessId,
       });
     }
 
@@ -73,11 +102,29 @@ export const assignStockToDistributor = async (req, res) => {
 // @access  Private/Admin
 export const withdrawStockFromDistributor = async (req, res) => {
   try {
+    const businessId = resolveBusinessId(req);
+    if (!businessId && req.user.role !== "super_admin") {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
     const { distributorId, productId, quantity } = req.body;
+
+    const distributorMembership = await Membership.findOne({
+      business: businessId,
+      user: distributorId,
+      status: "active",
+    });
+
+    if (!distributorMembership) {
+      return res
+        .status(403)
+        .json({ message: "Distribuidor no pertenece a este negocio" });
+    }
 
     const distributorStock = await DistributorStock.findOne({
       distributor: distributorId,
       product: productId,
+      business: businessId,
     });
 
     if (!distributorStock) {
@@ -97,7 +144,10 @@ export const withdrawStockFromDistributor = async (req, res) => {
     await distributorStock.save();
 
     // Devolver a bodega
-    const product = await Product.findById(productId);
+    const product = await Product.findOne({
+      _id: productId,
+      business: businessId,
+    });
     product.warehouseStock += quantity;
     await product.save();
 
@@ -119,6 +169,11 @@ export const withdrawStockFromDistributor = async (req, res) => {
 // @access  Private
 export const getDistributorStock = async (req, res) => {
   try {
+    const businessId = resolveBusinessId(req);
+    if (!businessId && req.user.role !== "super_admin") {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
     let { distributorId } = req.params;
 
     // Si es "me", usar el ID del usuario autenticado
@@ -129,16 +184,20 @@ export const getDistributorStock = async (req, res) => {
     // Verificar permisos: admin puede ver cualquiera, distribuidor solo el suyo
     const currentUserId = req.user.userId || req.user.id;
     if (req.user.role !== "admin" && currentUserId !== distributorId) {
-      return res.status(403).json({ 
-        message: "No tienes permiso para ver este inventario" 
+      return res.status(403).json({
+        message: "No tienes permiso para ver este inventario",
       });
     }
 
     const stock = await DistributorStock.find({
       distributor: distributorId,
+      business: businessId,
     })
-      .select('product distributor quantity lowStockAlert createdAt updatedAt')
-      .populate("product", "name image purchasePrice distributorPrice clientPrice")
+      .select("product distributor quantity lowStockAlert createdAt updatedAt")
+      .populate(
+        "product",
+        "name image purchasePrice distributorPrice clientPrice"
+      )
       .populate("distributor", "name email")
       .lean();
 
@@ -160,8 +219,15 @@ export const getDistributorStock = async (req, res) => {
 // @access  Private/Admin
 export const getAllDistributorsStock = async (req, res) => {
   try {
-    const stock = await DistributorStock.find()
-      .select('product distributor quantity lowStockAlert')
+    const businessId = resolveBusinessId(req);
+    if (!businessId && req.user.role !== "super_admin") {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
+    const stockFilter = businessId ? { business: businessId } : {};
+
+    const stock = await DistributorStock.find(stockFilter)
+      .select("product distributor quantity lowStockAlert")
       .populate("product", "name image warehouseStock totalStock")
       .populate("distributor", "name email active")
       .lean();
@@ -177,13 +243,21 @@ export const getAllDistributorsStock = async (req, res) => {
 // @access  Private/Admin
 export const getStockAlerts = async (req, res) => {
   try {
+    const businessId = resolveBusinessId(req);
+    if (!businessId && req.user.role !== "super_admin") {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
     // Productos con stock bajo en bodega
     const lowWarehouseStock = await Product.find({
       warehouseStock: { $lte: 10 },
+      ...(businessId ? { business: businessId } : {}),
     }).select("name warehouseStock lowStockAlert");
 
     // Distribuidores con stock bajo
-    const lowDistributorStock = await DistributorStock.find()
+    const lowDistributorStock = await DistributorStock.find(
+      businessId ? { business: businessId } : {}
+    )
       .populate("product", "name")
       .populate("distributor", "name email");
 
@@ -205,6 +279,11 @@ export const getStockAlerts = async (req, res) => {
 // @access  Private/Distributor
 export const transferStockBetweenDistributors = async (req, res) => {
   try {
+    const businessId = resolveBusinessId(req);
+    if (!businessId && req.user.role !== "super_admin") {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
     const { toDistributorId, productId, quantity } = req.body;
     const fromDistributorId = req.user.userId || req.user.id; // Usuario autenticado que transfiere
 
@@ -216,39 +295,60 @@ export const transferStockBetweenDistributors = async (req, res) => {
 
     // Validaciones básicas
     if (!toDistributorId || !productId || !quantity) {
-      return res.status(400).json({ 
-        message: "Faltan datos requeridos: destinatario, producto y cantidad" 
+      return res.status(400).json({
+        message: "Faltan datos requeridos: destinatario, producto y cantidad",
       });
     }
 
     if (quantity <= 0) {
-      return res.status(400).json({ 
-        message: "La cantidad debe ser mayor a 0" 
+      return res.status(400).json({
+        message: "La cantidad debe ser mayor a 0",
       });
     }
 
     if (fromDistributorId === toDistributorId) {
-      return res.status(400).json({ 
-        message: "No puedes transferir stock a ti mismo" 
+      return res.status(400).json({
+        message: "No puedes transferir stock a ti mismo",
       });
     }
 
     // Verificar que ambos usuarios sean distribuidores
     const [fromDistributor, toDistributor] = await Promise.all([
       User.findById(fromDistributorId),
-      User.findById(toDistributorId)
+      User.findById(toDistributorId),
     ]);
 
     if (!fromDistributor || fromDistributor.role !== "distribuidor") {
-      return res.status(403).json({ message: "Usuario origen no es distribuidor" });
+      return res
+        .status(403)
+        .json({ message: "Usuario origen no es distribuidor" });
     }
 
     if (!toDistributor || toDistributor.role !== "distribuidor") {
-      return res.status(400).json({ message: "Usuario destino no es distribuidor válido" });
+      return res
+        .status(400)
+        .json({ message: "Usuario destino no es distribuidor válido" });
+    }
+
+    if (businessId) {
+      const toMembership = await Membership.findOne({
+        business: businessId,
+        user: toDistributorId,
+        status: "active",
+      });
+
+      if (!toMembership) {
+        return res.status(403).json({
+          message: "El distribuidor destino no pertenece a este negocio",
+        });
+      }
     }
 
     // Verificar que el producto existe
-    const product = await Product.findById(productId);
+    const product = await Product.findOne({
+      _id: productId,
+      business: businessId,
+    });
     if (!product) {
       return res.status(404).json({ message: "Producto no encontrado" });
     }
@@ -256,24 +356,28 @@ export const transferStockBetweenDistributors = async (req, res) => {
     // Verificar stock del distribuidor origen
     const fromStock = await DistributorStock.findOne({
       distributor: fromDistributorId,
-      product: productId
+      product: productId,
+      business: businessId,
     });
 
     if (!fromStock || fromStock.quantity < quantity) {
       return res.status(400).json({
-        message: `Stock insuficiente. Disponible: ${fromStock?.quantity || 0}, Solicitado: ${quantity}`
+        message: `Stock insuficiente. Disponible: ${
+          fromStock?.quantity || 0
+        }, Solicitado: ${quantity}`,
       });
     }
 
     // Guardar estados antes de la transferencia
     const fromStockBefore = fromStock.quantity;
-    
+
     // 2. Buscar stock del distribuidor destino
     let toStock = await DistributorStock.findOne({
       distributor: toDistributorId,
-      product: productId
+      product: productId,
+      business: businessId,
     });
-    
+
     const toStockBefore = toStock?.quantity || 0;
 
     // Realizar la transferencia
@@ -289,7 +393,8 @@ export const transferStockBetweenDistributors = async (req, res) => {
       toStock = await DistributorStock.create({
         distributor: toDistributorId,
         product: productId,
-        quantity
+        quantity,
+        business: businessId,
       });
     }
 
@@ -297,11 +402,11 @@ export const transferStockBetweenDistributors = async (req, res) => {
     if (!toDistributor.assignedProducts) {
       toDistributor.assignedProducts = [];
     }
-    
+
     const hasProduct = toDistributor.assignedProducts.some(
-      p => p.toString() === productId.toString()
+      (p) => p.toString() === productId.toString()
     );
-    
+
     if (!hasProduct) {
       toDistributor.assignedProducts.push(productId);
       await toDistributor.save();
@@ -321,6 +426,7 @@ export const transferStockBetweenDistributors = async (req, res) => {
       toStockBefore,
       toStockAfter: toStock.quantity,
       status: "completed",
+      business: businessId,
     });
     console.log("✅ Transferencia registrada en historial");
 
@@ -329,6 +435,7 @@ export const transferStockBetweenDistributors = async (req, res) => {
       const AuditLog = (await import("../models/AuditLog.js")).default;
       await AuditLog.create({
         user: fromDistributorId,
+        business: businessId,
         action: "transfer_stock",
         entity: "DistributorStock",
         entityId: fromStock._id,
@@ -338,12 +445,15 @@ export const transferStockBetweenDistributors = async (req, res) => {
           product: product.name,
           quantity,
           fromStockRemaining: fromStock.quantity,
-          toStockNew: toStock.quantity
-        }
+          toStockNew: toStock.quantity,
+        },
       });
       console.log("✅ Registro de auditoría creado");
     } catch (auditError) {
-      console.error("⚠️  Error al crear log de auditoría (no crítico):", auditError.message);
+      console.error(
+        "⚠️  Error al crear log de auditoría (no crítico):",
+        auditError.message
+      );
     }
 
     console.log("✅ Transferencia completada exitosamente");
@@ -355,26 +465,26 @@ export const transferStockBetweenDistributors = async (req, res) => {
         from: {
           distributorId: fromDistributorId.toString(),
           name: fromDistributor.name,
-          remainingStock: fromStock.quantity
+          remainingStock: fromStock.quantity,
         },
         to: {
           distributorId: toDistributorId.toString(),
           name: toDistributor.name,
-          newStock: toStock.quantity
+          newStock: toStock.quantity,
         },
         product: {
           id: product._id.toString(),
-          name: product.name
+          name: product.name,
         },
-        quantity
-      }
+        quantity,
+      },
     });
   } catch (error) {
     console.error("❌ Error en transferencia de stock:", error);
     console.error("Stack trace:", error.stack);
-    res.status(500).json({ 
+    res.status(500).json({
       message: error.message,
-      error: process.env.NODE_ENV === "development" ? error.stack : undefined
+      error: process.env.NODE_ENV === "development" ? error.stack : undefined,
     });
   }
 };
@@ -384,6 +494,11 @@ export const transferStockBetweenDistributors = async (req, res) => {
 // @access  Private/Admin
 export const getTransferHistory = async (req, res) => {
   try {
+    const businessId = resolveBusinessId(req);
+    if (!businessId && req.user.role !== "super_admin") {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
     const {
       fromDistributor,
       toDistributor,
@@ -396,7 +511,7 @@ export const getTransferHistory = async (req, res) => {
     } = req.query;
 
     // Construir filtros
-    const filters = {};
+    const filters = businessId ? { business: businessId } : {};
 
     if (fromDistributor) filters.fromDistributor = fromDistributor;
     if (toDistributor) filters.toDistributor = toDistributor;
@@ -420,7 +535,9 @@ export const getTransferHistory = async (req, res) => {
     // Obtener transferencias
     const [transfers, total] = await Promise.all([
       StockTransfer.find(filters)
-        .select('fromDistributor toDistributor product quantity fromStockBefore fromStockAfter toStockBefore toStockAfter status createdAt')
+        .select(
+          "fromDistributor toDistributor product quantity fromStockBefore fromStockAfter toStockBefore toStockAfter status createdAt"
+        )
         .populate("fromDistributor", "name email")
         .populate("toDistributor", "name email")
         .populate("product", "name image")

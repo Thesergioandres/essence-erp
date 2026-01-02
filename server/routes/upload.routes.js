@@ -5,8 +5,9 @@ import { admin, protect } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
-// Rutas protegidas (solo admin)
-router.post("/", protect, admin, upload.single("image"), uploadImage);
+// Subir imagen: requiere login (no admin)
+router.post("/", protect, upload.single("image"), uploadImage);
+// Eliminar imagen: mantener restricción de admin
 router.delete("/:publicId", protect, admin, deleteImage);
 
 export default router;

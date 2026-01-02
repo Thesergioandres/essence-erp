@@ -20,13 +20,24 @@ class AuditService {
     metadata = null,
     severity = "info",
     req = null,
+    business = null,
   }) {
     try {
+      const businessId =
+        business ||
+        req?.businessId ||
+        req?.business?._id ||
+        req?.headers?.["x-business-id"];
+      const userId = user?._id || user?.id || user?.userId;
+      const userEmail = user?.email || user?.userEmail;
+      const userName = user?.name || user?.userName;
+      const userRole = user?.role || user?.userRole;
       const logData = {
-        user: user._id,
-        userEmail: user.email,
-        userName: user.name,
-        userRole: user.role,
+        user: userId,
+        userEmail,
+        userName,
+        userRole,
+        ...(businessId ? { business: businessId } : {}),
         action,
         module,
         description,
@@ -58,11 +69,18 @@ class AuditService {
    */
   static async logAuth(user, action, req, success = true) {
     return this.log({
-      user: user || { _id: null, email: req.body.email, name: "Unknown", role: "user" },
+      user: user || {
+        _id: null,
+        email: req.body.email,
+        name: "Unknown",
+        role: "user",
+      },
       action: success ? action : `${action}_failed`,
       module: "auth",
       description: success
-        ? `Usuario ${user.email} ${action === "login" ? "inició sesión" : "cerró sesión"}`
+        ? `Usuario ${user.email} ${
+            action === "login" ? "inició sesión" : "cerró sesión"
+          }`
         : `Intento fallido de inicio de sesión para ${req.body.email}`,
       severity: success ? "info" : "warning",
       req,
@@ -72,7 +90,13 @@ class AuditService {
   /**
    * Log de operaciones con productos
    */
-  static async logProduct(user, action, product, oldProduct = null, req = null) {
+  static async logProduct(
+    user,
+    action,
+    product,
+    oldProduct = null,
+    req = null
+  ) {
     const descriptions = {
       product_created: `Producto "${product.name}" creado`,
       product_updated: `Producto "${product.name}" actualizado`,
@@ -97,7 +121,13 @@ class AuditService {
   /**
    * Log de operaciones con categorías
    */
-  static async logCategory(user, action, category, oldCategory = null, req = null) {
+  static async logCategory(
+    user,
+    action,
+    category,
+    oldCategory = null,
+    req = null
+  ) {
     const descriptions = {
       category_created: `Categoría "${category.name}" creada`,
       category_updated: `Categoría "${category.name}" actualizada`,
@@ -146,8 +176,10 @@ class AuditService {
    * Log de operaciones con stock
    */
   static async logStock(user, action, stock, metadata = {}, req = null) {
-    const productName = stock.product?.name || metadata.productName || "Producto";
-    const distributorName = stock.distributor?.name || metadata.distributorName || "Distribuidor";
+    const productName =
+      stock.product?.name || metadata.productName || "Producto";
+    const distributorName =
+      stock.distributor?.name || metadata.distributorName || "Distribuidor";
     const quantity = metadata.quantity || stock.quantity;
 
     const descriptions = {
@@ -179,7 +211,8 @@ class AuditService {
    * Log de operaciones con ventas
    */
   static async logSale(user, action, sale, metadata = {}, req = null) {
-    const productName = sale.product?.name || metadata.productName || "Producto";
+    const productName =
+      sale.product?.name || metadata.productName || "Producto";
     const quantity = sale.quantity;
 
     const descriptions = {
@@ -210,8 +243,15 @@ class AuditService {
   /**
    * Log de productos defectuosos
    */
-  static async logDefective(user, action, defective, metadata = {}, req = null) {
-    const productName = defective.product?.name || metadata.productName || "Producto";
+  static async logDefective(
+    user,
+    action,
+    defective,
+    metadata = {},
+    req = null
+  ) {
+    const productName =
+      defective.product?.name || metadata.productName || "Producto";
     const quantity = defective.quantity;
 
     const descriptions = {

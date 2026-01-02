@@ -2,6 +2,11 @@ import mongoose from "mongoose";
 
 const stockTransferSchema = new mongoose.Schema(
   {
+    business: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Business",
+      index: true,
+    },
     fromDistributor: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

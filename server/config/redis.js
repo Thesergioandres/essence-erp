@@ -1,12 +1,14 @@
-import Redis from 'ioredis';
+import Redis from "ioredis";
 
 let redisClient = null;
 
 const initRedis = () => {
   try {
-    // Si no hay REDIS_URL, usar modo desarrollo (memoria)
-    if (!process.env.REDIS_URL) {
-      console.log('⚠️  Redis no configurado - Cache deshabilitado en desarrollo');
+    const redisEnabled = process.env.ENABLE_REDIS_CACHE === "true";
+
+    // Si está deshabilitado explícitamente o no hay URL, no iniciar
+    if (!redisEnabled || !process.env.REDIS_URL) {
+      console.log("ℹ️  Redis cache deshabilitado en este entorno");
       return null;
     }
 
@@ -16,17 +18,17 @@ const initRedis = () => {
       connectTimeout: 10000,
     });
 
-    redisClient.on('connect', () => {
-      console.log('✅ Redis conectado exitosamente');
+    redisClient.on("connect", () => {
+      console.log("✅ Redis conectado exitosamente");
     });
 
-    redisClient.on('error', (err) => {
-      console.error('❌ Redis error:', err.message);
+    redisClient.on("error", (err) => {
+      console.error("❌ Redis error:", err.message);
     });
 
     return redisClient;
   } catch (error) {
-    console.error('❌ Error inicializando Redis:', error.message);
+    console.error("❌ Error inicializando Redis:", error.message);
     return null;
   }
 };
@@ -38,4 +40,4 @@ const getRedisClient = () => {
   return redisClient;
 };
 
-export { initRedis, getRedisClient };
+export { getRedisClient, initRedis };

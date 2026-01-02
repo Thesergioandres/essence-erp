@@ -2,6 +2,11 @@ import mongoose from "mongoose";
 
 const distributorStockSchema = new mongoose.Schema(
   {
+    business: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Business",
+      index: true,
+    },
     distributor: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -29,8 +34,11 @@ const distributorStockSchema = new mongoose.Schema(
 );
 
 // Índice compuesto para evitar duplicados
-distributorStockSchema.index({ distributor: 1, product: 1 }, { unique: true });
+distributorStockSchema.index(
+  { business: 1, distributor: 1, product: 1 },
+  { unique: true }
+);
 // Índice adicional para queries por distribuidor
-distributorStockSchema.index({ distributor: 1, quantity: 1 });
+distributorStockSchema.index({ business: 1, distributor: 1, quantity: 1 });
 
 export default mongoose.model("DistributorStock", distributorStockSchema);

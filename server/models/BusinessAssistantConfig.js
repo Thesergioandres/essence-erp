@@ -2,6 +2,11 @@ import mongoose from "mongoose";
 
 const businessAssistantConfigSchema = new mongoose.Schema(
   {
+    business: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Business",
+      index: true,
+    },
     // Ventanas por defecto
     horizonDaysDefault: { type: Number, default: 90, min: 1 },
     recentDaysDefault: { type: Number, default: 30, min: 1 },
@@ -36,6 +41,11 @@ const businessAssistantConfigSchema = new mongoose.Schema(
     increasePricePct: { type: Number, default: 5 },
   },
   { timestamps: true }
+);
+
+businessAssistantConfigSchema.index(
+  { business: 1 },
+  { unique: true, sparse: true }
 );
 
 const BusinessAssistantConfig = mongoose.model(

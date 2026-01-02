@@ -7,11 +7,19 @@ import {
   recordProfitHistory,
 } from "../services/profitHistory.service.js";
 
+const resolveBusinessId = (req) =>
+  req.businessId || req.headers["x-business-id"] || req.query.businessId;
+
 // @desc    Obtener historial de ganancias de un usuario
 // @route   GET /api/profit-history/user/:userId
 // @access  Private/Admin o propio usuario
 export const getUserProfitHistory = async (req, res) => {
   try {
+    const businessId = resolveBusinessId(req);
+    if (!businessId && req.user.role !== "super_admin") {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
     const { userId } = req.params;
     const { startDate, endDate, type, page = 1, limit = 50 } = req.query;
 
@@ -22,7 +30,10 @@ export const getUserProfitHistory = async (req, res) => {
     }
 
     // Construir filtro
-    const filter = { user: userId };
+    const filter = {
+      user: userId,
+      ...(businessId ? { business: businessId } : {}),
+    };
 
     if (startDate || endDate) {
       filter.date = {};
@@ -92,6 +103,11 @@ export const getUserProfitHistory = async (req, res) => {
 // @access  Private/Admin o propio usuario
 export const getUserBalance = async (req, res) => {
   try {
+    const businessId = resolveBusinessId(req);
+    if (!businessId && req.user.role !== "super_admin") {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
     const { userId } = req.params;
 
     const user = await User.findById(userId);
@@ -100,13 +116,23 @@ export const getUserBalance = async (req, res) => {
     }
 
     // Obtener el último registro para el balance actual
-    const lastEntry = await ProfitHistory.findOne({ user: userId })
+    const lastEntry = await ProfitHistory.findOne({
+      user: userId,
+      ...(businessId ? { business: businessId } : {}),
+    })
       .sort({ date: -1 })
       .lean();
 
     // Calcular totales por tipo
     const totals = await ProfitHistory.aggregate([
-      { $match: { user: new mongoose.Types.ObjectId(userId) } },
+      {
+        $match: {
+          user: new mongoose.Types.ObjectId(userId),
+          ...(businessId
+            ? { business: new mongoose.Types.ObjectId(businessId) }
+            : {}),
+        },
+      },
       {
         $group: {
           _id: "$type",
@@ -151,9 +177,16 @@ export const getUserBalance = async (req, res) => {
 // @access  Private/Admin
 export const getProfitSummary = async (req, res) => {
   try {
+    const businessId = resolveBusinessId(req);
+    if (!businessId && req.user.role !== "super_admin") {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
     const { startDate, endDate, groupBy = "day" } = req.query;
 
-    const filter = {};
+    const filter = businessId
+      ? { business: new mongoose.Types.ObjectId(businessId) }
+      : {};
     if (startDate || endDate) {
       filter.date = {};
       if (startDate) filter.date.$gte = new Date(startDate);
@@ -250,6 +283,11 @@ export const getProfitSummary = async (req, res) => {
 // @access  Private/Admin
 export const createProfitEntry = async (req, res) => {
   try {
+    const businessId = resolveBusinessId(req);
+    if (!businessId && req.user.role !== "super_admin") {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
     const { userId, amount, description, type = "ajuste", metadata } = req.body;
 
     const user = await User.findById(userId);
@@ -258,7 +296,10 @@ export const createProfitEntry = async (req, res) => {
     }
 
     // Obtener balance actual
-    const lastEntry = await ProfitHistory.findOne({ user: userId })
+    const lastEntry = await ProfitHistory.findOne({
+      user: userId,
+      ...(businessId ? { business: businessId } : {}),
+    })
       .sort({ date: -1 })
       .lean();
 
@@ -273,6 +314,8 @@ export const createProfitEntry = async (req, res) => {
       description,
       balanceAfter: newBalance,
       metadata,
+      business: businessId,
+      date: new Date(),
     });
 
     const populatedEntry = await ProfitHistory.findById(entry._id)
@@ -294,16 +337,25 @@ export const createProfitEntry = async (req, res) => {
 // @access  Private/Admin
 export const backfillProfitHistoryFromSales = async (req, res) => {
   try {
+    const businessId = resolveBusinessId(req);
+    if (!businessId && req.user.role !== "super_admin") {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
     const { startDate, endDate, distributorId, saleId } = req.body || {};
 
-    const adminUser = await User.findOne({ role: "admin" })
+    const adminUser = await User.findOne({
+      role: { $in: ["admin", "super_admin"] },
+    })
       .select("_id")
       .lean();
     if (!adminUser?._id) {
       return res.status(500).json({ message: "No se encontró usuario admin" });
     }
 
-    const salesFilter = {};
+    const salesFilter = businessId
+      ? { business: new mongoose.Types.ObjectId(businessId) }
+      : {};
 
     if (saleId) {
       if (!mongoose.isValidObjectId(saleId)) {
@@ -391,6 +443,7 @@ export const backfillProfitHistoryFromSales = async (req, res) => {
           saleId: sale._id,
           productId: sale.product,
           metadata: entry.metadata,
+          businessId,
           date: sale.saleDate,
         });
 
@@ -402,7 +455,7 @@ export const backfillProfitHistoryFromSales = async (req, res) => {
     // Recalcular balances para mantener balanceAfter correcto
     for (const userId of affectedUsers) {
       try {
-        await recalculateUserBalance(userId);
+        await recalculateUserBalance(userId, businessId);
       } catch (e) {
         console.error("Error recalculando balance para", userId, e?.message);
       }
@@ -425,6 +478,11 @@ export const backfillProfitHistoryFromSales = async (req, res) => {
 // @access  Private/Admin
 export const getComparativeAnalysis = async (req, res) => {
   try {
+    const businessId = resolveBusinessId(req);
+    if (!businessId && req.user.role !== "super_admin") {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
     const now = new Date();
 
     // Este mes
@@ -449,9 +507,22 @@ export const getComparativeAnalysis = async (req, res) => {
       59
     );
 
+    const matchCurrent = {
+      date: { $gte: startOfMonth, $lte: endOfMonth },
+      ...(businessId
+        ? { business: new mongoose.Types.ObjectId(businessId) }
+        : {}),
+    };
+    const matchPrevious = {
+      date: { $gte: startOfLastMonth, $lte: endOfLastMonth },
+      ...(businessId
+        ? { business: new mongoose.Types.ObjectId(businessId) }
+        : {}),
+    };
+
     const [thisMonth, lastMonth] = await Promise.all([
       ProfitHistory.aggregate([
-        { $match: { date: { $gte: startOfMonth, $lte: endOfMonth } } },
+        { $match: matchCurrent },
         {
           $group: {
             _id: null,
@@ -462,7 +533,7 @@ export const getComparativeAnalysis = async (req, res) => {
         },
       ]),
       ProfitHistory.aggregate([
-        { $match: { date: { $gte: startOfLastMonth, $lte: endOfLastMonth } } },
+        { $match: matchPrevious },
         {
           $group: {
             _id: null,

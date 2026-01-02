@@ -1,7 +1,10 @@
-import SpecialSale from "../models/SpecialSale.js";
+import mongoose from "mongoose";
 import Product from "../models/Product.js";
-import User from "../models/User.js";
+import SpecialSale from "../models/SpecialSale.js";
 import { recordSpecialSaleProfit } from "../services/profitHistory.service.js";
+
+const resolveBusinessId = (req) =>
+  req.businessId || req.headers["x-business-id"] || req.query.businessId;
 
 // @desc    Crear una venta especial
 // @route   POST /api/special-sales
@@ -18,6 +21,14 @@ export const createSpecialSale = async (req, res) => {
       eventName,
       saleDate,
     } = req.body;
+
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({
+        success: false,
+        message: "Falta x-business-id",
+      });
+    }
 
     // Validaciones básicas
     if (!product || !product.name) {
@@ -84,7 +95,9 @@ export const createSpecialSale = async (req, res) => {
     if (distributionSum > totalProfit + tolerance) {
       return res.status(400).json({
         success: false,
-        message: `La suma de distribuciones ($${distributionSum.toFixed(2)}) excede la ganancia total ($${totalProfit.toFixed(2)})`,
+        message: `La suma de distribuciones ($${distributionSum.toFixed(
+          2
+        )}) excede la ganancia total ($${totalProfit.toFixed(2)})`,
         distributionSum,
         totalProfit,
       });
@@ -103,8 +116,11 @@ export const createSpecialSale = async (req, res) => {
       if (adminIndex !== -1) {
         // Si ya existe Admin, sumar al monto existente
         finalDistribution[adminIndex].amount += remainingProfit;
-        finalDistribution[adminIndex].notes = finalDistribution[adminIndex].notes 
-          ? `${finalDistribution[adminIndex].notes} (incluye restante: $${remainingProfit.toFixed(2)})`
+        finalDistribution[adminIndex].notes = finalDistribution[adminIndex]
+          .notes
+          ? `${
+              finalDistribution[adminIndex].notes
+            } (incluye restante: $${remainingProfit.toFixed(2)})`
           : `Incluye restante: $${remainingProfit.toFixed(2)}`;
       } else {
         // Si no existe, agregar nuevo distribuidor Admin
@@ -119,7 +135,10 @@ export const createSpecialSale = async (req, res) => {
     // Si product.productId existe, verificar que el producto exista y descontar stock
     let productDoc = null;
     if (product.productId) {
-      productDoc = await Product.findById(product.productId);
+      productDoc = await Product.findOne({
+        _id: product.productId,
+        business: businessId,
+      });
       if (!productDoc) {
         return res.status(404).json({
           success: false,
@@ -138,6 +157,7 @@ export const createSpecialSale = async (req, res) => {
 
     // Crear la venta especial
     const specialSale = await SpecialSale.create({
+      business: businessId,
       product,
       quantity,
       specialPrice,
@@ -201,7 +221,15 @@ export const getAllSpecialSales = async (req, res) => {
       sortBy = "-saleDate",
     } = req.query;
 
-    const query = {};
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({
+        success: false,
+        message: "Falta x-business-id",
+      });
+    }
+
+    const query = { business: businessId };
 
     // Filtro por estado
     if (status) {
@@ -260,7 +288,18 @@ export const getAllSpecialSales = async (req, res) => {
 // @access  Private/Admin
 export const getSpecialSaleById = async (req, res) => {
   try {
-    const specialSale = await SpecialSale.findById(req.params.id)
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({
+        success: false,
+        message: "Falta x-business-id",
+      });
+    }
+
+    const specialSale = await SpecialSale.findOne({
+      _id: req.params.id,
+      business: businessId,
+    })
       .populate("createdBy", "name email")
       .populate("product.productId", "name image clientPrice cost");
 
@@ -301,7 +340,18 @@ export const updateSpecialSale = async (req, res) => {
       status,
     } = req.body;
 
-    const specialSale = await SpecialSale.findById(req.params.id);
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({
+        success: false,
+        message: "Falta x-business-id",
+      });
+    }
+
+    const specialSale = await SpecialSale.findOne({
+      _id: req.params.id,
+      business: businessId,
+    });
 
     if (!specialSale) {
       return res.status(404).json({
@@ -311,18 +361,33 @@ export const updateSpecialSale = async (req, res) => {
     }
 
     // Actualizar campos si se proporcionan
-    if (product) specialSale.product = product;
+    if (product) {
+      if (product.productId) {
+        const productDoc = await Product.findOne({
+          _id: product.productId,
+          business: businessId,
+        });
+
+        if (!productDoc) {
+          return res.status(404).json({
+            success: false,
+            message: "Producto no encontrado en este negocio",
+          });
+        }
+      }
+      specialSale.product = product;
+    }
     if (quantity) specialSale.quantity = quantity;
     if (specialPrice !== undefined) specialSale.specialPrice = specialPrice;
     if (cost !== undefined) specialSale.cost = cost;
-    
+
     // Si se actualiza la distribución, aplicar la misma lógica de ganancias restantes
     if (distribution) {
-      const newTotalProfit = 
-        (specialPrice !== undefined ? specialPrice : specialSale.specialPrice) * 
-        (quantity !== undefined ? quantity : specialSale.quantity) - 
-        (cost !== undefined ? cost : specialSale.cost) * 
-        (quantity !== undefined ? quantity : specialSale.quantity);
+      const newTotalProfit =
+        (specialPrice !== undefined ? specialPrice : specialSale.specialPrice) *
+          (quantity !== undefined ? quantity : specialSale.quantity) -
+        (cost !== undefined ? cost : specialSale.cost) *
+          (quantity !== undefined ? quantity : specialSale.quantity);
 
       const distributionSum = distribution.reduce(
         (sum, dist) => sum + dist.amount,
@@ -333,7 +398,9 @@ export const updateSpecialSale = async (req, res) => {
       if (distributionSum > newTotalProfit + tolerance) {
         return res.status(400).json({
           success: false,
-          message: `La suma de distribuciones ($${distributionSum.toFixed(2)}) excede la ganancia total ($${newTotalProfit.toFixed(2)})`,
+          message: `La suma de distribuciones ($${distributionSum.toFixed(
+            2
+          )}) excede la ganancia total ($${newTotalProfit.toFixed(2)})`,
         });
       }
 
@@ -348,8 +415,11 @@ export const updateSpecialSale = async (req, res) => {
 
         if (adminIndex !== -1) {
           finalDistribution[adminIndex].amount += remainingProfit;
-          finalDistribution[adminIndex].notes = finalDistribution[adminIndex].notes 
-            ? `${finalDistribution[adminIndex].notes} (incluye restante: $${remainingProfit.toFixed(2)})`
+          finalDistribution[adminIndex].notes = finalDistribution[adminIndex]
+            .notes
+            ? `${
+                finalDistribution[adminIndex].notes
+              } (incluye restante: $${remainingProfit.toFixed(2)})`
             : `Incluye restante: $${remainingProfit.toFixed(2)}`;
         } else {
           finalDistribution.push({
@@ -362,7 +432,7 @@ export const updateSpecialSale = async (req, res) => {
 
       specialSale.distribution = finalDistribution;
     }
-    
+
     if (observations !== undefined) specialSale.observations = observations;
     if (eventName !== undefined) specialSale.eventName = eventName;
     if (saleDate) specialSale.saleDate = saleDate;
@@ -395,7 +465,18 @@ export const updateSpecialSale = async (req, res) => {
 // @access  Private/Admin
 export const deleteSpecialSale = async (req, res) => {
   try {
-    const specialSale = await SpecialSale.findById(req.params.id);
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({
+        success: false,
+        message: "Falta x-business-id",
+      });
+    }
+
+    const specialSale = await SpecialSale.findOne({
+      _id: req.params.id,
+      business: businessId,
+    });
 
     if (!specialSale) {
       return res.status(404).json({
@@ -424,7 +505,18 @@ export const deleteSpecialSale = async (req, res) => {
 // @access  Private/Admin
 export const cancelSpecialSale = async (req, res) => {
   try {
-    const specialSale = await SpecialSale.findById(req.params.id);
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({
+        success: false,
+        message: "Falta x-business-id",
+      });
+    }
+
+    const specialSale = await SpecialSale.findOne({
+      _id: req.params.id,
+      business: businessId,
+    });
 
     if (!specialSale) {
       return res.status(404).json({
@@ -442,7 +534,10 @@ export const cancelSpecialSale = async (req, res) => {
 
     // Devolver stock al producto si existe referencia
     if (specialSale.product.productId) {
-      const product = await Product.findById(specialSale.product.productId);
+      const product = await Product.findOne({
+        _id: specialSale.product.productId,
+        business: businessId,
+      });
       if (product) {
         product.totalStock += specialSale.quantity;
         product.warehouseStock += specialSale.quantity;
@@ -473,8 +568,19 @@ export const cancelSpecialSale = async (req, res) => {
 export const getSpecialSalesStatistics = async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({
+        success: false,
+        message: "Falta x-business-id",
+      });
+    }
 
-    const statistics = await SpecialSale.getStatistics(startDate, endDate);
+    const statistics = await SpecialSale.getStatistics(
+      startDate,
+      endDate,
+      businessId
+    );
 
     res.status(200).json({
       success: true,
@@ -495,10 +601,18 @@ export const getSpecialSalesStatistics = async (req, res) => {
 export const getDistributionByPerson = async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({
+        success: false,
+        message: "Falta x-business-id",
+      });
+    }
 
     const distribution = await SpecialSale.getDistributionByPerson(
       startDate,
-      endDate
+      endDate,
+      businessId
     );
 
     res.status(200).json({
@@ -520,9 +634,17 @@ export const getDistributionByPerson = async (req, res) => {
 export const getTopProducts = async (req, res) => {
   try {
     const { startDate, endDate, limit = 10 } = req.query;
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({
+        success: false,
+        message: "Falta x-business-id",
+      });
+    }
 
     const match = {
       status: "active",
+      business: new mongoose.Types.ObjectId(businessId),
     };
 
     if (startDate || endDate) {

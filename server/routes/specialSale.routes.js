@@ -1,21 +1,25 @@
 import express from "express";
 import {
-  createSpecialSale,
-  getAllSpecialSales,
-  getSpecialSaleById,
-  updateSpecialSale,
-  deleteSpecialSale,
   cancelSpecialSale,
-  getSpecialSalesStatistics,
+  createSpecialSale,
+  deleteSpecialSale,
+  getAllSpecialSales,
   getDistributionByPerson,
+  getSpecialSaleById,
+  getSpecialSalesStatistics,
   getTopProducts,
+  updateSpecialSale,
 } from "../controllers/specialSale.controller.js";
-import { protect, admin } from "../middleware/auth.middleware.js";
+import { admin, protect } from "../middleware/auth.middleware.js";
+import {
+  businessContext,
+  requireFeature,
+} from "../middleware/business.middleware.js";
 
 const router = express.Router();
 
 // Proteger todas las rutas y solo permitir admin
-router.use(protect);
+router.use(protect, businessContext, requireFeature("sales"));
 router.use(admin);
 
 // Rutas de estadísticas

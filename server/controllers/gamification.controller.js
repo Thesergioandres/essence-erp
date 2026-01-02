@@ -1,8 +1,23 @@
+import mongoose from "mongoose";
 import DistributorStats from "../models/DistributorStats.js";
 import GamificationConfig from "../models/GamificationConfig.js";
+import Membership from "../models/Membership.js";
 import PeriodWinner from "../models/PeriodWinner.js";
 import Sale from "../models/Sale.js";
 import { getDistributorCommissionInfo } from "../utils/distributorPricing.js";
+
+const resolveBusinessId = (req) =>
+  req.businessId || req.headers["x-business-id"] || req.query.businessId;
+
+const getBusinessDistributorIds = async (businessId) => {
+  // Solo distribuidores; no usamos admins para limitar el ranking
+  const memberships = await Membership.find({
+    business: businessId,
+    status: "active",
+    role: { $in: ["distribuidor"] },
+  }).select("user");
+  return memberships.map((m) => m.user);
+};
 
 // @desc    Obtener comisión ajustada por ranking para un distribuidor
 // @route   GET /api/gamification/commission/:distributorId
@@ -10,7 +25,20 @@ import { getDistributorCommissionInfo } from "../utils/distributorPricing.js";
 export const getAdjustedCommission = async (req, res) => {
   try {
     const { distributorId } = req.params;
-    const info = await getDistributorCommissionInfo(distributorId);
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+    const allowedDistributors = await getBusinessDistributorIds(businessId);
+    if (
+      allowedDistributors.length &&
+      !allowedDistributors.some((id) => id.toString() === distributorId)
+    ) {
+      return res
+        .status(403)
+        .json({ message: "Distribuidor fuera del negocio" });
+    }
+    const info = await getDistributorCommissionInfo(distributorId, businessId);
 
     res.json({
       position: info.position,
@@ -29,6 +57,13 @@ export const getAdjustedCommission = async (req, res) => {
 // @access  Private/Admin
 export const checkAndEvaluatePeriod = async (req, res) => {
   try {
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+    const businessObjectId = new mongoose.Types.ObjectId(businessId);
+    const allowedDistributors = await getBusinessDistributorIds(businessId);
+
     const config = await GamificationConfig.findOne();
 
     if (!config || !config.autoEvaluate) {
@@ -68,6 +103,10 @@ export const checkAndEvaluatePeriod = async (req, res) => {
         $match: {
           saleDate: { $gte: startDate, $lte: endDate },
           paymentStatus: "confirmado",
+          business: businessObjectId,
+          ...(allowedDistributors.length
+            ? { distributor: { $in: allowedDistributors } }
+            : {}),
         },
       },
       {
@@ -110,6 +149,7 @@ export const checkAndEvaluatePeriod = async (req, res) => {
 
     // Crear registro de ganador
     const periodWinner = await PeriodWinner.create({
+      business: businessObjectId,
       periodType: config.evaluationPeriod,
       startDate: startDate,
       endDate: endDate,
@@ -232,6 +272,8 @@ export const updateConfig = async (req, res) => {
       productBonuses,
       pointsPerSale,
       pointsPerPeso,
+      minAdminProfitForRanking,
+      currentPeriodStart,
     } = req.body;
 
     let config = await GamificationConfig.findOne();
@@ -253,6 +295,8 @@ export const updateConfig = async (req, res) => {
         productBonuses,
         pointsPerSale,
         pointsPerPeso,
+        minAdminProfitForRanking,
+        ...(currentPeriodStart ? { currentPeriodStart } : {}),
       });
       await config.save();
     }
@@ -269,39 +313,57 @@ export const updateConfig = async (req, res) => {
 export const getRanking = async (req, res) => {
   try {
     const { period = "current" } = req.query;
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+    const businessObjectId = new mongoose.Types.ObjectId(businessId);
+    const allowedDistributors = await getBusinessDistributorIds(businessId);
     const config = await GamificationConfig.findOne();
 
     let startDate, endDate;
 
     if (period === "current") {
       const now = new Date();
-      if (config?.evaluationPeriod === "monthly") {
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-        endDate = new Date(
-          now.getFullYear(),
-          now.getMonth() + 1,
-          0,
-          23,
-          59,
-          59
-        );
-      } else if (config?.evaluationPeriod === "weekly") {
-        const dayOfWeek = now.getDay();
-        startDate = new Date(now);
-        startDate.setDate(now.getDate() - dayOfWeek);
-        startDate.setHours(0, 0, 0, 0);
-        endDate = new Date(startDate);
-        endDate.setDate(startDate.getDate() + 6);
-        endDate.setHours(23, 59, 59);
-      } else if (config?.evaluationPeriod === "custom") {
-        startDate = new Date();
-        startDate.setDate(
-          startDate.getDate() - (config.customPeriodDays || 30)
-        );
-        endDate = new Date();
-      } else {
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-        endDate = new Date();
+      // Si hay currentPeriodStart guardado, úsalo para mantener el mismo rango
+      const persistedStart = config?.currentPeriodStart
+        ? new Date(config.currentPeriodStart)
+        : null;
+
+      const evalPeriod = config?.evaluationPeriod || "biweekly";
+      let periodDays = 15;
+      if (evalPeriod === "monthly") periodDays = 30;
+      else if (evalPeriod === "weekly") periodDays = 7;
+      else if (evalPeriod === "custom")
+        periodDays = config?.customPeriodDays || 15;
+
+      startDate =
+        persistedStart ||
+        (() => {
+          if (evalPeriod === "monthly") {
+            return new Date(now.getFullYear(), now.getMonth(), 1);
+          }
+          if (evalPeriod === "weekly") {
+            const d = new Date(now);
+            // Semana que termina hoy: últimos 7 días
+            d.setDate(now.getDate() - 6);
+            d.setHours(0, 0, 0, 0);
+            return d;
+          }
+          // biweekly/custom sin persistedStart: últimos periodDays días
+          const d = new Date(now);
+          d.setDate(now.getDate() - (periodDays - 1));
+          d.setHours(0, 0, 0, 0);
+          return d;
+        })();
+
+      endDate = new Date(startDate);
+      endDate.setDate(startDate.getDate() + (periodDays - 1));
+      endDate.setHours(23, 59, 59, 999);
+
+      // No ir más allá de hoy
+      if (endDate > now) {
+        endDate = now;
       }
     } else {
       startDate = new Date(req.query.startDate);
@@ -314,6 +376,10 @@ export const getRanking = async (req, res) => {
         $match: {
           saleDate: { $gte: startDate, $lte: endDate },
           paymentStatus: "confirmado",
+          business: businessObjectId,
+          ...(allowedDistributors.length
+            ? { distributor: { $in: allowedDistributors } }
+            : {}),
         },
       },
       {
@@ -358,24 +424,30 @@ export const getRanking = async (req, res) => {
         const position = index + 1;
         let positionBadge = "";
         let positionLabel = "";
-        let profitPercentage = 20;
+        const basePct = 20;
+        const bonuses = [
+          config?.top1CommissionBonus || 0,
+          config?.top2CommissionBonus || 0,
+          config?.top3CommissionBonus || 0,
+        ];
+        let profitPercentage = basePct;
 
         if (position === 1) {
           positionBadge = "🥇";
           positionLabel = "PRIMER LUGAR";
-          profitPercentage = 25;
+          profitPercentage = basePct + bonuses[0];
         } else if (position === 2) {
           positionBadge = "🥈";
           positionLabel = "SEGUNDO LUGAR";
-          profitPercentage = 23;
+          profitPercentage = basePct + bonuses[1];
         } else if (position === 3) {
           positionBadge = "🥉";
           positionLabel = "TERCER LUGAR";
-          profitPercentage = 21;
+          profitPercentage = basePct + bonuses[2];
         } else {
           positionBadge = `#${position}`;
           positionLabel = `POSICIÓN ${position}`;
-          profitPercentage = 20;
+          profitPercentage = basePct;
         }
 
         return {
@@ -402,6 +474,12 @@ export const getRanking = async (req, res) => {
         topPerformerBonus: config?.topPerformerBonus || 0,
         secondPlaceBonus: config?.secondPlaceBonus || 0,
         thirdPlaceBonus: config?.thirdPlaceBonus || 0,
+        top1CommissionBonus: config?.top1CommissionBonus || 0,
+        top2CommissionBonus: config?.top2CommissionBonus || 0,
+        top3CommissionBonus: config?.top3CommissionBonus || 0,
+        evaluationPeriod: config?.evaluationPeriod,
+        customPeriodDays: config?.customPeriodDays,
+        currentPeriodStart: config?.currentPeriodStart,
       },
     });
   } catch (error) {
@@ -415,6 +493,12 @@ export const getRanking = async (req, res) => {
 export const evaluatePeriod = async (req, res) => {
   try {
     const { startDate, endDate, notes } = req.body;
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+    const businessObjectId = new mongoose.Types.ObjectId(businessId);
+    const allowedDistributors = await getBusinessDistributorIds(businessId);
     const config = await GamificationConfig.findOne();
 
     const start = new Date(startDate);
@@ -426,6 +510,10 @@ export const evaluatePeriod = async (req, res) => {
         $match: {
           saleDate: { $gte: start, $lte: end },
           paymentStatus: "confirmado",
+          business: businessObjectId,
+          ...(allowedDistributors.length
+            ? { distributor: { $in: allowedDistributors } }
+            : {}),
         },
       },
       {
@@ -462,6 +550,7 @@ export const evaluatePeriod = async (req, res) => {
 
     // Crear registro de ganador
     const periodWinner = await PeriodWinner.create({
+      business: businessObjectId,
       periodType: config?.evaluationPeriod || "custom",
       startDate: start,
       endDate: end,
@@ -535,15 +624,36 @@ export const evaluatePeriod = async (req, res) => {
 export const getWinners = async (req, res) => {
   try {
     const { limit = 10, page = 1 } = req.query;
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
 
-    const winners = await PeriodWinner.find()
+    const allowedDistributors = await getBusinessDistributorIds(businessId);
+
+    // Construir filtro: si hay distribuidores autorizados, limitar a ellos;
+    // si no, usar el negocio (incluyendo docs legacy sin business guardado)
+    const filters = [];
+    if (allowedDistributors.length) {
+      filters.push({ winner: { $in: allowedDistributors } });
+      filters.push({
+        "topPerformers.distributor": { $in: allowedDistributors },
+      });
+    } else {
+      filters.push({ business: businessId });
+      filters.push({ business: { $exists: false } });
+    }
+
+    const baseQuery = filters.length ? { $or: filters } : {};
+
+    const winners = await PeriodWinner.find(baseQuery)
       .sort({ endDate: -1 })
       .limit(parseInt(limit))
       .skip((parseInt(page) - 1) * parseInt(limit))
       .populate("winner", "name email")
       .populate("topPerformers.distributor", "name email");
 
-    const total = await PeriodWinner.countDocuments();
+    const total = await PeriodWinner.countDocuments(baseQuery);
 
     res.json({
       winners,
@@ -562,6 +672,19 @@ export const getWinners = async (req, res) => {
 export const getDistributorStats = async (req, res) => {
   try {
     const { distributorId } = req.params;
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+    const allowedDistributors = await getBusinessDistributorIds(businessId);
+    if (
+      allowedDistributors.length &&
+      !allowedDistributors.some((id) => id.toString() === distributorId)
+    ) {
+      return res
+        .status(403)
+        .json({ message: "Distribuidor fuera del negocio" });
+    }
 
     let stats = await DistributorStats.findOne({
       distributor: distributorId,

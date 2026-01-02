@@ -3,126 +3,128 @@ import { useNavigate } from "react-router-dom";
 export default function Hero() {
   const navigate = useNavigate();
 
+  const scrollToModules = () => {
+    document.getElementById("modulos")?.scrollIntoView({ behavior: "smooth" });
+  };
+
   return (
-    <section className="relative overflow-hidden bg-linear-to-br from-gray-900 via-purple-900 to-gray-900 px-4 py-12 sm:py-16 md:py-20 lg:py-32">
-      {/* Background Effects */}
+    <section className="relative overflow-hidden bg-[#0b0c14] px-4 py-12 sm:py-16 md:py-20 lg:py-24">
       <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -right-10 sm:-right-40 -top-10 sm:-top-40 h-48 w-48 sm:h-80 sm:w-80 rounded-full bg-purple-600/20 blur-3xl"></div>
-        <div className="absolute -bottom-10 sm:-bottom-40 -left-10 sm:-left-40 h-48 w-48 sm:h-80 sm:w-80 rounded-full bg-pink-600/20 blur-3xl"></div>
+        <div className="absolute -left-10 -top-10 h-60 w-60 rounded-full bg-purple-700/20 blur-3xl" />
+        <div className="absolute bottom-0 right-0 h-72 w-72 rounded-full bg-pink-600/15 blur-3xl" />
+        <div className="absolute inset-x-0 top-10 h-px bg-gradient-to-r from-transparent via-purple-500/40 to-transparent" />
       </div>
 
-      <div className="relative mx-auto max-w-7xl">
-        <div className="text-center">
-          {/* Logo/Brand */}
-          <h1 className="mb-3 sm:mb-4 md:mb-6 bg-linear-to-r from-purple-400 via-pink-400 to-purple-400 bg-clip-text text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold text-transparent leading-tight">
-            ESSENCE
-          </h1>
+      <div className="relative mx-auto flex max-w-6xl flex-col gap-10 lg:flex-row lg:items-center lg:justify-between">
+        <div className="space-y-6 text-left">
+          <div className="inline-flex items-center gap-2 rounded-full border border-purple-500/40 bg-purple-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-purple-100">
+            ERP modular • Multi-empresa
+          </div>
 
-          {/* Slogan */}
-          <p className="mb-2 sm:mb-3 md:mb-4 text-lg sm:text-xl md:text-2xl lg:text-3xl font-semibold text-white">
-            Tu esencia, tu estilo
-          </p>
-          <p className="mx-auto mb-6 sm:mb-8 md:mb-10 max-w-2xl text-sm sm:text-base md:text-lg lg:text-xl text-gray-300 px-2">
-            Descubre nuestra colección exclusiva de vapes, accesorios y más.
-            Calidad premium para los que buscan algo diferente.
-          </p>
+          <div className="space-y-4">
+            <h1 className="bg-gradient-to-r from-purple-200 via-white to-purple-300 bg-clip-text text-4xl font-extrabold leading-[1.05] text-transparent sm:text-5xl md:text-6xl">
+              Un ERP que opera por negocios.
+            </h1>
+            <p className="max-w-2xl text-base text-gray-300 sm:text-lg">
+              Centraliza inventario, catálogos, comisiones y analítica en un
+              mismo panel. Activa módulos por negocio y controla todo sin perder
+              velocidad.
+            </p>
+          </div>
 
-          {/* CTA Buttons */}
-          <div className="flex flex-col items-stretch justify-center gap-3 sm:gap-4 sm:flex-row sm:items-center px-2 max-w-lg mx-auto">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
             <button
-              onClick={() => navigate("/productos")}
-              className="group relative w-full sm:flex-1 overflow-hidden rounded-lg sm:rounded-full bg-linear-to-r from-purple-600 to-pink-600 px-6 sm:px-8 py-3.5 sm:py-4 text-base sm:text-lg font-semibold text-white shadow-lg transition-all hover:shadow-purple-500/50 active:scale-[0.98] min-h-[52px]"
+              onClick={scrollToModules}
+              className="group relative flex-1 overflow-hidden rounded-xl bg-gradient-to-r from-purple-600 to-fuchsia-600 px-5 py-3.5 text-base font-semibold text-white shadow-lg shadow-purple-700/30 transition hover:shadow-purple-500/40 sm:flex-none sm:px-6"
             >
-              <span className="relative z-10">Ver Productos</span>
-              <div className="absolute inset-0 z-0 bg-linear-to-r from-purple-700 to-pink-700 opacity-0 transition-opacity group-hover:opacity-100"></div>
+              <span className="relative z-10">Ver módulos</span>
+              <span className="absolute inset-0 translate-y-full bg-white/10 opacity-0 transition group-hover:translate-y-0 group-hover:opacity-100" />
             </button>
-
             <button
-              onClick={() => navigate("/productos")}
-              className="w-full sm:flex-1 rounded-lg sm:rounded-full border-2 border-purple-500 px-6 sm:px-8 py-3.5 sm:py-4 text-base sm:text-lg font-semibold text-purple-400 transition-all hover:bg-purple-500/10 active:scale-[0.98] min-h-[52px]"
+              onClick={() => navigate("/login")}
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-purple-400/40 bg-white/5 px-5 py-3.5 text-base font-semibold text-purple-100 transition hover:border-purple-300/70 hover:text-white sm:flex-none sm:px-6"
             >
-              Explorar Categorías
+              Entrar al panel
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 5l7 7-7 7"
+                />
+              </svg>
             </button>
           </div>
 
-          {/* Features */}
-          <div className="mt-8 sm:mt-12 md:mt-16 grid gap-4 sm:gap-6 md:gap-8 grid-cols-1 sm:grid-cols-3 px-2">
-            <div className="rounded-xl sm:rounded-2xl border border-gray-700 bg-gray-800/50 p-4 sm:p-5 md:p-6 backdrop-blur-lg transition hover:border-purple-500">
-              <div className="mb-2 sm:mb-3 md:mb-4 flex justify-center">
-                <div className="rounded-full bg-purple-600/20 p-2.5 sm:p-3 md:p-4">
-                  <svg
-                    className="h-6 w-6 sm:h-8 sm:w-8 text-purple-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {["Multi-empresa", "Roles y permisos", "KPIs en vivo"].map(
+              label => (
+                <div
+                  key={label}
+                  className="flex items-center gap-2 rounded-lg border border-white/5 bg-white/5 px-3 py-2 text-sm text-gray-200"
+                >
+                  <span className="h-2 w-2 rounded-full bg-green-400" />
+                  {label}
                 </div>
+              )
+            )}
+          </div>
+        </div>
+
+        <div className="relative w-full max-w-xl self-center lg:self-end">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-5 shadow-2xl shadow-purple-900/30 backdrop-blur-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.24em] text-gray-400">
+                  Operación
+                </p>
+                <p className="text-lg font-semibold text-white">
+                  Módulos activos
+                </p>
               </div>
-              <h3 className="mb-2 text-base sm:text-lg font-semibold text-white">
-                Calidad Premium
-              </h3>
-              <p className="text-sm sm:text-base text-gray-400">
-                Productos seleccionados con los más altos estándares de calidad
-              </p>
+              <span className="rounded-full bg-green-500/15 px-3 py-1 text-xs font-semibold text-green-200">
+                Uptime 99.9%
+              </span>
             </div>
 
-            <div className="rounded-2xl border border-gray-700 bg-gray-800/50 p-5 sm:p-6 backdrop-blur-lg transition hover:border-pink-500">
-              <div className="mb-3 sm:mb-4 flex justify-center">
-                <div className="rounded-full bg-pink-600/20 p-3 sm:p-4">
-                  <svg
-                    className="h-6 w-6 sm:h-8 sm:w-8 text-pink-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M13 10V3L4 14h7v7l9-11h-7z"
-                    />
-                  </svg>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {["Inventario en vivo", "Catálogo distribuido"].map(title => (
+                <div
+                  key={title}
+                  className="rounded-xl border border-white/5 bg-black/20 p-4 text-sm text-gray-100 shadow-inner shadow-purple-900/30"
+                >
+                  <div className="flex items-start justify-between">
+                    <p className="font-semibold text-white">{title}</p>
+                    <span className="rounded-full bg-purple-500/20 px-2 py-1 text-[10px] font-bold text-purple-100">
+                      Activo
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs text-gray-400">
+                    Controla stock, permisos y reglas por negocio sin romper la
+                    operación diaria.
+                  </p>
                 </div>
-              </div>
-              <h3 className="mb-2 text-base sm:text-lg font-semibold text-white">
-                Envío Rápido
-              </h3>
-              <p className="text-sm sm:text-base text-gray-400">
-                Entrega ágil para que disfrutes tu compra cuanto antes
-              </p>
+              ))}
             </div>
 
-            <div className="rounded-2xl border border-gray-700 bg-gray-800/50 p-5 sm:p-6 backdrop-blur-lg transition hover:border-purple-500">
-              <div className="mb-3 sm:mb-4 flex justify-center">
-                <div className="rounded-full bg-purple-600/20 p-3 sm:p-4">
-                  <svg
-                    className="h-6 w-6 sm:h-8 sm:w-8 text-purple-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
-                    />
-                  </svg>
-                </div>
+            <div className="mt-5 grid grid-cols-3 gap-3 text-center text-sm text-gray-200">
+              <div className="rounded-lg border border-white/5 bg-white/5 px-3 py-2">
+                <p className="text-xl font-bold text-white">24</p>
+                <p className="text-[11px] text-gray-400">Negocios activos</p>
               </div>
-              <h3 className="mb-2 text-base sm:text-lg font-semibold text-white">
-                Variedad Única
-              </h3>
-              <p className="text-sm sm:text-base text-gray-400">
-                Amplio catálogo para todos los gustos y preferencias
-              </p>
+              <div className="rounded-lg border border-white/5 bg-white/5 px-3 py-2">
+                <p className="text-xl font-bold text-white">+180</p>
+                <p className="text-[11px] text-gray-400">Jobs diarios</p>
+              </div>
+              <div className="rounded-lg border border-white/5 bg-white/5 px-3 py-2">
+                <p className="text-xl font-bold text-white">99.9%</p>
+                <p className="text-[11px] text-gray-400">Uptime</p>
+              </div>
             </div>
           </div>
         </div>

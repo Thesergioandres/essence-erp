@@ -27,6 +27,11 @@ const distributionSchema = new mongoose.Schema(
 
 const specialSaleSchema = new mongoose.Schema(
   {
+    business: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Business",
+      index: true,
+    },
     product: {
       name: {
         type: String,
@@ -105,7 +110,8 @@ const specialSaleSchema = new mongoose.Schema(
 // Validación personalizada: suma de distribuciones debe igualar ganancia total
 specialSaleSchema.pre("save", function (next) {
   // Calcular ganancia total
-  this.totalProfit = this.specialPrice * this.quantity - this.cost * this.quantity;
+  this.totalProfit =
+    this.specialPrice * this.quantity - this.cost * this.quantity;
 
   // Verificar que la suma de distribuciones coincida con la ganancia total
   const distributionSum = this.distribution.reduce(
@@ -117,7 +123,9 @@ specialSaleSchema.pre("save", function (next) {
   if (Math.abs(distributionSum - this.totalProfit) > tolerance) {
     next(
       new Error(
-        `La suma de distribuciones ($${distributionSum.toFixed(2)}) no coincide con la ganancia total ($${this.totalProfit.toFixed(2)})`
+        `La suma de distribuciones ($${distributionSum.toFixed(
+          2
+        )}) no coincide con la ganancia total ($${this.totalProfit.toFixed(2)})`
       )
     );
   } else {
@@ -127,6 +135,7 @@ specialSaleSchema.pre("save", function (next) {
 
 // Índices para búsquedas eficientes
 specialSaleSchema.index({ saleDate: -1 });
+specialSaleSchema.index({ business: 1, saleDate: -1 });
 specialSaleSchema.index({ createdBy: 1 });
 specialSaleSchema.index({ "product.name": 1 });
 specialSaleSchema.index({ status: 1 });
@@ -142,9 +151,16 @@ specialSaleSchema.virtual("totalCost").get(function () {
 });
 
 // Método estático para obtener estadísticas de ventas especiales
-specialSaleSchema.statics.getStatistics = async function (startDate, endDate) {
+specialSaleSchema.statics.getStatistics = async function (
+  startDate,
+  endDate,
+  businessId
+) {
   const match = {
     status: "active",
+    ...(businessId
+      ? { business: new mongoose.Types.ObjectId(businessId) }
+      : {}),
   };
 
   if (startDate || endDate) {
@@ -167,22 +183,28 @@ specialSaleSchema.statics.getStatistics = async function (startDate, endDate) {
     },
   ]);
 
-  return stats[0] || {
-    totalSales: 0,
-    totalCosts: 0,
-    totalProfit: 0,
-    count: 0,
-    averageSale: 0,
-  };
+  return (
+    stats[0] || {
+      totalSales: 0,
+      totalCosts: 0,
+      totalProfit: 0,
+      count: 0,
+      averageSale: 0,
+    }
+  );
 };
 
 // Método estático para obtener distribución por persona
 specialSaleSchema.statics.getDistributionByPerson = async function (
   startDate,
-  endDate
+  endDate,
+  businessId
 ) {
   const match = {
     status: "active",
+    ...(businessId
+      ? { business: new mongoose.Types.ObjectId(businessId) }
+      : {}),
   };
 
   if (startDate || endDate) {

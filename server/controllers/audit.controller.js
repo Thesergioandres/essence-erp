@@ -1,14 +1,48 @@
+import mongoose from "mongoose";
 import AuditLog from "../models/AuditLog.js";
 import DistributorStock from "../models/DistributorStock.js";
+import Membership from "../models/Membership.js";
 import Product from "../models/Product.js";
 import Sale from "../models/Sale.js";
 import User from "../models/User.js";
+
+const resolveBusinessId = (req) =>
+  req.businessId || req.headers["x-business-id"] || req.query.businessId;
+
+const getBusinessUserIds = async (businessId, reqUser) => {
+  const memberships = await Membership.find({
+    business: businessId,
+    status: "active",
+  }).select("user");
+  const memberIds = memberships.map((m) => m.user);
+  if (reqUser?.role === "super_admin") {
+    // super_admin puede ver todos; si no hay members, devolver vacío y se manejará sin filtro
+    return memberIds.length ? memberIds : [];
+  }
+  return memberIds;
+};
 
 // @desc    Obtener logs de auditoría con filtros
 // @route   GET /api/audit/logs
 // @access  Private/Admin
 export const getAuditLogs = async (req, res) => {
   try {
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
+    const allowedUsers = await getBusinessUserIds(businessId, req.user);
+    const isSuperAdmin = req.user?.role === "super_admin";
+    if (!isSuperAdmin && allowedUsers.length === 0) {
+      return res.json({
+        logs: [],
+        currentPage: 1,
+        totalPages: 0,
+        totalLogs: 0,
+      });
+    }
+
     const {
       page = 1,
       limit = 50,
@@ -22,11 +56,27 @@ export const getAuditLogs = async (req, res) => {
       entityId,
     } = req.query;
 
-    const filter = {};
+    const filter = { business: businessId };
+    if (!isSuperAdmin) {
+      filter.user = { $in: allowedUsers };
+    }
 
     if (action) filter.action = action;
     if (module) filter.module = module;
-    if (userId) filter.user = userId;
+    if (userId) {
+      if (
+        !isSuperAdmin &&
+        !allowedUsers.some((id) => id.toString() === userId.toString())
+      ) {
+        return res.json({
+          logs: [],
+          currentPage: 1,
+          totalPages: 0,
+          totalLogs: 0,
+        });
+      }
+      filter.user = new mongoose.Types.ObjectId(userId);
+    }
     if (severity) filter.severity = severity;
     if (entityType) filter.entityType = entityType;
     if (entityId) filter.entityId = entityId;
@@ -60,7 +110,19 @@ export const getAuditLogs = async (req, res) => {
 // @access  Private/Admin
 export const getAuditLogById = async (req, res) => {
   try {
-    const log = await AuditLog.findById(req.params.id).populate("user", "name email role");
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
+    const allowedUsers = await getBusinessUserIds(businessId, req.user);
+    const isSuperAdmin = req.user?.role === "super_admin";
+
+    const log = await AuditLog.findOne({
+      _id: req.params.id,
+      ...(isSuperAdmin ? {} : { user: { $in: allowedUsers } }),
+      business: businessId,
+    }).populate("user", "name email role");
 
     if (!log) {
       return res.status(404).json({ message: "Log no encontrado" });
@@ -79,16 +141,27 @@ export const getDailySummary = async (req, res) => {
   try {
     const { date } = req.query;
     const targetDate = date ? new Date(date) : new Date();
-    
+
     const startOfDay = new Date(targetDate);
     startOfDay.setHours(0, 0, 0, 0);
-    
+
     const endOfDay = new Date(targetDate);
     endOfDay.setHours(23, 59, 59, 999);
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+    const businessObjectId = new mongoose.Types.ObjectId(businessId);
+    const allowedUsers = await getBusinessUserIds(businessId, req.user);
+    const isSuperAdmin = req.user?.role === "super_admin";
 
     // Logs del día
     const dailyLogs = await AuditLog.find({
       createdAt: { $gte: startOfDay, $lte: endOfDay },
+      business: businessId,
+      ...(isSuperAdmin || !allowedUsers.length
+        ? {}
+        : { user: { $in: allowedUsers } }),
     });
 
     // Resumen por acción
@@ -121,6 +194,7 @@ export const getDailySummary = async (req, res) => {
     const dailySales = await Sale.find({
       saleDate: { $gte: startOfDay, $lte: endOfDay },
       paymentStatus: "confirmado",
+      business: businessObjectId,
     });
 
     const salesSummary = dailySales.reduce(
@@ -136,6 +210,7 @@ export const getDailySummary = async (req, res) => {
 
     // Stock al final del día
     const warehouseStock = await Product.aggregate([
+      { $match: { business: businessObjectId } },
       {
         $group: {
           _id: null,
@@ -147,6 +222,7 @@ export const getDailySummary = async (req, res) => {
     ]);
 
     const distributorStock = await DistributorStock.aggregate([
+      { $match: { business: businessObjectId } },
       {
         $group: {
           _id: null,
@@ -163,7 +239,11 @@ export const getDailySummary = async (req, res) => {
       topUsers,
       sales: salesSummary,
       inventory: {
-        warehouse: warehouseStock[0] || { totalProducts: 0, totalWarehouseStock: 0, totalStock: 0 },
+        warehouse: warehouseStock[0] || {
+          totalProducts: 0,
+          totalWarehouseStock: 0,
+          totalStock: 0,
+        },
         distributed: distributorStock[0]?.totalDistributed || 0,
       },
     });
@@ -179,8 +259,21 @@ export const getUserActivity = async (req, res) => {
   try {
     const { userId } = req.params;
     const { startDate, endDate, limit = 100 } = req.query;
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+    const allowedUsers = await getBusinessUserIds(businessId, req.user);
+    const isSuperAdmin = req.user?.role === "super_admin";
+    const isAllowed =
+      isSuperAdmin ||
+      allowedUsers.some((id) => id.toString() === userId.toString());
 
-    const filter = { user: userId };
+    if (!isAllowed) {
+      return res.status(403).json({ message: "Usuario fuera del negocio" });
+    }
+
+    const filter = { user: userId, business: businessId };
 
     if (startDate || endDate) {
       filter.createdAt = {};
@@ -225,9 +318,27 @@ export const getEntityHistory = async (req, res) => {
     const { entityType, entityId } = req.params;
     const { limit = 50 } = req.query;
 
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+    const allowedUsers = await getBusinessUserIds(businessId, req.user);
+    const isSuperAdmin = req.user?.role === "super_admin";
+
+    if (!isSuperAdmin && !allowedUsers.length) {
+      return res.json({
+        entityType,
+        entityId,
+        totalChanges: 0,
+        history: [],
+      });
+    }
+
     const logs = await AuditLog.find({
       entityType,
       entityId,
+      ...(isSuperAdmin ? {} : { user: { $in: allowedUsers } }),
+      business: businessId,
     })
       .sort({ createdAt: -1 })
       .limit(parseInt(limit))
@@ -250,12 +361,23 @@ export const getEntityHistory = async (req, res) => {
 export const getAuditStats = async (req, res) => {
   try {
     const { days = 30 } = req.query;
-    
+
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+    const allowedUsers = await getBusinessUserIds(businessId, req.user);
+    const isSuperAdmin = req.user?.role === "super_admin";
+
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - parseInt(days));
 
     const logs = await AuditLog.find({
       createdAt: { $gte: startDate },
+      business: businessId,
+      ...(isSuperAdmin || !allowedUsers.length
+        ? {}
+        : { user: { $in: allowedUsers } }),
     });
 
     // Total de acciones por tipo
@@ -287,7 +409,12 @@ export const getAuditStats = async (req, res) => {
     const userActivity = logs.reduce((acc, log) => {
       const key = log.userEmail;
       if (!acc[key]) {
-        acc[key] = { name: log.userName, email: log.userEmail, role: log.userRole, count: 0 };
+        acc[key] = {
+          name: log.userName,
+          email: log.userEmail,
+          role: log.userRole,
+          count: 0,
+        };
       }
       acc[key].count += 1;
       return acc;
@@ -317,7 +444,7 @@ export const getAuditStats = async (req, res) => {
 export const cleanupOldLogs = async (req, res) => {
   try {
     const { days = 90 } = req.body;
-    
+
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - parseInt(days));
 

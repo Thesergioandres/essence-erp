@@ -2,8 +2,11 @@ import { v2 as cloudinary } from "cloudinary";
 import multer from "multer";
 import { CloudinaryStorage } from "multer-storage-cloudinary";
 
+const cloudinaryEnabled = process.env.ENABLE_CLOUDINARY === "true";
+
 export const isCloudinaryConfigured = Boolean(
-  process.env.CLOUDINARY_CLOUD_NAME &&
+  cloudinaryEnabled &&
+    process.env.CLOUDINARY_CLOUD_NAME &&
     process.env.CLOUDINARY_API_KEY &&
     process.env.CLOUDINARY_API_SECRET
 );
@@ -15,9 +18,13 @@ if (isCloudinaryConfigured) {
     api_key: process.env.CLOUDINARY_API_KEY,
     api_secret: process.env.CLOUDINARY_API_SECRET,
   });
-} else {
+} else if (cloudinaryEnabled) {
   console.warn(
-    "⚠️  Cloudinary no configurado (faltan CLOUDINARY_*). Se deshabilita la subida de imágenes a Cloudinary."
+    "⚠️  Cloudinary habilitado pero faltan CLOUDINARY_*; se deshabilita la subida de imágenes."
+  );
+} else {
+  console.log(
+    "ℹ️  Cloudinary deshabilitado en este entorno (ENABLE_CLOUDINARY != true)"
   );
 }
 

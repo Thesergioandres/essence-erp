@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   distributorService,
   productService,
@@ -18,6 +19,7 @@ interface StockItem {
 }
 
 const StockManagement = () => {
+  const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
   const [distributors, setDistributors] = useState<User[]>([]);
   const [alerts, setAlerts] = useState<Array<Product | DistributorStock>>([]);
@@ -309,19 +311,32 @@ const StockManagement = () => {
               <label className="mb-2 block text-sm font-medium text-gray-300">
                 Distribuidor *
               </label>
-              <select
-                value={selectedDistributor}
-                onChange={e => setSelectedDistributor(e.target.value)}
-                className="w-full rounded-lg border border-gray-600 bg-gray-900/50 px-4 py-3 text-white focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              >
-                <option value="">Selecciona un distribuidor</option>
-                {distributors.map(dist => (
-                  <option key={dist._id} value={dist._id}>
-                    {dist.name} - {dist.email}
-                  </option>
-                ))}
-              </select>
+              {distributors.length === 0 ? (
+                <div className="rounded-lg border border-gray-700 bg-gray-900/50 px-4 py-4 text-sm text-gray-300">
+                  <p>No tienes distribuidores.</p>
+                  <Button
+                    type="button"
+                    className="mt-3"
+                    onClick={() => navigate("/admin/distributors/add")}
+                  >
+                    Añadir distribuidor
+                  </Button>
+                </div>
+              ) : (
+                <select
+                  value={selectedDistributor}
+                  onChange={e => setSelectedDistributor(e.target.value)}
+                  className="w-full rounded-lg border border-gray-600 bg-gray-900/50 px-4 py-3 text-white focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                >
+                  <option value="">Selecciona un distribuidor</option>
+                  {distributors.map(dist => (
+                    <option key={dist._id} value={dist._id}>
+                      {dist.name} - {dist.email}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
           </div>
         </div>
@@ -391,19 +406,32 @@ const StockManagement = () => {
 
           <div className="flex gap-4">
             <div className="flex-1">
-              <select
-                value={selectedProductId}
-                onChange={e => setSelectedProductId(e.target.value)}
-                className="w-full rounded-lg border border-gray-600 bg-gray-900/50 px-4 py-3 text-white focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Selecciona un producto</option>
-                {availableProducts.map(product => (
-                  <option key={product._id} value={product._id}>
-                    {product.name} | Bodega: {product.warehouseStock || 0} |{" "}
-                    {formatCurrency(product.distributorPrice || 0)}
-                  </option>
-                ))}
-              </select>
+              {availableProducts.length === 0 ? (
+                <div className="rounded-lg border border-gray-700 bg-gray-900/50 px-4 py-4 text-sm text-gray-300">
+                  <p>No tienes productos.</p>
+                  <Button
+                    type="button"
+                    className="mt-3"
+                    onClick={() => navigate("/admin/add-product")}
+                  >
+                    Añadir producto
+                  </Button>
+                </div>
+              ) : (
+                <select
+                  value={selectedProductId}
+                  onChange={e => setSelectedProductId(e.target.value)}
+                  className="w-full rounded-lg border border-gray-600 bg-gray-900/50 px-4 py-3 text-white focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Selecciona un producto</option>
+                  {availableProducts.map(product => (
+                    <option key={product._id} value={product._id}>
+                      {product.name} | Bodega: {product.warehouseStock || 0} |{" "}
+                      {formatCurrency(product.distributorPrice || 0)}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
             <Button
               type="button"

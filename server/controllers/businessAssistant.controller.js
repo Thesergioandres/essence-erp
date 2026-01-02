@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { getRedisClient } from "../config/redis.js";
 import { getBusinessAssistantQueue } from "../jobs/businessAssistant.queue.js";
 import { invalidateCache } from "../middleware/cache.middleware.js";
@@ -186,22 +187,47 @@ const buildPriceSuggestion = ({
   };
 };
 
-let _configCache = null;
-let _configCacheAt = 0;
+let _configCache = new Map();
 const CONFIG_CACHE_MS = 30_000;
+const getConfigCacheKey = (businessId) => String(businessId || "global");
 
-const getOrCreateBusinessAssistantConfig = async () => {
+const getOrCreateBusinessAssistantConfig = async (businessId) => {
   const now = Date.now();
-  if (_configCache && now - _configCacheAt < CONFIG_CACHE_MS)
-    return _configCache;
+  const cacheKey = getConfigCacheKey(businessId);
+  const cached = _configCache.get(cacheKey);
+  if (cached && now - cached.at < CONFIG_CACHE_MS) return cached.config;
 
-  let config = await BusinessAssistantConfig.findOne();
-  if (!config) {
-    config = await BusinessAssistantConfig.create({});
+  // Buscar config específica del negocio
+  let config = businessId
+    ? await BusinessAssistantConfig.findOne({ business: businessId })
+    : await BusinessAssistantConfig.findOne({
+        $or: [{ business: { $exists: false } }, { business: null }],
+      });
+
+  // Fallback: reutilizar plantilla global para inicializar negocio
+  if (!config && businessId) {
+    const fallback = await BusinessAssistantConfig.findOne({
+      $or: [{ business: { $exists: false } }, { business: null }],
+    });
+
+    if (fallback) {
+      const payload = fallback.toObject();
+      delete payload._id;
+      delete payload.createdAt;
+      delete payload.updatedAt;
+      delete payload.__v;
+      config = await BusinessAssistantConfig.create({
+        ...payload,
+        business: businessId,
+      });
+    }
   }
 
-  _configCache = config;
-  _configCacheAt = now;
+  if (!config) {
+    config = await BusinessAssistantConfig.create({ business: businessId });
+  }
+
+  _configCache.set(cacheKey, { config, at: now });
   return config;
 };
 
@@ -211,18 +237,21 @@ const parseNumber = (value, fallback) => {
 };
 
 const buildCacheKey = ({
+  businessId,
   configUpdatedAtMs,
   horizonDays,
   recentDays,
   startDateStr,
   endDateStr,
 }) => {
-  return `cache:businessAssistant:recommendations:v${configUpdatedAtMs}:${horizonDays}:${recentDays}:${
+  const businessKey = getConfigCacheKey(businessId);
+  return `cache:businessAssistant:${businessKey}:recommendations:v${configUpdatedAtMs}:${horizonDays}:${recentDays}:${
     startDateStr || ""
   }:${endDateStr || ""}`;
 };
 
 export const generateBusinessAssistantRecommendations = async ({
+  businessId,
   horizonDays,
   recentDays,
   startDate,
@@ -230,7 +259,12 @@ export const generateBusinessAssistantRecommendations = async ({
   redis,
   bypassCache = false,
 } = {}) => {
-  const config = await getOrCreateBusinessAssistantConfig();
+  if (!businessId) {
+    throw new Error("Falta el negocio para generar recomendaciones");
+  }
+
+  const businessObjectId = new mongoose.Types.ObjectId(String(businessId));
+  const config = await getOrCreateBusinessAssistantConfig(businessId);
 
   const effectiveHorizonDays = parseNumber(
     horizonDays,
@@ -252,6 +286,7 @@ export const generateBusinessAssistantRecommendations = async ({
   const ttlSeconds = parseNumber(config.cacheTtlSeconds, 300);
 
   const cacheKey = buildCacheKey({
+    businessId,
     configUpdatedAtMs,
     horizonDays: effectiveHorizonDays,
     recentDays: effectiveRecentDays,
@@ -293,6 +328,7 @@ export const generateBusinessAssistantRecommendations = async ({
   const salesAgg = await Sale.aggregate([
     {
       $match: {
+        business: businessObjectId,
         paymentStatus: "confirmado",
         saleDate: matchSaleDate,
       },
@@ -424,7 +460,7 @@ export const generateBusinessAssistantRecommendations = async ({
     },
   ]);
 
-  const allProducts = await Product.find({}).select(
+  const allProducts = await Product.find({ business: businessObjectId }).select(
     "name category purchasePrice distributorPrice suggestedPrice clientPrice warehouseStock totalStock lowStockAlert"
   );
 
@@ -437,7 +473,10 @@ export const generateBusinessAssistantRecommendations = async ({
     )
   );
   const categories = categoryIds.length
-    ? await Category.find({ _id: { $in: categoryIds } }).select("name")
+    ? await Category.find({
+        _id: { $in: categoryIds },
+        business: businessObjectId,
+      }).select("name")
     : [];
   const categoryNameById = new Map(
     (categories || []).map((c) => [String(c._id), c.name])
@@ -1084,7 +1123,7 @@ export const generateBusinessAssistantRecommendations = async ({
 // @access  Private/Admin
 export const getBusinessAssistantConfig = async (req, res) => {
   try {
-    const config = await getOrCreateBusinessAssistantConfig();
+    const config = await getOrCreateBusinessAssistantConfig(req.businessId);
     res.json(config);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -1096,18 +1135,43 @@ export const getBusinessAssistantConfig = async (req, res) => {
 // @access  Private/Admin
 export const updateBusinessAssistantConfig = async (req, res) => {
   try {
-    let config = await BusinessAssistantConfig.findOne();
+    const businessId = req.businessId;
+
+    let config = await BusinessAssistantConfig.findOne({
+      business: businessId,
+    });
+
     if (!config) {
-      config = await BusinessAssistantConfig.create(req.body || {});
+      const fallback = await BusinessAssistantConfig.findOne({
+        $or: [{ business: { $exists: false } }, { business: null }],
+      });
+
+      const basePayload = fallback
+        ? (() => {
+            const payload = fallback.toObject();
+            delete payload._id;
+            delete payload.createdAt;
+            delete payload.updatedAt;
+            delete payload.__v;
+            return payload;
+          })()
+        : {};
+
+      config = await BusinessAssistantConfig.create({
+        ...basePayload,
+        ...(req.body || {}),
+        business: businessId,
+      });
     } else {
       Object.assign(config, req.body || {});
       await config.save();
     }
 
-    _configCache = null;
-    _configCacheAt = 0;
+    _configCache.delete(getConfigCacheKey(businessId));
 
-    await invalidateCache("cache:businessAssistant:*");
+    await invalidateCache(
+      `cache:businessAssistant:${getConfigCacheKey(businessId)}:*`
+    );
 
     res.json(config);
   } catch (error) {
@@ -1137,7 +1201,7 @@ export const createBusinessAssistantRecommendationsJob = async (req, res) => {
 
     const job = await queue.add(
       "generate-recommendations",
-      { params },
+      { params, businessId: req.businessId },
       {
         jobId: undefined,
       }
@@ -1167,6 +1231,13 @@ export const getBusinessAssistantRecommendationsJob = async (req, res) => {
       return res.status(404).json({ message: "Job no encontrado" });
     }
 
+    const jobBusiness = job.data?.businessId
+      ? String(job.data.businessId)
+      : null;
+    if (jobBusiness && jobBusiness !== String(req.businessId)) {
+      return res.status(404).json({ message: "Job no encontrado" });
+    }
+
     const state = await job.getState();
     const progress = job.progress;
 
@@ -1193,6 +1264,7 @@ export const getBusinessAssistantRecommendations = async (req, res) => {
     const force = String(req.query.force || "0") === "1";
 
     const result = await generateBusinessAssistantRecommendations({
+      businessId: req.businessId,
       horizonDays: req.query.horizonDays,
       recentDays: req.query.recentDays,
       startDate: req.query.startDate,

@@ -2,6 +2,11 @@ import mongoose from "mongoose";
 
 const stockSchema = new mongoose.Schema(
   {
+    business: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Business",
+      index: true,
+    },
     product: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Product",
@@ -29,7 +34,10 @@ const stockSchema = new mongoose.Schema(
 );
 
 // Index compuesto para evitar duplicados
-stockSchema.index({ product: 1, distributor: 1 }, { unique: true });
+stockSchema.index(
+  { business: 1, product: 1, distributor: 1 },
+  { unique: true }
+);
 
 const Stock = mongoose.model("Stock", stockSchema);
 

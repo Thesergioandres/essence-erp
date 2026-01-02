@@ -2,13 +2,15 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { productService } from "../api/services";
 import Footer from "../components/Footer";
-import Navbar from "../components/Navbar";
 import LoadingSpinner from "../components/LoadingSpinner";
+import Navbar from "../components/Navbar";
+import { useBusiness } from "../context/BusinessContext";
 import type { Product } from "../types";
 
 export default function ProductDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { business } = useBusiness();
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -37,14 +39,20 @@ export default function ProductDetail() {
 
   const handleWhatsAppContact = () => {
     if (!product) return;
+    const contactNumber = business?.contactWhatsapp || business?.contactPhone;
+    const normalizedNumber = contactNumber?.replace(/\D/g, "");
+    if (!normalizedNumber) {
+      alert("Configura un número de WhatsApp en los datos del negocio.");
+      return;
+    }
     const message = `Hola, estoy interesado en el producto: ${product.name}`;
-    const whatsappUrl = `https://wa.me/573185753007?text=${encodeURIComponent(message)}`;
+    const whatsappUrl = `https://wa.me/${normalizedNumber}?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, "_blank");
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-linear-to-br from-gray-900 via-purple-900/20 to-gray-900">
+      <div className="bg-linear-to-br min-h-screen from-gray-900 via-purple-900/20 to-gray-900">
         <Navbar />
         <div className="flex min-h-[60vh] items-center justify-center">
           <LoadingSpinner size="lg" message="Cargando producto..." />
@@ -56,7 +64,7 @@ export default function ProductDetail() {
 
   if (error || !product) {
     return (
-      <div className="min-h-screen bg-linear-to-br from-gray-900 via-purple-900/20 to-gray-900">
+      <div className="bg-linear-to-br min-h-screen from-gray-900 via-purple-900/20 to-gray-900">
         <Navbar />
         <div className="flex min-h-[60vh] flex-col items-center justify-center">
           <p className="text-xl text-gray-400">
@@ -75,14 +83,14 @@ export default function ProductDetail() {
   }
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-gray-900 via-purple-900/20 to-gray-900">
+    <div className="bg-linear-to-br min-h-screen from-gray-900 via-purple-900/20 to-gray-900">
       <Navbar />
 
-      <div className="mx-auto max-w-7xl px-3 sm:px-4 md:px-6 lg:px-8 py-16 sm:py-20 md:py-24">
+      <div className="mx-auto max-w-7xl px-3 py-16 sm:px-4 sm:py-20 md:px-6 md:py-24 lg:px-8">
         {/* Back Button */}
         <button
           onClick={() => navigate(-1)}
-          className="mb-4 sm:mb-6 flex items-center gap-2 text-base sm:text-lg text-gray-400 transition hover:text-purple-400 active:scale-95 min-h-12"
+          className="mb-4 flex min-h-12 items-center gap-2 text-base text-gray-400 transition hover:text-purple-400 active:scale-95 sm:mb-6 sm:text-lg"
         >
           <svg
             className="h-5 w-5 sm:h-6 sm:w-6"
@@ -104,7 +112,7 @@ export default function ProductDetail() {
           {/* Product Image */}
           <div className="relative overflow-hidden rounded-xl border border-gray-700 bg-gray-800/50 p-4 sm:p-6 md:p-8">
             {product.featured && (
-              <div className="absolute left-3 sm:left-4 top-3 sm:top-4 rounded-full bg-linear-to-r from-purple-600 to-pink-600 px-3 sm:px-3.5 py-1 sm:py-1.5 text-xs sm:text-sm font-semibold text-white shadow-lg">
+              <div className="bg-linear-to-r absolute left-3 top-3 rounded-full from-purple-600 to-pink-600 px-3 py-1 text-xs font-semibold text-white shadow-lg sm:left-4 sm:top-4 sm:px-3.5 sm:py-1.5 sm:text-sm">
                 ⭐ Destacado
               </div>
             )}
@@ -127,21 +135,21 @@ export default function ProductDetail() {
             <div className="mb-3 sm:mb-4">
               <button
                 onClick={() => navigate(`/categoria/${product.category.slug}`)}
-                className="rounded-full bg-purple-900/50 px-4 sm:px-5 py-2 sm:py-2.5 text-sm sm:text-base text-purple-300 transition hover:bg-purple-900/70 active:scale-95 min-h-11 inline-flex items-center"
+                className="inline-flex min-h-11 items-center rounded-full bg-purple-900/50 px-4 py-2 text-sm text-purple-300 transition hover:bg-purple-900/70 active:scale-95 sm:px-5 sm:py-2.5 sm:text-base"
               >
                 {product.category.name}
               </button>
             </div>
 
             {/* Product Name */}
-            <h1 className="mb-3 sm:mb-4 text-2xl sm:text-3xl md:text-4xl font-bold text-white leading-tight">
+            <h1 className="mb-3 text-2xl font-bold leading-tight text-white sm:mb-4 sm:text-3xl md:text-4xl">
               {product.name}
             </h1>
 
             {/* Price */}
             <div className="mb-4 sm:mb-6">
-              <p className="text-3xl sm:text-4xl md:text-5xl font-bold text-purple-400">
-                ${product.clientPrice?.toLocaleString() || '0'}
+              <p className="text-3xl font-bold text-purple-400 sm:text-4xl md:text-5xl">
+                ${product.clientPrice?.toLocaleString() || "0"}
               </p>
             </div>
 
@@ -182,21 +190,25 @@ export default function ProductDetail() {
 
             {/* Description */}
             <div className="mb-4 sm:mb-6">
-              <h2 className="mb-2 sm:mb-3 text-lg sm:text-xl font-semibold text-white">
+              <h2 className="mb-2 text-lg font-semibold text-white sm:mb-3 sm:text-xl">
                 Descripción
               </h2>
-              <p className="text-sm sm:text-base md:text-lg text-gray-400 leading-relaxed">{product.description}</p>
+              <p className="text-sm leading-relaxed text-gray-400 sm:text-base md:text-lg">
+                {product.description}
+              </p>
             </div>
 
             {/* Ingredients */}
             {product.ingredients && product.ingredients.length > 0 && (
               <div className="mb-4 sm:mb-6">
-                <h2 className="mb-2 sm:mb-3 text-lg sm:text-xl font-semibold text-white">
+                <h2 className="mb-2 text-lg font-semibold text-white sm:mb-3 sm:text-xl">
                   Ingredientes
                 </h2>
-                <ul className="list-inside list-disc space-y-2 text-sm sm:text-base md:text-lg text-gray-400">
+                <ul className="list-inside list-disc space-y-2 text-sm text-gray-400 sm:text-base md:text-lg">
                   {product.ingredients.map((ingredient, index) => (
-                    <li key={index} className="leading-relaxed">{ingredient}</li>
+                    <li key={index} className="leading-relaxed">
+                      {ingredient}
+                    </li>
                   ))}
                 </ul>
               </div>
@@ -205,12 +217,14 @@ export default function ProductDetail() {
             {/* Benefits */}
             {product.benefits && product.benefits.length > 0 && (
               <div className="mb-6 sm:mb-8">
-                <h2 className="mb-2 sm:mb-3 text-lg sm:text-xl font-semibold text-white">
+                <h2 className="mb-2 text-lg font-semibold text-white sm:mb-3 sm:text-xl">
                   Beneficios
                 </h2>
-                <ul className="list-inside list-disc space-y-2 text-sm sm:text-base md:text-lg text-gray-400">
+                <ul className="list-inside list-disc space-y-2 text-sm text-gray-400 sm:text-base md:text-lg">
                   {product.benefits.map((benefit, index) => (
-                    <li key={index} className="leading-relaxed">{benefit}</li>
+                    <li key={index} className="leading-relaxed">
+                      {benefit}
+                    </li>
                   ))}
                 </ul>
               </div>
@@ -219,10 +233,11 @@ export default function ProductDetail() {
             {/* WhatsApp Button */}
             <button
               onClick={handleWhatsAppContact}
-              className="flex items-center justify-center gap-2 sm:gap-3 rounded-xl bg-linear-to-r from-green-600 to-green-500 px-6 sm:px-8 py-4 sm:py-5 text-base sm:text-lg font-semibold text-white transition hover:from-green-700 hover:to-green-600 active:scale-[0.98] shadow-lg hover:shadow-xl min-h-14 w-full"
+              disabled={!(business?.contactWhatsapp || business?.contactPhone)}
+              className="bg-linear-to-r flex min-h-14 w-full items-center justify-center gap-2 rounded-xl from-green-600 to-green-500 px-6 py-4 text-base font-semibold text-white shadow-lg transition hover:from-green-700 hover:to-green-600 hover:shadow-xl active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 sm:gap-3 sm:px-8 sm:py-5 sm:text-lg"
             >
               <svg
-                className="h-6 w-6 sm:h-7 sm:w-7 shrink-0"
+                className="h-6 w-6 shrink-0 sm:h-7 sm:w-7"
                 fill="currentColor"
                 viewBox="0 0 24 24"
               >

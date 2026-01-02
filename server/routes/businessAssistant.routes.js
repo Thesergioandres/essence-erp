@@ -7,30 +7,18 @@ import {
   updateBusinessAssistantConfig,
 } from "../controllers/businessAssistant.controller.js";
 import { admin, protect } from "../middleware/auth.middleware.js";
+import { businessContext } from "../middleware/business.middleware.js";
 
 const router = express.Router();
 
-router.get(
-  "/recommendations",
-  protect,
-  admin,
-  getBusinessAssistantRecommendations
-);
+router.use(protect, businessContext, admin);
 
-router.get("/config", protect, admin, getBusinessAssistantConfig);
-router.put("/config", protect, admin, updateBusinessAssistantConfig);
+router.get("/recommendations", getBusinessAssistantRecommendations);
 
-router.post(
-  "/recommendations/jobs",
-  protect,
-  admin,
-  createBusinessAssistantRecommendationsJob
-);
-router.get(
-  "/recommendations/jobs/:id",
-  protect,
-  admin,
-  getBusinessAssistantRecommendationsJob
-);
+router.get("/config", getBusinessAssistantConfig);
+router.put("/config", updateBusinessAssistantConfig);
+
+router.post("/recommendations/jobs", createBusinessAssistantRecommendationsJob);
+router.get("/recommendations/jobs/:id", getBusinessAssistantRecommendationsJob);
 
 export default router;

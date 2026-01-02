@@ -18,8 +18,9 @@ export const startBusinessAssistantWorker = () => {
   worker = new Worker(
     "business-assistant",
     async (job) => {
-      const { params } = job.data || {};
+      const { params, businessId } = job.data || {};
       const result = await generateBusinessAssistantRecommendations({
+        businessId,
         ...params,
         redis: getRedisClient(),
         // no cache within job unless explicitly requested; jobs are already async

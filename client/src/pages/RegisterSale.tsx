@@ -443,13 +443,8 @@ export default function RegisterSale() {
                               min="0"
                               step="100"
                               value={item.salePrice}
-                              onChange={e =>
-                                updateItemPrice(
-                                  item.productId,
-                                  Number(e.target.value)
-                                )
-                              }
-                              className="w-full rounded-lg border border-gray-600 bg-gray-900/50 px-3 py-2 text-white focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              readOnly
+                              className="w-full cursor-not-allowed rounded-lg border border-gray-600 bg-gray-900/50 px-3 py-2 text-white opacity-70"
                             />
                           </div>
 

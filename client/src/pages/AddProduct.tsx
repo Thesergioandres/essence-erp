@@ -1,10 +1,7 @@
 import type { ChangeEvent, FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  categoryService,
-  productService,
-} from "../api/services";
+import { categoryService, productService } from "../api/services";
 import type { Category } from "../types";
 
 interface FormState {
@@ -39,6 +36,7 @@ export default function AddProduct() {
     ingredients: "",
     benefits: "",
   });
+  const [distributorManual, setDistributorManual] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -87,6 +85,10 @@ export default function AddProduct() {
         ? target.checked
         : value;
 
+    if (name === "distributorPrice") {
+      setDistributorManual(value !== "");
+    }
+
     setFormData(current => {
       const updated = {
         ...current,
@@ -102,7 +104,7 @@ export default function AddProduct() {
       }
 
       // Calcular precio distribuidor automáticamente (80% del precio cliente)
-      if (name === "clientPrice" && value) {
+      if (name === "clientPrice" && value && !distributorManual) {
         const client = Number(value);
         if (!isNaN(client)) {
           updated.distributorPrice = Math.round(client * 0.8).toString();
@@ -245,7 +247,7 @@ export default function AddProduct() {
                 <h3 className="mb-3 text-sm font-semibold text-purple-300">
                   💰 Precios y Rentabilidad
                 </h3>
-                
+
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
                     <label className="mb-2 block text-xs font-medium text-gray-300">
@@ -295,12 +297,12 @@ export default function AddProduct() {
                       required
                       min="0"
                       step="0.01"
-                      readOnly
-                      className="w-full rounded-lg border border-blue-600 bg-blue-900/20 px-4 py-2 text-white placeholder-gray-500 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-not-allowed opacity-75"
-                      placeholder="Se calcula automáticamente"
+                      className="w-full rounded-lg border border-blue-600 bg-blue-900/20 px-4 py-2 text-white placeholder-gray-500 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Se calcula automáticamente (editable)"
                     />
                     <p className="mt-1 text-xs text-gray-500">
-                      Se calcula como 80% del precio cliente
+                      Se calcula como 80% del precio cliente, pero puedes
+                      ajustarlo
                     </p>
                   </div>
 
@@ -475,7 +477,7 @@ export default function AddProduct() {
           <button
             type="submit"
             disabled={loading}
-            className="rounded-lg bg-linear-to-r from-purple-600 to-pink-600 px-6 py-3 font-semibold text-white transition hover:from-purple-700 hover:to-pink-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="bg-linear-to-r rounded-lg from-purple-600 to-pink-600 px-6 py-3 font-semibold text-white transition hover:from-purple-700 hover:to-pink-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading ? "Guardando..." : "Guardar producto"}
           </button>

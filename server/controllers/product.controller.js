@@ -1,10 +1,17 @@
 import { deleteImage, isCloudinaryConfigured } from "../config/cloudinary.js";
 import { invalidateCache } from "../middleware/cache.middleware.js";
 import Product from "../models/Product.js";
+import AuditService from "../services/audit.service.js";
 import {
   getDistributorCommissionInfo,
   getDistributorProfitPercentage,
 } from "../utils/distributorPricing.js";
+
+const resolveBusinessId = (req) =>
+  req.businessId ||
+  req.headers["x-business-id"] ||
+  req.query.businessId ||
+  req.body.businessId;
 
 // @desc    Obtener todos los productos
 // @route   GET /api/products
@@ -12,7 +19,13 @@ import {
 export const getProducts = async (req, res) => {
   try {
     const { category, featured, page = 1, limit = 20 } = req.query;
-    let filter = {};
+    const businessId = resolveBusinessId(req);
+
+    if (!businessId) {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
+    let filter = { business: businessId };
 
     if (category) filter.category = category;
     if (featured) filter.featured = featured === "true";
@@ -51,7 +64,15 @@ export const getProducts = async (req, res) => {
 // @access  Public
 export const getProduct = async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id)
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
+    const product = await Product.findOne({
+      _id: req.params.id,
+      business: businessId,
+    })
       .populate("category", "name slug")
       .lean();
 
@@ -70,7 +91,12 @@ export const getProduct = async (req, res) => {
 // @access  Private/Admin
 export const createProduct = async (req, res) => {
   try {
-    const productData = { ...req.body };
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
+    const productData = { ...req.body, business: businessId };
 
     // Parsear arrays que vienen como JSON strings desde FormData
     if (typeof productData.ingredients === "string") {
@@ -140,6 +166,19 @@ export const createProduct = async (req, res) => {
     await invalidateCache("cache:products:*");
     await invalidateCache("cache:businessAssistant:*");
 
+    await AuditService.log({
+      user: req.user,
+      action: "product_created",
+      module: "products",
+      description: `Producto "${product.name}" creado`,
+      entityType: "Product",
+      entityId: product._id,
+      entityName: product.name,
+      newValues: product,
+      business: businessId,
+      req,
+    });
+
     res.status(201).json(populatedProduct);
   } catch (error) {
     console.error("❌ Error al crear producto:", error);
@@ -166,7 +205,15 @@ export const createProduct = async (req, res) => {
 // @access  Private/Admin
 export const updateProduct = async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id);
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
+    const product = await Product.findOne({
+      _id: req.params.id,
+      business: businessId,
+    });
 
     if (!product) {
       return res.status(404).json({ message: "Producto no encontrado" });
@@ -179,6 +226,7 @@ export const updateProduct = async (req, res) => {
 
     // Actualizar datos del producto
     const updateData = { ...req.body };
+    updateData.business = businessId;
 
     // Parsear arrays que vienen como JSON strings desde FormData
     if (typeof updateData.ingredients === "string") {
@@ -236,8 +284,8 @@ export const updateProduct = async (req, res) => {
       }
     }
 
-    const updatedProduct = await Product.findByIdAndUpdate(
-      req.params.id,
+    const updatedProduct = await Product.findOneAndUpdate(
+      { _id: req.params.id, business: businessId },
       updateData,
       {
         new: true,
@@ -250,6 +298,20 @@ export const updateProduct = async (req, res) => {
     await invalidateCache("cache:product:*");
     await invalidateCache("cache:businessAssistant:*");
 
+    await AuditService.log({
+      user: req.user,
+      action: "product_updated",
+      module: "products",
+      description: `Producto "${product.name}" actualizado`,
+      entityType: "Product",
+      entityId: product._id,
+      entityName: product.name,
+      newValues: updatedProduct,
+      oldValues: product,
+      business: businessId,
+      req,
+    });
+
     res.json(updatedProduct);
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -261,7 +323,15 @@ export const updateProduct = async (req, res) => {
 // @access  Private/Admin
 export const deleteProduct = async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id);
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
+    const product = await Product.findOne({
+      _id: req.params.id,
+      business: businessId,
+    });
 
     if (!product) {
       return res.status(404).json({ message: "Producto no encontrado" });
@@ -279,6 +349,19 @@ export const deleteProduct = async (req, res) => {
     await invalidateCache("cache:product:*");
     await invalidateCache("cache:businessAssistant:*");
 
+    await AuditService.log({
+      user: req.user,
+      action: "product_deleted",
+      module: "products",
+      description: `Producto "${product.name}" eliminado`,
+      entityType: "Product",
+      entityId: product._id,
+      entityName: product.name,
+      oldValues: product,
+      business: businessId,
+      req,
+    });
+
     res.json({ message: "Producto eliminado" });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -291,15 +374,23 @@ export const deleteProduct = async (req, res) => {
 export const getDistributorPrice = async (req, res) => {
   try {
     const { id, distributorId } = req.params;
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
 
-    const product = await Product.findById(id);
+    const product = await Product.findOne({ _id: id, business: businessId });
     if (!product) {
       return res.status(404).json({ message: "Producto no encontrado" });
     }
 
-    const commissionInfo = await getDistributorCommissionInfo(distributorId);
+    const commissionInfo = await getDistributorCommissionInfo(
+      distributorId,
+      businessId
+    );
     const profitPercentage = await getDistributorProfitPercentage(
-      distributorId
+      distributorId,
+      businessId
     );
     const position = commissionInfo.position;
 
@@ -318,6 +409,11 @@ export const getDistributorPrice = async (req, res) => {
 
 export const getDistributorCatalog = async (req, res) => {
   try {
+    const businessId = resolveBusinessId(req);
+    if (!businessId) {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
     console.log("📦 getDistributorCatalog llamado");
     console.log("Usuario autenticado:", req.user);
 
@@ -338,6 +434,7 @@ export const getDistributorCatalog = async (req, res) => {
       .default;
     const distributorStocks = await DistributorStock.find({
       distributor: distributorId,
+      business: businessId,
       quantity: { $gt: 0 }, // Solo productos con stock disponible
     }).populate({
       path: "product",

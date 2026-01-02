@@ -49,6 +49,48 @@ export interface User {
   token?: string;
 }
 
+export interface BusinessFeatures {
+  products?: boolean;
+  inventory?: boolean;
+  sales?: boolean;
+  gamification?: boolean;
+  incidents?: boolean;
+  expenses?: boolean;
+  assistant?: boolean;
+  reports?: boolean;
+  transfers?: boolean;
+}
+
+export interface BusinessConfig {
+  features?: BusinessFeatures;
+}
+
+export interface Business {
+  _id: string;
+  name: string;
+  description?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  contactWhatsapp?: string;
+  contactLocation?: string;
+  logoUrl?: string;
+  logoPublicId?: string;
+  status?: "active" | "archived";
+  config?: BusinessConfig;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Membership {
+  _id: string;
+  business: Business;
+  user: User | string;
+  role: "admin" | "distribuidor" | "super_admin";
+  status: "active" | "invited" | "inactive";
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface DistributorStock {
   _id: string;
   distributor: User | string;
@@ -607,6 +649,11 @@ export interface GamificationConfig {
   topPerformerBonus: number;
   secondPlaceBonus: number;
   thirdPlaceBonus: number;
+  top1CommissionBonus?: number;
+  top2CommissionBonus?: number;
+  top3CommissionBonus?: number;
+  minAdminProfitForRanking?: number;
+  currentPeriodStart?: string;
   salesTargets: SalesTarget[];
   productBonuses: ProductBonus[];
   pointsPerSale: number;
@@ -690,6 +737,7 @@ export interface RankingEntry {
   totalPoints: number;
   currentLevel: string;
   periodWins: number;
+  profitPercentage?: number;
 }
 
 export interface RankingResponse {
@@ -703,6 +751,12 @@ export interface RankingResponse {
     topPerformerBonus: number;
     secondPlaceBonus: number;
     thirdPlaceBonus: number;
+    top1CommissionBonus?: number;
+    top2CommissionBonus?: number;
+    top3CommissionBonus?: number;
+    evaluationPeriod?: string;
+    customPeriodDays?: number;
+    currentPeriodStart?: string;
   };
 }
 

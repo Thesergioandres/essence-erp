@@ -48,7 +48,10 @@ const getPeriodRange = (config) => {
   return { startDate, endDate };
 };
 
-export const getDistributorCommissionInfo = async (distributorId) => {
+export const getDistributorCommissionInfo = async (
+  distributorId,
+  businessId = null
+) => {
   try {
     const config = await GamificationConfig.findOne();
 
@@ -76,6 +79,7 @@ export const getDistributorCommissionInfo = async (distributorId) => {
           distributor: { $exists: true, $ne: null },
           saleDate: { $gte: startDate, $lte: endDate },
           paymentStatus: "confirmado",
+          ...(businessId ? { business: businessId } : {}),
         },
       },
       {
@@ -132,9 +136,12 @@ export const getDistributorCommissionInfo = async (distributorId) => {
  * @param {String} distributorId - ID del distribuidor
  * @returns {Promise<Number>} - Porcentaje de ganancia (20, 21, 23, o 25)
  */
-export const getDistributorProfitPercentage = async (distributorId) => {
+export const getDistributorProfitPercentage = async (
+  distributorId,
+  businessId = null
+) => {
   try {
-    const info = await getDistributorCommissionInfo(distributorId);
+    const info = await getDistributorCommissionInfo(distributorId, businessId);
     return info.profitPercentage;
   } catch (error) {
     console.error("Error calculando porcentaje distribuidor:", error);
@@ -151,9 +158,13 @@ export const getDistributorProfitPercentage = async (distributorId) => {
  */
 export const calculateDistributorPrice = async (
   purchasePrice,
-  distributorId
+  distributorId,
+  businessId = null
 ) => {
-  const profitPercentage = await getDistributorProfitPercentage(distributorId);
+  const profitPercentage = await getDistributorProfitPercentage(
+    distributorId,
+    businessId
+  );
 
   // Calcular precio para que el distribuidor gane exactamente su porcentaje
   // Si el distribuidor gana X% del precio de venta:

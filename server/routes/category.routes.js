@@ -7,16 +7,19 @@ import {
   updateCategory,
 } from "../controllers/category.controller.js";
 import { admin, protect } from "../middleware/auth.middleware.js";
+import { businessContext } from "../middleware/business.middleware.js";
 
 const router = express.Router();
 
-// Rutas públicas
+// Rutas protegidas por negocio
+router.use(protect, businessContext);
+
 router.get("/", getCategories);
 router.get("/:id", getCategoryById);
 
 // Rutas protegidas (solo admin)
-router.post("/", protect, admin, createCategory);
-router.put("/:id", protect, admin, updateCategory);
-router.delete("/:id", protect, admin, deleteCategory);
+router.post("/", admin, createCategory);
+router.put("/:id", admin, updateCategory);
+router.delete("/:id", admin, deleteCategory);
 
 export default router;

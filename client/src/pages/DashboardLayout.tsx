@@ -1,18 +1,30 @@
 import { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { authService } from "../api/services.ts";
+import BusinessGate from "../components/BusinessGate";
+import BusinessSelector from "../components/BusinessSelector";
+import { useBusiness } from "../context/BusinessContext";
+import { useBrandLogo } from "../hooks/useBrandLogo";
 
 const navLinkClasses = (isActive: boolean): string =>
   [
-    "flex items-center gap-3 rounded-lg px-3 py-2.5 transition text-sm",
+    "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
     isActive
-      ? "bg-purple-600/30 text-white shadow-lg shadow-purple-600/20"
-      : "text-gray-300 hover:bg-purple-600/20 hover:text-purple-400",
+      ? "bg-purple-600/20 text-white border border-purple-500/50 shadow-lg shadow-purple-700/20"
+      : "text-gray-300 hover:bg-white/5 hover:text-purple-200",
   ].join(" ");
+
+const SectionTitle = ({ label }: { label: string }) => (
+  <p className="px-3 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+    {label}
+  </p>
+);
 
 export default function DashboardLayout() {
   const navigate = useNavigate();
   const user = authService.getCurrentUser();
+  const { business } = useBusiness();
+  const logoUrl = useBrandLogo();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const handleLogout = () => {
@@ -25,68 +37,51 @@ export default function DashboardLayout() {
   }
 
   return (
-    <div className="bg-linear-to-br min-h-screen from-gray-900 via-purple-900 to-gray-900">
+    <div className="min-h-screen bg-[#0b0b11]">
       {/* Mobile Overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* Sidebar */}
       <aside
-        className={`fixed left-0 top-0 z-40 h-screen w-72 border-r border-gray-700 bg-gray-800/95 backdrop-blur-lg transition-transform duration-300 lg:translate-x-0 ${
+        className={`w-74 fixed left-0 top-0 z-50 h-screen border-r border-gray-800 bg-[#0f1018]/95 backdrop-blur-xl transition-transform duration-300 lg:translate-x-0 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
         <div className="flex h-full flex-col overflow-hidden">
           {/* Logo */}
-          <div className="shrink-0 border-b border-gray-700 px-4 py-4 sm:py-6">
+          <div className="shrink-0 border-b border-gray-800 px-4 py-4 sm:py-6">
             <div className="flex items-center gap-3">
               <img
-                src="/logo-essence.svg"
-                alt="Essence Logo"
-                className="h-10 w-10 drop-shadow-lg sm:h-12 sm:w-12"
+                src={logoUrl}
+                alt={business?.name || "Logo"}
+                className="h-10 w-10 rounded-lg bg-white/5 drop-shadow-lg sm:h-12 sm:w-12"
               />
               <div>
                 <h1 className="bg-linear-to-r from-purple-400 to-pink-400 bg-clip-text text-2xl font-bold text-transparent sm:text-3xl">
-                  ESSENCE
+                  {business?.name || ""}
                 </h1>
                 <p className="mt-0.5 text-xs text-gray-400 sm:text-sm">
                   Panel Admin
                 </p>
               </div>
             </div>
+            <BusinessSelector />
           </div>
 
           {/* Navigation - Scrollable with better mobile handling */}
           <nav
             className="scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent flex-1 space-y-1 overflow-y-auto px-3 py-3 sm:px-4 sm:py-4"
             style={{
-              maxHeight: "calc(100vh - 200px)",
+              maxHeight: "calc(100vh - 220px)",
               WebkitOverflowScrolling: "touch",
             }}
           >
-            <NavLink
-              to="/admin/register-sale"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 4v16m8-8H4"
-                />
-              </svg>
-              Registrar Venta
-            </NavLink>
+            <SectionTitle label="General" />
             <NavLink
               to="/admin/dashboard"
               className={({ isActive }): string => navLinkClasses(isActive)}
@@ -106,247 +101,6 @@ export default function DashboardLayout() {
               </svg>
               Dashboard
             </NavLink>
-
-            <NavLink
-              to="/admin/products"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
-                />
-              </svg>
-              Productos
-            </NavLink>
-
-            <NavLink
-              to="/admin/categories"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
-                />
-              </svg>
-              Categorías
-            </NavLink>
-
-            <NavLink
-              to="/catalog"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-                />
-              </svg>
-              Catálogo Completo
-            </NavLink>
-
-            <NavLink
-              to="/admin/distributors"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-                />
-              </svg>
-              Distribuidores
-            </NavLink>
-
-            <NavLink
-              to="/admin/stock-management"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"
-                />
-              </svg>
-              Gestión de Stock
-            </NavLink>
-
-            <NavLink
-              to="/admin/transfer-history"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
-                />
-              </svg>
-              Historial de Transferencias
-            </NavLink>
-
-            <NavLink
-              to="/admin/sales"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                />
-              </svg>
-              Ventas
-            </NavLink>
-
-            <NavLink
-              to="/admin/expenses"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-10V6m0 12v-2m9-4a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              Gastos
-            </NavLink>
-
-            <NavLink
-              to="/admin/special-sales"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
-                />
-              </svg>
-              Ventas Especiales
-            </NavLink>
-
-            <NavLink
-              to="/admin/profit-history"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              Historial de Ganancias
-            </NavLink>
-
-            <NavLink
-              to="/admin/analytics"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                />
-              </svg>
-              Análisis
-            </NavLink>
-
-            <NavLink
-              to="/admin/advanced-analytics"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"
-                />
-              </svg>
-              Analíticas Avanzadas
-            </NavLink>
-
             <NavLink
               to="/admin/business-assistant"
               className={({ isActive }): string => navLinkClasses(isActive)}
@@ -367,8 +121,28 @@ export default function DashboardLayout() {
               Business Assistant
             </NavLink>
 
+            <SectionTitle label="Ventas" />
             <NavLink
-              to="/admin/audit-logs"
+              to="/admin/register-sale"
+              className={({ isActive }): string => navLinkClasses(isActive)}
+            >
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 4v16m8-8H4"
+                />
+              </svg>
+              Registrar Venta
+            </NavLink>
+            <NavLink
+              to="/admin/sales"
               className={({ isActive }): string => navLinkClasses(isActive)}
             >
               <svg
@@ -384,11 +158,10 @@ export default function DashboardLayout() {
                   d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                 />
               </svg>
-              Auditoría
+              Ventas
             </NavLink>
-
             <NavLink
-              to="/admin/rankings"
+              to="/admin/special-sales"
               className={({ isActive }): string => navLinkClasses(isActive)}
             >
               <svg
@@ -401,14 +174,13 @@ export default function DashboardLayout() {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"
+                  d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
                 />
               </svg>
-              Rankings
+              Ventas Especiales
             </NavLink>
-
             <NavLink
-              to="/admin/gamification-config"
+              to="/admin/expenses"
               className={({ isActive }): string => navLinkClasses(isActive)}
             >
               <svg
@@ -421,18 +193,127 @@ export default function DashboardLayout() {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                  d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-10V6m0 12v-2m9-4a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
+              </svg>
+              Gastos
+            </NavLink>
+
+            <SectionTitle label="Productos" />
+            <NavLink
+              to="/admin/products"
+              className={({ isActive }): string => navLinkClasses(isActive)}
+            >
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                  d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
                 />
               </svg>
-              Config. Gamificación
+              Productos
             </NavLink>
-
+            <NavLink
+              to="/admin/add-product"
+              className={({ isActive }): string => navLinkClasses(isActive)}
+            >
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 4v16m8-8H4"
+                />
+              </svg>
+              Agregar Producto
+            </NavLink>
+            <NavLink
+              to="/admin/categories"
+              className={({ isActive }): string => navLinkClasses(isActive)}
+            >
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
+                />
+              </svg>
+              Categorías
+            </NavLink>
+            <NavLink
+              to="/catalog"
+              className={({ isActive }): string => navLinkClasses(isActive)}
+            >
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+                />
+              </svg>
+              Catálogo Completo
+            </NavLink>
+            <NavLink
+              to="/admin/stock-management"
+              className={({ isActive }): string => navLinkClasses(isActive)}
+            >
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"
+                />
+              </svg>
+              Gestión de Stock
+            </NavLink>
+            <NavLink
+              to="/admin/transfer-history"
+              className={({ isActive }): string => navLinkClasses(isActive)}
+            >
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
+                />
+              </svg>
+              Historial de Transferencias
+            </NavLink>
             <NavLink
               to="/admin/defective-products"
               className={({ isActive }): string => navLinkClasses(isActive)}
@@ -453,8 +334,9 @@ export default function DashboardLayout() {
               Productos Defectuosos
             </NavLink>
 
+            <SectionTitle label="Reportes" />
             <NavLink
-              to="/admin/add-product"
+              to="/admin/profit-history"
               className={({ isActive }): string => navLinkClasses(isActive)}
             >
               <svg
@@ -467,10 +349,75 @@ export default function DashboardLayout() {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M12 4v16m8-8H4"
+                  d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
               </svg>
-              Agregar Producto
+              Historial de Ganancias
+            </NavLink>
+            <NavLink
+              to="/admin/analytics"
+              className={({ isActive }): string => navLinkClasses(isActive)}
+            >
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                />
+              </svg>
+              Análisis
+            </NavLink>
+            <NavLink
+              to="/admin/advanced-analytics"
+              className={({ isActive }): string => navLinkClasses(isActive)}
+            >
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"
+                />
+              </svg>
+              Analíticas Avanzadas
+            </NavLink>
+
+            <SectionTitle label="Configuración" />
+            <NavLink
+              to="/admin/business-settings"
+              className={({ isActive }): string => navLinkClasses(isActive)}
+            >
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 6v6l4 2"
+                />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              Configurar negocio
             </NavLink>
           </nav>
 
@@ -514,39 +461,61 @@ export default function DashboardLayout() {
         </div>
       </aside>
 
-      {/* Mobile Header */}
-      <div className="fixed left-0 right-0 top-0 z-20 h-14 border-b border-gray-700 bg-gray-800/95 backdrop-blur-lg lg:hidden">
-        <div className="flex h-full items-center justify-between px-3 sm:px-4">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="-ml-2 p-2 text-gray-300 transition hover:text-purple-400 active:scale-95"
-            aria-label="Open menu"
-          >
-            <svg
-              className="h-6 w-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+      {/* Header (mobile + desktop) */}
+      <div className="fixed left-0 right-0 top-0 z-30 h-14 border-b border-gray-800 bg-[#0d0e16]/80 backdrop-blur-lg lg:h-16">
+        <div className="flex h-full items-center justify-between px-3 sm:px-5 lg:px-8">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="-ml-2 rounded-lg p-2 text-gray-300 transition hover:bg-white/5 hover:text-purple-200 lg:hidden"
+              aria-label="Open menu"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 6h16M4 12h16M4 18h16"
-              />
-            </svg>
-          </button>
-          <h1 className="bg-linear-to-r from-purple-400 to-pink-400 bg-clip-text text-lg font-bold text-transparent sm:text-xl">
-            ESSENCE
-          </h1>
-          <div className="w-10" />
+              <svg
+                className="h-6 w-6"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 6h16M4 12h16M4 18h16"
+                />
+              </svg>
+            </button>
+            <div className="flex items-center gap-2">
+              <img src="/logo-essence.svg" alt="Essence" className="h-8 w-8" />
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
+                  Multi-negocio
+                </p>
+                <p className="text-sm font-bold text-white">Essence Admin</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="hidden items-center gap-2 rounded-full border border-purple-500/30 bg-purple-500/10 px-3 py-1 text-xs font-medium text-purple-100 lg:flex">
+              <span className="inline-block h-2 w-2 rounded-full bg-green-400" />
+              Multi-negocio activo
+            </div>
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-gray-200 transition hover:border-purple-400/60 hover:text-white lg:hidden"
+            >
+              Menú
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Main Content */}
-      <main className="min-h-screen pt-14 lg:ml-72 lg:pt-0">
+      <main className="min-h-screen pt-16 lg:ml-72 lg:pt-20">
         <div className="p-3 sm:p-4 md:p-6 lg:p-8">
-          <Outlet />
+          <BusinessGate>
+            <Outlet />
+          </BusinessGate>
         </div>
       </main>
     </div>

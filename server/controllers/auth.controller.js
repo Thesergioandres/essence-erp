@@ -15,7 +15,13 @@ const generateToken = (id) => {
 // @access  Public
 export const register = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, phone, address } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({
+        message: "Nombre, email y contraseña son obligatorios",
+      });
+    }
 
     // Verificar si el usuario existe
     const userExists = await User.findOne({ email });
@@ -27,11 +33,14 @@ export const register = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Crear usuario
+    // Registrar como super_admin por defecto (para control total)
     const user = await User.create({
       name,
       email,
       password: hashedPassword,
+      role: "super_admin",
+      ...(phone ? { phone } : {}),
+      ...(address ? { address } : {}),
     });
 
     if (user) {
@@ -40,6 +49,8 @@ export const register = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        phone: user.phone,
+        address: user.address,
         token: generateToken(user._id),
       });
     }
@@ -100,7 +111,7 @@ export const getAllUsers = async (req, res) => {
     const users = await User.find({})
       .select("-password")
       .sort({ createdAt: -1 });
-    
+
     res.json({
       success: true,
       data: users,
@@ -125,12 +136,14 @@ export const createAdmin = async (req, res) => {
 
     // Verificar si ya existe un administrador o el correo definido
     const existingAdmin = await User.findOne({ role: "admin" });
-    const existingEmail = await User.findOne({ email: "serguito2003@gmail.com" });
+    const existingEmail = await User.findOne({
+      email: "serguito2003@gmail.com",
+    });
 
     if (existingAdmin || existingEmail) {
-      return res
-        .status(400)
-        .json({ message: "El usuario administrador ya fue creado previamente" });
+      return res.status(400).json({
+        message: "El usuario administrador ya fue creado previamente",
+      });
     }
 
     const salt = await bcrypt.genSalt(10);

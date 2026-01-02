@@ -7,6 +7,8 @@ import SpecialSale from "../models/SpecialSale.js";
 // @access  Private/Admin
 export const getMonthlyProfit = async (req, res) => {
   try {
+    const businessFilter = req.businessId ? { business: req.businessId } : {};
+
     // Obtener fecha actual ajustada al timezone de Colombia (UTC-5)
     const now = new Date();
     const colombiaOffset = 5 * 60; // Colombia es UTC-5 (5 horas * 60 minutos)
@@ -48,24 +50,28 @@ export const getMonthlyProfit = async (req, res) => {
     const currentMonthSales = await Sale.find({
       saleDate: { $gte: startOfMonth, $lte: endOfMonth },
       paymentStatus: "confirmado",
+      ...businessFilter,
     });
 
     // Ventas especiales del mes actual
     const currentMonthSpecialSales = await SpecialSale.find({
       saleDate: { $gte: startOfMonth, $lte: endOfMonth },
       status: "active",
+      ...businessFilter,
     });
 
     // Ventas del mes anterior
     const lastMonthSales = await Sale.find({
       saleDate: { $gte: startOfLastMonth, $lte: endOfLastMonth },
       paymentStatus: "confirmado",
+      ...businessFilter,
     });
 
     // Ventas especiales del mes anterior
     const lastMonthSpecialSales = await SpecialSale.find({
       saleDate: { $gte: startOfLastMonth, $lte: endOfLastMonth },
       status: "active",
+      ...businessFilter,
     });
 
     const calculateTotals = (sales, specialSales) => {
@@ -150,9 +156,10 @@ export const getMonthlyProfit = async (req, res) => {
 // @access  Private/Admin
 export const getProfitByProduct = async (req, res) => {
   try {
+    const businessFilter = req.businessId ? { business: req.businessId } : {};
     const { startDate, endDate } = req.query;
 
-    const filter = { paymentStatus: "confirmado" };
+    const filter = { paymentStatus: "confirmado", ...businessFilter };
     if (startDate || endDate) {
       filter.saleDate = {};
       if (startDate) {
@@ -249,9 +256,10 @@ export const getProfitByProduct = async (req, res) => {
 // @access  Private/Admin
 export const getProfitByDistributor = async (req, res) => {
   try {
+    const businessFilter = req.businessId ? { business: req.businessId } : {};
     const { startDate, endDate } = req.query;
 
-    const filter = { paymentStatus: "confirmado" };
+    const filter = { paymentStatus: "confirmado", ...businessFilter };
     if (startDate || endDate) {
       filter.saleDate = {};
       if (startDate) {
@@ -337,6 +345,7 @@ export const getProfitByDistributor = async (req, res) => {
 // @access  Private/Admin
 export const getAverages = async (req, res) => {
   try {
+    const businessFilter = req.businessId ? { business: req.businessId } : {};
     const {
       period = "month",
       startDate: startDateStr,
@@ -430,6 +439,7 @@ export const getAverages = async (req, res) => {
 
     const saleFilter = {
       paymentStatus: "confirmado",
+      ...businessFilter,
       ...(startDate || endDate
         ? {
             saleDate: {
@@ -442,6 +452,7 @@ export const getAverages = async (req, res) => {
 
     const specialFilter = {
       status: "active",
+      ...businessFilter,
       ...(startDate || endDate
         ? {
             saleDate: {
@@ -498,6 +509,7 @@ export const getAverages = async (req, res) => {
 // @access  Private/Admin
 export const getSalesTimeline = async (req, res) => {
   try {
+    const businessFilter = req.businessId ? { business: req.businessId } : {};
     const {
       days = 30,
       startDate: startDateStr,
@@ -554,11 +566,13 @@ export const getSalesTimeline = async (req, res) => {
     const sales = await Sale.find({
       saleDate: dateFilter,
       paymentStatus: "confirmado",
+      ...businessFilter,
     }).sort({ saleDate: 1 });
 
     const specialSales = await SpecialSale.find({
       saleDate: dateFilter,
       status: "active",
+      ...businessFilter,
     }).sort({ saleDate: 1 });
 
     // Agrupar por día
@@ -619,9 +633,10 @@ export const getSalesTimeline = async (req, res) => {
 // @access  Private/Admin
 export const getFinancialSummary = async (req, res) => {
   try {
+    const businessFilter = req.businessId ? { business: req.businessId } : {};
     const { startDate, endDate } = req.query;
 
-    const filter = { paymentStatus: "confirmado" };
+    const filter = { paymentStatus: "confirmado", ...businessFilter };
     if (startDate || endDate) {
       filter.saleDate = {};
       if (startDate) {
@@ -657,7 +672,7 @@ export const getFinancialSummary = async (req, res) => {
 
     const sales = await Sale.find(filter);
 
-    const specialFilter = { status: "active" };
+    const specialFilter = { status: "active", ...businessFilter };
     if (startDate || endDate) {
       specialFilter.saleDate = {};
       if (startDate) {
@@ -693,6 +708,7 @@ export const getFinancialSummary = async (req, res) => {
 
     const defectiveProducts = await DefectiveProduct.find({
       status: "confirmado",
+      ...businessFilter,
       ...(startDate && { reportDate: { $gte: new Date(startDate) } }),
       ...(endDate && { reportDate: { $lte: new Date(endDate) } }),
     });
@@ -756,6 +772,7 @@ export const getFinancialSummary = async (req, res) => {
 // @access  Private/Admin
 export const getAnalyticsDashboard = async (req, res) => {
   try {
+    const businessFilter = req.businessId ? { business: req.businessId } : {};
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
@@ -763,12 +780,14 @@ export const getAnalyticsDashboard = async (req, res) => {
     const monthlySales = await Sale.find({
       saleDate: { $gte: startOfMonth },
       paymentStatus: "confirmado",
+      ...businessFilter,
     });
 
     // Ventas especiales del mes
     const monthlySpecialSales = await SpecialSale.find({
       saleDate: { $gte: startOfMonth },
       status: "active",
+      ...businessFilter,
     });
 
     // Top productos
@@ -777,6 +796,7 @@ export const getAnalyticsDashboard = async (req, res) => {
         $match: {
           saleDate: { $gte: startOfMonth },
           paymentStatus: "confirmado",
+          ...businessFilter,
         },
       },
       {
@@ -813,6 +833,7 @@ export const getAnalyticsDashboard = async (req, res) => {
         $match: {
           saleDate: { $gte: startOfMonth },
           paymentStatus: "confirmado",
+          ...businessFilter,
         },
       },
       {
@@ -874,10 +895,11 @@ export const getAnalyticsDashboard = async (req, res) => {
 // @access  Private/Admin
 export const getCombinedSummary = async (req, res) => {
   try {
+    const businessFilter = req.businessId ? { business: req.businessId } : {};
     const { startDate, endDate } = req.query;
 
     // Filtros para ventas normales
-    const salesFilter = { paymentStatus: "confirmado" };
+    const salesFilter = { paymentStatus: "confirmado", ...businessFilter };
     if (startDate || endDate) {
       salesFilter.saleDate = {};
       if (startDate) {
@@ -910,7 +932,7 @@ export const getCombinedSummary = async (req, res) => {
     }
 
     // Filtros para ventas especiales
-    const specialSalesFilter = { status: "active" };
+    const specialSalesFilter = { status: "active", ...businessFilter };
     if (startDate || endDate) {
       specialSalesFilter.saleDate = {};
       if (startDate) specialSalesFilter.saleDate.$gte = new Date(startDate);

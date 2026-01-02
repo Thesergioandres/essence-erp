@@ -1,11 +1,11 @@
-import { getRedisClient } from '../config/redis.js';
+import { getRedisClient } from "../config/redis.js";
 
 /**
  * Middleware de caché con Redis
  * @param {number} duration - Duración del caché en segundos
  * @param {string} keyPrefix - Prefijo para la clave de caché
  */
-export const cacheMiddleware = (duration = 300, keyPrefix = '') => {
+export const cacheMiddleware = (duration = 300, keyPrefix = "") => {
   return async (req, res, next) => {
     const redis = getRedisClient();
 
@@ -16,7 +16,11 @@ export const cacheMiddleware = (duration = 300, keyPrefix = '') => {
 
     try {
       // Generar clave única basada en URL y query params
-      const key = `cache:${keyPrefix}:${req.originalUrl || req.url}`;
+      const businessKey =
+        req.businessId || req.headers["x-business-id"] || "global";
+      const key = `cache:${keyPrefix}:${businessKey}:${
+        req.originalUrl || req.url
+      }`;
 
       // Intentar obtener datos del caché
       const cachedData = await redis.get(key);
@@ -34,7 +38,7 @@ export const cacheMiddleware = (duration = 300, keyPrefix = '') => {
         // Guardar en caché solo respuestas exitosas
         if (res.statusCode === 200) {
           redis.setex(key, duration, JSON.stringify(data)).catch((err) => {
-            console.error('Error guardando en caché:', err);
+            console.error("Error guardando en caché:", err);
           });
         }
         return originalJson(data);
@@ -42,7 +46,7 @@ export const cacheMiddleware = (duration = 300, keyPrefix = '') => {
 
       next();
     } catch (error) {
-      console.error('Error en middleware de caché:', error);
+      console.error("Error en middleware de caché:", error);
       next();
     }
   };
@@ -63,7 +67,7 @@ export const invalidateCache = async (pattern) => {
       console.log(`🗑️  Invalidadas ${keys.length} claves de caché: ${pattern}`);
     }
   } catch (error) {
-    console.error('Error invalidando caché:', error);
+    console.error("Error invalidando caché:", error);
   }
 };
 
@@ -76,8 +80,8 @@ export const clearAllCache = async () => {
 
   try {
     await redis.flushdb();
-    console.log('🗑️  Caché completamente limpiado');
+    console.log("🗑️  Caché completamente limpiado");
   } catch (error) {
-    console.error('Error limpiando caché:', error);
+    console.error("Error limpiando caché:", error);
   }
 };

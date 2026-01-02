@@ -1,11 +1,11 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { categoryService, productService } from "../api/services";
-import { useDebounce } from "../hooks";
 import Footer from "../components/Footer";
+import LoadingSpinner from "../components/LoadingSpinner";
 import Navbar from "../components/Navbar";
 import ProductCard from "../components/ProductCard";
-import LoadingSpinner from "../components/LoadingSpinner";
+import { useDebounce } from "../hooks";
 import type { Category, Product } from "../types";
 
 export default function Catalog() {
@@ -22,6 +22,19 @@ export default function Catalog() {
   );
   const [sortBy, setSortBy] = useState(searchParams.get("sort") || "name");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [inStockOnly, setInStockOnly] = useState(false);
+  const [featuredOnly, setFeaturedOnly] = useState(false);
+  const [priceRange, setPriceRange] = useState<{ min: number; max: number }>({
+    min: 0,
+    max: 0,
+  });
+  const [maxPrice, setMaxPrice] = useState(0);
+  const hideChrome = useMemo(
+    () =>
+      searchParams.has("bare") ||
+      (searchParams.has("category") && !searchParams.has("full")),
+    [searchParams]
+  );
 
   useEffect(() => {
     const loadData = async () => {
@@ -30,8 +43,19 @@ export default function Catalog() {
           productService.getAll(),
           categoryService.getAll(),
         ]);
-        setProducts(productsData.data || productsData);
+        const productsList = Array.isArray(productsData)
+          ? productsData
+          : productsData.data || [];
+
+        setProducts(productsList);
         setCategories(categoriesData);
+
+        const maxClientPrice = Math.max(
+          0,
+          ...productsList.map((p: Product) => Number(p.clientPrice) || 0)
+        );
+        setMaxPrice(maxClientPrice || 0);
+        setPriceRange({ min: 0, max: maxClientPrice || 0 });
       } catch (error) {
         console.error("Error loading data:", error);
       } finally {
@@ -60,6 +84,19 @@ export default function Catalog() {
       filtered = filtered.filter(p => p.category._id === selectedCategory);
     }
 
+    if (inStockOnly) {
+      filtered = filtered.filter(p => (p.totalStock ?? 0) > 0);
+    }
+
+    if (featuredOnly) {
+      filtered = filtered.filter(p => p.featured);
+    }
+
+    filtered = filtered.filter(p => {
+      const price = Number(p.clientPrice) || 0;
+      return price >= priceRange.min && price <= priceRange.max;
+    });
+
     // Sort products
     switch (sortBy) {
       case "price-asc":
@@ -77,7 +114,15 @@ export default function Catalog() {
     }
 
     return filtered;
-  }, [products, debouncedSearchTerm, selectedCategory, sortBy]);
+  }, [
+    products,
+    debouncedSearchTerm,
+    selectedCategory,
+    sortBy,
+    inStockOnly,
+    featuredOnly,
+    priceRange,
+  ]);
 
   useEffect(() => {
     // Update URL params
@@ -85,51 +130,117 @@ export default function Catalog() {
     if (searchTerm) params.set("search", searchTerm);
     if (selectedCategory !== "all") params.set("category", selectedCategory);
     if (sortBy !== "name") params.set("sort", sortBy);
+    if (inStockOnly) params.set("stock", "1");
+    if (featuredOnly) params.set("featured", "1");
+    if (priceRange.min) params.set("min", String(priceRange.min));
+    if (priceRange.max && priceRange.max !== maxPrice)
+      params.set("max", String(priceRange.max));
     setSearchParams(params, { replace: true });
-  }, [searchTerm, selectedCategory, sortBy, setSearchParams]);
+  }, [
+    searchTerm,
+    selectedCategory,
+    sortBy,
+    inStockOnly,
+    featuredOnly,
+    priceRange,
+    maxPrice,
+    setSearchParams,
+  ]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900/10 to-gray-900">
-      <Navbar />
+    <div className="min-h-screen bg-gray-950">
+      {!hideChrome && <Navbar />}
 
-      {/* Hero Section */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-purple-600/20 via-pink-500/20 to-purple-600/20 backdrop-blur-3xl">
-        <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center opacity-20"></div>
-        <div className="absolute inset-0 bg-gradient-to-t from-gray-900 to-transparent"></div>
-        
-        <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-16 sm:py-20 lg:py-24">
-          <div className="text-center space-y-4 sm:space-y-6">
-            <div className="inline-flex items-center gap-2 rounded-full bg-purple-500/10 backdrop-blur-sm border border-purple-500/20 px-4 py-2 text-sm font-medium text-purple-400 animate-fade-in">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-purple-500"></span>
-              </span>
-              Productos Premium
+      {!hideChrome && (
+        <div className="relative overflow-hidden">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(88,28,135,0.35),transparent_25%),radial-gradient(circle_at_80%_0%,rgba(219,39,119,0.35),transparent_25%),radial-gradient(circle_at_50%_80%,rgba(59,130,246,0.25),transparent_30%)]" />
+          <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center opacity-10" />
+          <div className="relative mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
+            <div className="grid items-center gap-10 lg:grid-cols-[1.4fr,1fr]">
+              <div className="space-y-4 sm:space-y-6">
+                <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-blue-100 backdrop-blur-sm">
+                  <span className="relative flex h-2 w-2">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-300 opacity-75"></span>
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-400"></span>
+                  </span>
+                  Nuevo catálogo inteligente
+                </div>
+
+                <h1 className="text-4xl font-bold leading-tight tracking-tight text-white sm:text-5xl lg:text-6xl">
+                  Eleva tu selección con filtros inteligentes y vista inmersiva.
+                </h1>
+
+                <p className="max-w-2xl text-base leading-relaxed text-gray-300 sm:text-lg">
+                  Busca, filtra y explora productos premium con una experiencia
+                  visual más cuidada. Haz foco en lo destacado, stock disponible
+                  y precios al instante.
+                </p>
+
+                <div className="flex flex-wrap gap-3">
+                  <div className="rounded-full border border-blue-400/30 bg-blue-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-blue-100">
+                    Filtros dinamicos
+                  </div>
+                  <div className="rounded-full border border-pink-400/30 bg-pink-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-pink-100">
+                    Vistas grid/lista
+                  </div>
+                  <div className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100">
+                    Precios en vivo
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur-xl sm:p-8">
+                <div className="mb-6 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-400">
+                      Productos en catálogo
+                    </p>
+                    <p className="text-4xl font-bold text-white">
+                      {products.length}
+                    </p>
+                  </div>
+                  <div className="rounded-full bg-gradient-to-r from-blue-500 to-pink-500 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white">
+                    Actualizado
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between text-sm text-gray-300">
+                    <span>Categorias</span>
+                    <span className="font-semibold text-white">
+                      {categories.length}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm text-gray-300">
+                    <span>Destacados</span>
+                    <span className="font-semibold text-white">
+                      {products.filter(p => p.featured).length}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm text-gray-300">
+                    <span>Stock disponible</span>
+                    <span className="font-semibold text-emerald-300">
+                      {products.filter(p => (p.totalStock ?? 0) > 0).length}
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
-            
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight">
-              <span className="block bg-gradient-to-r from-purple-400 via-pink-400 to-purple-400 bg-clip-text text-transparent animate-gradient">
-                Catálogo Essence
-              </span>
-            </h1>
-            
-            <p className="mx-auto max-w-2xl text-base sm:text-lg lg:text-xl text-gray-400 leading-relaxed">
-              Descubre nuestra selección exclusiva de productos de vaping premium
-            </p>
           </div>
         </div>
-      </div>
+      )}
 
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 sm:py-12 lg:py-16">
+      <div
+        className={`mx-auto max-w-7xl space-y-6 px-4 ${hideChrome ? "py-6" : "py-8 sm:px-6 sm:py-12 lg:px-8 lg:py-16"}`}
+      >
         {/* Category Pills */}
-        <div className="mb-8 overflow-x-auto scrollbar-hide">
-          <div className="flex gap-2 sm:gap-3 pb-2 min-w-max">
+        <div className="scrollbar-hide mb-8 overflow-x-auto">
+          <div className="flex min-w-max gap-2 pb-2 sm:gap-3">
             <button
               onClick={() => setSelectedCategory("all")}
-              className={`px-4 sm:px-6 py-2.5 sm:py-3 rounded-full text-sm sm:text-base font-medium transition-all duration-300 whitespace-nowrap ${
+              className={`whitespace-nowrap rounded-full px-4 py-2.5 text-sm font-medium transition-all duration-300 sm:px-6 sm:py-3 sm:text-base ${
                 selectedCategory === "all"
-                  ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg shadow-purple-500/50 scale-105"
-                  : "bg-gray-800/50 text-gray-400 hover:bg-gray-800 hover:text-white border border-gray-700/50"
+                  ? "scale-105 bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg shadow-purple-500/50"
+                  : "border border-gray-700/50 bg-gray-800/50 text-gray-400 hover:bg-gray-800 hover:text-white"
               }`}
             >
               Todos
@@ -138,14 +249,12 @@ export default function Catalog() {
               <button
                 key={cat._id}
                 onClick={() => setSelectedCategory(cat._id)}
-                className={`px-4 sm:px-6 py-2.5 sm:py-3 rounded-full text-sm sm:text-base font-medium transition-all duration-300 whitespace-nowrap ${
+                className={`whitespace-nowrap rounded-full px-4 py-2.5 text-sm font-medium transition-all duration-300 sm:px-6 sm:py-3 sm:text-base ${
                   selectedCategory === cat._id
-                    ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg shadow-purple-500/50 scale-105"
-                    : "bg-gray-800/50 text-gray-400 hover:bg-gray-800 hover:text-white border border-gray-700/50"
+                    ? "scale-105 bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg shadow-purple-500/50"
+                    : "border border-gray-700/50 bg-gray-800/50 text-gray-400 hover:bg-gray-800 hover:text-white"
                 }`}
-                style={{
-                  animationDelay: `${index * 50}ms`,
-                }}
+                style={{ animationDelay: `${index * 50}ms` }}
               >
                 {cat.name}
               </button>
@@ -153,87 +262,162 @@ export default function Catalog() {
           </div>
         </div>
 
-        {/* Search and Filters Bar */}
-        <div className="mb-8 rounded-2xl border border-gray-800/50 bg-gray-900/50 backdrop-blur-xl p-4 sm:p-6 shadow-2xl">
-          <div className="flex flex-col lg:flex-row gap-4">
-            {/* Search */}
-            <div className="flex-1">
-              <div className="relative group">
-                <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
-                  <svg
-                    className="h-5 w-5 text-gray-400 group-focus-within:text-purple-400 transition-colors"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                    />
-                  </svg>
-                </div>
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={e => setSearchTerm(e.target.value)}
-                  placeholder="Buscar productos por nombre o descripción..."
-                  className="w-full rounded-xl border border-gray-700/50 bg-gray-800/50 pl-12 pr-4 py-3.5 text-white placeholder-gray-500 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all"
-                />
-                {searchTerm && (
-                  <button
-                    onClick={() => setSearchTerm("")}
-                    className="absolute inset-y-0 right-0 flex items-center pr-4 text-gray-400 hover:text-white transition-colors"
-                  >
-                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Sort */}
-            <div className="w-full lg:w-64">
-              <select
-                value={sortBy}
-                onChange={e => setSortBy(e.target.value)}
-                className="w-full rounded-xl border border-gray-700/50 bg-gray-800/50 px-4 py-3.5 text-white focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all cursor-pointer"
+        {/* Search and Controls */}
+        <div className="grid gap-4 lg:grid-cols-[1.4fr,1fr] lg:items-center">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="relative flex-1">
+              <svg
+                className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-500"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
               >
-                <option value="name">Ordenar: A-Z</option>
-                <option value="price-asc">Precio: Menor a Mayor</option>
-                <option value="price-desc">Precio: Mayor a Menor</option>
-                <option value="featured">Destacados primero</option>
-              </select>
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 21l-4.35-4.35M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15z"
+                />
+              </svg>
+              <input
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                placeholder="Buscar productos..."
+                className="w-full rounded-xl border border-white/10 bg-gray-900/70 px-11 py-3 text-sm text-white outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              />
             </div>
 
-            {/* View Mode Toggle */}
-            <div className="flex gap-2 bg-gray-800/50 rounded-xl p-1.5 border border-gray-700/50">
+            <select
+              value={sortBy}
+              onChange={e => setSortBy(e.target.value)}
+              className="rounded-xl border border-white/10 bg-gray-900/70 px-4 py-3 text-sm text-white transition hover:border-blue-500 focus:border-blue-500 focus:outline-none"
+            >
+              <option value="name">Ordenar: A-Z</option>
+              <option value="price-asc">Precio: Menor a Mayor</option>
+              <option value="price-desc">Precio: Mayor a Menor</option>
+              <option value="featured">Destacados primero</option>
+            </select>
+
+            <div className="flex rounded-xl border border-white/10 bg-gray-900/60 p-1.5">
               <button
                 onClick={() => setViewMode("grid")}
-                className={`p-2.5 rounded-lg transition-all ${
+                className={`rounded-lg p-2.5 transition-all ${
                   viewMode === "grid"
-                    ? "bg-purple-600 text-white shadow-lg"
+                    ? "bg-blue-600 text-white shadow-lg"
                     : "text-gray-400 hover:text-white"
                 }`}
               >
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                <svg
+                  className="h-5 w-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
+                  />
                 </svg>
               </button>
               <button
                 onClick={() => setViewMode("list")}
-                className={`p-2.5 rounded-lg transition-all ${
+                className={`rounded-lg p-2.5 transition-all ${
                   viewMode === "list"
-                    ? "bg-purple-600 text-white shadow-lg"
+                    ? "bg-blue-600 text-white shadow-lg"
                     : "text-gray-400 hover:text-white"
                 }`}
               >
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                <svg
+                  className="h-5 w-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 6h16M4 12h16M4 18h16"
+                  />
                 </svg>
               </button>
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <label className="flex cursor-pointer items-center justify-between rounded-lg border border-white/10 bg-gray-900/60 px-4 py-3 text-sm text-gray-200 transition hover:border-blue-500/50">
+              <div>
+                <p className="font-semibold text-white">Solo con stock</p>
+                <p className="text-xs text-gray-400">
+                  Oculta productos agotados
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                checked={inStockOnly}
+                onChange={e => setInStockOnly(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-500 text-blue-500 focus:ring-blue-500"
+              />
+            </label>
+
+            <label className="flex cursor-pointer items-center justify-between rounded-lg border border-white/10 bg-gray-900/60 px-4 py-3 text-sm text-gray-200 transition hover:border-pink-500/50">
+              <div>
+                <p className="font-semibold text-white">Solo destacados</p>
+                <p className="text-xs text-gray-400">Prioriza lo que brilla</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={featuredOnly}
+                onChange={e => setFeaturedOnly(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-500 text-pink-500 focus:ring-pink-500"
+              />
+            </label>
+
+            <div className="rounded-lg border border-white/10 bg-gray-900/60 px-4 py-3 text-sm text-gray-200">
+              <div className="mb-2 flex items-center justify-between">
+                <div>
+                  <p className="font-semibold text-white">Rango de precio</p>
+                  <p className="text-xs text-gray-400">Cliente</p>
+                </div>
+                <span className="text-xs text-gray-400">
+                  Max {maxPrice ? maxPrice.toLocaleString() : 0}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-gray-400">
+                <div className="flex-1">
+                  <input
+                    type="number"
+                    min={0}
+                    max={priceRange.max}
+                    value={priceRange.min}
+                    onChange={e =>
+                      setPriceRange(prev => ({
+                        ...prev,
+                        min: Number(e.target.value) || 0,
+                      }))
+                    }
+                    className="w-full rounded-md border border-white/10 bg-gray-800/80 px-2 py-1 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+                <span className="text-gray-500">-</span>
+                <div className="flex-1">
+                  <input
+                    type="number"
+                    min={priceRange.min}
+                    max={maxPrice || undefined}
+                    value={priceRange.max}
+                    onChange={e =>
+                      setPriceRange(prev => ({
+                        ...prev,
+                        max: Number(e.target.value) || maxPrice,
+                      }))
+                    }
+                    className="w-full rounded-md border border-white/10 bg-gray-800/80 px-2 py-1 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -241,26 +425,45 @@ export default function Catalog() {
         {/* Results Count */}
         {!loading && (
           <div className="mb-6 flex items-center justify-between">
-            <p className="text-sm sm:text-base text-gray-400">
+            <p className="text-sm text-gray-400 sm:text-base">
               {filteredProducts.length > 0 ? (
                 <>
-                  <span className="font-semibold text-white">{filteredProducts.length}</span> producto{filteredProducts.length !== 1 ? "s" : ""} encontrado{filteredProducts.length !== 1 ? "s" : ""}
+                  <span className="font-semibold text-white">
+                    {filteredProducts.length}
+                  </span>{" "}
+                  producto{filteredProducts.length !== 1 ? "s" : ""} encontrado
+                  {filteredProducts.length !== 1 ? "s" : ""}
                 </>
               ) : (
                 "No se encontraron productos"
               )}
             </p>
-            {(searchTerm || selectedCategory !== "all" || sortBy !== "name") && (
+            {(searchTerm ||
+              selectedCategory !== "all" ||
+              sortBy !== "name") && (
               <button
                 onClick={() => {
                   setSearchTerm("");
                   setSelectedCategory("all");
                   setSortBy("name");
+                  setInStockOnly(false);
+                  setFeaturedOnly(false);
+                  setPriceRange({ min: 0, max: maxPrice });
                 }}
-                className="text-sm text-purple-400 hover:text-purple-300 transition-colors flex items-center gap-1.5"
+                className="flex items-center gap-1.5 text-sm text-purple-400 transition-colors hover:text-purple-300"
               >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  />
                 </svg>
                 Limpiar filtros
               </button>
@@ -270,14 +473,18 @@ export default function Catalog() {
 
         {/* Products Grid/List */}
         {loading ? (
-          <div className="flex justify-center items-center py-20">
-            <LoadingSpinner size="lg" variant="dots" message="Cargando productos..." />
+          <div className="flex items-center justify-center py-20">
+            <LoadingSpinner
+              size="lg"
+              variant="dots"
+              message="Cargando productos..."
+            />
           </div>
         ) : filteredProducts.length > 0 ? (
           <div
             className={
               viewMode === "grid"
-                ? "grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+                ? "grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
                 : "flex flex-col gap-4"
             }
           >
@@ -296,9 +503,9 @@ export default function Catalog() {
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="rounded-full bg-gray-800/50 p-6 mb-4">
+            <div className="mb-4 rounded-full border border-white/10 bg-white/5 p-6">
               <svg
-                className="h-16 w-16 text-gray-600"
+                className="h-16 w-16 text-gray-500"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -311,15 +518,22 @@ export default function Catalog() {
                 />
               </svg>
             </div>
-            <h3 className="text-xl font-semibold text-white mb-2">No encontramos productos</h3>
-            <p className="text-gray-400 mb-6">Intenta ajustar tus filtros de búsqueda</p>
+            <h3 className="mb-2 text-xl font-semibold text-white">
+              No encontramos productos
+            </h3>
+            <p className="mb-6 text-gray-400">
+              Intenta ajustar tus filtros de búsqueda
+            </p>
             <button
               onClick={() => {
                 setSearchTerm("");
                 setSelectedCategory("all");
                 setSortBy("name");
+                setInStockOnly(false);
+                setFeaturedOnly(false);
+                setPriceRange({ min: 0, max: maxPrice });
               }}
-              className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl font-medium hover:shadow-lg hover:shadow-purple-500/50 transition-all"
+              className="rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 px-6 py-3 font-medium text-white transition-all hover:shadow-lg hover:shadow-purple-500/50"
             >
               Ver todos los productos
             </button>
@@ -327,7 +541,7 @@ export default function Catalog() {
         )}
       </div>
 
-      <Footer />
+      {!hideChrome && <Footer />}
     </div>
   );
 }

@@ -13,6 +13,12 @@ const GamificationConfigPage = () => {
   const [topPerformerBonus, setTopPerformerBonus] = useState<number>(1000);
   const [secondPlaceBonus, setSecondPlaceBonus] = useState<number>(500);
   const [thirdPlaceBonus, setThirdPlaceBonus] = useState<number>(250);
+  const [top1CommissionBonus, setTop1CommissionBonus] = useState<number>(5);
+  const [top2CommissionBonus, setTop2CommissionBonus] = useState<number>(3);
+  const [top3CommissionBonus, setTop3CommissionBonus] = useState<number>(1);
+  const [minAdminProfitForRanking, setMinAdminProfitForRanking] =
+    useState<number>(0);
+  const [currentPeriodStart, setCurrentPeriodStart] = useState<string>("");
   const [pointsPerSale, setPointsPerSale] = useState<number>(10);
   const [pointsPerPeso, setPointsPerPeso] = useState<number>(0.01);
   const [salesTargets, setSalesTargets] = useState<SalesTarget[]>([]);
@@ -37,6 +43,13 @@ const GamificationConfigPage = () => {
       setTopPerformerBonus(data.topPerformerBonus);
       setSecondPlaceBonus(data.secondPlaceBonus);
       setThirdPlaceBonus(data.thirdPlaceBonus);
+      setTop1CommissionBonus(data.top1CommissionBonus ?? 5);
+      setTop2CommissionBonus(data.top2CommissionBonus ?? 3);
+      setTop3CommissionBonus(data.top3CommissionBonus ?? 1);
+      setMinAdminProfitForRanking(data.minAdminProfitForRanking ?? 0);
+      setCurrentPeriodStart(
+        data.currentPeriodStart ? data.currentPeriodStart.slice(0, 10) : ""
+      );
       setPointsPerSale(data.pointsPerSale);
       setPointsPerPeso(data.pointsPerPeso);
       setSalesTargets(data.salesTargets);
@@ -62,6 +75,13 @@ const GamificationConfigPage = () => {
         topPerformerBonus,
         secondPlaceBonus,
         thirdPlaceBonus,
+        top1CommissionBonus,
+        top2CommissionBonus,
+        top3CommissionBonus,
+        minAdminProfitForRanking,
+        currentPeriodStart: currentPeriodStart
+          ? new Date(currentPeriodStart).toISOString()
+          : undefined,
         pointsPerSale,
         pointsPerPeso,
         salesTargets,
@@ -178,6 +198,37 @@ const GamificationConfigPage = () => {
             />
           </div>
         )}
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div>
+            <label className="mb-2 block font-medium text-gray-300">
+              Inicio del periodo actual
+            </label>
+            <input
+              type="date"
+              value={currentPeriodStart}
+              onChange={e => setCurrentPeriodStart(e.target.value)}
+              className="w-full rounded-md border border-gray-700 bg-gray-800 px-4 py-2 text-white focus:ring-2 focus:ring-blue-500"
+            />
+            <p className="mt-1 text-xs text-gray-400">
+              Para alinear el rango con el deploy (ej. 2025-12-27).
+            </p>
+          </div>
+          <div>
+            <label className="mb-2 block font-medium text-gray-300">
+              Ganancia mínima admin para entrar al ranking
+            </label>
+            <input
+              type="number"
+              min="0"
+              value={minAdminProfitForRanking}
+              onChange={e =>
+                setMinAdminProfitForRanking(Number(e.target.value))
+              }
+              className="w-full rounded-md border border-gray-700 bg-gray-800 px-4 py-2 text-white focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
       </div>
 
       {/* Bonos */}
@@ -219,6 +270,42 @@ const GamificationConfigPage = () => {
               type="number"
               value={thirdPlaceBonus}
               onChange={e => setThirdPlaceBonus(Number(e.target.value))}
+              className="w-full rounded-md border border-gray-700 bg-gray-800 px-4 py-2 text-white focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+
+        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div>
+            <label className="mb-2 block font-medium text-gray-300">
+              % Extra 1er Lugar
+            </label>
+            <input
+              type="number"
+              value={top1CommissionBonus}
+              onChange={e => setTop1CommissionBonus(Number(e.target.value))}
+              className="w-full rounded-md border border-gray-700 bg-gray-800 px-4 py-2 text-white focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="mb-2 block font-medium text-gray-300">
+              % Extra 2do Lugar
+            </label>
+            <input
+              type="number"
+              value={top2CommissionBonus}
+              onChange={e => setTop2CommissionBonus(Number(e.target.value))}
+              className="w-full rounded-md border border-gray-700 bg-gray-800 px-4 py-2 text-white focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="mb-2 block font-medium text-gray-300">
+              % Extra 3er Lugar
+            </label>
+            <input
+              type="number"
+              value={top3CommissionBonus}
+              onChange={e => setTop3CommissionBonus(Number(e.target.value))}
               className="w-full rounded-md border border-gray-700 bg-gray-800 px-4 py-2 text-white focus:ring-2 focus:ring-blue-500"
             />
           </div>

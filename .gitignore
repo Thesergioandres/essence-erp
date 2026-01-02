@@ -37,9 +37,6 @@ build
 *.sln
 *.sw?
 
-# Vercel
-.vercel
-
 # OS
 Thumbs.db
 .DS_Store
@@ -56,5 +53,3 @@ coverage
 
 # Script reports (local)
 server/recalc-commissions-*.txt
-
-.vercel

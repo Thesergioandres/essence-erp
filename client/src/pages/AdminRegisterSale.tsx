@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { productService, saleService, authService } from "../api/services";
+import { authService, productService, saleService } from "../api/services";
 import { Button } from "../components/Button";
 import type { Product } from "../types";
 
@@ -64,18 +64,21 @@ export default function AdminRegisterSale() {
   };
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+    >
   ) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: name === "quantity" || name === "salePrice" ? Number(value) : value,
+      [name]:
+        name === "quantity" || name === "salePrice" ? Number(value) : value,
     }));
   };
 
   const handleAddItem = () => {
     setError("");
-    
+
     if (!formData.productId) {
       setError("Selecciona un producto");
       return;
@@ -108,7 +111,7 @@ export default function AdminRegisterSale() {
     };
 
     setSaleItems(prev => [...prev, newItem]);
-    
+
     // Limpiar solo los campos del producto
     setFormData(prev => ({
       ...prev,
@@ -141,10 +144,10 @@ export default function AdminRegisterSale() {
     try {
       setLoading(true);
       const user = authService.getCurrentUser();
-      
+
       // Registrar cada venta del pedido
       for (const item of saleItems) {
-        if (user && user.role === "admin") {
+        if (user && (user.role === "admin" || user.role === "super_admin")) {
           await saleService.registerAdmin({
             productId: item.productId,
             quantity: item.quantity,
@@ -162,9 +165,11 @@ export default function AdminRegisterSale() {
           });
         }
       }
-      
-      setSuccess(`¡${saleItems.length} ${saleItems.length === 1 ? 'venta registrada' : 'ventas registradas'} exitosamente!`);
-      
+
+      setSuccess(
+        `¡${saleItems.length} ${saleItems.length === 1 ? "venta registrada" : "ventas registradas"} exitosamente!`
+      );
+
       // Limpiar todo
       setSaleItems([]);
       setFormData({
@@ -175,14 +180,14 @@ export default function AdminRegisterSale() {
         saleDate: new Date().toISOString().slice(0, 10),
       });
       setSelectedProduct(null);
-      
+
       // Recargar productos para actualizar stock
       await loadProducts();
-      
+
       // Opción de volver al dashboard después de 2 segundos
       setTimeout(() => {
         setSuccess(prev => prev + " Redirigiendo al dashboard...");
-        setTimeout(() => navigate("/dashboard"), 1000);
+        setTimeout(() => navigate("/admin/dashboard"), 1000);
       }, 2000);
     } catch {
       setError("Error al registrar las ventas");
@@ -192,8 +197,15 @@ export default function AdminRegisterSale() {
   };
 
   const calculateTotals = () => {
-    const totalSale = saleItems.reduce((sum, item) => sum + (item.salePrice * item.quantity), 0);
-    const totalProfit = saleItems.reduce((sum, item) => sum + ((item.salePrice - item.purchasePrice) * item.quantity), 0);
+    const totalSale = saleItems.reduce(
+      (sum, item) => sum + item.salePrice * item.quantity,
+      0
+    );
+    const totalProfit = saleItems.reduce(
+      (sum, item) =>
+        sum + (item.salePrice - item.purchasePrice) * item.quantity,
+      0
+    );
     return { totalSale, totalProfit };
   };
 
@@ -210,25 +222,46 @@ export default function AdminRegisterSale() {
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <div>
-        <h1 className="text-4xl font-bold text-white">Registrar Pedido Grande (Admin)</h1>
-        <p className="mt-2 text-gray-400">Registra múltiples ventas en un solo pedido</p>
+        <h1 className="text-4xl font-bold text-white">
+          Registrar Pedido Grande (Admin)
+        </h1>
+        <p className="mt-2 text-gray-400">
+          Registra múltiples ventas en un solo pedido
+        </p>
       </div>
       {error && (
-        <div className="rounded-lg border border-red-500 bg-red-500/10 p-4 text-sm text-red-400">{error}</div>
+        <div className="rounded-lg border border-red-500 bg-red-500/10 p-4 text-sm text-red-400">
+          {error}
+        </div>
       )}
       {success && (
-        <div className="rounded-lg border border-green-500 bg-green-500/10 p-4 text-sm text-green-400">{success}</div>
+        <div className="rounded-lg border border-green-500 bg-green-500/10 p-4 text-sm text-green-400">
+          {success}
+        </div>
       )}
-      
+
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Formulario para agregar productos */}
         <div className="space-y-6">
-          <form onSubmit={(e) => { e.preventDefault(); handleAddItem(); }} className="space-y-6">
+          <form
+            onSubmit={e => {
+              e.preventDefault();
+              handleAddItem();
+            }}
+            className="space-y-6"
+          >
             <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-6">
-              <h2 className="mb-4 text-lg font-semibold text-white">Agregar Producto</h2>
+              <h2 className="mb-4 text-lg font-semibold text-white">
+                Agregar Producto
+              </h2>
               <div className="space-y-4">
                 <div>
-                  <label htmlFor="productId" className="mb-2 block text-sm font-medium text-gray-300">Producto *</label>
+                  <label
+                    htmlFor="productId"
+                    className="mb-2 block text-sm font-medium text-gray-300"
+                  >
+                    Producto *
+                  </label>
                   <select
                     id="productId"
                     name="productId"
@@ -239,29 +272,42 @@ export default function AdminRegisterSale() {
                     <option value="">Selecciona un producto</option>
                     {products.map(product => (
                       <option key={product._id} value={product._id}>
-                        {product.name} | Compra: {formatCurrency(product.purchasePrice)} | Cliente: {formatCurrency(product.clientPrice || 0)}
+                        {product.name} | Compra:{" "}
+                        {formatCurrency(product.purchasePrice)} | Cliente:{" "}
+                        {formatCurrency(product.clientPrice || 0)}
                       </option>
                     ))}
                   </select>
                 </div>
                 {selectedProduct && (
                   <div className="rounded-lg border border-blue-500/30 bg-blue-900/10 p-4">
-                    <h3 className="mb-2 font-semibold text-white">{selectedProduct.name}</h3>
+                    <h3 className="mb-2 font-semibold text-white">
+                      {selectedProduct.name}
+                    </h3>
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       <div>
                         <p className="text-gray-400">Precio de compra:</p>
-                        <p className="font-bold text-white">{formatCurrency(selectedProduct.purchasePrice)}</p>
+                        <p className="font-bold text-white">
+                          {formatCurrency(selectedProduct.purchasePrice)}
+                        </p>
                       </div>
                       <div>
                         <p className="text-gray-400">Precio sugerido:</p>
-                        <p className="font-bold text-green-400">{formatCurrency(selectedProduct.clientPrice || 0)}</p>
+                        <p className="font-bold text-green-400">
+                          {formatCurrency(selectedProduct.clientPrice || 0)}
+                        </p>
                       </div>
                     </div>
                   </div>
                 )}
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label htmlFor="quantity" className="mb-2 block text-sm font-medium text-gray-300">Cantidad *</label>
+                    <label
+                      htmlFor="quantity"
+                      className="mb-2 block text-sm font-medium text-gray-300"
+                    >
+                      Cantidad *
+                    </label>
                     <input
                       type="number"
                       id="quantity"
@@ -273,7 +319,12 @@ export default function AdminRegisterSale() {
                     />
                   </div>
                   <div>
-                    <label htmlFor="salePrice" className="mb-2 block text-sm font-medium text-gray-300">Precio Unitario *</label>
+                    <label
+                      htmlFor="salePrice"
+                      className="mb-2 block text-sm font-medium text-gray-300"
+                    >
+                      Precio Unitario *
+                    </label>
                     <input
                       type="number"
                       id="salePrice"
@@ -288,9 +339,9 @@ export default function AdminRegisterSale() {
                 </div>
               </div>
             </div>
-            <Button 
-              type="submit" 
-              disabled={!formData.productId} 
+            <Button
+              type="submit"
+              disabled={!formData.productId}
               className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
             >
               ➕ Agregar al Pedido
@@ -305,13 +356,20 @@ export default function AdminRegisterSale() {
               Productos en el Pedido ({saleItems.length})
             </h2>
             {saleItems.length === 0 ? (
-              <p className="text-center text-gray-500 py-8">No hay productos agregados</p>
+              <p className="py-8 text-center text-gray-500">
+                No hay productos agregados
+              </p>
             ) : (
               <div className="space-y-3">
                 {saleItems.map(item => (
-                  <div key={item.id} className="rounded-lg border border-gray-700 bg-gray-900/50 p-4">
-                    <div className="flex justify-between items-start mb-2">
-                      <h3 className="font-semibold text-white">{item.productName}</h3>
+                  <div
+                    key={item.id}
+                    className="rounded-lg border border-gray-700 bg-gray-900/50 p-4"
+                  >
+                    <div className="mb-2 flex items-start justify-between">
+                      <h3 className="font-semibold text-white">
+                        {item.productName}
+                      </h3>
                       <button
                         onClick={() => handleRemoveItem(item.id)}
                         className="text-red-400 hover:text-red-300"
@@ -326,15 +384,24 @@ export default function AdminRegisterSale() {
                       </div>
                       <div>
                         <p className="text-gray-400">Precio unit:</p>
-                        <p className="text-white">{formatCurrency(item.salePrice)}</p>
+                        <p className="text-white">
+                          {formatCurrency(item.salePrice)}
+                        </p>
                       </div>
                       <div>
                         <p className="text-gray-400">Subtotal:</p>
-                        <p className="font-bold text-green-400">{formatCurrency(item.salePrice * item.quantity)}</p>
+                        <p className="font-bold text-green-400">
+                          {formatCurrency(item.salePrice * item.quantity)}
+                        </p>
                       </div>
                       <div>
                         <p className="text-gray-400">Ganancia:</p>
-                        <p className="font-bold text-blue-400">{formatCurrency((item.salePrice - item.purchasePrice) * item.quantity)}</p>
+                        <p className="font-bold text-blue-400">
+                          {formatCurrency(
+                            (item.salePrice - item.purchasePrice) *
+                              item.quantity
+                          )}
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -345,16 +412,24 @@ export default function AdminRegisterSale() {
 
           {/* Totales del pedido */}
           {saleItems.length > 0 && (
-            <div className="rounded-xl border border-gray-700 bg-linear-to-br from-purple-900/30 to-blue-900/30 p-6">
-              <h2 className="mb-4 text-lg font-semibold text-white">Resumen del Pedido</h2>
+            <div className="bg-linear-to-br rounded-xl border border-gray-700 from-purple-900/30 to-blue-900/30 p-6">
+              <h2 className="mb-4 text-lg font-semibold text-white">
+                Resumen del Pedido
+              </h2>
               <div className="space-y-3">
                 <div className="flex justify-between text-lg">
                   <span className="font-semibold text-white">Total venta:</span>
-                  <span className="font-bold text-green-400">{formatCurrency(totals.totalSale)}</span>
+                  <span className="font-bold text-green-400">
+                    {formatCurrency(totals.totalSale)}
+                  </span>
                 </div>
-                <div className="flex justify-between text-lg border-t border-gray-600 pt-3">
-                  <span className="font-semibold text-white">Ganancia total:</span>
-                  <span className="font-bold text-blue-400">{formatCurrency(totals.totalProfit)}</span>
+                <div className="flex justify-between border-t border-gray-600 pt-3 text-lg">
+                  <span className="font-semibold text-white">
+                    Ganancia total:
+                  </span>
+                  <span className="font-bold text-blue-400">
+                    {formatCurrency(totals.totalProfit)}
+                  </span>
                 </div>
               </div>
             </div>
@@ -366,10 +441,17 @@ export default function AdminRegisterSale() {
       {saleItems.length > 0 && (
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-6">
-            <h2 className="mb-4 text-lg font-semibold text-white">Información del Pedido</h2>
+            <h2 className="mb-4 text-lg font-semibold text-white">
+              Información del Pedido
+            </h2>
             <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <label htmlFor="saleDate" className="mb-2 block text-sm font-medium text-gray-300">Fecha del pedido *</label>
+                <label
+                  htmlFor="saleDate"
+                  className="mb-2 block text-sm font-medium text-gray-300"
+                >
+                  Fecha del pedido *
+                </label>
                 <input
                   type="date"
                   id="saleDate"
@@ -381,7 +463,12 @@ export default function AdminRegisterSale() {
                 />
               </div>
               <div>
-                <label htmlFor="notes" className="mb-2 block text-sm font-medium text-gray-300">Notas (opcional)</label>
+                <label
+                  htmlFor="notes"
+                  className="mb-2 block text-sm font-medium text-gray-300"
+                >
+                  Notas (opcional)
+                </label>
                 <textarea
                   id="notes"
                   name="notes"
@@ -394,22 +481,24 @@ export default function AdminRegisterSale() {
               </div>
             </div>
           </div>
-          
+
           {/* Botones de acción */}
           <div className="flex gap-4">
-            <Button 
-              type="button" 
-              onClick={() => navigate("/dashboard")} 
+            <Button
+              type="button"
+              onClick={() => navigate("/dashboard")}
               className="flex-1 bg-gray-700 hover:bg-gray-600"
             >
               Cancelar
             </Button>
-            <Button 
-              type="submit" 
-              disabled={loading || saleItems.length === 0} 
-              className="flex-1 bg-linear-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:opacity-50"
+            <Button
+              type="submit"
+              disabled={loading || saleItems.length === 0}
+              className="bg-linear-to-r flex-1 from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:opacity-50"
             >
-              {loading ? "Registrando..." : `✓ Confirmar Pedido (${saleItems.length} ${saleItems.length === 1 ? 'venta' : 'ventas'})`}
+              {loading
+                ? "Registrando..."
+                : `✓ Confirmar Pedido (${saleItems.length} ${saleItems.length === 1 ? "venta" : "ventas"})`}
             </Button>
           </div>
         </form>
