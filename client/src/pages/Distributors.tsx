@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { distributorService } from "../api/services";
 import LoadingSpinner from "../components/LoadingSpinner";
+import { useBusiness } from "../context/BusinessContext";
 import type { User } from "../types";
 import {
   buildCacheKey,
@@ -13,6 +14,7 @@ const DISTRIBUTORS_CACHE_TTL_MS = 60 * 1000;
 
 export default function Distributors() {
   const navigate = useNavigate();
+  const { businessId } = useBusiness();
   const [distributors, setDistributors] = useState<User[]>([]);
   const [pagination, setPagination] = useState({
     page: 1,
@@ -27,9 +29,17 @@ export default function Distributors() {
 
   const loadDistributors = useCallback(async () => {
     try {
+      if (!businessId) {
+        setError("Selecciona un negocio para ver distribuidores");
+        setDistributors([]);
+        setLoading(false);
+        return;
+      }
+
       const params: any = {
         page: pagination.page,
         limit: pagination.limit,
+        businessId,
       };
       if (filter !== "all") params.active = filter === "active";
 
@@ -66,7 +76,7 @@ export default function Distributors() {
     } finally {
       setLoading(false);
     }
-  }, [filter, pagination.page, pagination.limit]);
+  }, [filter, pagination.page, pagination.limit, businessId]);
 
   useEffect(() => {
     loadDistributors();
