@@ -90,16 +90,7 @@ export default function App() {
         />
 
         {/* Shared authenticated route - accessible by admin and distributor */}
-        <Route
-          path="/catalog"
-          element={
-            <ProtectedRoute
-              allowedRoles={["admin", "distribuidor", "super_admin"]}
-            >
-              <Catalog />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="/catalog" element={<Catalog />} />
 
         {/* Admin Routes */}
         <Route
