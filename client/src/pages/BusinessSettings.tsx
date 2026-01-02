@@ -1,5 +1,5 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
-import { businessService } from "../api/services";
+import { businessService, uploadService } from "../api/services";
 import { useBusiness } from "../context/BusinessContext";
 import type { BusinessFeatures } from "../types";
 import AuditLogs from "./AuditLogs";
@@ -14,6 +14,8 @@ interface FormState {
   contactPhone: string;
   contactWhatsapp: string;
   contactLocation: string;
+  logoUrl?: string;
+  logoPublicId?: string | null;
   features: BusinessFeatures;
 }
 
@@ -38,6 +40,8 @@ export default function BusinessSettings() {
     contactPhone: "",
     contactWhatsapp: "",
     contactLocation: "",
+    logoUrl: undefined,
+    logoPublicId: null,
     features: defaultFeatures,
   });
   const [loading, setLoading] = useState(false);
@@ -87,6 +91,8 @@ export default function BusinessSettings() {
         contactPhone: business.contactPhone || "",
         contactWhatsapp: business.contactWhatsapp || "",
         contactLocation: business.contactLocation || "",
+        logoUrl: business.logoUrl,
+        logoPublicId: business.logoPublicId ?? null,
         features: business.config?.features || features || defaultFeatures,
       });
     }
@@ -122,6 +128,8 @@ export default function BusinessSettings() {
         contactPhone: form.contactPhone,
         contactWhatsapp: form.contactWhatsapp,
         contactLocation: form.contactLocation,
+        logoUrl: form.logoUrl,
+        logoPublicId: form.logoPublicId ?? undefined,
       });
       await businessService.updateBusinessFeatures(businessId, form.features);
       setMessage("Datos del negocio actualizados");
@@ -134,6 +142,33 @@ export default function BusinessSettings() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleLogoUpload = async (file: File | null) => {
+    if (!file) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const image = await uploadService.uploadImage(file);
+      setForm(prev => ({
+        ...prev,
+        logoUrl: image.url,
+        logoPublicId: image.publicId,
+      }));
+      setMessage("Logo actualizado (pendiente de guardar)");
+    } catch (err) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message || "No se pudo subir el logo";
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRemoveLogo = () => {
+    setForm(prev => ({ ...prev, logoUrl: undefined, logoPublicId: null }));
+    setMessage("Logo eliminado (pendiente de guardar)");
   };
 
   return (
@@ -277,6 +312,57 @@ export default function BusinessSettings() {
                         className="w-full rounded-lg border border-gray-600 bg-gray-900/60 px-4 py-3 text-white placeholder-gray-500 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-purple-500"
                         placeholder="Ciudad / dirección"
                       />
+                    </div>
+
+                    <div className="space-y-3 sm:col-span-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-semibold text-gray-200">
+                          Logo del negocio
+                        </label>
+                        {form.logoUrl && (
+                          <button
+                            type="button"
+                            onClick={handleRemoveLogo}
+                            className="text-xs font-semibold text-red-300 hover:text-red-200"
+                          >
+                            Quitar
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex flex-col gap-3 rounded-lg border border-gray-700 bg-gray-900/50 p-4 sm:flex-row sm:items-center">
+                        <div className="flex items-center gap-3">
+                          <div className="h-16 w-16 overflow-hidden rounded-lg border border-gray-700 bg-gray-800">
+                            {form.logoUrl ? (
+                              <img
+                                src={form.logoUrl}
+                                alt="Logo"
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center text-xs text-gray-500">
+                                Sin logo
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-xs text-gray-400">
+                            Formatos aceptados: JPG, PNG. Máx 5MB.
+                          </div>
+                        </div>
+                        <label className="inline-flex cursor-pointer items-center gap-2 self-start rounded-lg border border-purple-500/60 px-3 py-2 text-sm font-semibold text-purple-200 transition hover:bg-purple-500/10">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={e =>
+                              handleLogoUpload(e.target.files?.[0] || null)
+                            }
+                          />
+                          Subir logo
+                        </label>
+                      </div>
+                      <p className="text-xs text-gray-400">
+                        Guarda los cambios para aplicar el logo en el catálogo.
+                      </p>
                     </div>
                   </div>
 

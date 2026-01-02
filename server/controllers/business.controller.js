@@ -84,6 +84,8 @@ export const updateBusiness = async (req, res) => {
       contactPhone,
       contactWhatsapp,
       contactLocation,
+      logoUrl,
+      logoPublicId,
     } = req.body;
 
     if (name) business.name = name;
@@ -94,6 +96,8 @@ export const updateBusiness = async (req, res) => {
       business.contactWhatsapp = contactWhatsapp;
     if (contactLocation !== undefined)
       business.contactLocation = contactLocation;
+    if (logoUrl !== undefined) business.logoUrl = logoUrl;
+    if (logoPublicId !== undefined) business.logoPublicId = logoPublicId;
 
     await business.save();
 

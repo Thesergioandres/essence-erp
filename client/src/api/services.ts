@@ -152,6 +152,8 @@ export const businessService = {
       contactPhone: string;
       contactWhatsapp: string;
       contactLocation: string;
+      logoUrl?: string;
+      logoPublicId?: string | null;
     }>
   ): Promise<{ business: unknown }> {
     const response = await api.patch<{ business: unknown }>(
