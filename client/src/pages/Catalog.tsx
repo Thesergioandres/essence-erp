@@ -14,6 +14,7 @@ export default function Catalog() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState(
     searchParams.get("search") || ""
   );
@@ -26,10 +27,15 @@ export default function Catalog() {
   const [inStockOnly, setInStockOnly] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const publicBusinessId = useMemo(
-    () =>
-      searchParams.get("businessId") ||
-      import.meta.env.VITE_PUBLIC_BUSINESS_ID ||
-      null,
+    () => {
+      const fromQuery = searchParams.get("businessId");
+      if (fromQuery) return fromQuery;
+      if (typeof window !== "undefined") {
+        const fromStorage = localStorage.getItem("businessId");
+        if (fromStorage) return fromStorage;
+      }
+      return import.meta.env.VITE_PUBLIC_BUSINESS_ID || null;
+    },
     [searchParams]
   );
   const hideChrome = import.meta.env.PROD
@@ -44,6 +50,14 @@ export default function Catalog() {
   const [maxPrice, setMaxPrice] = useState(0);
 
   useEffect(() => {
+    if (!publicBusinessId) {
+      setLoadError(
+        "Falta el businessId para cargar el catálogo público. Añade ?businessId=... o define VITE_PUBLIC_BUSINESS_ID en el build."
+      );
+      setLoading(false);
+      return;
+    }
+
     // Para visitas públicas, propaga el businessId al header mediante localStorage
     const hasToken = Boolean(localStorage.getItem("token"));
     if (publicBusinessId && !hasToken) {
@@ -88,6 +102,7 @@ export default function Catalog() {
         setPriceRange({ min: 0, max: maxClientPrice || 0 });
       } catch (error) {
         console.error("Error loading data:", error);
+        setLoadError("No se pudieron cargar productos. Verifica businessId y acceso público.");
       } finally {
         setLoading(false);
       }
@@ -281,6 +296,12 @@ export default function Catalog() {
       <div
         className={`mx-auto max-w-7xl space-y-6 px-4 ${hideChrome ? "py-6" : "py-8 sm:px-6 sm:py-12 lg:px-8 lg:py-16"}`}
       >
+        {loadError && (
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+            {loadError}
+          </div>
+        )}
+
         <div className="rounded-xl border border-white/10 bg-gray-900/70 p-4 sm:flex sm:items-center sm:justify-between sm:gap-4">
           <div className="mb-3 sm:mb-0">
             <p className="text-sm font-semibold text-white">
