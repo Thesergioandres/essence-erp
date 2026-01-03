@@ -100,8 +100,7 @@ export default function GodPanel() {
     const load = async () => {
       try {
         const data = await userAccessService.list();
-        const filtered = data.filter(u => u.role === "super_admin");
-        setUsers(filtered);
+        setUsers(data.filter(u => u.role === "super_admin"));
         await loadIssues(issueStatus);
       } catch (err) {
         console.error("god panel list error", err);
@@ -250,8 +249,7 @@ export default function GodPanel() {
                 setLoading(true);
                 try {
                   const data = await userAccessService.list();
-                  const filtered = data.filter(u => u.role === "super_admin");
-                  setUsers(filtered);
+                  setUsers(data.filter(u => u.role === "super_admin"));
                   setFeedback("Lista actualizada");
                 } catch (err) {
                   console.error("god panel refresh error", err);

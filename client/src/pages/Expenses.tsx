@@ -266,63 +266,112 @@ export default function Expenses() {
             Aún no hay gastos registrados.
           </div>
         ) : (
-          <div className="mt-4 overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-700">
-              <thead className="bg-gray-900/50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-400">
-                    Fecha
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-400">
-                    Tipo de gasto
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-400">
-                    Monto
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-400">
-                    Acciones
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-700">
-                {expenses.map(exp => (
-                  <tr key={exp._id} className="hover:bg-gray-900/30">
-                    <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-200">
-                      {new Date(exp.expenseDate).toLocaleDateString("es-CO")}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-200">
-                      {exp.type || exp.category || exp.description || "—"}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-gray-200">
-                      {formatCurrency(exp.amount)}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right text-sm">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          type="button"
-                          className="border-gray-700 bg-transparent text-gray-200 hover:bg-gray-800"
-                          onClick={() => startEdit(exp)}
-                        >
-                          Editar
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          type="button"
-                          loading={deletingId === exp._id}
-                          onClick={() => handleDelete(exp._id)}
-                        >
-                          Eliminar
-                        </Button>
-                      </div>
-                    </td>
+          <>
+            <div className="mt-4 hidden overflow-x-auto md:block">
+              <table className="min-w-[720px] divide-y divide-gray-700">
+                <thead className="sticky top-0 bg-gray-900/70 backdrop-blur">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-400">
+                      Fecha
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-400">
+                      Tipo de gasto
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-400">
+                      Monto
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-400">
+                      Acciones
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-gray-700">
+                  {expenses.map(exp => (
+                    <tr key={exp._id} className="hover:bg-gray-900/30">
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-200">
+                        {new Date(exp.expenseDate).toLocaleDateString("es-CO")}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-200">
+                        {exp.type || exp.category || exp.description || "—"}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-gray-200">
+                        {formatCurrency(exp.amount)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right text-sm">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            type="button"
+                            className="border-gray-700 bg-transparent text-gray-200 hover:bg-gray-800"
+                            onClick={() => startEdit(exp)}
+                          >
+                            Editar
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            type="button"
+                            loading={deletingId === exp._id}
+                            onClick={() => handleDelete(exp._id)}
+                          >
+                            Eliminar
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Vista móvil en tarjetas */}
+            <div className="mt-4 space-y-3 md:hidden">
+              {expenses.map(exp => (
+                <div
+                  key={exp._id}
+                  className="rounded-lg border border-gray-700 bg-gray-900/60 p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-gray-400">
+                        {new Date(exp.expenseDate).toLocaleDateString("es-CO")}
+                      </p>
+                      <p className="text-sm font-semibold text-white">
+                        {exp.type || exp.category || exp.description || "—"}
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-gray-800 px-3 py-1 text-xs font-semibold text-purple-200">
+                      {formatCurrency(exp.amount)}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:justify-end">
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        type="button"
+                        className="border-gray-700 bg-transparent text-gray-200 hover:bg-gray-800"
+                        onClick={() => startEdit(exp)}
+                      >
+                        Editar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        type="button"
+                        loading={deletingId === exp._id}
+                        onClick={() => handleDelete(exp._id)}
+                      >
+                        Eliminar
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
 

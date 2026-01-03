@@ -196,7 +196,7 @@ export default function ProfitHistory() {
       </div>
 
       <div className="rounded-xl border border-gray-800 bg-gray-900/70 p-4">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-300">
               Distribuidor
@@ -279,9 +279,9 @@ export default function ProfitHistory() {
             </button>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-800">
-              <thead className="bg-gray-950/60">
+          <div className="hidden overflow-x-auto md:block">
+            <table className="min-w-[960px] divide-y divide-gray-800">
+              <thead className="sticky top-0 bg-gray-950/80 backdrop-blur">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">
                     Fecha
@@ -385,6 +385,90 @@ export default function ProfitHistory() {
                   ))}
               </tbody>
             </table>
+          </div>
+
+          {/* Vista móvil en tarjetas */}
+          <div className="space-y-3 md:hidden">
+            {loading && (
+              <div className="rounded-lg border border-gray-800 bg-gray-900 px-4 py-3 text-center text-gray-300">
+                Cargando...
+              </div>
+            )}
+
+            {!loading && (!overview || overview.entries.length === 0) && (
+              <div className="rounded-lg border border-gray-800 bg-gray-900 px-4 py-3 text-center text-gray-300">
+                No hay ventas en el rango seleccionado.
+              </div>
+            )}
+
+            {!loading &&
+              overview?.entries.map(entry => (
+                <div
+                  key={entry.id}
+                  className="rounded-lg border border-gray-800 bg-gray-900 p-4 shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-gray-400">
+                        {formatDateTime(entry.date)}
+                      </p>
+                      <p className="text-sm font-semibold text-white">
+                        {entry.saleId || entry.id}
+                      </p>
+                      {entry.eventName && (
+                        <p className="text-xs text-purple-300">
+                          {entry.eventName}
+                        </p>
+                      )}
+                    </div>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-gray-800 px-2 py-1 text-[11px] font-semibold uppercase text-gray-200">
+                      <span
+                        className={
+                          entry.source === "special"
+                            ? "text-pink-300"
+                            : "text-emerald-300"
+                        }
+                      >
+                        ●
+                      </span>
+                      {entry.source === "special" ? "Especial" : "Normal"}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 space-y-2 text-sm text-gray-200">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-gray-400">Distribuidor</span>
+                      <span className="text-right font-semibold text-white">
+                        {entry.distributorName}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-gray-400">Producto</span>
+                      <span className="text-right text-white">
+                        {entry.productName || "-"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-gray-400">Ganancia dist</span>
+                      <span className="font-semibold text-cyan-300">
+                        {formatCurrency(entry.distributorProfit)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-gray-400">Ganancia admin</span>
+                      <span className="font-semibold text-emerald-300">
+                        {formatCurrency(entry.adminProfit)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-gray-400">Total</span>
+                      <span className="font-semibold text-purple-200">
+                        {formatCurrency(entry.totalProfit)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
           </div>
         </div>
 

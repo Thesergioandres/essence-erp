@@ -243,7 +243,7 @@ export default function DefectiveProductsManagement() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-3xl font-bold text-white">Productos Defectuosos</h1>
         <button
           onClick={() => {
@@ -253,14 +253,14 @@ export default function DefectiveProductsManagement() {
             setReportForm({ productId: "", quantity: 1, reason: "" });
             setShowReportModal(true);
           }}
-          className="bg-linear-to-r rounded-lg from-red-600 to-orange-600 px-6 py-3 font-semibold text-white shadow-lg transition hover:from-red-700 hover:to-orange-700"
+          className="bg-linear-to-r w-full rounded-lg from-red-600 to-orange-600 px-6 py-3 text-center font-semibold text-white shadow-lg transition hover:from-red-700 hover:to-orange-700 sm:w-auto"
         >
           + Reportar defecto
         </button>
       </div>
 
       {/* Estadísticas */}
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-5">
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-5">
         <div className="rounded-lg border border-gray-800 bg-gray-900 p-6">
           <p className="text-sm text-gray-400">Total Reportes</p>
           <p className="text-2xl font-bold text-white">{data.stats.total}</p>
@@ -339,8 +339,8 @@ export default function DefectiveProductsManagement() {
 
       {/* Tabla de reportes */}
       <div className="overflow-hidden rounded-lg border border-gray-800 bg-gray-900">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-800">
+        <div className="hidden overflow-x-auto md:block">
+          <table className="min-w-[960px] divide-y divide-gray-800">
             <thead className="bg-gray-800/50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase text-gray-300">
@@ -501,6 +501,117 @@ export default function DefectiveProductsManagement() {
               <p className="text-gray-400">No hay reportes</p>
             </div>
           )}
+        </div>
+
+        {/* Vista móvil en tarjetas */}
+        <div className="space-y-3 p-3 md:hidden">
+          {filteredReports.length === 0 && (
+            <div className="rounded-lg border border-gray-800 bg-gray-900 px-4 py-3 text-center text-gray-300">
+              No hay reportes
+            </div>
+          )}
+
+          {filteredReports.map(report => {
+            const product =
+              typeof report.product === "object" ? report.product : null;
+            const distributor =
+              typeof report.distributor === "object"
+                ? report.distributor
+                : null;
+            const branch =
+              typeof report.branch === "object" ? report.branch : null;
+
+            return (
+              <div
+                key={report._id}
+                className="rounded-lg border border-gray-800 bg-gray-900 p-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-gray-400">
+                      {new Date(report.reportDate).toLocaleDateString("es-ES", {
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </p>
+                    <p className="text-sm font-semibold text-white">
+                      {product?.name || "Producto"}
+                    </p>
+                    {product?.image?.url && (
+                      <img
+                        src={product.image.url}
+                        alt={product.name}
+                        className="mt-2 h-12 w-12 rounded object-cover"
+                      />
+                    )}
+                  </div>
+                  <span className="inline-flex rounded-full bg-gray-800 px-2 py-1 text-[11px] font-semibold uppercase text-gray-200">
+                    {report.status}
+                  </span>
+                </div>
+
+                <div className="mt-3 space-y-2 text-sm text-gray-200">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-gray-400">Origen</span>
+                    <span className="text-right text-white">
+                      {branch
+                        ? `Sede: ${branch.name}`
+                        : report.distributor
+                          ? "Distribuidor"
+                          : "Bodega"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-gray-400">Distribuidor</span>
+                    <span className="text-right text-white">
+                      {distributor?.name || "Admin"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-gray-400">Cantidad</span>
+                    <span className="font-semibold text-white">
+                      {report.quantity}
+                    </span>
+                  </div>
+                  <div className="text-gray-200">
+                    <p className="text-gray-400">Razón</p>
+                    <p className="text-sm leading-snug text-white">
+                      {report.reason}
+                    </p>
+                  </div>
+                </div>
+
+                {report.status === "pendiente" ? (
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:justify-end">
+                    <button
+                      onClick={() => handleAction(report, "confirm")}
+                      disabled={processingId === report._id}
+                      className="rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-green-500 disabled:opacity-50"
+                    >
+                      Confirmar
+                    </button>
+                    <button
+                      onClick={() => handleAction(report, "reject")}
+                      disabled={processingId === report._id}
+                      className="rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-red-500 disabled:opacity-50"
+                    >
+                      Rechazar
+                    </button>
+                  </div>
+                ) : (
+                  <p className="mt-3 text-xs text-gray-400">
+                    {report.status === "confirmado"
+                      ? "Confirmado"
+                      : "Rechazado"}
+                    {report.confirmedAt
+                      ? ` el ${new Date(report.confirmedAt).toLocaleDateString("es-ES")}`
+                      : ""}
+                  </p>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
 

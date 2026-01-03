@@ -1,6 +1,10 @@
-import { useEffect, useState, useCallback } from "react";
-import { stockService, distributorService, productService } from "../api/services";
-import type { User, Product } from "../types";
+import { useCallback, useEffect, useState } from "react";
+import {
+  distributorService,
+  productService,
+  stockService,
+} from "../api/services";
+import type { Product, User } from "../types";
 
 interface StockTransfer {
   _id: string;
@@ -72,7 +76,15 @@ export default function TransferHistory() {
     } finally {
       setLoading(false);
     }
-  }, [page, fromDistributor, toDistributor, product, startDate, endDate, status]);
+  }, [
+    page,
+    fromDistributor,
+    toDistributor,
+    product,
+    startDate,
+    endDate,
+    status,
+  ]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -107,7 +119,7 @@ export default function TransferHistory() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2">
+          <h1 className="mb-2 text-4xl font-bold text-white">
             📋 Historial de Transferencias
           </h1>
           <p className="text-gray-400">
@@ -116,16 +128,30 @@ export default function TransferHistory() {
         </div>
 
         {/* Estadísticas */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2">
           <div className="rounded-xl border border-purple-500/30 bg-gradient-to-br from-purple-900/20 to-pink-900/20 p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-400 mb-1">Total Transferencias</p>
-                <p className="text-3xl font-bold text-white">{stats.totalTransfers}</p>
+                <p className="mb-1 text-sm text-gray-400">
+                  Total Transferencias
+                </p>
+                <p className="text-3xl font-bold text-white">
+                  {stats.totalTransfers}
+                </p>
               </div>
               <div className="rounded-full bg-purple-600/20 p-4">
-                <svg className="h-8 w-8 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                <svg
+                  className="h-8 w-8 text-purple-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
+                  />
                 </svg>
               </div>
             </div>
@@ -134,12 +160,26 @@ export default function TransferHistory() {
           <div className="rounded-xl border border-blue-500/30 bg-gradient-to-br from-blue-900/20 to-cyan-900/20 p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-400 mb-1">Unidades Transferidas</p>
-                <p className="text-3xl font-bold text-white">{stats.totalQuantity}</p>
+                <p className="mb-1 text-sm text-gray-400">
+                  Unidades Transferidas
+                </p>
+                <p className="text-3xl font-bold text-white">
+                  {stats.totalQuantity}
+                </p>
               </div>
               <div className="rounded-full bg-blue-600/20 p-4">
-                <svg className="h-8 w-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                <svg
+                  className="h-8 w-8 text-blue-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"
+                  />
                 </svg>
               </div>
             </div>
@@ -147,19 +187,19 @@ export default function TransferHistory() {
         </div>
 
         {/* Filtros */}
-        <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-6 mb-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+        <div className="mb-8 rounded-xl border border-gray-700 bg-gray-800/50 p-6">
+          <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="mb-2 block text-sm font-medium text-gray-300">
                 Origen
               </label>
               <select
                 value={fromDistributor}
-                onChange={(e) => setFromDistributor(e.target.value)}
+                onChange={e => setFromDistributor(e.target.value)}
                 className="w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-2 text-white focus:border-purple-500 focus:outline-none"
               >
                 <option value="">Todos</option>
-                {distributors.map((d) => (
+                {distributors.map(d => (
                   <option key={d._id} value={d._id}>
                     {d.name}
                   </option>
@@ -168,16 +208,16 @@ export default function TransferHistory() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="mb-2 block text-sm font-medium text-gray-300">
                 Destino
               </label>
               <select
                 value={toDistributor}
-                onChange={(e) => setToDistributor(e.target.value)}
+                onChange={e => setToDistributor(e.target.value)}
                 className="w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-2 text-white focus:border-purple-500 focus:outline-none"
               >
                 <option value="">Todos</option>
-                {distributors.map((d) => (
+                {distributors.map(d => (
                   <option key={d._id} value={d._id}>
                     {d.name}
                   </option>
@@ -186,16 +226,16 @@ export default function TransferHistory() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="mb-2 block text-sm font-medium text-gray-300">
                 Producto
               </label>
               <select
                 value={product}
-                onChange={(e) => setProduct(e.target.value)}
+                onChange={e => setProduct(e.target.value)}
                 className="w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-2 text-white focus:border-purple-500 focus:outline-none"
               >
                 <option value="">Todos</option>
-                {products.map((p) => (
+                {products.map(p => (
                   <option key={p._id} value={p._id}>
                     {p.name}
                   </option>
@@ -204,36 +244,36 @@ export default function TransferHistory() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="mb-2 block text-sm font-medium text-gray-300">
                 Fecha Inicio
               </label>
               <input
                 type="date"
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+                onChange={e => setStartDate(e.target.value)}
                 className="w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-2 text-white focus:border-purple-500 focus:outline-none"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="mb-2 block text-sm font-medium text-gray-300">
                 Fecha Fin
               </label>
               <input
                 type="date"
                 value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
+                onChange={e => setEndDate(e.target.value)}
                 className="w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-2 text-white focus:border-purple-500 focus:outline-none"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="mb-2 block text-sm font-medium text-gray-300">
                 Estado
               </label>
               <select
                 value={status}
-                onChange={(e) => setStatus(e.target.value)}
+                onChange={e => setStatus(e.target.value)}
                 className="w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-2 text-white focus:border-purple-500 focus:outline-none"
               >
                 <option value="">Todos</option>
@@ -246,7 +286,7 @@ export default function TransferHistory() {
 
           <button
             onClick={clearFilters}
-            className="w-full md:w-auto px-6 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition"
+            className="w-full rounded-lg bg-gray-700 px-6 py-2 text-white transition hover:bg-gray-600 md:w-auto"
           >
             Limpiar Filtros
           </button>
@@ -261,8 +301,10 @@ export default function TransferHistory() {
                 <div className="absolute inset-0 h-16 w-16 animate-ping rounded-full border-4 border-purple-500/30"></div>
               </div>
               <div className="text-center">
-                <p className="text-xl font-semibold text-white mb-2">Cargando transferencias</p>
-                <div className="flex gap-1 justify-center">
+                <p className="mb-2 text-xl font-semibold text-white">
+                  Cargando transferencias
+                </p>
+                <div className="flex justify-center gap-1">
                   <div className="h-2 w-2 animate-bounce rounded-full bg-purple-500 [animation-delay:-0.3s]"></div>
                   <div className="h-2 w-2 animate-bounce rounded-full bg-pink-500 [animation-delay:-0.15s]"></div>
                   <div className="h-2 w-2 animate-bounce rounded-full bg-purple-500"></div>
@@ -272,38 +314,43 @@ export default function TransferHistory() {
           </div>
         ) : transfers.length === 0 ? (
           <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-12 text-center">
-            <p className="text-gray-400 text-lg">No se encontraron transferencias</p>
+            <p className="text-lg text-gray-400">
+              No se encontraron transferencias
+            </p>
           </div>
         ) : (
           <>
-            <div className="rounded-xl border border-gray-700 bg-gray-800/50 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-700/50">
+            <div className="overflow-hidden rounded-xl border border-gray-700 bg-gray-800/50">
+              <div className="hidden overflow-x-auto md:block">
+                <table className="min-w-[960px]">
+                  <thead className="sticky top-0 bg-gray-700/70 backdrop-blur">
                     <tr>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase">
+                      <th className="px-6 py-4 text-left text-xs font-medium uppercase text-gray-300">
                         Fecha
                       </th>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase">
+                      <th className="px-6 py-4 text-left text-xs font-medium uppercase text-gray-300">
                         Origen
                       </th>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase">
+                      <th className="px-6 py-4 text-left text-xs font-medium uppercase text-gray-300">
                         Destino
                       </th>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase">
+                      <th className="px-6 py-4 text-left text-xs font-medium uppercase text-gray-300">
                         Producto
                       </th>
-                      <th className="px-6 py-4 text-center text-xs font-medium text-gray-300 uppercase">
+                      <th className="px-6 py-4 text-center text-xs font-medium uppercase text-gray-300">
                         Cantidad
                       </th>
-                      <th className="px-6 py-4 text-center text-xs font-medium text-gray-300 uppercase">
+                      <th className="px-6 py-4 text-center text-xs font-medium uppercase text-gray-300">
                         Estado
                       </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-700">
-                    {transfers.map((transfer) => (
-                      <tr key={transfer._id} className="hover:bg-gray-700/30 transition">
+                    {transfers.map(transfer => (
+                      <tr
+                        key={transfer._id}
+                        className="transition hover:bg-gray-700/30"
+                      >
                         <td className="px-6 py-4 text-sm text-gray-300">
                           {formatDate(transfer.createdAt)}
                         </td>
@@ -313,7 +360,8 @@ export default function TransferHistory() {
                               {transfer.fromDistributor.name}
                             </p>
                             <p className="text-xs text-gray-400">
-                              {transfer.fromStockBefore} → {transfer.fromStockAfter} unidades
+                              {transfer.fromStockBefore} →{" "}
+                              {transfer.fromStockAfter} unidades
                             </p>
                           </div>
                         </td>
@@ -323,7 +371,8 @@ export default function TransferHistory() {
                               {transfer.toDistributor.name}
                             </p>
                             <p className="text-xs text-gray-400">
-                              {transfer.toStockBefore} → {transfer.toStockAfter} unidades
+                              {transfer.toStockBefore} → {transfer.toStockAfter}{" "}
+                              unidades
                             </p>
                           </div>
                         </td>
@@ -331,31 +380,100 @@ export default function TransferHistory() {
                           {transfer.product.name}
                         </td>
                         <td className="px-6 py-4 text-center">
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-600/20 text-blue-400">
+                          <span className="inline-flex items-center rounded-full bg-blue-600/20 px-3 py-1 text-sm font-medium text-blue-400">
                             {transfer.quantity}
                           </span>
                         </td>
                         <td className="px-6 py-4 text-center">
                           <span
-                            className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                            className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${
                               transfer.status === "completed"
                                 ? "bg-green-600/20 text-green-400"
                                 : transfer.status === "failed"
-                                ? "bg-red-600/20 text-red-400"
-                                : "bg-yellow-600/20 text-yellow-400"
+                                  ? "bg-red-600/20 text-red-400"
+                                  : "bg-yellow-600/20 text-yellow-400"
                             }`}
                           >
                             {transfer.status === "completed"
                               ? "Completada"
                               : transfer.status === "failed"
-                              ? "Fallida"
-                              : "Cancelada"}
+                                ? "Fallida"
+                                : "Cancelada"}
                           </span>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+              </div>
+
+              {/* Vista móvil en tarjetas */}
+              <div className="space-y-3 p-3 md:hidden">
+                {transfers.map(transfer => (
+                  <div
+                    key={transfer._id}
+                    className="rounded-lg border border-gray-700 bg-gray-900/60 p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-gray-400">
+                          {formatDate(transfer.createdAt)}
+                        </p>
+                        <p className="text-sm font-semibold text-white">
+                          {transfer.product.name}
+                        </p>
+                      </div>
+                      <span
+                        className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase ${
+                          transfer.status === "completed"
+                            ? "bg-green-600/20 text-green-300"
+                            : transfer.status === "failed"
+                              ? "bg-red-600/20 text-red-300"
+                              : "bg-yellow-600/20 text-yellow-300"
+                        }`}
+                      >
+                        {transfer.status === "completed"
+                          ? "Completada"
+                          : transfer.status === "failed"
+                            ? "Fallida"
+                            : "Cancelada"}
+                      </span>
+                    </div>
+
+                    <div className="mt-3 space-y-2 text-sm text-gray-200">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="text-gray-400">Origen</span>
+                        <div className="text-right">
+                          <p className="font-semibold text-white">
+                            {transfer.fromDistributor.name}
+                          </p>
+                          <p className="text-xs text-gray-400">
+                            {transfer.fromStockBefore} →{" "}
+                            {transfer.fromStockAfter} uds
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="text-gray-400">Destino</span>
+                        <div className="text-right">
+                          <p className="font-semibold text-white">
+                            {transfer.toDistributor.name}
+                          </p>
+                          <p className="text-xs text-gray-400">
+                            {transfer.toStockBefore} → {transfer.toStockAfter}{" "}
+                            uds
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-gray-400">Cantidad</span>
+                        <span className="inline-flex items-center rounded-full bg-blue-600/20 px-3 py-1 text-sm font-semibold text-blue-300">
+                          {transfer.quantity}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -365,17 +483,17 @@ export default function TransferHistory() {
                 <button
                   onClick={() => setPage(Math.max(1, page - 1))}
                   disabled={page === 1}
-                  className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="rounded-lg bg-gray-700 px-4 py-2 text-white hover:bg-gray-600 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Anterior
                 </button>
-                <span className="px-4 py-2 bg-gray-800 text-white rounded-lg">
+                <span className="rounded-lg bg-gray-800 px-4 py-2 text-white">
                   Página {page} de {totalPages}
                 </span>
                 <button
                   onClick={() => setPage(Math.min(totalPages, page + 1))}
                   disabled={page === totalPages}
-                  className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="rounded-lg bg-gray-700 px-4 py-2 text-white hover:bg-gray-600 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Siguiente
                 </button>

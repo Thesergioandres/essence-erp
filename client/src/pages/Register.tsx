@@ -48,6 +48,27 @@ export default function Register() {
     setError("");
     setSuccess("");
 
+    const trimmedName = formData.name.trim();
+    const trimmedEmail = formData.email.trim();
+    const trimmedPhone = formData.phone.trim();
+    const digitsInPhone = trimmedPhone.replace(/\D/g, "");
+    const emailRegex = /[^\s@]+@[^\s@]+\.[^\s@]+/;
+
+    if (!trimmedName || /\d/.test(trimmedName)) {
+      setError("El nombre no debe contener números");
+      return;
+    }
+
+    if (!emailRegex.test(trimmedEmail)) {
+      setError("Ingresa un correo electrónico válido");
+      return;
+    }
+
+    if (/[a-zA-Z]/.test(trimmedPhone) || digitsInPhone.length < 7) {
+      setError("Ingresa un teléfono válido (solo números y mínimo 7 dígitos)");
+      return;
+    }
+
     if (formData.password.length < 6) {
       setError("La contraseña debe tener al menos 6 caracteres");
       return;
@@ -61,10 +82,10 @@ export default function Register() {
     setLoading(true);
     try {
       const payload = {
-        name: formData.name.trim(),
-        email: formData.email.trim(),
+        name: trimmedName,
+        email: trimmedEmail,
         password: formData.password,
-        phone: formData.phone.trim(),
+        phone: trimmedPhone,
         address: formData.address.trim(),
         logo: null,
       };

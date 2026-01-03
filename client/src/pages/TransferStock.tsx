@@ -254,7 +254,7 @@ export default function TransferStock() {
             )}
           </div>
 
-          <div className="flex gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row">
             <button
               type="submit"
               disabled={submitting}
@@ -289,7 +289,7 @@ export default function TransferStock() {
                 seleccionado.
               </p>
             </div>
-            <div className="mt-6 flex gap-3">
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <button
                 onClick={() => setShowConfirmation(false)}
                 disabled={submitting}

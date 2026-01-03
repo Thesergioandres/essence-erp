@@ -1,4 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
+import { Navigate } from "react-router-dom";
+import { authService } from "../api/services";
 import { useBusiness } from "../context/BusinessContext";
 import BusinessSelector from "./BusinessSelector";
 
@@ -11,8 +13,17 @@ export default function BusinessGate({
   children,
   requiredFeature,
 }: BusinessGateProps) {
-  const { business, businessId, loading, error, features, hydrating, refresh } =
-    useBusiness();
+  const {
+    business,
+    businessId,
+    loading,
+    error,
+    features,
+    hydrating,
+    refresh,
+    memberships,
+  } = useBusiness();
+  const user = authService.getCurrentUser();
   const retriedRef = useRef(false);
 
   // Si no hay negocio pero ya se hidrató y no estamos cargando, fuerza un refresh una sola vez
@@ -49,6 +60,16 @@ export default function BusinessGate({
   }
 
   if (!businessId || !business) {
+    if (
+      !loading &&
+      !hydrating &&
+      user?.role === "super_admin" &&
+      user?.status === "active" &&
+      memberships.length === 0
+    ) {
+      return <Navigate to="/onboarding" replace />;
+    }
+
     return (
       <div className="space-y-3 rounded-lg border border-amber-400/30 bg-amber-500/10 px-4 py-4 text-sm text-amber-100">
         <div className="font-semibold text-amber-200">
