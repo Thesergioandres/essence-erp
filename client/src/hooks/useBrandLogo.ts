@@ -24,14 +24,15 @@ export function useBrandLogo() {
     };
   }, []);
 
-  const businessLogo =
-    business?.logoUrl?.trim() ||
-    (typeof (business as Record<string, unknown> | null)?.logo === "string"
-      ? ((business as Record<string, string>).logo || "").trim()
-      : (
-          business as Record<string, { url?: string }> | null
-        )?.logo?.url?.trim()) ||
-    null;
+  const logoField = (business as { logo?: unknown } | null)?.logo;
+  const logoFromBusiness =
+    typeof logoField === "string"
+      ? logoField.trim()
+      : typeof logoField === "object" && logoField
+        ? (logoField as { url?: string }).url?.trim() || null
+        : null;
+
+  const businessLogo = business?.logoUrl?.trim() || logoFromBusiness || null;
 
   const storedLogo = customLogo?.trim() || null;
 

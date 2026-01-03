@@ -13,7 +13,7 @@ vi.mock("../api/services", () => ({
   },
 }));
 
-const mockedApi = (await import("../api/axios")).default as {
+const mockedApi = (await import("../api/axios")).default as unknown as {
   get: ReturnType<typeof vi.fn>;
 };
 const mockedAuth = (await import("../api/services")).authService as unknown as {

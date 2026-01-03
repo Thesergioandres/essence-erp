@@ -76,7 +76,6 @@ export const FinancialKPICards: React.FC<{
   const monthly = kpis?.monthly || {};
 
   const hasCustomRange = Boolean(startDate || endDate);
-  const rangeLabel = hasCustomRange ? "(rango)" : "";
   const todayLabel = hasCustomRange ? "Ventas rango" : "Ventas Hoy";
   const todayRevenueLabel = hasCustomRange ? "Ingresos rango" : "Ingresos Hoy";
   const todayProfitLabel = hasCustomRange ? "Ganancia rango" : "Ganancia Hoy";
