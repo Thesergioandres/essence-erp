@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   analyticsService,
@@ -9,6 +9,7 @@ import {
   stockService,
 } from "../api/services";
 import LoadingSpinner from "../components/LoadingSpinner";
+import { useBusiness } from "../context/BusinessContext";
 import type { Category, MonthlyProfitData, Product, User } from "../types";
 
 export default function Dashboard() {
@@ -27,6 +28,7 @@ export default function Dashboard() {
   }
 
   const navigate = useNavigate();
+  const { businessId, hydrating: businessHydrating } = useBusiness();
   const [stats, setStats] = useState<DashboardStats>({
     totalProducts: 0,
     totalCategories: 0,
@@ -46,58 +48,9 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [fixingAdminSales, setFixingAdminSales] = useState(false);
 
-  useEffect(() => {
-    loadStats();
-  }, []);
+  const loadStats = useCallback(async () => {
+    if (!businessId) return;
 
-  const handleFixAdminSales = async () => {
-    if (
-      !confirm(
-        "¿Actualizar ventas admin?\n\n• Confirmar ventas pendientes\n• Recalcular ganancias correctamente\n• Mover solo ventas del MES ANTERIOR al mes actual\n\nNOTA: No afecta el histórico de ventas antiguas."
-      )
-    ) {
-      return;
-    }
-
-    try {
-      setFixingAdminSales(true);
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL || "http://localhost:5000/api"}/sales/fix-admin-sales`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      const data = await response.json();
-
-      let message = `✅ ${data.message}\n\n`;
-      message += `📊 Resumen:\n`;
-      message += `• Total ventas admin: ${data.totalAdminSales}\n`;
-      message += `• Confirmadas: ${data.confirmed}\n`;
-      message += `• Pendientes: ${data.pending}\n`;
-      message += `• Actualizadas: ${data.updated}\n`;
-      if (data.datesUpdated > 0) {
-        message += `• Fechas actualizadas: ${data.datesUpdated}\n`;
-      }
-      message += `\n${data.note}`;
-
-      alert(message);
-
-      // Recargar stats
-      await loadStats();
-    } catch (error) {
-      console.error("Error actualizando ventas:", error);
-      alert("❌ Error al actualizar ventas admin");
-    } finally {
-      setFixingAdminSales(false);
-    }
-  };
-
-  const loadStats = async () => {
     try {
       const [
         productsResponse,
@@ -107,7 +60,7 @@ export default function Dashboard() {
         salesResponse,
         monthly,
       ] = await Promise.all([
-        productService.getAll(),
+        productService.getAll({ page: 1, limit: 50 }),
         categoryService.getAll(),
         distributorService.getAll(),
         stockService.getAlerts(),
@@ -184,6 +137,65 @@ export default function Dashboard() {
       console.error("Error cargando estadísticas:", error);
     } finally {
       setLoading(false);
+    }
+  }, [businessId]);
+
+  useEffect(() => {
+    if (!businessId || businessHydrating) return;
+    setLoading(true);
+    void loadStats();
+  }, [businessId, businessHydrating, loadStats]);
+
+  const handleFixAdminSales = async () => {
+    if (!businessId) {
+      alert("Selecciona un negocio antes de ejecutar el fix de ventas admin.");
+      return;
+    }
+
+    if (
+      !confirm(
+        "¿Actualizar ventas admin?\n\n• Confirmar ventas pendientes\n• Recalcular ganancias correctamente\n• Mover solo ventas del MES ANTERIOR al mes actual\n\nNOTA: No afecta el histórico de ventas antiguas."
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setFixingAdminSales(true);
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL || "http://localhost:5000/api"}/sales/fix-admin-sales`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            "Content-Type": "application/json",
+            "x-business-id": businessId,
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      let message = `✅ ${data.message}\n\n`;
+      message += `📊 Resumen:\n`;
+      message += `• Total ventas admin: ${data.totalAdminSales}\n`;
+      message += `• Confirmadas: ${data.confirmed}\n`;
+      message += `• Pendientes: ${data.pending}\n`;
+      message += `• Actualizadas: ${data.updated}\n`;
+      if (data.datesUpdated > 0) {
+        message += `• Fechas actualizadas: ${data.datesUpdated}\n`;
+      }
+      message += `\n${data.note}`;
+
+      alert(message);
+
+      // Recargar stats
+      await loadStats();
+    } catch (error) {
+      console.error("Error actualizando ventas:", error);
+      alert("❌ Error al actualizar ventas admin");
+    } finally {
+      setFixingAdminSales(false);
     }
   };
 

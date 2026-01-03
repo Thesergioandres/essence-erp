@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
-import { authService, userAccessService } from "../api/services";
-import type { User } from "../types";
+import { authService, issueService, userAccessService } from "../api/services";
+import type { IssueReport, User } from "../types";
 
 interface DurationForm {
   days: number;
@@ -50,6 +50,32 @@ export default function GodPanel() {
   const [actionKey, setActionKey] = useState<string | null>(null);
   const [durations, setDurations] = useState<Record<string, DurationForm>>({});
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [issues, setIssues] = useState<IssueReport[]>([]);
+  const [issuesLoading, setIssuesLoading] = useState(true);
+  const [issuesError, setIssuesError] = useState<string | null>(null);
+  const [issueStatus, setIssueStatus] = useState<
+    "all" | "open" | "reviewing" | "closed"
+  >("open");
+  const [issueAction, setIssueAction] = useState<string | null>(null);
+  const [confirmUser, setConfirmUser] = useState<User | null>(null);
+
+  const loadIssues = async (
+    status: "all" | "open" | "reviewing" | "closed" = "open"
+  ) => {
+    setIssuesLoading(true);
+    setIssuesError(null);
+    try {
+      const res = await issueService.list(
+        status === "all" ? { limit: 50 } : { status, limit: 50 }
+      );
+      setIssues(res.data);
+    } catch (err) {
+      console.error("god panel issues error", err);
+      setIssuesError("No se pudieron cargar los reportes");
+    } finally {
+      setIssuesLoading(false);
+    }
+  };
 
   const counts = useMemo(() => {
     return users.reduce(
@@ -76,6 +102,7 @@ export default function GodPanel() {
         const data = await userAccessService.list();
         const filtered = data.filter(u => u.role === "super_admin");
         setUsers(filtered);
+        await loadIssues(issueStatus);
       } catch (err) {
         console.error("god panel list error", err);
         setError("No se pudieron cargar los usuarios");
@@ -86,6 +113,26 @@ export default function GodPanel() {
 
     load();
   }, [currentUser?.role, navigate]);
+
+  useEffect(() => {
+    void loadIssues(issueStatus);
+  }, [issueStatus]);
+
+  const updateIssueStatus = async (
+    id: string,
+    status: "open" | "reviewing" | "closed"
+  ) => {
+    setIssueAction(id);
+    try {
+      const { report } = await issueService.updateStatus(id, status);
+      setIssues(prev => prev.map(item => (item._id === id ? report : item)));
+    } catch (err) {
+      console.error("god panel issues update error", err);
+      setIssuesError("No se pudo actualizar el estado");
+    } finally {
+      setIssueAction(null);
+    }
+  };
 
   // Bloqueo defensivo en caso de que el navigate aún no haya redirigido
   if (currentUser?.role !== "god") {
@@ -146,6 +193,7 @@ export default function GodPanel() {
           await userAccessService.remove(userId);
           setUsers(prev => prev.filter(u => u._id !== userId));
           setFeedback("Usuario eliminado");
+          setConfirmUser(null);
           return;
       }
 
@@ -268,17 +316,192 @@ export default function GodPanel() {
           ))}
         </section>
 
-        <div className="overflow-hidden rounded-2xl border border-white/10 bg-gray-900/60 shadow-2xl shadow-purple-900/20">
-          <div className="grid grid-cols-12 gap-3 border-b border-white/5 bg-white/5 px-4 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-gray-300">
-            <span className="col-span-3 sm:col-span-2">Usuario</span>
-            <span className="col-span-3 sm:col-span-2">Contacto</span>
-            <span className="col-span-2">Rol</span>
-            <span className="col-span-2">Estado</span>
-            <span className="col-span-2">Expira</span>
-            <span className="col-span-12 sm:col-span-4">Acciones</span>
+        {/* Issues internos */}
+        <div className="rounded-2xl border border-white/10 bg-gray-900/70 p-6 shadow-2xl shadow-purple-900/20">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-purple-200/80">
+                Reportes internos
+              </p>
+              <h2 className="text-xl font-bold">Buzón de fallos</h2>
+              <p className="text-sm text-gray-400">
+                Logs, contexto y capturas enviados desde la app.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <select
+                value={issueStatus}
+                onChange={e => setIssueStatus(e.target.value as any)}
+                className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-white focus:border-purple-400 focus:outline-none"
+              >
+                <option value="all">Todos</option>
+                <option value="open">Abiertos</option>
+                <option value="reviewing">En revisión</option>
+                <option value="closed">Cerrados</option>
+              </select>
+              <button
+                onClick={() => loadIssues(issueStatus)}
+                className="rounded-lg border border-purple-500/40 bg-purple-500/20 px-3 py-2 text-sm font-semibold text-purple-50 transition hover:border-purple-300/60 hover:bg-purple-500/30"
+              >
+                Refrescar
+              </button>
+            </div>
           </div>
 
-          <div className="divide-y divide-white/5">
+          {issuesError && (
+            <div className="mb-4 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">
+              {issuesError}
+            </div>
+          )}
+
+          {issuesLoading ? (
+            <div className="flex h-48 items-center justify-center text-sm text-gray-300">
+              Cargando reportes...
+            </div>
+          ) : issues.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-white/15 p-6 text-center text-sm text-gray-400">
+              No hay reportes con este filtro.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {issues.map(report => (
+                <div
+                  key={report._id}
+                  className="rounded-xl border border-white/10 bg-white/5 p-4 shadow-sm shadow-black/20"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 text-xs text-gray-400">
+                        <span className="rounded-full bg-purple-500/20 px-2 py-0.5 text-purple-200">
+                          {report.user?.role || "-"}
+                        </span>
+                        <span>{report.user?.name || "Usuario"}</span>
+                        <span className="text-gray-500">•</span>
+                        <span>
+                          {report.createdAt
+                            ? new Date(report.createdAt).toLocaleString(
+                                "es-ES",
+                                {
+                                  dateStyle: "medium",
+                                  timeStyle: "short",
+                                }
+                              )
+                            : "-"}
+                        </span>
+                      </div>
+                      <p className="text-sm font-semibold text-white">
+                        {report.message}
+                      </p>
+                      {report.clientContext?.url && (
+                        <p className="text-xs text-gray-400">
+                          URL: {report.clientContext.url}
+                        </p>
+                      )}
+                      {report.clientContext?.appVersion && (
+                        <p className="text-xs text-gray-500">
+                          Versión: {report.clientContext.appVersion}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${
+                          report.status === "open"
+                            ? "bg-red-500/20 text-red-200"
+                            : report.status === "reviewing"
+                              ? "bg-amber-500/20 text-amber-100"
+                              : "bg-green-500/20 text-green-100"
+                        }`}
+                      >
+                        {report.status}
+                      </span>
+                      <button
+                        disabled={issueAction === report._id}
+                        onClick={() => updateIssueStatus(report._id, "open")}
+                        className="rounded-lg border border-white/20 bg-white/5 px-3 py-1 text-xs font-semibold text-white transition hover:border-white/40 hover:bg-white/10 disabled:opacity-50"
+                      >
+                        Reabrir
+                      </button>
+                      <button
+                        disabled={issueAction === report._id}
+                        onClick={() =>
+                          updateIssueStatus(report._id, "reviewing")
+                        }
+                        className="rounded-lg border border-amber-400/40 bg-amber-500/20 px-3 py-1 text-xs font-semibold text-amber-50 transition hover:border-amber-300/60 hover:bg-amber-500/30 disabled:opacity-50"
+                      >
+                        Revisando
+                      </button>
+                      <button
+                        disabled={issueAction === report._id}
+                        onClick={() => updateIssueStatus(report._id, "closed")}
+                        className="rounded-lg border border-green-400/40 bg-green-500/20 px-3 py-1 text-xs font-semibold text-green-50 transition hover:border-green-300/60 hover:bg-green-500/30 disabled:opacity-50"
+                      >
+                        Cerrar
+                      </button>
+                    </div>
+                  </div>
+
+                  {report.logs?.length > 0 && (
+                    <details className="mt-3 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-gray-200">
+                      <summary className="cursor-pointer text-gray-300">
+                        Ver logs ({report.logs.length})
+                      </summary>
+                      <pre className="mt-2 whitespace-pre-wrap text-[11px] text-gray-300">
+                        {report.logs.join("\n")}
+                      </pre>
+                    </details>
+                  )}
+                  {report.stackTrace && (
+                    <details className="mt-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-gray-200">
+                      <summary className="cursor-pointer text-gray-300">
+                        Stacktrace
+                      </summary>
+                      <pre className="mt-2 whitespace-pre-wrap text-[11px] text-gray-300">
+                        {report.stackTrace}
+                      </pre>
+                    </details>
+                  )}
+                  {report.screenshotUrl && (
+                    <a
+                      href={report.screenshotUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 inline-flex items-center gap-2 text-xs text-purple-200 hover:text-purple-100"
+                    >
+                      Ver captura ↗
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-gray-900/70 shadow-2xl shadow-purple-900/20">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/5 bg-white/5 px-4 py-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-purple-200/80">
+                Usuarios
+              </p>
+              <h2 className="text-lg font-bold text-white">Super admins</h2>
+              <p className="text-xs text-gray-400">
+                Ajusta vigencias y estado sin perder de vista la info clave.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-gray-300">
+              <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1">
+                <span className="h-2 w-2 rounded-full bg-green-400" />
+                <span>{counts.active} activos</span>
+              </div>
+              <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1">
+                <span className="h-2 w-2 rounded-full bg-amber-400" />
+                <span>{counts.pending} pendientes</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-3 p-4">
             {users.map(user => {
               const duration = getDuration(user._id);
               const isSelf = currentUser?._id === user._id;
@@ -287,135 +510,183 @@ export default function GodPanel() {
               return (
                 <div
                   key={user._id}
-                  className="grid grid-cols-12 gap-3 px-4 py-4 text-sm transition hover:bg-white/5"
+                  className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 shadow-sm shadow-black/10 transition hover:border-purple-500/30 hover:bg-purple-500/5"
                 >
-                  <div className="col-span-3 sm:col-span-2">
-                    <p className="font-semibold text-white">{user.name}</p>
-                    <p className="text-xs text-gray-400">
-                      {user._id.slice(-6)}
-                    </p>
-                  </div>
-                  <div className="col-span-3 sm:col-span-2">
-                    <p className="text-white/90">{user.email}</p>
-                    {user.phone && (
-                      <p className="text-xs text-gray-400">{user.phone}</p>
-                    )}
-                  </div>
-                  <div className="col-span-2">
-                    <span className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs capitalize text-gray-200">
-                      {user.role}
-                    </span>
-                  </div>
-                  <div className="col-span-2">
-                    <span
-                      className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${
-                        statusBadgeStyles[user.status || "pending"] ||
-                        "border-gray-500/40 bg-gray-500/10 text-gray-200"
-                      }`}
-                    >
-                      {formatStatus(user.status)}
-                    </span>
-                  </div>
-                  <div className="col-span-2">
-                    <p className="text-xs text-gray-200">
-                      {formatDateTime(user.subscriptionExpiresAt)}
-                    </p>
-                  </div>
-
-                  <div className="col-span-12 flex flex-wrap items-center gap-2 sm:col-span-4">
-                    <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs">
-                      <label className="text-gray-300">D</label>
-                      <input
-                        type="number"
-                        min={0}
-                        value={duration.days}
-                        onChange={e =>
-                          onDurationChange(user._id, "days", e.target.value)
-                        }
-                        className="w-14 rounded bg-transparent px-2 py-1 text-white outline-none"
-                      />
-                      <label className="text-gray-300">M</label>
-                      <input
-                        type="number"
-                        min={0}
-                        value={duration.months}
-                        onChange={e =>
-                          onDurationChange(user._id, "months", e.target.value)
-                        }
-                        className="w-14 rounded bg-transparent px-2 py-1 text-white outline-none"
-                      />
-                      <label className="text-gray-300">A</label>
-                      <input
-                        type="number"
-                        min={0}
-                        value={duration.years}
-                        onChange={e =>
-                          onDurationChange(user._id, "years", e.target.value)
-                        }
-                        className="w-14 rounded bg-transparent px-2 py-1 text-white outline-none"
-                      />
+                  <div className="grid grid-cols-12 gap-3">
+                    <div className="col-span-12 space-y-2 sm:col-span-8">
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-gray-400">
+                        <span className="rounded-full bg-white/10 px-2 py-0.5 text-white">
+                          {user._id.slice(-6)}
+                        </span>
+                        <span className="rounded-full bg-purple-500/15 px-2 py-0.5 text-purple-100">
+                          {user.role}
+                        </span>
+                        <span className="text-gray-500">•</span>
+                        <span>{user.email}</span>
+                        {user.phone && (
+                          <span className="text-gray-500">· {user.phone}</span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <div>
+                          <p className="text-base font-semibold text-white">
+                            {user.name}
+                          </p>
+                          <p className="text-xs text-gray-400">Super admin</p>
+                        </div>
+                        <span
+                          className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${
+                            statusBadgeStyles[user.status || "pending"] ||
+                            "border-gray-500/40 bg-gray-500/10 text-gray-200"
+                          }`}
+                        >
+                          <span className="h-2 w-2 rounded-full bg-current opacity-70" />
+                          {formatStatus(user.status)}
+                        </span>
+                        <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-gray-200">
+                          Expira: {formatDateTime(user.subscriptionExpiresAt)}
+                        </span>
+                      </div>
                     </div>
 
-                    <ActionButton
-                      label="Activar"
-                      tone="primary"
-                      disabled={isSelf}
-                      loading={loadingThis && actionKey?.startsWith("activate")}
-                      onClick={() => handleAction(user._id, "activate")}
-                    />
-                    <ActionButton
-                      label="Extender"
-                      tone="muted"
-                      disabled={isSelf}
-                      loading={loadingThis && actionKey?.startsWith("extend")}
-                      onClick={() => handleAction(user._id, "extend")}
-                    />
+                    <div className="col-span-12 flex flex-wrap items-center gap-2 sm:col-span-4 sm:justify-end">
+                      <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs">
+                        <label className="text-gray-300">D</label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={duration.days}
+                          onChange={e =>
+                            onDurationChange(user._id, "days", e.target.value)
+                          }
+                          className="w-12 rounded bg-transparent px-2 py-1 text-white outline-none"
+                        />
+                        <label className="text-gray-300">M</label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={duration.months}
+                          onChange={e =>
+                            onDurationChange(user._id, "months", e.target.value)
+                          }
+                          className="w-12 rounded bg-transparent px-2 py-1 text-white outline-none"
+                        />
+                        <label className="text-gray-300">A</label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={duration.years}
+                          onChange={e =>
+                            onDurationChange(user._id, "years", e.target.value)
+                          }
+                          className="w-12 rounded bg-transparent px-2 py-1 text-white outline-none"
+                        />
+                      </div>
 
-                    {user.status === "active" && (
                       <ActionButton
-                        label="Pausar"
-                        tone="info"
-                        disabled={isSelf}
-                        loading={loadingThis && actionKey?.startsWith("pause")}
-                        onClick={() => handleAction(user._id, "pause")}
-                      />
-                    )}
-
-                    {user.status === "paused" && (
-                      <ActionButton
-                        label="Reanudar"
-                        tone="success"
-                        disabled={isSelf}
-                        loading={loadingThis && actionKey?.startsWith("resume")}
-                        onClick={() => handleAction(user._id, "resume")}
-                      />
-                    )}
-
-                    {user.status !== "suspended" && (
-                      <ActionButton
-                        label="Suspender"
-                        tone="warning"
+                        label="Activar"
+                        tone="primary"
                         disabled={isSelf}
                         loading={
-                          loadingThis && actionKey?.startsWith("suspend")
+                          loadingThis && actionKey?.startsWith("activate")
                         }
-                        onClick={() => handleAction(user._id, "suspend")}
+                        onClick={() => handleAction(user._id, "activate")}
                       />
-                    )}
-
-                    <ActionButton
-                      label="Eliminar"
-                      tone="danger"
-                      disabled={isSelf}
-                      loading={loadingThis && actionKey?.startsWith("remove")}
-                      onClick={() => handleAction(user._id, "remove")}
-                    />
+                      <ActionButton
+                        label="Extender"
+                        tone="muted"
+                        disabled={isSelf}
+                        loading={loadingThis && actionKey?.startsWith("extend")}
+                        onClick={() => handleAction(user._id, "extend")}
+                      />
+                      {user.status === "active" && (
+                        <ActionButton
+                          label="Pausar"
+                          tone="info"
+                          disabled={isSelf}
+                          loading={
+                            loadingThis && actionKey?.startsWith("pause")
+                          }
+                          onClick={() => handleAction(user._id, "pause")}
+                        />
+                      )}
+                      {user.status === "paused" && (
+                        <ActionButton
+                          label="Reanudar"
+                          tone="success"
+                          disabled={isSelf}
+                          loading={
+                            loadingThis && actionKey?.startsWith("resume")
+                          }
+                          onClick={() => handleAction(user._id, "resume")}
+                        />
+                      )}
+                      {user.status !== "suspended" && (
+                        <ActionButton
+                          label="Suspender"
+                          tone="warning"
+                          disabled={isSelf}
+                          loading={
+                            loadingThis && actionKey?.startsWith("suspend")
+                          }
+                          onClick={() => handleAction(user._id, "suspend")}
+                        />
+                      )}
+                      <ActionButton
+                        label="Eliminar"
+                        tone="danger"
+                        disabled={isSelf}
+                        loading={loadingThis && actionKey?.startsWith("remove")}
+                        onClick={() => setConfirmUser(user)}
+                      />
+                    </div>
                   </div>
                 </div>
               );
             })}
           </div>
         </div>
+        {confirmUser && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+            <div className="w-full max-w-md rounded-2xl border border-white/10 bg-gray-900/90 p-6 shadow-2xl shadow-black/40">
+              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-red-200/80">
+                Confirmar eliminación
+              </p>
+              <h3 className="mt-2 text-lg font-bold text-white">
+                ¿Eliminar al usuario {confirmUser.name}?
+              </h3>
+              <p className="mt-1 text-sm text-gray-300">
+                Se borrará su cuenta y todo lo creado por él (negocios,
+                productos, categorías, ventas, distribuidores, analíticas
+                asociadas).
+              </p>
+              <div className="mt-4 flex justify-end gap-2 text-sm">
+                <button
+                  onClick={() => setConfirmUser(null)}
+                  className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 font-semibold text-gray-200 transition hover:border-white/30 hover:bg-white/10"
+                >
+                  Cancelar
+                </button>
+                <button
+                  disabled={
+                    !!(
+                      actionKey?.startsWith("remove") &&
+                      actionKey?.endsWith(confirmUser._id)
+                    )
+                  }
+                  onClick={() => handleAction(confirmUser._id, "remove")}
+                  className="flex items-center gap-2 rounded-lg border border-red-500/40 bg-red-500/20 px-4 py-2 font-semibold text-red-100 transition hover:border-red-400/60 hover:bg-red-500/30 disabled:opacity-50"
+                >
+                  {actionKey?.startsWith("remove") &&
+                  actionKey?.endsWith(confirmUser._id) ? (
+                    <span className="h-3 w-3 animate-spin rounded-full border-2 border-red-100/70 border-t-transparent" />
+                  ) : null}
+                  <span>Eliminar definitivamente</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

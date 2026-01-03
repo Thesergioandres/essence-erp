@@ -1,7 +1,11 @@
 import mongoose from "mongoose";
 import Product from "../models/Product.js";
+import ProfitHistory from "../models/ProfitHistory.js";
 import SpecialSale from "../models/SpecialSale.js";
-import { recordSpecialSaleProfit } from "../services/profitHistory.service.js";
+import {
+  recalculateUserBalance,
+  recordSpecialSaleProfit,
+} from "../services/profitHistory.service.js";
 
 const resolveBusinessId = (req) =>
   req.businessId || req.headers["x-business-id"] || req.query.businessId;
@@ -483,6 +487,49 @@ export const deleteSpecialSale = async (req, res) => {
         success: false,
         message: "Venta especial no encontrada",
       });
+    }
+
+    // Restaurar stock si el producto está referenciado
+    if (specialSale.product?.productId) {
+      const productDoc = await Product.findOne({
+        _id: specialSale.product.productId,
+        business: businessId,
+      });
+      if (productDoc) {
+        productDoc.totalStock =
+          (productDoc.totalStock || 0) + specialSale.quantity;
+        productDoc.warehouseStock =
+          (productDoc.warehouseStock || 0) + specialSale.quantity;
+        await productDoc.save({ validateBeforeSave: false });
+      }
+    }
+
+    // Eliminar ganancias y recalcular balances de los usuarios impactados
+    const profitEntries = await ProfitHistory.find({
+      specialSale: specialSale._id,
+      business: businessId,
+    })
+      .select("user")
+      .lean();
+
+    const userIds = [
+      ...new Set(profitEntries.map((e) => e.user?.toString()).filter(Boolean)),
+    ];
+
+    await ProfitHistory.deleteMany({
+      specialSale: specialSale._id,
+      business: businessId,
+    });
+    for (const userId of userIds) {
+      try {
+        await recalculateUserBalance(userId, businessId);
+      } catch (err) {
+        console.error(
+          "Error recalculando balance (venta especial)",
+          userId,
+          err?.message
+        );
+      }
     }
 
     await specialSale.deleteOne();

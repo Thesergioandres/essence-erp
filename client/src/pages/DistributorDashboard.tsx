@@ -36,6 +36,7 @@ export default function DistributorDashboard() {
   const [myStock, setMyStock] = useState<DistributorStock[]>([]);
   const [rankingInfo, setRankingInfo] = useState<RankingInfo | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadDashboardData();
@@ -44,9 +45,17 @@ export default function DistributorDashboard() {
   const loadDashboardData = async () => {
     try {
       setLoading(true);
+      setError(null);
+      const businessId = localStorage.getItem("businessId");
+      if (!businessId) {
+        setError("Debes seleccionar un negocio antes de continuar.");
+        setLoading(false);
+        return;
+      }
+
       const userId = localStorage.getItem("userId");
       const [salesData, stockData, commissionData] = await Promise.all([
-        saleService.getDistributorSales(),
+        saleService.getDistributorSales(undefined, { limit: 50 }),
         stockService.getDistributorStock("me"),
         userId
           ? gamificationService.getAdjustedCommission(userId).catch(() => null)
@@ -112,6 +121,23 @@ export default function DistributorDashboard() {
     );
   }
 
+  if (error) {
+    return (
+      <div className="flex h-96 flex-col items-center justify-center gap-3 text-center text-gray-200">
+        <p className="text-lg font-semibold text-red-300">{error}</p>
+        <p className="text-sm text-gray-400">
+          Selecciona un negocio en el selector superior y vuelve a intentar.
+        </p>
+        <button
+          onClick={() => navigate("/distributor/dashboard")}
+          className="rounded-lg border border-white/20 px-4 py-2 text-sm font-semibold text-white transition hover:border-white/40 hover:bg-white/10"
+        >
+          Reintentar
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -124,7 +150,7 @@ export default function DistributorDashboard() {
 
       {/* Ranking Widget - Solo si hay información */}
       {rankingInfo && rankingInfo.position && (
-        <div className="rounded-xl border border-yellow-500/50 bg-linear-to-br from-yellow-900/30 to-orange-900/30 p-6 backdrop-blur-lg">
+        <div className="bg-linear-to-br rounded-xl border border-yellow-500/50 from-yellow-900/30 to-orange-900/30 p-6 backdrop-blur-lg">
           <div className="flex items-center justify-between">
             <div className="flex-1">
               <div className="mb-2 flex items-center gap-3">
@@ -200,7 +226,7 @@ export default function DistributorDashboard() {
       {/* Stats Cards */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         {/* Total Sales */}
-        <div className="rounded-xl border border-gray-700 bg-linear-to-br from-blue-900/50 to-gray-800/50 p-6 backdrop-blur-lg transition hover:border-blue-500">
+        <div className="bg-linear-to-br rounded-xl border border-gray-700 from-blue-900/50 to-gray-800/50 p-6 backdrop-blur-lg transition hover:border-blue-500">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-400">Ventas Realizadas</p>
@@ -227,7 +253,7 @@ export default function DistributorDashboard() {
         </div>
 
         {/* Total Revenue */}
-        <div className="rounded-xl border border-gray-700 bg-linear-to-br from-green-900/50 to-gray-800/50 p-6 backdrop-blur-lg transition hover:border-green-500">
+        <div className="bg-linear-to-br rounded-xl border border-gray-700 from-green-900/50 to-gray-800/50 p-6 backdrop-blur-lg transition hover:border-green-500">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-400">Ingresos Totales</p>
@@ -254,7 +280,7 @@ export default function DistributorDashboard() {
         </div>
 
         {/* Total Profit */}
-        <div className="rounded-xl border border-gray-700 bg-linear-to-br from-purple-900/50 to-gray-800/50 p-6 backdrop-blur-lg transition hover:border-purple-500">
+        <div className="bg-linear-to-br rounded-xl border border-gray-700 from-purple-900/50 to-gray-800/50 p-6 backdrop-blur-lg transition hover:border-purple-500">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-400">Mis Ganancias</p>
@@ -281,7 +307,7 @@ export default function DistributorDashboard() {
         </div>
 
         {/* Products Count */}
-        <div className="rounded-xl border border-gray-700 bg-linear-to-br from-yellow-900/50 to-gray-800/50 p-6 backdrop-blur-lg transition hover:border-yellow-500">
+        <div className="bg-linear-to-br rounded-xl border border-gray-700 from-yellow-900/50 to-gray-800/50 p-6 backdrop-blur-lg transition hover:border-yellow-500">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-400">Mis Productos</p>
@@ -317,7 +343,7 @@ export default function DistributorDashboard() {
       <div className="grid gap-6 md:grid-cols-2">
         <button
           onClick={() => navigate("/distributor/register-sale")}
-          className="rounded-xl border border-gray-700 bg-linear-to-br from-blue-600/20 to-cyan-600/20 p-6 text-left transition hover:border-blue-500 hover:from-blue-600/30 hover:to-cyan-600/30"
+          className="bg-linear-to-br rounded-xl border border-gray-700 from-blue-600/20 to-cyan-600/20 p-6 text-left transition hover:border-blue-500 hover:from-blue-600/30 hover:to-cyan-600/30"
         >
           <div className="flex items-center gap-4">
             <div className="rounded-full bg-blue-600/30 p-4">
@@ -346,7 +372,7 @@ export default function DistributorDashboard() {
 
         <button
           onClick={() => navigate("/distributor/products")}
-          className="rounded-xl border border-gray-700 bg-linear-to-br from-purple-600/20 to-pink-600/20 p-6 text-left transition hover:border-purple-500 hover:from-purple-600/30 hover:to-pink-600/30"
+          className="bg-linear-to-br rounded-xl border border-gray-700 from-purple-600/20 to-pink-600/20 p-6 text-left transition hover:border-purple-500 hover:from-purple-600/30 hover:to-pink-600/30"
         >
           <div className="flex items-center gap-4">
             <div className="rounded-full bg-purple-600/30 p-4">

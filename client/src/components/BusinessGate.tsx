@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { useBusiness } from "../context/BusinessContext";
 import BusinessSelector from "./BusinessSelector";
 
@@ -11,8 +11,18 @@ export default function BusinessGate({
   children,
   requiredFeature,
 }: BusinessGateProps) {
-  const { business, businessId, loading, error, features, hydrating } =
+  const { business, businessId, loading, error, features, hydrating, refresh } =
     useBusiness();
+  const retriedRef = useRef(false);
+
+  // Si no hay negocio pero ya se hidrató y no estamos cargando, fuerza un refresh una sola vez
+  useEffect(() => {
+    if (hydrating || loading || businessId || retriedRef.current) return;
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    retriedRef.current = true;
+    void refresh();
+  }, [businessId, loading, hydrating, refresh]);
 
   if (hydrating) {
     return (
@@ -42,7 +52,9 @@ export default function BusinessGate({
     return (
       <div className="space-y-3 rounded-lg border border-amber-400/30 bg-amber-500/10 px-4 py-4 text-sm text-amber-100">
         <div className="font-semibold text-amber-200">
-          Selecciona un negocio para continuar
+          {loading
+            ? "Cargando negocios..."
+            : "Selecciona un negocio para continuar"}
         </div>
         <BusinessSelector />
       </div>

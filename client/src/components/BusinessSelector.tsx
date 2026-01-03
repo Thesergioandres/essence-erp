@@ -1,9 +1,17 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useBusiness } from "../context/BusinessContext";
 
 export default function BusinessSelector() {
-  const { memberships, businessId, selectBusiness, loading, error, hydrating } =
-    useBusiness();
+  const {
+    memberships,
+    businessId,
+    selectBusiness,
+    loading,
+    error,
+    hydrating,
+    refresh,
+  } = useBusiness();
+  const retriedRef = useRef(false);
 
   const hasBusinesses = memberships.length > 0;
 
@@ -12,6 +20,15 @@ export default function BusinessSelector() {
     if (error) return error;
     return "Negocio";
   }, [loading, hydrating, error]);
+
+  // Si la lista llega vacía, intenta refrescar una sola vez si hay token
+  useEffect(() => {
+    if (hydrating || loading || hasBusinesses || retriedRef.current) return;
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    retriedRef.current = true;
+    void refresh();
+  }, [hasBusinesses, loading, hydrating, refresh]);
 
   return (
     <div className="mt-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-gray-300">
@@ -35,7 +52,7 @@ export default function BusinessSelector() {
         <p className="text-[11px] text-amber-200/80">Cargando negocios...</p>
       ) : (
         <p className="text-[11px] text-amber-200/80">
-          No tienes negocios asignados.
+          Actualizando negocios...
         </p>
       )}
     </div>

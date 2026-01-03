@@ -1,34 +1,34 @@
-import { useEffect, useState } from 'react';
-import React from 'react';
-import { saleService } from '../api/services';
-import type { Sale } from '../types';
+import React, { useEffect, useState } from "react";
+import { saleService } from "../api/services";
+import type { Sale } from "../types";
 
 export default function DistributorStats() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState<'week' | 'month' | 'all'>('month');
+  const [period, setPeriod] = useState<"week" | "month" | "all">("month");
 
   const loadStats = React.useCallback(async () => {
     try {
       setLoading(true);
       const now = new Date();
-      let startDate = '';
+      let startDate = "";
 
-      if (period === 'week') {
+      if (period === "week") {
         const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        startDate = weekAgo.toISOString().split('T')[0];
-      } else if (period === 'month') {
+        startDate = weekAgo.toISOString().split("T")[0];
+      } else if (period === "month") {
         const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        startDate = monthAgo.toISOString().split('T')[0];
+        startDate = monthAgo.toISOString().split("T")[0];
       }
 
       const response = await saleService.getDistributorSales(undefined, {
         ...(startDate && { startDate }),
+        limit: 200,
       });
 
       setSales(response.sales);
     } catch (error) {
-      console.error('Error al cargar estadísticas:', error);
+      console.error("Error al cargar estadísticas:", error);
     } finally {
       setLoading(false);
     }
@@ -39,58 +39,72 @@ export default function DistributorStats() {
   }, [period, loadStats]);
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('es-CO', {
-      style: 'currency',
-      currency: 'COP',
+    return new Intl.NumberFormat("es-CO", {
+      style: "currency",
+      currency: "COP",
       minimumFractionDigits: 0,
     }).format(value);
   };
 
   // Calcular estadísticas
   const totalSales = sales.length;
-  const totalRevenue = sales.reduce((sum, sale) => sum + sale.salePrice * sale.quantity, 0);
-  const totalProfit = sales.reduce((sum, sale) => sum + sale.distributorProfit, 0);
+  const totalRevenue = sales.reduce(
+    (sum, sale) => sum + sale.salePrice * sale.quantity,
+    0
+  );
+  const totalProfit = sales.reduce(
+    (sum, sale) => sum + sale.distributorProfit,
+    0
+  );
   const avgSaleValue = totalSales > 0 ? totalRevenue / totalSales : 0;
   const avgProfit = totalSales > 0 ? totalProfit / totalSales : 0;
 
   // Productos más vendidos
-  const productSales = sales.reduce((acc, sale) => {
-    const product = typeof sale.product === 'object' ? sale.product : null;
-    if (!product) return acc;
+  const productSales = sales.reduce(
+    (acc, sale) => {
+      const product = typeof sale.product === "object" ? sale.product : null;
+      if (!product) return acc;
 
-    const existing = acc.find(item => item.productId === product._id);
-    if (existing) {
-      existing.quantity += sale.quantity;
-      existing.revenue += sale.salePrice * sale.quantity;
-      existing.profit += sale.distributorProfit;
-    } else {
-      acc.push({
-        productId: product._id,
-        productName: product.name,
-        productImage: product.image?.url,
-        quantity: sale.quantity,
-        revenue: sale.salePrice * sale.quantity,
-        profit: sale.distributorProfit,
-      });
-    }
-    return acc;
-  }, [] as Array<{
-    productId: string;
-    productName: string;
-    productImage?: string;
-    quantity: number;
-    revenue: number;
-    profit: number;
-  }>);
+      const existing = acc.find(item => item.productId === product._id);
+      if (existing) {
+        existing.quantity += sale.quantity;
+        existing.revenue += sale.salePrice * sale.quantity;
+        existing.profit += sale.distributorProfit;
+      } else {
+        acc.push({
+          productId: product._id,
+          productName: product.name,
+          productImage: product.image?.url,
+          quantity: sale.quantity,
+          revenue: sale.salePrice * sale.quantity,
+          profit: sale.distributorProfit,
+        });
+      }
+      return acc;
+    },
+    [] as Array<{
+      productId: string;
+      productName: string;
+      productImage?: string;
+      quantity: number;
+      revenue: number;
+      profit: number;
+    }>
+  );
 
-  const topProducts = productSales.sort((a, b) => b.quantity - a.quantity).slice(0, 5);
+  const topProducts = productSales
+    .sort((a, b) => b.quantity - a.quantity)
+    .slice(0, 5);
 
   // Ventas por día
-  const salesByDay = sales.reduce((acc, sale) => {
-    const date = new Date(sale.saleDate).toLocaleDateString('es-CO');
-    acc[date] = (acc[date] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
+  const salesByDay = sales.reduce(
+    (acc, sale) => {
+      const date = new Date(sale.saleDate).toLocaleDateString("es-CO");
+      acc[date] = (acc[date] || 0) + 1;
+      return acc;
+    },
+    {} as Record<string, number>
+  );
 
   if (loading) {
     return (
@@ -106,39 +120,37 @@ export default function DistributorStats() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-4xl font-bold text-white">Estadísticas</h1>
-          <p className="mt-2 text-gray-400">
-            Análisis de tu desempeño
-          </p>
+          <p className="mt-2 text-gray-400">Análisis de tu desempeño</p>
         </div>
 
         {/* Period Selector */}
         <div className="flex gap-2">
           <button
-            onClick={() => setPeriod('week')}
+            onClick={() => setPeriod("week")}
             className={`rounded-lg px-4 py-2 font-medium transition ${
-              period === 'week'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+              period === "week"
+                ? "bg-blue-600 text-white"
+                : "bg-gray-800 text-gray-400 hover:bg-gray-700"
             }`}
           >
             Semana
           </button>
           <button
-            onClick={() => setPeriod('month')}
+            onClick={() => setPeriod("month")}
             className={`rounded-lg px-4 py-2 font-medium transition ${
-              period === 'month'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+              period === "month"
+                ? "bg-blue-600 text-white"
+                : "bg-gray-800 text-gray-400 hover:bg-gray-700"
             }`}
           >
             Mes
           </button>
           <button
-            onClick={() => setPeriod('all')}
+            onClick={() => setPeriod("all")}
             className={`rounded-lg px-4 py-2 font-medium transition ${
-              period === 'all'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+              period === "all"
+                ? "bg-blue-600 text-white"
+                : "bg-gray-800 text-gray-400 hover:bg-gray-700"
             }`}
           >
             Todo
@@ -148,23 +160,23 @@ export default function DistributorStats() {
 
       {/* Main Stats */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border border-gray-700 bg-linear-to-br from-blue-900/50 to-gray-800/50 p-6">
+        <div className="bg-linear-to-br rounded-xl border border-gray-700 from-blue-900/50 to-gray-800/50 p-6">
           <p className="text-sm text-gray-400">Total Ventas</p>
           <p className="mt-2 text-3xl font-bold text-white">{totalSales}</p>
         </div>
-        <div className="rounded-xl border border-gray-700 bg-linear-to-br from-green-900/50 to-gray-800/50 p-6">
+        <div className="bg-linear-to-br rounded-xl border border-gray-700 from-green-900/50 to-gray-800/50 p-6">
           <p className="text-sm text-gray-400">Ingresos Totales</p>
           <p className="mt-2 text-2xl font-bold text-white">
             {formatCurrency(totalRevenue)}
           </p>
         </div>
-        <div className="rounded-xl border border-gray-700 bg-linear-to-br from-purple-900/50 to-gray-800/50 p-6">
+        <div className="bg-linear-to-br rounded-xl border border-gray-700 from-purple-900/50 to-gray-800/50 p-6">
           <p className="text-sm text-gray-400">Ganancias Totales</p>
           <p className="mt-2 text-2xl font-bold text-white">
             {formatCurrency(totalProfit)}
           </p>
         </div>
-        <div className="rounded-xl border border-gray-700 bg-linear-to-br from-yellow-900/50 to-gray-800/50 p-6">
+        <div className="bg-linear-to-br rounded-xl border border-gray-700 from-yellow-900/50 to-gray-800/50 p-6">
           <p className="text-sm text-gray-400">Promedio por Venta</p>
           <p className="mt-2 text-2xl font-bold text-white">
             {formatCurrency(avgSaleValue)}
@@ -179,22 +191,27 @@ export default function DistributorStats() {
             Métricas Adicionales
           </h2>
           <div className="space-y-4">
-            <div className="flex justify-between items-center pb-3 border-b border-gray-700">
+            <div className="flex items-center justify-between border-b border-gray-700 pb-3">
               <span className="text-gray-400">Ganancia promedio por venta</span>
               <span className="text-lg font-bold text-purple-400">
                 {formatCurrency(avgProfit)}
               </span>
             </div>
-            <div className="flex justify-between items-center pb-3 border-b border-gray-700">
-              <span className="text-gray-400">Productos diferentes vendidos</span>
+            <div className="flex items-center justify-between border-b border-gray-700 pb-3">
+              <span className="text-gray-400">
+                Productos diferentes vendidos
+              </span>
               <span className="text-lg font-bold text-blue-400">
                 {productSales.length}
               </span>
             </div>
-            <div className="flex justify-between items-center">
+            <div className="flex items-center justify-between">
               <span className="text-gray-400">Margen de ganancia promedio</span>
               <span className="text-lg font-bold text-green-400">
-                {totalRevenue > 0 ? ((totalProfit / totalRevenue) * 100).toFixed(1) : 0}%
+                {totalRevenue > 0
+                  ? ((totalProfit / totalRevenue) * 100).toFixed(1)
+                  : 0}
+                %
               </span>
             </div>
           </div>
@@ -205,25 +222,29 @@ export default function DistributorStats() {
             Actividad Diaria
           </h2>
           {Object.keys(salesByDay).length === 0 ? (
-            <p className="text-center text-gray-400 py-8">No hay datos de ventas</p>
+            <p className="py-8 text-center text-gray-400">
+              No hay datos de ventas
+            </p>
           ) : (
             <div className="space-y-3">
               {Object.entries(salesByDay)
-                .sort((a, b) => new Date(b[0]).getTime() - new Date(a[0]).getTime())
+                .sort(
+                  (a, b) => new Date(b[0]).getTime() - new Date(a[0]).getTime()
+                )
                 .slice(0, 7)
                 .map(([date, count]) => (
                   <div key={date} className="flex items-center justify-between">
                     <span className="text-sm text-gray-400">{date}</span>
                     <div className="flex items-center gap-3">
-                      <div className="h-2 w-32 bg-gray-700 rounded-full overflow-hidden">
+                      <div className="h-2 w-32 overflow-hidden rounded-full bg-gray-700">
                         <div
-                          className="h-full bg-linear-to-r from-blue-600 to-cyan-600"
+                          className="bg-linear-to-r h-full from-blue-600 to-cyan-600"
                           style={{
                             width: `${(count / Math.max(...Object.values(salesByDay))) * 100}%`,
                           }}
                         />
                       </div>
-                      <span className="text-sm font-semibold text-white w-8 text-right">
+                      <span className="w-8 text-right text-sm font-semibold text-white">
                         {count}
                       </span>
                     </div>
@@ -240,7 +261,9 @@ export default function DistributorStats() {
           Productos Más Vendidos
         </h2>
         {topProducts.length === 0 ? (
-          <p className="text-center text-gray-400 py-8">No hay datos de productos</p>
+          <p className="py-8 text-center text-gray-400">
+            No hay datos de productos
+          </p>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {topProducts.map((product, index) => (
@@ -249,15 +272,21 @@ export default function DistributorStats() {
                 className="rounded-lg border border-gray-700 bg-gray-900/50 p-4"
               >
                 <div className="flex items-start gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-linear-to-r from-blue-600 to-cyan-600 text-white font-bold">
+                  <div className="bg-linear-to-r flex h-10 w-10 items-center justify-center rounded-full from-blue-600 to-cyan-600 font-bold text-white">
                     {index + 1}
                   </div>
                   <div className="flex-1">
-                    <h3 className="font-semibold text-white">{product.productName}</h3>
+                    <h3 className="font-semibold text-white">
+                      {product.productName}
+                    </h3>
                     <div className="mt-2 space-y-1 text-sm">
                       <div className="flex justify-between">
-                        <span className="text-gray-400">Unidades vendidas:</span>
-                        <span className="font-semibold text-blue-400">{product.quantity}</span>
+                        <span className="text-gray-400">
+                          Unidades vendidas:
+                        </span>
+                        <span className="font-semibold text-blue-400">
+                          {product.quantity}
+                        </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-400">Ingresos:</span>

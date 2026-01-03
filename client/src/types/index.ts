@@ -83,6 +83,27 @@ export interface Business {
   updatedAt?: string;
 }
 
+export interface BranchConfig {
+  ticketPrefix?: string;
+  notes?: string;
+}
+
+export interface Branch {
+  _id: string;
+  business?: string;
+  name: string;
+  address?: string;
+  contactName?: string;
+  contactPhone?: string;
+  contactEmail?: string;
+  timezone?: string;
+  config?: BranchConfig;
+  isWarehouse?: boolean;
+  active?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface Membership {
   _id: string;
   business: Business;
@@ -104,11 +125,23 @@ export interface DistributorStock {
   updatedAt?: string;
 }
 
+export interface BranchStock {
+  _id: string;
+  branch: Branch | string;
+  product: Product | string;
+  quantity: number;
+  lowStockAlert: number;
+  isLowStock?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface Sale {
   _id: string;
   saleId: string;
   distributor: User | string;
   product: Product | string;
+  branch?: Branch | string;
   quantity: number;
   purchasePrice: number;
   distributorPrice: number;
@@ -307,6 +340,7 @@ export interface StockAlert {
 export interface DefectiveProduct {
   _id: string;
   distributor?: User | string | null; // Opcional: null cuando es reporte de admin desde bodega
+  branch?: Branch | string | null;
   product: Product | string;
   quantity: number;
   reason: string;
@@ -813,4 +847,23 @@ export interface DistributorStatsResponse {
   stats: DistributorStats;
   currentRankingPosition: number;
   totalDistributors: number;
+}
+
+export interface IssueReport {
+  _id: string;
+  message: string;
+  stackTrace?: string;
+  logs: string[];
+  clientContext?: {
+    url?: string;
+    userAgent?: string;
+    appVersion?: string;
+    businessId?: string | null;
+  };
+  screenshotUrl?: string;
+  screenshotPublicId?: string;
+  status: "open" | "reviewing" | "closed";
+  user?: Pick<User, "_id" | "name" | "email" | "role">;
+  createdAt?: string;
+  updatedAt?: string;
 }

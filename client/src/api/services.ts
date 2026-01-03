@@ -5,6 +5,8 @@ import type {
   AuditLogsResponse,
   AuditStats,
   Averages,
+  Branch,
+  BranchStock,
   Business,
   BusinessAssistantConfig,
   BusinessAssistantJobStatus,
@@ -21,6 +23,7 @@ import type {
   Expense,
   FinancialSummary,
   GamificationConfig,
+  IssueReport,
   Membership,
   MonthlyProfitData,
   PeriodWinner,
@@ -100,6 +103,9 @@ export const authService = {
     if (response.data.token) {
       localStorage.setItem("token", response.data.token);
       localStorage.setItem("user", JSON.stringify(response.data));
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("auth-changed"));
+      }
     }
 
     return response.data;
@@ -115,6 +121,9 @@ export const authService = {
       localStorage.setItem("token", response.data.token);
       localStorage.setItem("user", JSON.stringify(response.data));
       await trySetBusinessForGod(response.data.role);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("auth-changed"));
+      }
     }
 
     return response.data;
@@ -124,6 +133,9 @@ export const authService = {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     localStorage.removeItem("businessId");
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("auth-changed"));
+    }
   },
 
   getCurrentUser(): (AuthResponse & { token: string }) | null {
@@ -468,6 +480,53 @@ export const uploadService = {
   },
 };
 
+export const issueService = {
+  async create(payload: {
+    message: string;
+    stackTrace?: string;
+    logs?: string[];
+    clientContext?: {
+      url?: string;
+      userAgent?: string;
+      appVersion?: string;
+      businessId?: string | null;
+    };
+    screenshotUrl?: string;
+    screenshotPublicId?: string;
+  }): Promise<{ report: IssueReport }> {
+    const response = await api.post<{ report: IssueReport }>(
+      "/issues",
+      payload
+    );
+    return response.data;
+  },
+
+  async list(params?: {
+    status?: "open" | "reviewing" | "closed";
+    page?: number;
+    limit?: number;
+  }): Promise<{
+    data: IssueReport[];
+    pagination: { page: number; limit: number; total: number; pages: number };
+  }> {
+    const response = await api.get<{
+      data: IssueReport[];
+      pagination: { page: number; limit: number; total: number; pages: number };
+    }>("/issues", { params });
+    return response.data;
+  },
+
+  async updateStatus(
+    id: string,
+    status: "open" | "reviewing" | "closed"
+  ): Promise<{ report: IssueReport }> {
+    const response = await api.patch<{ report: IssueReport }>(`/issues/${id}`, {
+      status,
+    });
+    return response.data;
+  },
+};
+
 export const categoryService = {
   async getAll(
     params?: Record<string, string | boolean | number>
@@ -636,6 +695,16 @@ export const stockService = {
     return response.data;
   },
 
+  async getBranchStock(branchId?: string): Promise<BranchStock[]> {
+    const url = branchId ? `/stock/branch/${branchId}` : "/stock/branch";
+    const response = await api.get<{ data?: BranchStock[] } | BranchStock[]>(
+      url
+    );
+    const payload = (response as any).data ?? response;
+    if (Array.isArray(payload)) return payload as BranchStock[];
+    return payload?.data ?? [];
+  },
+
   async getAlerts(): Promise<StockAlert> {
     const response = await api.get<StockAlert>("/stock/alerts");
     return response.data;
@@ -697,12 +766,74 @@ export const stockService = {
   },
 };
 
+// ==================== BRANCH SERVICE ====================
+export const branchService = {
+  async list(): Promise<Branch[]> {
+    const response = await api.get("/branches");
+    return response.data?.data ?? response.data ?? [];
+  },
+
+  async create(data: {
+    name: string;
+    address?: string;
+    contactName?: string;
+    contactPhone?: string;
+    contactEmail?: string;
+    timezone?: string;
+    config?: Branch["config"];
+  }): Promise<Branch> {
+    const response = await api.post("/branches", data);
+    return response.data?.branch ?? response.data;
+  },
+
+  async update(
+    id: string,
+    data: {
+      name?: string;
+      address?: string;
+      contactName?: string;
+      contactPhone?: string;
+      contactEmail?: string;
+      timezone?: string;
+      config?: Branch["config"];
+      active?: boolean;
+    }
+  ): Promise<Branch> {
+    const response = await api.patch(`/branches/${id}`, data);
+    return response.data?.branch ?? response.data;
+  },
+
+  async remove(id: string): Promise<{ message: string }> {
+    const response = await api.delete(`/branches/${id}`);
+    return response.data;
+  },
+};
+
+// ==================== BRANCH TRANSFER SERVICE ====================
+export const branchTransferService = {
+  async create(data: {
+    originBranchId: string;
+    targetBranchId: string;
+    items: Array<{ product: string; quantity: number }>;
+    notes?: string;
+  }): Promise<any> {
+    const response = await api.post("/branch-transfers", data);
+    return response.data;
+  },
+
+  async list(): Promise<any> {
+    const response = await api.get("/branch-transfers");
+    return response.data?.data ?? response.data ?? [];
+  },
+};
+
 // ==================== SALE SERVICE ====================
 export const saleService = {
   async register(data: {
     productId: string;
     quantity: number;
     salePrice: number;
+    branchId?: string;
     notes?: string;
     saleDate?: string;
   }): Promise<{
@@ -718,6 +849,7 @@ export const saleService = {
     productId: string;
     quantity: number;
     salePrice: number;
+    branchId?: string;
     notes?: string;
     saleDate?: string;
   }): Promise<{
@@ -735,6 +867,8 @@ export const saleService = {
       startDate?: string;
       endDate?: string;
       productId?: string;
+      limit?: number;
+      statsOnly?: boolean;
     }
   ): Promise<{ sales: Sale[]; stats: SaleStats }> {
     const url = distributorId
@@ -846,6 +980,21 @@ export const defectiveProductService = {
     remainingStock: number;
   }> {
     const response = await api.post("/defective-products/admin", data);
+    return response.data;
+  },
+
+  async reportFromBranch(data: {
+    branchId: string;
+    productId: string;
+    quantity: number;
+    reason: string;
+    images?: ProductImage[];
+  }): Promise<{
+    message: string;
+    report: DefectiveProduct;
+    remainingStock: number;
+  }> {
+    const response = await api.post("/defective-products/branch", data);
     return response.data;
   },
 

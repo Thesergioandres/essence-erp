@@ -1,15 +1,32 @@
 ﻿import mongoose from "mongoose";
 import { invalidateCache } from "../middleware/cache.middleware.js";
+import Branch from "../models/Branch.js";
+import BranchStock from "../models/BranchStock.js";
 import DistributorStock from "../models/DistributorStock.js";
 import Product from "../models/Product.js";
+import ProfitHistory from "../models/ProfitHistory.js";
 import Sale from "../models/Sale.js";
 import SpecialSale from "../models/SpecialSale.js";
+import User from "../models/User.js";
 import AuditService from "../services/audit.service.js";
-import { recordSaleProfit } from "../services/profitHistory.service.js";
+import {
+  recalculateUserBalance,
+  recordSaleProfit,
+} from "../services/profitHistory.service.js";
 import { getDistributorCommissionInfo } from "../utils/distributorPricing.js";
 
 const resolveBusinessId = (req) =>
   req?.businessId || req?.headers?.["x-business-id"] || req?.query?.businessId;
+
+const ensureBranch = async (businessId, branchId) => {
+  if (!branchId) return null;
+  const branch = await Branch.findOne({
+    _id: branchId,
+    business: businessId,
+  });
+  if (!branch) throw new Error("Sede inválida para este negocio");
+  return branch;
+};
 
 // Normaliza una fecha (YYYY-MM-DD) a inicio de día en Colombia (05:00 UTC)
 const toColombiaStartOfDay = (dateStr) => {
@@ -44,21 +61,60 @@ export const deleteSale = async (req, res) => {
       return res.status(404).json({ message: "Venta no encontrada" });
     }
 
-    // Si la venta pertenece a un distribuidor, restaurar su stock
-    if (sale.distributor) {
+    const product = await Product.findById(sale.product);
+    const adminUser = await User.findOne({
+      role: { $in: ["admin", "super_admin"] },
+    });
+    const profitUsers = [
+      sale.distributor?.toString(),
+      adminUser?._id?.toString(),
+    ].filter(Boolean);
+
+    // Restaurar stock según el origen de la venta
+    if (sale.branch) {
+      await BranchStock.findOneAndUpdate(
+        { business: sale.business, branch: sale.branch, product: sale.product },
+        { $inc: { quantity: sale.quantity } },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+      if (product) {
+        product.totalStock = (product.totalStock || 0) + sale.quantity;
+        await product.save({ validateBeforeSave: false });
+      }
+    } else if (sale.distributor) {
       await DistributorStock.findOneAndUpdate(
         { distributor: sale.distributor, product: sale.product },
         { $inc: { quantity: sale.quantity } },
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
+      if (product) {
+        product.totalStock = (product.totalStock || 0) + sale.quantity;
+        await product.save({ validateBeforeSave: false });
+      }
+    } else {
+      // Venta admin sin sede: devolver al almacén general
+      if (product) {
+        product.totalStock = (product.totalStock || 0) + sale.quantity;
+        product.warehouseStock = (product.warehouseStock || 0) + sale.quantity;
+        await product.save({ validateBeforeSave: false });
+      }
     }
 
-    // Restaurar stock del producto
-    const product = await Product.findById(sale.product);
-    if (product) {
-      product.totalStock = (product.totalStock || 0) + sale.quantity;
-      product.warehouseStock = (product.warehouseStock || 0) + sale.quantity;
-      await product.save({ validateBeforeSave: false });
+    // Eliminar entradas de ganancias asociadas a la venta y recalcular balances
+    await ProfitHistory.deleteMany({
+      sale: sale._id,
+      ...(businessId ? { business: businessId } : {}),
+    });
+    for (const userId of profitUsers) {
+      try {
+        await recalculateUserBalance(userId, businessId);
+      } catch (balanceError) {
+        console.error(
+          "Error recalculando balance para usuario",
+          userId,
+          balanceError?.message
+        );
+      }
     }
 
     // Invalidar cach├® (si est├í activo)
@@ -202,6 +258,7 @@ export const registerAdminSale = async (req, res) => {
       saleDate,
       paymentProof,
       paymentProofMimeType,
+      branchId,
     } = req.body;
 
     const normalizedSaleDate = toColombiaStartOfDay(saleDate);
@@ -237,10 +294,28 @@ export const registerAdminSale = async (req, res) => {
       });
     }
 
-    // Crear la venta (sin distribuidor)
-    console.log(`[${reqId}] ­ƒÆ¥ Creando venta...`);
+    // Resolver sede (si se envía) y validar stock en la sede si aplica
+    console.log(`[${reqId}] Creando venta...`);
+    let branch = null;
+    let branchStock = null;
+    if (branchId) {
+      branch = await ensureBranch(businessId, branchId);
+      branchStock = await BranchStock.findOne({
+        business: businessId,
+        branch: branch._id,
+        product: productId,
+      });
+      if (!branchStock || branchStock.quantity < quantity) {
+        return res.status(400).json({
+          message: `Stock insuficiente en la sede. Disponible: ${
+            branchStock?.quantity || 0
+          }`,
+        });
+      }
+    }
     const saleData = {
       business: businessId,
+      branch: branch?._id,
       distributor: null,
       product: productId,
       quantity,
@@ -253,7 +328,7 @@ export const registerAdminSale = async (req, res) => {
       paymentProofMimeType: paymentProof
         ? paymentProofMimeType || "image/jpeg"
         : undefined,
-      paymentStatus: "confirmado", // Las ventas admin est├ín confirmadas autom├íticamente
+      paymentStatus: "confirmado", // Las ventas admin están confirmadas automáticamente
       paymentConfirmedAt: new Date(),
       paymentConfirmedBy: req.user?.id || req.user?.userId,
       commissionBonus: 0, // Admin no tiene bonus
@@ -264,12 +339,20 @@ export const registerAdminSale = async (req, res) => {
     const sale = await Sale.create(saleData);
     console.log(`[${reqId}] Ô£à Venta creada:`, sale._id);
 
-    // Descontar del stock total del producto
-    console.log(`[${reqId}] ­ƒôª Actualizando stock...`);
+    // Descontar del stock total del producto y de la sede si aplica
+    console.log(`[${reqId}] Actualizando stock...`);
     product.totalStock -= quantity;
+    product.warehouseStock = Math.max(
+      (product.warehouseStock || 0) - quantity,
+      0
+    );
     await product.save();
+    if (branchStock) {
+      branchStock.quantity -= quantity;
+      await branchStock.save();
+    }
     console.log(
-      `[${reqId}] Ô£à Stock actualizado. Nuevo stock:`,
+      `[${reqId}] Ô£à Stock actualizado. Nuevo stock general:`,
       product.totalStock
     );
 
@@ -346,28 +429,37 @@ export const registerSale = async (req, res) => {
       paymentProof,
       paymentProofMimeType,
       saleDate,
+      branchId,
     } = req.body;
     const distributorId = req.user.id;
+    const usesBranchStock = Boolean(branchId);
 
     const normalizedSaleDate = toColombiaStartOfDay(saleDate);
 
-    // Verificar que el distribuidor tenga el producto
-    const distributorStock = await DistributorStock.findOne({
-      distributor: distributorId,
-      product: productId,
-      business: businessId,
-    });
+    let distributorStock = null;
+    let branch = null;
 
-    if (!distributorStock) {
-      return res
-        .status(400)
-        .json({ message: "No tienes este producto asignado" });
-    }
-
-    if (distributorStock.quantity < quantity) {
-      return res.status(400).json({
-        message: `Stock insuficiente. Disponible: ${distributorStock.quantity}`,
+    if (usesBranchStock) {
+      branch = await ensureBranch(businessId, branchId);
+    } else {
+      // Venta con stock propio del distribuidor
+      distributorStock = await DistributorStock.findOne({
+        distributor: distributorId,
+        product: productId,
+        business: businessId,
       });
+
+      if (!distributorStock) {
+        return res
+          .status(400)
+          .json({ message: "No tienes este producto asignado" });
+      }
+
+      if (distributorStock.quantity < quantity) {
+        return res.status(400).json({
+          message: `Stock insuficiente. Disponible: ${distributorStock.quantity}`,
+        });
+      }
     }
 
     // Obtener precios del producto
@@ -411,6 +503,7 @@ export const registerSale = async (req, res) => {
     // Crear la venta
     const saleData = {
       business: businessId,
+      branch: branch?._id,
       saleId,
       distributor: distributorId,
       product: productId,
@@ -435,13 +528,83 @@ export const registerSale = async (req, res) => {
       saleData.saleDate = normalizedSaleDate;
     }
 
+    // Validar y ajustar stock seg fn origen
+    if (usesBranchStock) {
+      const branchStock = await BranchStock.findOne({
+        business: businessId,
+        branch: branch._id,
+        product: productId,
+      });
+      if (!branchStock || branchStock.quantity < quantity) {
+        return res.status(400).json({
+          message: `Stock insuficiente en la sede. Disponible: ${
+            branchStock?.quantity || 0
+          }`,
+        });
+      }
+
+      const sale = await Sale.create(saleData);
+
+      branchStock.quantity -= quantity;
+      await branchStock.save();
+
+      product.totalStock -= quantity;
+      await product.save();
+
+      const populatedSale = await Sale.findById(sale._id)
+        .populate("product", "name image")
+        .populate("distributor", "name email");
+
+      await invalidateCache("cache:analytics:*");
+      await invalidateCache("cache:gamification:*");
+      await invalidateCache("cache:sales:*");
+      await invalidateCache("cache:distributors:*");
+      await invalidateCache("cache:businessAssistant:*");
+
+      try {
+        await recordSaleProfit(sale._id);
+      } catch (historyError) {
+        console.error(
+          "Error registrando historial de ganancias:",
+          historyError
+        );
+      }
+
+      res.status(201).json({
+        message: "Venta registrada exitosamente",
+        sale: populatedSale,
+        remainingStock: branchStock.quantity,
+        commissionBonus: commissionBonus > 0 ? `+${commissionBonus}%` : null,
+      });
+
+      await AuditService.log({
+        user: req.user,
+        action: "sale_registered",
+        module: "sales",
+        description: `Venta registrada de ${quantity} ${product.name}`,
+        entityType: "Sale",
+        entityId: sale._id,
+        entityName: product.name,
+        newValues: sale,
+        business: businessId,
+        req,
+        metadata: {
+          quantity,
+          salePrice,
+          distributor: distributorId,
+          branch: branch._id,
+          origin: "branch_stock",
+        },
+      });
+      return;
+    }
+
+    // Venta con stock del distribuidor
     const sale = await Sale.create(saleData);
 
-    // Descontar del stock del distribuidor
     distributorStock.quantity -= quantity;
     await distributorStock.save();
 
-    // Descontar del stock total del producto
     product.totalStock -= quantity;
     await product.save();
 
@@ -504,6 +667,15 @@ export const getDistributorSales = async (req, res) => {
     }
 
     const distributorId = req.params.distributorId || req.user.id;
+    const limitParam = parseInt(req.query.limit, 10);
+    const statsOnly = String(req.query.statsOnly).toLowerCase() === "true";
+    const limit =
+      Number.isFinite(limitParam) && limitParam > 0
+        ? Math.min(limitParam, 200)
+        : 50;
+    const branchFilter = req.query.branchId
+      ? { branch: new mongoose.Types.ObjectId(req.query.branchId) }
+      : {};
 
     // Si no es admin y est├í consultando otro distribuidor, denegar
     if (req.user.role !== "admin" && distributorId !== req.user.id) {
@@ -515,6 +687,7 @@ export const getDistributorSales = async (req, res) => {
     const { startDate, endDate, productId } = req.query;
 
     const filter = { distributor: distributorId, business: businessId };
+    Object.assign(filter, branchFilter);
 
     if (startDate || endDate) {
       filter.saleDate = {};
@@ -524,36 +697,47 @@ export const getDistributorSales = async (req, res) => {
 
     if (productId) filter.product = productId;
 
+    // Totales vía agregación (evita cargar todas las ventas en memoria)
+    const statsAgg = await Sale.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: null,
+          totalSales: { $sum: 1 },
+          totalQuantity: { $sum: "$quantity" },
+          totalDistributorProfit: { $sum: "$distributorProfit" },
+          totalAdminProfit: { $sum: "$adminProfit" },
+          totalRevenue: { $sum: { $multiply: ["$salePrice", "$quantity"] } },
+        },
+      },
+    ]);
+
+    const stats = statsAgg[0] || {
+      totalSales: 0,
+      totalQuantity: 0,
+      totalDistributorProfit: 0,
+      totalAdminProfit: 0,
+      totalRevenue: 0,
+    };
+
+    // Si solo se necesitan estadísticas, evitar traer las ventas
+    if (statsOnly) {
+      return res.json({ sales: [], stats });
+    }
+
     const sales = await Sale.find(filter)
+      .select(
+        "product distributor salePrice quantity saleDate distributorProfit adminProfit saleStatus paymentStatus"
+      )
       .populate("product", "name image")
       .populate("distributor", "name email")
-      .sort({ saleDate: -1 });
-
-    // Calcular totales
-    const totalSales = sales.length;
-    const totalQuantity = sales.reduce((sum, sale) => sum + sale.quantity, 0);
-    const totalDistributorProfit = sales.reduce(
-      (sum, sale) => sum + sale.distributorProfit,
-      0
-    );
-    const totalAdminProfit = sales.reduce(
-      (sum, sale) => sum + sale.adminProfit,
-      0
-    );
-    const totalRevenue = sales.reduce(
-      (sum, sale) => sum + sale.salePrice * sale.quantity,
-      0
-    );
+      .sort({ saleDate: -1 })
+      .limit(limit)
+      .lean();
 
     res.json({
       sales,
-      stats: {
-        totalSales,
-        totalQuantity,
-        totalDistributorProfit,
-        totalAdminProfit,
-        totalRevenue,
-      },
+      stats,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -580,14 +764,25 @@ export const getAllSales = async (req, res) => {
       page = 1,
       limit = 50,
       statsOnly,
+      allTime,
     } = req.query;
 
     const filter = { business: businessId };
 
-    if (startDate || endDate) {
+    if (req.query.branchId) {
+      filter.branch = new mongoose.Types.ObjectId(req.query.branchId);
+    }
+
+    // Si no se envían fechas y no se pide explícitamente allTime, limitar a últimos 30 días para evitar scans enormes
+    const mustDefaultDateRange =
+      !startDate && !endDate && String(allTime) !== "true";
+    if (startDate || endDate || mustDefaultDateRange) {
       filter.saleDate = {};
       if (startDate) {
         filter.saleDate.$gte = new Date(startDate);
+      } else if (mustDefaultDateRange) {
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        filter.saleDate.$gte = thirtyDaysAgo;
       }
       if (endDate) {
         filter.saleDate.$lte = new Date(endDate);
@@ -599,16 +794,22 @@ export const getAllSales = async (req, res) => {
     if (paymentStatus) filter.paymentStatus = paymentStatus;
 
     // Determinar ordenamiento
-    let sortOption = { saleDate: -1 }; // default: m├ís reciente primero
+    let sortOption = { saleDate: -1 };
     if (sortBy === "date-asc") {
       sortOption = { saleDate: 1 };
     } else if (sortBy === "distributor") {
       sortOption = { "distributor.name": 1 };
     }
 
-    const pageNum = parseInt(page);
-    const limitNum = parseInt(limit);
+    const pageNum = parseInt(page, 10);
+    const limitNum = parseInt(limit, 10);
     const skip = (pageNum - 1) * limitNum;
+
+    const aggOptions = { allowDiskUse: true, maxTimeMS: 15000 };
+    const includeSpecials =
+      req.query.includeSpecials === undefined
+        ? true
+        : String(req.query.includeSpecials).toLowerCase() === "true";
 
     const shouldReturnList = String(statsOnly) !== "true";
 
@@ -634,15 +835,18 @@ export const getAllSales = async (req, res) => {
       notes: 1,
       distributor: 1,
       product: 1,
+      branch: 1,
       createdAt: 1,
       updatedAt: 1,
     };
 
     if (shouldReturnList) {
+      const tListStart = Date.now();
       const [foundSales, totalCount] = await Promise.all([
         Sale.find(filter, projection)
           .populate("product", "name image description")
           .populate("distributor", "name email phone address")
+          .populate("branch", "name")
           .sort(sortOption)
           .skip(skip)
           .limit(limitNum)
@@ -652,11 +856,19 @@ export const getAllSales = async (req, res) => {
 
       sales = foundSales;
       total = totalCount;
+      console.log(
+        `[${req.reqId || "no-id"}] sales:list fetched ${
+          sales.length
+        }/${total} in ${Date.now() - tListStart}ms`
+      );
     }
     // Calcular estadísticas
     const canIncludeSpecials =
-      (!paymentStatus || paymentStatus === "confirmado") && !distributorId;
+      includeSpecials &&
+      (!paymentStatus || paymentStatus === "confirmado") &&
+      !distributorId;
 
+    const tAggStart = Date.now();
     const salesAgg = await Sale.aggregate([
       {
         $match: {
@@ -681,8 +893,12 @@ export const getAllSales = async (req, res) => {
           totalProfit: { $sum: "$totalProfit" },
         },
       },
-    ]);
-
+    ]).option(aggOptions);
+    console.log(
+      `[${req.reqId || "no-id"}] sales:stats aggregate in ${
+        Date.now() - tAggStart
+      }ms`
+    );
     const salesStats = salesAgg[0] || null;
 
     let specialStats = null;
@@ -713,10 +929,9 @@ export const getAllSales = async (req, res) => {
             totalProfit: { $sum: "$totalProfit" },
           },
         },
-      ]);
+      ]).option(aggOptions);
       specialStats = agg || null;
     }
-
     const stats = {
       totalSales: 0,
       totalQuantity: 0,
@@ -740,6 +955,10 @@ export const getAllSales = async (req, res) => {
       stats.totalProfit += specialStats.totalProfit || 0;
     }
 
+    // Si solo se necesitan estadísticas, evitar traer las ventas
+    if (statsOnly) {
+      return res.json({ sales: [], stats });
+    }
     res.json({
       sales,
       stats,
@@ -768,8 +987,17 @@ export const getSalesByProduct = async (req, res) => {
       return res.status(400).json({ message: "Falta x-business-id" });
     }
 
+    const branchMatch = req.query.branchId
+      ? { branch: new mongoose.Types.ObjectId(req.query.branchId) }
+      : {};
+
     const salesByProduct = await Sale.aggregate([
-      { $match: { business: new mongoose.Types.ObjectId(businessId) } },
+      {
+        $match: {
+          business: new mongoose.Types.ObjectId(businessId),
+          ...branchMatch,
+        },
+      },
       {
         $project: {
           product: "$product",
@@ -851,8 +1079,17 @@ export const getSalesByDistributor = async (req, res) => {
       return res.status(400).json({ message: "Falta x-business-id" });
     }
 
+    const branchMatch = req.query.branchId
+      ? { branch: new mongoose.Types.ObjectId(req.query.branchId) }
+      : {};
+
     const salesByDistributor = await Sale.aggregate([
-      { $match: { business: new mongoose.Types.ObjectId(businessId) } },
+      {
+        $match: {
+          business: new mongoose.Types.ObjectId(businessId),
+          ...branchMatch,
+        },
+      },
       {
         $project: {
           distributor: "$distributor",

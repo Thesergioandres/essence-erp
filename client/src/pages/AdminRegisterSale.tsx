@@ -1,8 +1,14 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { authService, productService, saleService } from "../api/services";
+import {
+  authService,
+  branchService,
+  productService,
+  saleService,
+} from "../api/services";
 import { Button } from "../components/Button";
-import type { Product } from "../types";
+import { useBusiness } from "../context/BusinessContext";
+import type { Branch, Product } from "../types";
 
 interface SaleItem {
   id: string;
@@ -20,11 +26,18 @@ interface FormState {
   salePrice: number;
   notes: string;
   saleDate: string;
+  branchId: string;
 }
 
 export default function AdminRegisterSale() {
+  const {
+    businessId,
+    hydrating: businessHydrating,
+    loading: businessLoading,
+  } = useBusiness();
   const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [saleItems, setSaleItems] = useState<SaleItem[]>([]);
   const [formData, setFormData] = useState<FormState>({
     productId: "",
@@ -32,6 +45,7 @@ export default function AdminRegisterSale() {
     salePrice: 0,
     notes: "",
     saleDate: new Date().toISOString().slice(0, 10),
+    branchId: "",
   });
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(false);
@@ -39,15 +53,31 @@ export default function AdminRegisterSale() {
   const [success, setSuccess] = useState("");
 
   useEffect(() => {
-    loadProducts();
-  }, []);
+    if (!businessId || businessHydrating || businessLoading) return;
+    void Promise.all([loadProducts(), loadBranches()]);
+  }, [businessId, businessHydrating, businessLoading]);
 
   const loadProducts = async () => {
     try {
+      if (!businessId) return;
       const response = await productService.getAll();
       setProducts(response.data || response);
     } catch {
-      setError("No se pudo cargar los productos");
+      setError(
+        "No se pudo cargar los productos. Verifica el negocio seleccionado."
+      );
+    }
+  };
+
+  const loadBranches = async () => {
+    try {
+      if (!businessId) return;
+      const response = await branchService.list();
+      setBranches(Array.isArray(response) ? response : []);
+    } catch {
+      setError(
+        "No se pudieron cargar las sedes. Verifica el negocio seleccionado."
+      );
     }
   };
 
@@ -157,6 +187,7 @@ export default function AdminRegisterSale() {
             productId: item.productId,
             quantity: item.quantity,
             salePrice: item.salePrice,
+            branchId: formData.branchId || undefined,
             notes: formData.notes,
             saleDate: formData.saleDate,
           });
@@ -165,6 +196,7 @@ export default function AdminRegisterSale() {
             productId: item.productId,
             quantity: item.quantity,
             salePrice: item.salePrice,
+            branchId: formData.branchId || undefined,
             notes: formData.notes,
             saleDate: formData.saleDate,
           });
@@ -183,6 +215,7 @@ export default function AdminRegisterSale() {
         salePrice: 0,
         notes: "",
         saleDate: new Date().toISOString().slice(0, 10),
+        branchId: formData.branchId,
       });
       setSelectedProduct(null);
 
@@ -452,6 +485,31 @@ export default function AdminRegisterSale() {
               Información del Pedido
             </h2>
             <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label
+                  htmlFor="branchId"
+                  className="mb-2 block text-sm font-medium text-gray-300"
+                >
+                  Sede (opcional)
+                </label>
+                <select
+                  id="branchId"
+                  name="branchId"
+                  value={formData.branchId || ""}
+                  onChange={handleChange}
+                  className="w-full rounded-lg border border-gray-600 bg-gray-900/50 px-4 py-3 text-white focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {branches.map(branch => (
+                    <option key={branch._id} value={branch._id}>
+                      {branch.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-2 text-xs text-gray-400">
+                  Deja sin seleccionar para usar el stock general. Solo se
+                  muestran sedes/bodegas reales.
+                </p>
+              </div>
               <div>
                 <label
                   htmlFor="saleDate"

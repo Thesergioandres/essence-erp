@@ -17,6 +17,10 @@ const defectiveProductSchema = new mongoose.Schema(
       ref: "Product",
       required: [true, "El producto es obligatorio"],
     },
+    branch: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Branch",
+    },
     quantity: {
       type: Number,
       required: [true, "La cantidad es obligatoria"],

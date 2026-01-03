@@ -64,6 +64,7 @@ const DistributorSales = lazy(() => import("./pages/DistributorSales"));
 const DistributorStats = lazy(() => import("./pages/DistributorStats"));
 const DefectiveReports = lazy(() => import("./pages/DefectiveReports"));
 const DistributorCatalog = lazy(() => import("./pages/DistributorCatalog"));
+const Branches = lazy(() => import("./pages/Branches"));
 const TransferStock = lazy(() => import("./pages/TransferStock"));
 const TransferHistory = lazy(() => import("./pages/TransferHistory"));
 
@@ -117,7 +118,14 @@ export default function App() {
             </ProtectedRoute>
           }
         >
-          <Route path="dashboard" element={<Dashboard />} />
+          <Route
+            path="dashboard"
+            element={
+              <BusinessGate>
+                <Dashboard />
+              </BusinessGate>
+            }
+          />
           <Route
             path="products"
             element={
@@ -159,6 +167,14 @@ export default function App() {
             element={
               <BusinessGate requiredFeature="inventory">
                 <StockManagement />
+              </BusinessGate>
+            }
+          />
+          <Route
+            path="branches"
+            element={
+              <BusinessGate requiredFeature="inventory">
+                <Branches />
               </BusinessGate>
             }
           />

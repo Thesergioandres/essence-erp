@@ -1,3 +1,4 @@
+import BranchStock from "../models/BranchStock.js";
 import DefectiveProduct from "../models/DefectiveProduct.js";
 import DistributorStock from "../models/DistributorStock.js";
 import Product from "../models/Product.js";
@@ -52,6 +53,68 @@ export const reportDefectiveProductAdmin = async (req, res) => {
       message: "Producto defectuoso reportado desde bodega",
       report: populatedReport,
       remainingStock: product.warehouseStock,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Reportar producto defectuoso (admin desde sede)
+// @route   POST /api/defective-products/branch
+// @access  Private/Admin
+export const reportDefectiveProductBranch = async (req, res) => {
+  try {
+    const { branchId, productId, quantity, reason, images } = req.body;
+    const businessId = req.businessId;
+
+    if (!branchId) {
+      return res.status(400).json({ message: "La sede es obligatoria" });
+    }
+
+    const branchStock = await BranchStock.findOne({
+      branch: branchId,
+      product: productId,
+      business: businessId,
+    });
+
+    if (!branchStock) {
+      return res
+        .status(404)
+        .json({ message: "El producto no existe en esta sede" });
+    }
+
+    if (branchStock.quantity < quantity) {
+      return res.status(400).json({
+        message: `Stock insuficiente en la sede. Disponible: ${branchStock.quantity}`,
+      });
+    }
+
+    const defectiveReport = await DefectiveProduct.create({
+      distributor: null,
+      branch: branchId,
+      product: productId,
+      business: businessId,
+      quantity,
+      reason,
+      images: images || [],
+      status: "confirmado",
+      confirmedAt: Date.now(),
+      confirmedBy: req.user._id,
+      adminNotes: "Reporte directo desde sede",
+    });
+
+    branchStock.quantity -= quantity;
+    await branchStock.save();
+
+    const populatedReport = await DefectiveProduct.findById(defectiveReport._id)
+      .populate("product", "name image")
+      .populate("branch", "name")
+      .populate("confirmedBy", "name email");
+
+    res.status(201).json({
+      message: "Producto defectuoso reportado desde sede",
+      report: populatedReport,
+      remainingStock: branchStock.quantity,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -142,6 +205,7 @@ export const getDistributorDefectiveReports = async (req, res) => {
     const reports = await DefectiveProduct.find(filter)
       .populate("product", "name image")
       .populate("distributor", "name email")
+      .populate("branch", "name")
       .populate("confirmedBy", "name email")
       .sort({ reportDate: -1 });
 
@@ -166,6 +230,7 @@ export const getAllDefectiveReports = async (req, res) => {
     const reports = await DefectiveProduct.find(filter)
       .populate("product", "name image")
       .populate("distributor", "name email")
+      .populate("branch", "name")
       .populate("confirmedBy", "name email")
       .sort({ reportDate: -1 });
 
@@ -221,6 +286,7 @@ export const confirmDefectiveProduct = async (req, res) => {
     const populatedReport = await DefectiveProduct.findById(report._id)
       .populate("product", "name image")
       .populate("distributor", "name email")
+      .populate("branch", "name")
       .populate("confirmedBy", "name email");
 
     res.json({
@@ -281,6 +347,7 @@ export const rejectDefectiveProduct = async (req, res) => {
     const populatedReport = await DefectiveProduct.findById(report._id)
       .populate("product", "name image")
       .populate("distributor", "name email")
+      .populate("branch", "name")
       .populate("confirmedBy", "name email");
 
     res.json({

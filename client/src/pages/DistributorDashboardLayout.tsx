@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { authService } from "../api/services.ts";
 import BusinessGate from "../components/BusinessGate";
 import BusinessSelector from "../components/BusinessSelector";
+import ReportIssueButton from "../components/ReportIssueButton";
 
 const navLinkClasses = (isActive: boolean): string =>
   [
@@ -329,6 +330,8 @@ export default function DistributorDashboardLayout() {
           </BusinessGate>
         </div>
       </main>
+
+      <ReportIssueButton />
     </div>
   );
 }

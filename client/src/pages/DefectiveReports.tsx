@@ -286,7 +286,7 @@ export default function DefectiveReports() {
                       quantity: 1,
                     })
                   }
-                  className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-white focus:border-transparent focus:ring-2 focus:ring-blue-500"
+                  className="w-full rounded-lg border border-gray-600 bg-gray-900/50 px-4 py-3 text-white focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
                   required
                 >
                   <option value="">Selecciona un producto</option>
@@ -321,7 +321,7 @@ export default function DefectiveReports() {
                       quantity: parseInt(e.target.value) || 1,
                     })
                   }
-                  className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-white focus:border-transparent focus:ring-2 focus:ring-blue-500"
+                  className="w-full rounded-lg border border-gray-600 bg-gray-900/50 px-4 py-3 text-white focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
                   required
                 />
               </div>

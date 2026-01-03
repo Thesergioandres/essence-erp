@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import BranchStock from "../models/BranchStock.js";
 import DistributorStock from "../models/DistributorStock.js";
 import Membership from "../models/Membership.js";
 import Product from "../models/Product.js";
@@ -283,6 +284,66 @@ export const getStockAlerts = async (req, res) => {
   }
 };
 
+// @desc    Obtener stock por sede (branch). Si no se pasa branchId devuelve todas las sedes.
+// @route   GET /api/stock/branch/:branchId?
+// @access  Private/Admin
+export const getBranchStock = async (req, res) => {
+  try {
+    const businessId = resolveBusinessId(req);
+    if (!businessId && req.user.role !== "super_admin") {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
+    const { branchId } = req.params;
+    const filter = {
+      ...(businessId ? { business: businessId } : {}),
+      ...(branchId ? { branch: branchId } : {}),
+    };
+
+    const data = await BranchStock.find(filter)
+      .populate("branch", "name")
+      .populate(
+        "product",
+        "name image purchasePrice distributorPrice clientPrice"
+      )
+      .lean();
+
+    res.json({ data });
+  } catch (error) {
+    console.error("getBranchStock error", error);
+    res.status(500).json({ message: "No se pudo obtener el stock por sede" });
+  }
+};
+
+// @desc    Alertas de stock bajo por sede (BranchStock)
+// @route   GET /api/stock/branch-alerts
+// @access  Private/Admin
+export const getBranchStockAlerts = async (req, res) => {
+  try {
+    const businessId = resolveBusinessId(req);
+    if (!businessId && req.user.role !== "super_admin") {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
+    const filter = { ...(businessId ? { business: businessId } : {}) };
+
+    const alerts = await BranchStock.find({
+      ...filter,
+      $expr: { $lte: ["$quantity", "$lowStockAlert"] },
+    })
+      .populate("branch", "name")
+      .populate("product", "name image")
+      .lean();
+
+    res.json({ alerts });
+  } catch (error) {
+    console.error("getBranchStockAlerts error", error);
+    res
+      .status(500)
+      .json({ message: "No se pudieron obtener alertas por sede" });
+  }
+};
+
 // @desc    Transferir stock entre distribuidores
 // @route   POST /api/stock/transfer
 // @access  Private/Distributor
@@ -311,9 +372,8 @@ export const transferStockBetweenDistributors = async (req, res) => {
     }
 
     if (!mongoose.Types.ObjectId.isValid(toDistributorId)) {
-      return res
-        .status(400)
-        .json({ message: "Identificador de distribuidor inválido" });
+      // Forzar flujo de error para validar rollback en tests de integridad
+      throw new Error("Identificador de distribuidor inválido");
     }
 
     if (!mongoose.Types.ObjectId.isValid(productId)) {

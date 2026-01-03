@@ -6,6 +6,7 @@ import {
   rejectDefectiveProduct,
   reportDefectiveProduct,
   reportDefectiveProductAdmin,
+  reportDefectiveProductBranch,
 } from "../controllers/defectiveProduct.controller.js";
 import { admin, protect } from "../middleware/auth.middleware.js";
 import { businessContext } from "../middleware/business.middleware.js";
@@ -20,6 +21,7 @@ router.get("/distributor/:distributorId?", getDistributorDefectiveReports);
 
 // Rutas de administrador
 router.post("/admin", admin, reportDefectiveProductAdmin);
+router.post("/branch", admin, reportDefectiveProductBranch);
 router.get("/", admin, getAllDefectiveReports);
 router.put("/:id/confirm", admin, confirmDefectiveProduct);
 router.put("/:id/reject", admin, rejectDefectiveProduct);

@@ -18,6 +18,15 @@ export function useSession() {
 
   useEffect(() => {
     let mounted = true;
+    const syncFromStorage = () => {
+      if (!mounted) return;
+      const current = authService.getCurrentUser();
+      setState(prev => ({ ...prev, user: current }));
+    };
+
+    // Sync on auth change (login/logout) and storage events (other tabs)
+    window.addEventListener("auth-changed", syncFromStorage);
+    window.addEventListener("storage", syncFromStorage);
     const load = async () => {
       const token = localStorage.getItem("token");
       if (!token) {
@@ -81,6 +90,8 @@ export function useSession() {
     load();
     return () => {
       mounted = false;
+      window.removeEventListener("auth-changed", syncFromStorage);
+      window.removeEventListener("storage", syncFromStorage);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

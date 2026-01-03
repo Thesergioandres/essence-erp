@@ -85,7 +85,7 @@ app.use(
       if (isAllowed) {
         callback(null, true);
       } else {
-        console.log("Origin bloqueado:", origin);
+        console.log("❌ Origin bloqueado:", origin);
         callback(null, true); // Temporalmente permitir todos para debug
       }
     },
@@ -126,31 +126,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// Métrica de duración y finalización/resets de la conexión
-app.use((req, res, next) => {
-  const start = Date.now();
-
-  res.on("finish", () => {
-    const duration = Date.now() - start;
-    console.log(
-      `[${req.reqId || "no-id"}] RES ${res.statusCode} ${req.method} ${
-        req.path
-      } (${duration}ms)`
-    );
-  });
-
-  res.on("close", () => {
-    const duration = Date.now() - start;
-    console.warn(
-      `[${req.reqId || "no-id"}] RES ABORT ${req.method} ${
-        req.path
-      } (${duration}ms)`
-    );
-  });
-
-  next();
-});
-
 // Aumentar límite de tamaño del body para imágenes Base64 (50MB)
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
@@ -158,7 +133,7 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 // Rutas
 app.get("/", (req, res) => {
   res.json({
-    message: "Essence API funcionando correctamente",
+    message: "🚀 Essence API funcionando correctamente",
     version: "2.0.0",
     cors: "enabled",
     timestamp: new Date().toISOString(),
@@ -190,7 +165,7 @@ app.use("/api/issues", issueRoutes);
 // Manejo global de errores
 app.use((err, req, res, next) => {
   const reqId = req.reqId || "no-id";
-  console.error(`\n[${reqId}] ERROR NO CAPTURADO`);
+  console.error(`\n[${reqId}] ❌ ERROR NO CAPTURADO`);
   console.error(`[${reqId}] Ruta: ${req.method} ${req.path}`);
   if (err instanceof Error) {
     console.error(`[${reqId}] Mensaje:`, err.message);
@@ -222,6 +197,6 @@ export default app;
 // Iniciar servidor (evitar escuchar en entorno de tests)
 if (process.env.NODE_ENV !== "test") {
   app.listen(PORT, () => {
-    console.log(`Servidor corriendo en http://localhost:${PORT}`);
+    console.log(`✅ Servidor corriendo en http://localhost:${PORT}`);
   });
 }

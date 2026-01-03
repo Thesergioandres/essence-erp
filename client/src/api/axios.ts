@@ -8,8 +8,27 @@ const api = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
-  timeout: 20000,
+  timeout: 30000,
 });
+
+const logApiError = (error: AxiosError) => {
+  const status = error.response?.status;
+  const url = error.config?.url;
+  const method = error.config?.method;
+  const requestId =
+    (error.response?.headers?.["x-request-id"] as string | undefined) ||
+    (error.response?.data as { requestId?: string } | undefined)?.requestId;
+
+  // Consola detallada para depurar fallos en frontend
+  console.error("[API ERROR]", {
+    url,
+    method,
+    status,
+    requestId,
+    message: error.message,
+    data: error.response?.data,
+  });
+};
 
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
@@ -44,6 +63,8 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   response => response,
   error => {
+    logApiError(error as AxiosError);
+
     const code = (error.response?.data as { code?: string } | undefined)?.code;
 
     if (error.response?.status === 403 && code === "owner_inactive") {

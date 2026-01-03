@@ -32,6 +32,8 @@ const quickRanges = [
   { label: "Últimos 90 días", days: 90 },
 ];
 
+const isValidObjectId = (value: string) => /^[a-f\d]{24}$/i.test(value);
+
 export default function ProfitHistory() {
   const [loading, setLoading] = useState(true);
   const [overview, setOverview] = useState<ProfitHistoryAdminOverview | null>(
@@ -92,6 +94,17 @@ export default function ProfitHistory() {
     if (!overview) return [];
     return overview.distributors;
   }, [overview]);
+
+  const distributorOptions = useMemo(() => {
+    const seen = new Set<string>();
+    return distributors.filter(dist => {
+      const allow = dist.id === "admin" || isValidObjectId(dist.id);
+      if (!allow) return false;
+      if (seen.has(dist.id)) return false;
+      seen.add(dist.id);
+      return true;
+    });
+  }, [distributors]);
 
   const handleQuickRange = (days: number) => {
     const end = new Date();
@@ -195,7 +208,7 @@ export default function ProfitHistory() {
             >
               <option value="">Todos</option>
               <option value="admin">Solo ventas admin</option>
-              {distributors
+              {distributorOptions
                 .filter(d => d.id !== "admin")
                 .map(d => (
                   <option key={d.id} value={d.id}>

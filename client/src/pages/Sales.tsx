@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { authService, saleService } from "../api/services";
+import { authService, branchService, saleService } from "../api/services";
 import LoadingSpinner from "../components/LoadingSpinner";
 import SaleDetailModal from "../components/SaleDetailModal";
-import type { Sale } from "../types";
+import type { Branch, Sale } from "../types";
 import {
   buildCacheKey,
   readSessionCache,
@@ -28,6 +28,8 @@ export default function Sales() {
     totalProfit?: number;
   }>({});
   const [loading, setLoading] = useState(true);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [branchId, setBranchId] = useState<string>("");
   const [filter, setFilter] = useState<"all" | "pendiente" | "confirmado">(
     "all"
   );
@@ -51,7 +53,19 @@ export default function Sales() {
   useEffect(() => {
     loadSales();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pagination.page, filter, sortBy, dateFilters]);
+  }, [pagination.page, filter, sortBy, dateFilters, branchId]);
+
+  useEffect(() => {
+    const fetchBranches = async () => {
+      try {
+        const data = await branchService.list();
+        setBranches(data || []);
+      } catch (error) {
+        console.error("Error cargando sedes", error);
+      }
+    };
+    void fetchBranches();
+  }, []);
 
   const loadSales = async () => {
     try {
@@ -60,6 +74,7 @@ export default function Sales() {
         limit: pagination.limit,
         sortBy: sortBy,
       };
+      if (branchId) params.branchId = branchId;
       if (filter !== "all") params.paymentStatus = filter;
       if (dateFilters.startDate) params.startDate = dateFilters.startDate;
       if (dateFilters.endDate) params.endDate = dateFilters.endDate;
@@ -227,6 +242,31 @@ export default function Sales() {
       {!loading && (
         <>
           <div className="space-y-4 rounded-xl border border-gray-700 bg-gray-800/50 p-4">
+            {/* Filtro por sede */}
+            <div>
+              <p className="mb-2 text-sm font-medium text-gray-300">
+                Sede / Bodega:
+              </p>
+              <div className="flex flex-wrap gap-4">
+                <div className="min-w-[220px] flex-1">
+                  <select
+                    value={branchId}
+                    onChange={e => {
+                      setBranchId(e.target.value);
+                      setPagination(prev => ({ ...prev, page: 1 }));
+                    }}
+                    className="w-full rounded-lg border border-gray-700 bg-gray-900/40 px-4 py-2 text-sm text-gray-100 focus:border-transparent focus:ring-2 focus:ring-purple-500/40"
+                  >
+                    <option value="">Todas las sedes (stock general)</option>
+                    {branches.map(branch => (
+                      <option key={branch._id} value={branch._id}>
+                        {branch.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
             {/* Filtros de fecha */}
             <div>
               <p className="mb-2 text-sm font-medium text-gray-300">
@@ -356,6 +396,9 @@ export default function Sales() {
                       Fecha
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium uppercase text-gray-400">
+                      Sede
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase text-gray-400">
                       Distribuidor
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium uppercase text-gray-400">
@@ -392,6 +435,10 @@ export default function Sales() {
                       typeof sale.distributor === "object"
                         ? sale.distributor
                         : null;
+                    const branchName =
+                      typeof sale.branch === "object"
+                        ? sale.branch?.name
+                        : undefined;
 
                     // Determinar rango según comisión
                     let rankBadge = {
@@ -445,6 +492,9 @@ export default function Sales() {
                             month: "short",
                             day: "numeric",
                           })}
+                        </td>
+                        <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-300">
+                          {branchName || "General"}
                         </td>
                         <td className="whitespace-nowrap px-6 py-4">
                           <div className="text-sm font-medium text-gray-200">

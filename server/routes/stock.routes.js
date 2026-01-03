@@ -2,6 +2,8 @@ import express from "express";
 import {
   assignStockToDistributor,
   getAllDistributorsStock,
+  getBranchStock,
+  getBranchStockAlerts,
   getDistributorStock,
   getStockAlerts,
   getTransferHistory,
@@ -44,6 +46,14 @@ router.get(
   getAllDistributorsStock
 );
 router.get(
+  "/branch/:branchId?",
+  protect,
+  businessContext,
+  admin,
+  requireFeature("inventory"),
+  getBranchStock
+);
+router.get(
   "/alerts",
   protect,
   businessContext,
@@ -51,6 +61,15 @@ router.get(
   requireFeature("inventory"),
   cacheMiddleware(30, "stock:alerts"),
   getStockAlerts
+);
+router.get(
+  "/branch-alerts",
+  protect,
+  businessContext,
+  admin,
+  requireFeature("inventory"),
+  cacheMiddleware(30, "stock:branch-alerts"),
+  getBranchStockAlerts
 );
 router.get(
   "/transfers",

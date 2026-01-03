@@ -209,7 +209,7 @@ export default function TransferStock() {
                 setSelectedProduct(e.target.value);
                 setQuantity(1);
               }}
-              className="w-full rounded-lg border border-gray-700 bg-gray-900/40 px-4 py-2.5 text-gray-100 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+              className="w-full rounded-lg border border-gray-600 bg-gray-900/50 px-4 py-3 text-white focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
             >
               <option value="">Selecciona un producto</option>

@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { authService } from "../api/services.ts";
 import BusinessGate from "../components/BusinessGate";
 import BusinessSelector from "../components/BusinessSelector";
+import ReportIssueButton from "../components/ReportIssueButton";
 import { useBusiness } from "../context/BusinessContext";
 import { useBrandLogo } from "../hooks/useBrandLogo";
 
@@ -283,6 +284,25 @@ export default function DashboardLayout() {
               Catálogo Completo
             </NavLink>
             <NavLink
+              to="/admin/branches"
+              className={({ isActive }): string => navLinkClasses(isActive)}
+            >
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"
+                />
+              </svg>
+              Sedes
+            </NavLink>
+            <NavLink
               to="/admin/stock-management"
               className={({ isActive }): string => navLinkClasses(isActive)}
             >
@@ -528,6 +548,8 @@ export default function DashboardLayout() {
           </BusinessGate>
         </div>
       </main>
+
+      <ReportIssueButton />
     </div>
   );
 }

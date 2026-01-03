@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
-import { defectiveProductService, productService } from "../api/services";
-import type { DefectiveProduct, Product } from "../types";
+import {
+  branchService,
+  defectiveProductService,
+  productService,
+  stockService,
+} from "../api/services";
+import type { Branch, BranchStock, DefectiveProduct, Product } from "../types";
 
 export default function DefectiveProductsManagement() {
   const [data, setData] = useState<{
@@ -22,6 +27,7 @@ export default function DefectiveProductsManagement() {
       totalQuantity: 0,
     },
   });
+
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<
     "all" | "pendiente" | "confirmado" | "rechazado"
@@ -37,6 +43,12 @@ export default function DefectiveProductsManagement() {
   // Estados para reportar desde admin
   const [showReportModal, setShowReportModal] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [branchStock, setBranchStock] = useState<BranchStock[]>([]);
+  const [reportOrigin, setReportOrigin] = useState<"warehouse" | "branch">(
+    "warehouse"
+  );
+  const [selectedBranchId, setSelectedBranchId] = useState("");
   const [reportForm, setReportForm] = useState({
     productId: "",
     quantity: 1,
@@ -47,6 +59,7 @@ export default function DefectiveProductsManagement() {
   useEffect(() => {
     loadReports();
     loadProducts();
+    loadBranches();
   }, []);
 
   const loadReports = async () => {
@@ -68,6 +81,30 @@ export default function DefectiveProductsManagement() {
       setProducts(products.filter((p: Product) => p.warehouseStock > 0));
     } catch (error) {
       console.error("Error al cargar productos:", error);
+    }
+  };
+
+  const loadBranches = async () => {
+    try {
+      const data = await branchService.list();
+      setBranches(data || []);
+    } catch (error) {
+      console.error("Error al cargar sedes:", error);
+    }
+  };
+
+  const loadBranchStock = async (branchId: string) => {
+    if (!branchId) {
+      setBranchStock([]);
+      return;
+    }
+
+    try {
+      const stock = await stockService.getBranchStock(branchId);
+      setBranchStock(stock || []);
+    } catch (error) {
+      console.error("Error al cargar stock de sede:", error);
+      setBranchStock([]);
     }
   };
 
@@ -105,7 +142,7 @@ export default function DefectiveProductsManagement() {
     }
   };
 
-  const handleReportFromWarehouse = async (e: React.FormEvent) => {
+  const handleReportFromInventory = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (
@@ -117,22 +154,55 @@ export default function DefectiveProductsManagement() {
       return;
     }
 
+    if (reportOrigin === "branch" && !selectedBranchId) {
+      alert("Selecciona la sede desde donde reportas");
+      return;
+    }
+
+    const availableQuantity =
+      reportOrigin === "branch"
+        ? selectedBranchStockItem?.quantity || 0
+        : selectedWarehouseProduct?.warehouseStock || 0;
+
+    if (!availableQuantity) {
+      alert("No hay stock disponible para reportar");
+      return;
+    }
+
+    if (reportForm.quantity > availableQuantity) {
+      alert(`La cantidad supera el stock disponible (${availableQuantity})`);
+      return;
+    }
+
     try {
       setSubmitting(true);
-      await defectiveProductService.reportAdmin({
-        productId: reportForm.productId,
-        quantity: reportForm.quantity,
-        reason: reportForm.reason,
-      });
 
-      // Recargar datos
-      await Promise.all([loadReports(), loadProducts()]);
+      if (reportOrigin === "branch") {
+        await defectiveProductService.reportFromBranch({
+          branchId: selectedBranchId,
+          productId: reportForm.productId,
+          quantity: reportForm.quantity,
+          reason: reportForm.reason,
+        });
 
-      // Limpiar y cerrar
+        await Promise.all([loadReports(), loadBranchStock(selectedBranchId)]);
+      } else {
+        await defectiveProductService.reportAdmin({
+          productId: reportForm.productId,
+          quantity: reportForm.quantity,
+          reason: reportForm.reason,
+        });
+
+        await Promise.all([loadReports(), loadProducts()]);
+      }
+
       setReportForm({ productId: "", quantity: 1, reason: "" });
       setShowReportModal(false);
-
-      alert("Producto defectuoso reportado desde bodega");
+      alert(
+        reportOrigin === "branch"
+          ? "Producto defectuoso reportado desde sede"
+          : "Producto defectuoso reportado desde bodega"
+      );
     } catch (error: any) {
       console.error("Error al reportar:", error);
       alert(error.response?.data?.message || "Error al reportar el producto");
@@ -145,6 +215,23 @@ export default function DefectiveProductsManagement() {
     if (filter === "all") return true;
     return report.status === filter;
   });
+
+  const selectedBranchStockItem = Array.isArray(branchStock)
+    ? branchStock.find(s => {
+        const product =
+          typeof s.product === "object" ? s.product._id : s.product;
+        return product === reportForm.productId;
+      })
+    : undefined;
+
+  const selectedWarehouseProduct = products.find(
+    p => p._id === reportForm.productId
+  );
+
+  const maxQuantity =
+    reportOrigin === "branch"
+      ? selectedBranchStockItem?.quantity || 0
+      : selectedWarehouseProduct?.warehouseStock || 0;
 
   if (loading) {
     return (
@@ -159,10 +246,16 @@ export default function DefectiveProductsManagement() {
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-white">Productos Defectuosos</h1>
         <button
-          onClick={() => setShowReportModal(true)}
+          onClick={() => {
+            setReportOrigin("warehouse");
+            setSelectedBranchId("");
+            setBranchStock([]);
+            setReportForm({ productId: "", quantity: 1, reason: "" });
+            setShowReportModal(true);
+          }}
           className="bg-linear-to-r rounded-lg from-red-600 to-orange-600 px-6 py-3 font-semibold text-white shadow-lg transition hover:from-red-700 hover:to-orange-700"
         >
-          + Reportar desde Bodega
+          + Reportar defecto
         </button>
       </div>
 
@@ -257,6 +350,9 @@ export default function DefectiveProductsManagement() {
                   Distribuidor
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase text-gray-300">
+                  Origen
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase text-gray-300">
                   Producto
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase text-gray-300">
@@ -281,6 +377,8 @@ export default function DefectiveProductsManagement() {
                   typeof report.distributor === "object"
                     ? report.distributor
                     : null;
+                const branch =
+                  typeof report.branch === "object" ? report.branch : null;
 
                 return (
                   <tr key={report._id} className="hover:bg-white/5">
@@ -307,6 +405,21 @@ export default function DefectiveProductsManagement() {
                             🏢 Bodega (Admin)
                           </span>
                         </div>
+                      )}
+                    </td>
+                    <td className="whitespace-nowrap px-6 py-4">
+                      {branch ? (
+                        <span className="inline-flex items-center rounded-full bg-blue-500/15 px-2.5 py-0.5 text-xs font-medium text-blue-200">
+                          📦 Sede: {branch.name}
+                        </span>
+                      ) : report.distributor ? (
+                        <span className="inline-flex items-center rounded-full bg-green-500/15 px-2.5 py-0.5 text-xs font-medium text-green-200">
+                          🚚 Distribuidor
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center rounded-full bg-purple-500/15 px-2.5 py-0.5 text-xs font-medium text-purple-200">
+                          🏭 Bodega
+                        </span>
                       )}
                     </td>
                     <td className="whitespace-nowrap px-6 py-4">
@@ -467,10 +580,69 @@ export default function DefectiveProductsManagement() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="w-full max-w-md rounded-lg border border-gray-800 bg-gray-900 p-6">
             <h2 className="mb-4 text-2xl font-bold text-white">
-              Reportar Producto Defectuoso (Bodega)
+              Reportar Producto Defectuoso
             </h2>
 
-            <form onSubmit={handleReportFromWarehouse} className="space-y-4">
+            <form onSubmit={handleReportFromInventory} className="space-y-4">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReportOrigin("warehouse");
+                    setSelectedBranchId("");
+                    setBranchStock([]);
+                    setReportForm({ productId: "", quantity: 1, reason: "" });
+                  }}
+                  className={`flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                    reportOrigin === "warehouse"
+                      ? "bg-red-600 text-white"
+                      : "border border-gray-700 text-gray-200 hover:bg-white/5"
+                  }`}
+                >
+                  Reportar desde bodega
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReportOrigin("branch");
+                    setReportForm({ productId: "", quantity: 1, reason: "" });
+                  }}
+                  className={`flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                    reportOrigin === "branch"
+                      ? "bg-blue-600 text-white"
+                      : "border border-gray-700 text-gray-200 hover:bg-white/5"
+                  }`}
+                >
+                  Reportar desde sede
+                </button>
+              </div>
+
+              {reportOrigin === "branch" && (
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-300">
+                    Sede *
+                  </label>
+                  <select
+                    value={selectedBranchId}
+                    onChange={async e => {
+                      const value = e.target.value;
+                      setSelectedBranchId(value);
+                      setReportForm({ productId: "", quantity: 1, reason: "" });
+                      await loadBranchStock(value);
+                    }}
+                    className="w-full rounded-lg border border-gray-600 bg-gray-900/50 px-4 py-3 text-white focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  >
+                    <option value="">Selecciona la sede</option>
+                    {branches.map(branch => (
+                      <option key={branch._id} value={branch._id}>
+                        {branch.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div>
                 <label className="mb-2 block text-sm font-medium text-gray-300">
                   Producto *
@@ -484,17 +656,32 @@ export default function DefectiveProductsManagement() {
                       quantity: 1,
                     })
                   }
-                  className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-white focus:border-transparent focus:ring-2 focus:ring-red-500"
+                  className="w-full rounded-lg border border-gray-600 bg-gray-900/50 px-4 py-3 text-white focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={reportOrigin === "branch" && !selectedBranchId}
                   required
                 >
                   <option value="">Selecciona un producto</option>
-                  {products.map(product => (
-                    <option key={product._id} value={product._id}>
-                      {product.name} | Stock: {product.warehouseStock} | Compra:
-                      ${product.purchasePrice} | Cliente: $
-                      {product.clientPrice || 0}
-                    </option>
-                  ))}
+                  {reportOrigin === "branch"
+                    ? branchStock
+                        .filter(s => s.quantity > 0)
+                        .map(s => {
+                          const product =
+                            typeof s.product === "object" ? s.product : null;
+                          return (
+                            <option key={s._id} value={product?._id}>
+                              {product?.name} | Stock sede: {s.quantity} |
+                              Cliente: ${product?.clientPrice || 0}
+                            </option>
+                          );
+                        })
+                    : products.map(product => (
+                        <option key={product._id} value={product._id}>
+                          {product.name} | Stock bodega:{" "}
+                          {product.warehouseStock} | Compra: $
+                          {product.purchasePrice} | Cliente: $
+                          {product.clientPrice || 0}
+                        </option>
+                      ))}
                 </select>
               </div>
 
@@ -505,12 +692,7 @@ export default function DefectiveProductsManagement() {
                 <input
                   type="number"
                   min="1"
-                  max={
-                    reportForm.productId
-                      ? products.find(p => p._id === reportForm.productId)
-                          ?.warehouseStock || 1
-                      : 1
-                  }
+                  max={Math.max(maxQuantity || 0, 1)}
                   value={reportForm.quantity}
                   onChange={e =>
                     setReportForm({
@@ -541,8 +723,8 @@ export default function DefectiveProductsManagement() {
 
               <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/10 p-3">
                 <p className="text-sm text-yellow-200">
-                  ℹ️ Los reportes desde bodega se auto-confirman automáticamente
-                  y descuentan del stock de bodega.
+                  ℹ️ Los reportes desde bodega o sede se auto-confirman
+                  automáticamente y descuentan del stock correspondiente.
                 </p>
               </div>
 
@@ -551,6 +733,9 @@ export default function DefectiveProductsManagement() {
                   type="button"
                   onClick={() => {
                     setShowReportModal(false);
+                    setReportOrigin("warehouse");
+                    setSelectedBranchId("");
+                    setBranchStock([]);
                     setReportForm({ productId: "", quantity: 1, reason: "" });
                   }}
                   className="flex-1 rounded-lg border border-gray-700 px-4 py-2 text-gray-200 transition hover:bg-white/5"
