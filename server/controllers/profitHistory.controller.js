@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import ProfitHistory from "../models/ProfitHistory.js";
 import Sale from "../models/Sale.js";
+import SpecialSale from "../models/SpecialSale.js";
 import User from "../models/User.js";
 import {
   recalculateUserBalance,
@@ -638,10 +639,189 @@ export const getComparativeAnalysis = async (req, res) => {
   }
 };
 
+// @desc    Overview de ganancias para admins sin depender del historial previo
+// @route   GET /api/profit-history/admin/overview
+// @access  Private/Admin
+export const getAdminProfitHistoryOverview = async (req, res) => {
+  try {
+    const businessId = resolveBusinessId(req);
+    const isGodOrSuper =
+      req.user?.role === "god" || req.user?.role === "super_admin";
+
+    if (!businessId && !isGodOrSuper) {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
+    const { startDate, endDate, distributorId, limit = 150 } = req.query;
+
+    const saleFilter = businessId
+      ? { business: new mongoose.Types.ObjectId(businessId) }
+      : {};
+
+    const saleDateRange = buildColombiaDateRange(startDate, endDate);
+    if (saleDateRange) {
+      saleFilter.saleDate = saleDateRange;
+    }
+
+    if (distributorId) {
+      if (distributorId === "admin") {
+        saleFilter.$or = [
+          { distributor: { $exists: false } },
+          { distributor: null },
+        ];
+      } else if (mongoose.isValidObjectId(distributorId)) {
+        saleFilter.distributor = new mongoose.Types.ObjectId(distributorId);
+      }
+    }
+
+    const safeLimit = Math.min(Math.max(parseInt(limit) || 0, 20), 400);
+
+    const sales = await Sale.find(saleFilter)
+      .select(
+        "saleId saleDate distributor product quantity adminProfit distributorProfit totalProfit paymentStatus"
+      )
+      .populate("product", "name")
+      .populate("distributor", "name email role")
+      .sort({ saleDate: -1 })
+      .limit(safeLimit)
+      .lean();
+
+    const specialSaleFilter = {
+      status: "active",
+      ...(saleDateRange ? { saleDate: saleDateRange } : {}),
+      ...(businessId
+        ? { business: new mongoose.Types.ObjectId(businessId) }
+        : {}),
+    };
+
+    const specialSales = await SpecialSale.find(specialSaleFilter)
+      .select(
+        "product quantity totalProfit distribution saleDate eventName saleId"
+      )
+      .sort({ saleDate: -1 })
+      .limit(safeLimit)
+      .lean();
+
+    const entries = sales.map((sale) => {
+      const distributor = sale.distributor;
+      const distributorIdValue = distributor?._id?.toString() || null;
+
+      const adminProfit = sale.adminProfit || 0;
+      const distributorProfit = sale.distributorProfit || 0;
+      const totalProfit =
+        sale.totalProfit ?? adminProfit + (distributorProfit ?? 0);
+
+      return {
+        id: sale._id.toString(),
+        saleId: sale.saleId,
+        date: sale.saleDate,
+        source: "normal",
+        distributorId: distributorIdValue,
+        distributorName:
+          distributor?.name || distributor?.email || "Venta administrada",
+        distributorEmail: distributor?.email || null,
+        type: distributorIdValue ? "venta_distribuidor" : "venta_admin",
+        adminProfit,
+        distributorProfit,
+        totalProfit,
+        quantity: sale.quantity,
+        productName: sale.product?.name || "",
+        paymentStatus: sale.paymentStatus,
+      };
+    });
+
+    // Agregar entradas de ventas especiales desglosadas por distribución
+    specialSales.forEach((sale) => {
+      const saleId = sale.saleId || sale._id.toString();
+      const productName = sale.product?.name || "";
+
+      sale.distribution.forEach((dist, idx) => {
+        const isAdmin = dist.name?.toLowerCase() === "admin";
+        if (distributorId === "admin" && !isAdmin) return;
+        entries.push({
+          id: `${sale._id.toString()}-${idx}`,
+          saleId,
+          date: sale.saleDate,
+          source: "special",
+          distributorId: isAdmin ? null : null,
+          distributorName: dist.name || "Sin nombre",
+          distributorEmail: null,
+          type: isAdmin ? "venta_admin" : "venta_distribuidor",
+          adminProfit: isAdmin ? dist.amount || 0 : 0,
+          distributorProfit: !isAdmin ? dist.amount || 0 : 0,
+          totalProfit: dist.amount || 0,
+          quantity: sale.quantity,
+          productName,
+          eventName: sale.eventName,
+          paymentStatus: undefined,
+        });
+      });
+    });
+
+    const summary = entries.reduce(
+      (acc, entry) => {
+        acc.totalProfit += entry.totalProfit;
+        acc.adminProfit += entry.adminProfit;
+        acc.distributorProfit += entry.distributorProfit;
+        acc.count += 1;
+        return acc;
+      },
+      {
+        totalProfit: 0,
+        adminProfit: 0,
+        distributorProfit: 0,
+        count: 0,
+      }
+    );
+
+    summary.averageTicket = summary.count
+      ? summary.totalProfit / summary.count
+      : 0;
+
+    const distributorMap = new Map();
+
+    entries.forEach((entry) => {
+      const key = entry.distributorId || entry.distributorName || "admin";
+      const current = distributorMap.get(key) || {
+        id: entry.distributorId || entry.distributorName || "admin",
+        name: entry.distributorName || "Ventas administradas",
+        email: entry.distributorEmail,
+        totalProfit: 0,
+        adminProfit: 0,
+        distributorProfit: 0,
+        sales: 0,
+      };
+
+      current.totalProfit += entry.distributorId
+        ? entry.distributorProfit
+        : entry.adminProfit;
+      current.adminProfit += entry.adminProfit;
+      current.distributorProfit += entry.distributorProfit;
+      current.sales += 1;
+
+      distributorMap.set(key, current);
+    });
+
+    const distributors = Array.from(distributorMap.values()).sort(
+      (a, b) => b.totalProfit - a.totalProfit
+    );
+
+    res.json({
+      summary,
+      distributors,
+      entries,
+    });
+  } catch (error) {
+    console.error("Error en getAdminProfitHistoryOverview:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
 export default {
   getUserProfitHistory,
   getUserBalance,
   getProfitSummary,
   createProfitEntry,
   getComparativeAnalysis,
+  getAdminProfitHistoryOverview,
 };

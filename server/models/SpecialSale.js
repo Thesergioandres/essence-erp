@@ -107,28 +107,28 @@ const specialSaleSchema = new mongoose.Schema(
   }
 );
 
-// Validación personalizada: suma de distribuciones debe igualar ganancia total
+// Validación personalizada: bloquear solo sobre-asignación (el resto se envía a Admin)
 specialSaleSchema.pre("save", function (next) {
   // Calcular ganancia total
   this.totalProfit =
     this.specialPrice * this.quantity - this.cost * this.quantity;
 
-  // Verificar que la suma de distribuciones coincida con la ganancia total
   const distributionSum = this.distribution.reduce(
     (sum, dist) => sum + dist.amount,
     0
   );
 
   const tolerance = 0.01; // Tolerancia de 1 centavo para errores de redondeo
-  if (Math.abs(distributionSum - this.totalProfit) > tolerance) {
+  if (distributionSum - this.totalProfit > tolerance) {
     next(
       new Error(
         `La suma de distribuciones ($${distributionSum.toFixed(
           2
-        )}) no coincide con la ganancia total ($${this.totalProfit.toFixed(2)})`
+        )}) excede la ganancia total ($${this.totalProfit.toFixed(2)})`
       )
     );
   } else {
+    // Permitimos sumas menores; el controlador asigna el restante al Admin
     next();
   }
 });

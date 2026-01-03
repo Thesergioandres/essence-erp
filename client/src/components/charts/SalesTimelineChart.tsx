@@ -18,12 +18,14 @@ interface SalesTimelineChartProps {
   period: "day" | "week" | "month";
   startDate?: string;
   endDate?: string;
+  reloadKey?: number;
 }
 
 export const SalesTimelineChart: React.FC<SalesTimelineChartProps> = ({
   period,
   startDate,
   endDate,
+  reloadKey = 0,
 }) => {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,7 +68,7 @@ export const SalesTimelineChart: React.FC<SalesTimelineChartProps> = ({
     };
 
     fetchData();
-  }, [period, startDate, endDate]);
+  }, [period, startDate, endDate, reloadKey]);
 
   if (loading) {
     return (

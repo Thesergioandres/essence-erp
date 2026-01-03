@@ -17,6 +17,7 @@ interface TopProductsChartProps {
   limit?: number;
   startDate?: string;
   endDate?: string;
+  reloadKey?: number;
 }
 
 const COLORS = [
@@ -36,6 +37,7 @@ export const TopProductsChart: React.FC<TopProductsChartProps> = ({
   limit = 10,
   startDate,
   endDate,
+  reloadKey = 0,
 }) => {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,7 +68,7 @@ export const TopProductsChart: React.FC<TopProductsChartProps> = ({
     };
 
     fetchData();
-  }, [limit, startDate, endDate]);
+  }, [limit, startDate, endDate, reloadKey]);
 
   if (loading) {
     return (

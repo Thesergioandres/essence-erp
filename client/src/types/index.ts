@@ -489,6 +489,46 @@ export interface ProfitHistoryResponse {
   };
 }
 
+export interface ProfitHistoryAdminEntry {
+  id: string;
+  saleId: string;
+  date: string;
+  source: "normal" | "special";
+  distributorId: string | null;
+  distributorName: string;
+  distributorEmail: string | null;
+  type: "venta_distribuidor" | "venta_admin";
+  adminProfit: number;
+  distributorProfit: number;
+  totalProfit: number;
+  quantity: number;
+  productName: string;
+  eventName?: string;
+  paymentStatus?: string;
+}
+
+export interface ProfitHistoryAdminDistributor {
+  id: string;
+  name: string;
+  email?: string | null;
+  totalProfit: number;
+  adminProfit: number;
+  distributorProfit: number;
+  sales: number;
+}
+
+export interface ProfitHistoryAdminOverview {
+  summary: {
+    totalProfit: number;
+    adminProfit: number;
+    distributorProfit: number;
+    count: number;
+    averageTicket: number;
+  };
+  distributors: ProfitHistoryAdminDistributor[];
+  entries: ProfitHistoryAdminEntry[];
+}
+
 export interface UserBalance {
   totalBalance: number;
   breakdown: {

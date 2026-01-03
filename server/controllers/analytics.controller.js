@@ -3,6 +3,12 @@ import DefectiveProduct from "../models/DefectiveProduct.js";
 import Sale from "../models/Sale.js";
 import SpecialSale from "../models/SpecialSale.js";
 
+// Normaliza el filtro de negocio a ObjectId para evitar fallos de coincidencia
+const buildBusinessFilter = (req) =>
+  req.businessId
+    ? { business: new mongoose.Types.ObjectId(req.businessId) }
+    : {};
+
 // Construye un rango de fechas usando la zona horaria de Colombia (UTC-5)
 const buildColombiaRange = (startStr, endStr) => {
   if (!startStr && !endStr) return null;
@@ -46,7 +52,7 @@ const buildColombiaRange = (startStr, endStr) => {
 // @access  Private/Admin
 export const getMonthlyProfit = async (req, res) => {
   try {
-    const businessFilter = req.businessId ? { business: req.businessId } : {};
+    const businessFilter = buildBusinessFilter(req);
 
     // Límites de mes en UTC para evitar desfaces por timezone
     const now = new Date();
@@ -59,13 +65,9 @@ export const getMonthlyProfit = async (req, res) => {
     const startOfLastMonth = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0));
     const endOfLastMonth = new Date(Date.UTC(year, month, 1, 0, 0, 0, 0) - 1);
 
-    const businessMatch = businessFilter.business
-      ? { business: new mongoose.Types.ObjectId(businessFilter.business) }
-      : {};
-
     const baseSaleMatch = {
       paymentStatus: "confirmado",
-      ...businessMatch,
+      ...businessFilter,
     };
 
     const sumPipeline = (start, end) => [
@@ -185,7 +187,7 @@ export const getMonthlyProfit = async (req, res) => {
 // @access  Private/Admin
 export const getProfitByProduct = async (req, res) => {
   try {
-    const businessFilter = req.businessId ? { business: req.businessId } : {};
+    const businessFilter = buildBusinessFilter(req);
     const { startDate, endDate } = req.query;
 
     const filter = { paymentStatus: "confirmado", ...businessFilter };
@@ -222,59 +224,105 @@ export const getProfitByProduct = async (req, res) => {
       }
     }
 
-    const profitByProduct = await Sale.aggregate([
+    const salesAgg = await Sale.aggregate([
       { $match: filter },
       {
         $group: {
           _id: "$product",
           totalQuantity: { $sum: "$quantity" },
           totalSales: { $sum: 1 },
-          totalRevenue: { $sum: { $multiply: ["$salePrice", "$quantity"] } },
+          totalRevenue: {
+            $sum: { $multiply: ["$salePrice", "$quantity"] },
+          },
           totalCost: { $sum: { $multiply: ["$purchasePrice", "$quantity"] } },
           totalAdminProfit: { $sum: "$adminProfit" },
           totalDistributorProfit: { $sum: "$distributorProfit" },
           totalProfit: { $sum: "$totalProfit" },
         },
       },
-      {
-        $lookup: {
-          from: "products",
-          localField: "_id",
-          foreignField: "_id",
-          as: "product",
-        },
-      },
-      { $unwind: "$product" },
-      {
-        $project: {
-          productId: "$_id",
-          productName: "$product.name",
-          productImage: "$product.image",
-          totalQuantity: 1,
-          totalSales: 1,
-          totalRevenue: 1,
-          totalCost: 1,
-          totalAdminProfit: 1,
-          totalDistributorProfit: 1,
-          totalProfit: 1,
-          profitMargin: {
-            $cond: [
-              { $gt: ["$totalRevenue", 0] },
-              {
-                $multiply: [
-                  { $divide: ["$totalProfit", "$totalRevenue"] },
-                  100,
-                ],
-              },
-              0,
-            ],
-          },
-        },
-      },
-      { $sort: { totalProfit: -1 } },
     ]);
 
-    res.json(profitByProduct);
+    const specialMatch = {
+      status: "active",
+      ...businessFilter,
+      ...(filter.saleDate ? { saleDate: filter.saleDate } : {}),
+      "product.productId": { $exists: true, $ne: null },
+    };
+
+    const specialAgg = await SpecialSale.aggregate([
+      { $match: specialMatch },
+      {
+        $group: {
+          _id: "$product.productId",
+          totalQuantity: { $sum: "$quantity" },
+          totalSales: { $sum: 1 },
+          totalRevenue: {
+            $sum: { $multiply: ["$specialPrice", "$quantity"] },
+          },
+          totalCost: { $sum: { $multiply: ["$cost", "$quantity"] } },
+          totalAdminProfit: { $sum: "$totalProfit" },
+          totalDistributorProfit: { $sum: 0 },
+          totalProfit: { $sum: "$totalProfit" },
+        },
+      },
+    ]);
+
+    const merged = new Map();
+
+    for (const item of [...salesAgg, ...specialAgg]) {
+      const key = item._id?.toString();
+      if (!key) continue;
+      const existing = merged.get(key) || {
+        _id: item._id,
+        totalQuantity: 0,
+        totalSales: 0,
+        totalRevenue: 0,
+        totalCost: 0,
+        totalAdminProfit: 0,
+        totalDistributorProfit: 0,
+        totalProfit: 0,
+      };
+
+      existing.totalQuantity += item.totalQuantity || 0;
+      existing.totalSales += item.totalSales || 0;
+      existing.totalRevenue += item.totalRevenue || 0;
+      existing.totalCost += item.totalCost || 0;
+      existing.totalAdminProfit += item.totalAdminProfit || 0;
+      existing.totalDistributorProfit += item.totalDistributorProfit || 0;
+      existing.totalProfit += item.totalProfit || 0;
+
+      merged.set(key, existing);
+    }
+
+    const profitByProduct = await Promise.all(
+      [...merged.values()].map(async (item) => {
+        const product = await mongoose
+          .model("Product")
+          .findById(item._id)
+          .select("name image")
+          .lean();
+
+        const totalRevenue = item.totalRevenue || 0;
+        const totalProfit = item.totalProfit || 0;
+
+        return {
+          productId: item._id,
+          productName: product?.name || "Producto eliminado",
+          productImage: product?.image,
+          totalQuantity: item.totalQuantity,
+          totalSales: item.totalSales,
+          totalRevenue,
+          totalCost: item.totalCost || 0,
+          totalAdminProfit: item.totalAdminProfit,
+          totalDistributorProfit: item.totalDistributorProfit,
+          totalProfit,
+          profitMargin:
+            totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0,
+        };
+      })
+    );
+
+    res.json(profitByProduct.sort((a, b) => b.totalProfit - a.totalProfit));
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -285,85 +333,121 @@ export const getProfitByProduct = async (req, res) => {
 // @access  Private/Admin
 export const getProfitByDistributor = async (req, res) => {
   try {
-    const businessFilter = req.businessId ? { business: req.businessId } : {};
-    const { startDate, endDate } = req.query;
+    const businessFilter = buildBusinessFilter(req);
+    const { startDate: startDateStr, endDate: endDateStr } = req.query;
+    const dateRange = buildColombiaRange(startDateStr, endDateStr);
 
-    const filter = { paymentStatus: "confirmado", ...businessFilter };
-    if (startDate || endDate) {
-      filter.saleDate = {};
-      if (startDate) {
-        // Convertir fecha a inicio del día en Colombia (00:00 Colombia = 05:00 UTC)
-        const date = new Date(startDate);
-        filter.saleDate.$gte = new Date(
-          Date.UTC(
-            date.getUTCFullYear(),
-            date.getUTCMonth(),
-            date.getUTCDate(),
-            5,
-            0,
-            0
-          )
-        );
-      }
-      if (endDate) {
-        // Convertir fecha a fin del día en Colombia (23:59:59 Colombia = 04:59:59 UTC del día siguiente)
-        const date = new Date(endDate);
-        filter.saleDate.$lte = new Date(
-          Date.UTC(
-            date.getUTCFullYear(),
-            date.getUTCMonth(),
-            date.getUTCDate() + 1,
-            4,
-            59,
-            59,
-            999
-          )
-        );
-      }
-    }
+    const filter = {
+      paymentStatus: "confirmado",
+      ...businessFilter,
+    };
 
-    const profitByDistributor = await Sale.aggregate([
+    if (dateRange) filter.saleDate = dateRange;
+
+    const salesAgg = await Sale.aggregate([
       { $match: filter },
       {
         $group: {
           _id: "$distributor",
           totalQuantity: { $sum: "$quantity" },
           totalSales: { $sum: 1 },
-          totalRevenue: { $sum: { $multiply: ["$salePrice", "$quantity"] } },
+          totalRevenue: {
+            $sum: { $multiply: ["$salePrice", "$quantity"] },
+          },
           totalCost: { $sum: { $multiply: ["$purchasePrice", "$quantity"] } },
           totalAdminProfit: { $sum: "$adminProfit" },
           totalDistributorProfit: { $sum: "$distributorProfit" },
           totalProfit: { $sum: "$totalProfit" },
         },
       },
-      {
-        $lookup: {
-          from: "users",
-          localField: "_id",
-          foreignField: "_id",
-          as: "distributor",
-        },
-      },
-      { $unwind: "$distributor" },
-      {
-        $project: {
-          distributorId: "$_id",
-          distributorName: "$distributor.name",
-          distributorEmail: "$distributor.email",
-          totalQuantity: 1,
-          totalSales: 1,
-          totalRevenue: 1,
-          totalCost: 1,
-          totalAdminProfit: 1,
-          totalDistributorProfit: 1,
-          totalProfit: 1,
-          averageSale: { $divide: ["$totalRevenue", "$totalSales"] },
-        },
-      },
-      { $sort: { totalAdminProfit: -1 } },
     ]);
 
-    res.json(profitByDistributor);
+    const specialMatch = {
+      status: "active",
+      ...businessFilter,
+      ...(dateRange ? { saleDate: dateRange } : {}),
+    };
+
+    const specialAgg = await SpecialSale.aggregate([
+      { $match: specialMatch },
+      {
+        $group: {
+          _id: null,
+          totalQuantity: { $sum: "$quantity" },
+          totalSales: { $sum: 1 },
+          totalRevenue: {
+            $sum: { $multiply: ["$specialPrice", "$quantity"] },
+          },
+          totalCost: { $sum: { $multiply: ["$cost", "$quantity"] } },
+          totalAdminProfit: { $sum: "$totalProfit" },
+          totalDistributorProfit: { $sum: 0 },
+          totalProfit: { $sum: "$totalProfit" },
+        },
+      },
+    ]);
+
+    const merged = new Map();
+
+    for (const item of salesAgg) {
+      merged.set(item._id ? item._id.toString() : "admin", item);
+    }
+
+    if (specialAgg[0]) {
+      const key = "admin"; // ventas especiales se cuentan como admin
+      const existing = merged.get(key) || {
+        _id: null,
+        totalQuantity: 0,
+        totalSales: 0,
+        totalRevenue: 0,
+        totalCost: 0,
+        totalAdminProfit: 0,
+        totalDistributorProfit: 0,
+        totalProfit: 0,
+      };
+
+      existing.totalQuantity += specialAgg[0].totalQuantity || 0;
+      existing.totalSales += specialAgg[0].totalSales || 0;
+      existing.totalRevenue += specialAgg[0].totalRevenue || 0;
+      existing.totalCost += specialAgg[0].totalCost || 0;
+      existing.totalAdminProfit += specialAgg[0].totalAdminProfit || 0;
+      existing.totalDistributorProfit +=
+        specialAgg[0].totalDistributorProfit || 0;
+      existing.totalProfit += specialAgg[0].totalProfit || 0;
+
+      merged.set(key, existing);
+    }
+
+    const profitByDistributor = await Promise.all(
+      [...merged.values()].map(async (item) => {
+        const distributorDoc = item._id
+          ? await mongoose
+              .model("User")
+              .findById(item._id)
+              .select("name email")
+              .lean()
+          : null;
+
+        const totalRevenue = item.totalRevenue || 0;
+        const totalSales = item.totalSales || 0;
+
+        return {
+          distributorName: distributorDoc?.name || "Ventas administradas",
+          distributorEmail: distributorDoc?.email || null,
+          totalQuantity: item.totalQuantity,
+          totalSales,
+          totalRevenue,
+          totalCost: item.totalCost || 0,
+          totalAdminProfit: item.totalAdminProfit,
+          totalDistributorProfit: item.totalDistributorProfit,
+          totalProfit: item.totalProfit,
+          averageSale: totalSales > 0 ? totalRevenue / totalSales : 0,
+        };
+      })
+    );
+
+    res.json(
+      profitByDistributor.sort((a, b) => b.totalRevenue - a.totalRevenue)
+    );
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -374,7 +458,7 @@ export const getProfitByDistributor = async (req, res) => {
 // @access  Private/Admin
 export const getAverages = async (req, res) => {
   try {
-    const businessFilter = req.businessId ? { business: req.businessId } : {};
+    const businessFilter = buildBusinessFilter(req);
     const {
       period = "month",
       startDate: startDateStr,
@@ -538,7 +622,7 @@ export const getAverages = async (req, res) => {
 // @access  Private/Admin
 export const getSalesTimeline = async (req, res) => {
   try {
-    const businessFilter = req.businessId ? { business: req.businessId } : {};
+    const businessFilter = buildBusinessFilter(req);
     const {
       days = 30,
       startDate: startDateStr,
@@ -555,17 +639,33 @@ export const getSalesTimeline = async (req, res) => {
       dateFilter = { $gte: startDate };
     }
 
+    const opDateFilter = {
+      $or: [
+        { saleDate: dateFilter },
+        { paymentConfirmedAt: dateFilter },
+        { createdAt: dateFilter },
+      ],
+    };
+
     const sales = await Sale.find({
-      saleDate: dateFilter,
       paymentStatus: "confirmado",
       ...businessFilter,
-    }).sort({ saleDate: 1 });
+      ...opDateFilter,
+    })
+      .select(
+        "saleDate salePrice quantity totalProfit purchasePrice paymentStatus"
+      )
+      .sort({ saleDate: 1 })
+      .lean();
 
     const specialSales = await SpecialSale.find({
-      saleDate: dateFilter,
-      status: "active",
       ...businessFilter,
-    }).sort({ saleDate: 1 });
+      status: "active",
+      $or: [{ saleDate: dateFilter }, { createdAt: dateFilter }],
+    })
+      .select("saleDate specialPrice quantity totalProfit cost status")
+      .sort({ saleDate: 1 })
+      .lean();
 
     // Agrupar por día
     const salesByDay = {};
@@ -575,8 +675,9 @@ export const getSalesTimeline = async (req, res) => {
       return colombia.toISOString().split("T")[0];
     };
     sales.forEach((sale) => {
-      if (!sale.saleDate) return; // omit invalid records
-      const day = toColombiaDayKey(sale.saleDate);
+      const opDate = sale.saleDate || sale.paymentConfirmedAt || sale.createdAt;
+      if (!opDate) return; // omit invalid records
+      const day = toColombiaDayKey(new Date(opDate));
       if (!salesByDay[day]) {
         salesByDay[day] = {
           date: day,
@@ -596,8 +697,9 @@ export const getSalesTimeline = async (req, res) => {
 
     // Agregar ventas especiales
     specialSales.forEach((sale) => {
-      if (!sale.saleDate) return; // omit invalid records
-      const day = toColombiaDayKey(sale.saleDate);
+      const opDate = sale.saleDate || sale.createdAt;
+      if (!opDate) return; // omit invalid records
+      const day = toColombiaDayKey(new Date(opDate));
       if (!salesByDay[day]) {
         salesByDay[day] = {
           date: day,
@@ -627,7 +729,7 @@ export const getSalesTimeline = async (req, res) => {
 // @access  Private/Admin
 export const getFinancialSummary = async (req, res) => {
   try {
-    const businessFilter = req.businessId ? { business: req.businessId } : {};
+    const businessFilter = buildBusinessFilter(req);
     const { startDate, endDate } = req.query;
 
     const filter = { paymentStatus: "confirmado", ...businessFilter };
@@ -664,7 +766,11 @@ export const getFinancialSummary = async (req, res) => {
       }
     }
 
-    const sales = await Sale.find(filter);
+    const sales = await Sale.find(filter)
+      .select(
+        "salePrice purchasePrice quantity totalProfit adminProfit distributorProfit"
+      )
+      .lean();
 
     const specialFilter = { status: "active", ...businessFilter };
     if (startDate || endDate) {
@@ -698,7 +804,9 @@ export const getFinancialSummary = async (req, res) => {
       }
     }
 
-    const specialSales = await SpecialSale.find(specialFilter);
+    const specialSales = await SpecialSale.find(specialFilter)
+      .select("specialPrice cost quantity totalProfit")
+      .lean();
 
     const defectiveDateRange = buildColombiaRange(startDate, endDate);
 
@@ -767,7 +875,7 @@ export const getFinancialSummary = async (req, res) => {
 // @access  Private/Admin
 export const getAnalyticsDashboard = async (req, res) => {
   try {
-    const businessFilter = req.businessId ? { business: req.businessId } : {};
+    const businessFilter = buildBusinessFilter(req);
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
@@ -785,13 +893,42 @@ export const getAnalyticsDashboard = async (req, res) => {
       ...businessFilter,
     });
 
-    // Top productos
+    // Top productos (incluye especiales)
     const topProducts = await Sale.aggregate([
       {
         $match: {
           saleDate: { $gte: startOfMonth },
           paymentStatus: "confirmado",
           ...businessFilter,
+        },
+      },
+      {
+        $project: {
+          product: "$product",
+          quantity: "$quantity",
+          totalProfit: "$totalProfit",
+        },
+      },
+      {
+        $unionWith: {
+          coll: "specialsales",
+          pipeline: [
+            {
+              $match: {
+                status: "active",
+                saleDate: { $gte: startOfMonth },
+                ...businessFilter,
+              },
+            },
+            { $match: { "product.productId": { $exists: true, $ne: null } } },
+            {
+              $project: {
+                product: "$product.productId",
+                quantity: "$quantity",
+                totalProfit: "$totalProfit",
+              },
+            },
+          ],
         },
       },
       {
@@ -822,13 +959,39 @@ export const getAnalyticsDashboard = async (req, res) => {
       { $limit: 5 },
     ]);
 
-    // Top distribuidores
+    // Top distribuidores (incluye especiales como ventas administradas)
     const topDistributors = await Sale.aggregate([
       {
         $match: {
           saleDate: { $gte: startOfMonth },
           paymentStatus: "confirmado",
           ...businessFilter,
+        },
+      },
+      {
+        $project: {
+          distributor: "$distributor",
+          adminProfit: "$adminProfit",
+        },
+      },
+      {
+        $unionWith: {
+          coll: "specialsales",
+          pipeline: [
+            {
+              $match: {
+                status: "active",
+                saleDate: { $gte: startOfMonth },
+                ...businessFilter,
+              },
+            },
+            {
+              $project: {
+                distributor: null,
+                adminProfit: "$totalProfit",
+              },
+            },
+          ],
         },
       },
       {
@@ -846,10 +1009,15 @@ export const getAnalyticsDashboard = async (req, res) => {
           as: "distributor",
         },
       },
-      { $unwind: "$distributor" },
+      {
+        $unwind: {
+          path: "$distributor",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
       {
         $project: {
-          name: "$distributor.name",
+          name: { $ifNull: ["$distributor.name", "Ventas administradas"] },
           totalSales: 1,
           totalProfit: 1,
         },
@@ -890,7 +1058,7 @@ export const getAnalyticsDashboard = async (req, res) => {
 // @access  Private/Admin
 export const getCombinedSummary = async (req, res) => {
   try {
-    const businessFilter = req.businessId ? { business: req.businessId } : {};
+    const businessFilter = buildBusinessFilter(req);
     const { startDate, endDate } = req.query;
 
     // Filtros para ventas normales

@@ -39,6 +39,7 @@ export const protect = async (req, res, next) => {
       req.user = {
         userId: user._id.toString(),
         id: user._id.toString(),
+        _id: user._id, // mantener compatibilidad con controladores que esperan _id
         role: user.role,
         name: user.name,
         email: user.email,

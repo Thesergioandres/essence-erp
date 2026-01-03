@@ -3,6 +3,7 @@ import { invalidateCache } from "../middleware/cache.middleware.js";
 import DistributorStock from "../models/DistributorStock.js";
 import Product from "../models/Product.js";
 import Sale from "../models/Sale.js";
+import SpecialSale from "../models/SpecialSale.js";
 import AuditService from "../services/audit.service.js";
 import { recordSaleProfit } from "../services/profitHistory.service.js";
 import { getDistributorCommissionInfo } from "../utils/distributorPricing.js";
@@ -653,7 +654,10 @@ export const getAllSales = async (req, res) => {
       total = totalCount;
     }
     // Calcular estadísticas
-    const statsAgg = await Sale.aggregate([
+    const canIncludeSpecials =
+      (!paymentStatus || paymentStatus === "confirmado") && !distributorId;
+
+    const salesAgg = await Sale.aggregate([
       {
         $match: {
           ...filter,
@@ -679,7 +683,41 @@ export const getAllSales = async (req, res) => {
       },
     ]);
 
-    const stats = statsAgg[0] || {
+    const salesStats = salesAgg[0] || null;
+
+    let specialStats = null;
+    if (canIncludeSpecials) {
+      const match = {
+        status: "active",
+        business: new mongoose.Types.ObjectId(businessId),
+        ...(filter.saleDate ? { saleDate: filter.saleDate } : {}),
+        ...(productId
+          ? { "product.productId": new mongoose.Types.ObjectId(productId) }
+          : {}),
+      };
+
+      const [agg] = await SpecialSale.aggregate([
+        { $match: match },
+        {
+          $group: {
+            _id: null,
+            totalSales: { $sum: 1 },
+            totalQuantity: { $sum: "$quantity" },
+            totalDistributorProfit: { $sum: 0 },
+            totalAdminProfit: { $sum: "$totalProfit" },
+            totalRevenue: {
+              $sum: { $multiply: ["$specialPrice", "$quantity"] },
+            },
+            confirmedSales: { $sum: 1 },
+            pendingSales: { $sum: 0 },
+            totalProfit: { $sum: "$totalProfit" },
+          },
+        },
+      ]);
+      specialStats = agg || null;
+    }
+
+    const stats = {
       totalSales: 0,
       totalQuantity: 0,
       totalDistributorProfit: 0,
@@ -688,7 +726,19 @@ export const getAllSales = async (req, res) => {
       confirmedSales: 0,
       pendingSales: 0,
       totalProfit: 0,
+      ...(salesStats || {}),
     };
+
+    if (specialStats) {
+      stats.totalSales += specialStats.totalSales || 0;
+      stats.totalQuantity += specialStats.totalQuantity || 0;
+      stats.totalDistributorProfit += specialStats.totalDistributorProfit || 0;
+      stats.totalAdminProfit += specialStats.totalAdminProfit || 0;
+      stats.totalRevenue += specialStats.totalRevenue || 0;
+      stats.confirmedSales += specialStats.confirmedSales || 0;
+      stats.pendingSales += specialStats.pendingSales || 0;
+      stats.totalProfit += specialStats.totalProfit || 0;
+    }
 
     res.json({
       sales,
@@ -720,6 +770,38 @@ export const getSalesByProduct = async (req, res) => {
 
     const salesByProduct = await Sale.aggregate([
       { $match: { business: new mongoose.Types.ObjectId(businessId) } },
+      {
+        $project: {
+          product: "$product",
+          quantity: "$quantity",
+          salePrice: "$salePrice",
+          adminProfit: "$adminProfit",
+          distributorProfit: "$distributorProfit",
+        },
+      },
+      {
+        $unionWith: {
+          coll: "specialsales",
+          pipeline: [
+            {
+              $match: {
+                status: "active",
+                business: new mongoose.Types.ObjectId(businessId),
+                "product.productId": { $exists: true, $ne: null },
+              },
+            },
+            {
+              $project: {
+                product: "$product.productId",
+                quantity: "$quantity",
+                salePrice: "$specialPrice",
+                adminProfit: "$totalProfit",
+                distributorProfit: 0,
+              },
+            },
+          ],
+        },
+      },
       {
         $group: {
           _id: "$product",
@@ -772,6 +854,37 @@ export const getSalesByDistributor = async (req, res) => {
     const salesByDistributor = await Sale.aggregate([
       { $match: { business: new mongoose.Types.ObjectId(businessId) } },
       {
+        $project: {
+          distributor: "$distributor",
+          quantity: "$quantity",
+          salePrice: "$salePrice",
+          adminProfit: "$adminProfit",
+          distributorProfit: "$distributorProfit",
+        },
+      },
+      {
+        $unionWith: {
+          coll: "specialsales",
+          pipeline: [
+            {
+              $match: {
+                status: "active",
+                business: new mongoose.Types.ObjectId(businessId),
+              },
+            },
+            {
+              $project: {
+                distributor: null,
+                quantity: "$quantity",
+                salePrice: "$specialPrice",
+                adminProfit: "$totalProfit",
+                distributorProfit: 0,
+              },
+            },
+          ],
+        },
+      },
+      {
         $group: {
           _id: "$distributor",
           totalQuantity: { $sum: "$quantity" },
@@ -789,10 +902,12 @@ export const getSalesByDistributor = async (req, res) => {
           as: "distributor",
         },
       },
-      { $unwind: "$distributor" },
+      { $unwind: { path: "$distributor", preserveNullAndEmptyArrays: true } },
       {
         $project: {
-          distributorName: "$distributor.name",
+          distributorName: {
+            $ifNull: ["$distributor.name", "Ventas administradas"],
+          },
           distributorEmail: "$distributor.email",
           totalQuantity: 1,
           totalSales: 1,
@@ -828,6 +943,16 @@ export const confirmPayment = async (req, res) => {
     if (!sale) {
       return res.status(404).json({ message: "Venta no encontrada" });
     }
+
+    // Marcar la venta como confirmada si aún está pendiente
+    if (sale.paymentStatus !== "confirmado") {
+      sale.paymentStatus = "confirmado";
+      sale.paymentConfirmedAt = new Date();
+      sale.paymentConfirmedBy = req.user?.id || req.user?._id || null;
+      await sale.save();
+    }
+
+    const filter = {};
 
     // Calcular estadísticas
     const statsAgg = await Sale.aggregate([

@@ -107,6 +107,7 @@ const saleSchema = new mongoose.Schema(
 saleSchema.index({ saleDate: -1 });
 saleSchema.index({ business: 1, saleDate: -1 });
 saleSchema.index({ distributor: 1, saleDate: -1 });
+saleSchema.index({ business: 1, distributor: 1, saleDate: -1 });
 saleSchema.index({ paymentStatus: 1, saleDate: -1 });
 saleSchema.index({ business: 1, paymentStatus: 1, saleDate: -1 });
 // Unicidad por negocio

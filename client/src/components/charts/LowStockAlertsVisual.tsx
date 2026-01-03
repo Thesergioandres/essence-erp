@@ -3,7 +3,9 @@ import { AlertCircle, AlertTriangle, CheckCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { advancedAnalyticsService } from "../../api/services";
 
-export const LowStockAlertsVisual: React.FC = () => {
+export const LowStockAlertsVisual: React.FC<{ reloadKey?: number }> = ({
+  reloadKey = 0,
+}) => {
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -21,7 +23,7 @@ export const LowStockAlertsVisual: React.FC = () => {
     };
 
     fetchData();
-  }, []);
+  }, [reloadKey]);
 
   const getUrgencyColor = (urgency: string) => {
     switch (urgency) {

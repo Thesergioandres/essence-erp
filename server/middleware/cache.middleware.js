@@ -9,8 +9,8 @@ export const cacheMiddleware = (duration = 300, keyPrefix = "") => {
   return async (req, res, next) => {
     const redis = getRedisClient();
 
-    // Si Redis no está disponible, continuar sin caché
-    if (!redis) {
+    // Si Redis no está disponible o no está listo, continuar sin caché
+    if (!redis || redis.status !== "ready") {
       return next();
     }
 

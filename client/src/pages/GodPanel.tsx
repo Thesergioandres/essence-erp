@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { authService, userAccessService } from "../api/services";
 import type { User } from "../types";
 
@@ -66,6 +66,11 @@ export default function GodPanel() {
   }, [users]);
 
   useEffect(() => {
+    if (currentUser?.role !== "god") {
+      navigate("/login", { replace: true });
+      return;
+    }
+
     const load = async () => {
       try {
         const data = await userAccessService.list();
@@ -80,7 +85,12 @@ export default function GodPanel() {
     };
 
     load();
-  }, []);
+  }, [currentUser?.role, navigate]);
+
+  // Bloqueo defensivo en caso de que el navigate aún no haya redirigido
+  if (currentUser?.role !== "god") {
+    return <Navigate to="/login" replace />;
+  }
 
   const onDurationChange = (
     userId: string,

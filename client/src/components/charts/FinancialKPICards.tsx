@@ -5,11 +5,13 @@ import {
   Target,
   TrendingDown,
   TrendingUp,
+  Users,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { advancedAnalyticsService } from "../../api/services";
 
 interface KPI {
+  id: string;
   label: string;
   value: string | number;
   change?: number;
@@ -17,7 +19,11 @@ interface KPI {
   color: string;
 }
 
-export const FinancialKPICards: React.FC = () => {
+export const FinancialKPICards: React.FC<{
+  reloadKey?: number;
+  startDate?: string;
+  endDate?: string;
+}> = ({ reloadKey = 0, startDate, endDate }) => {
   const [kpis, setKpis] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -25,7 +31,10 @@ export const FinancialKPICards: React.FC = () => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const response = await advancedAnalyticsService.getFinancialKPIs();
+        const response = await advancedAnalyticsService.getFinancialKPIs({
+          startDate,
+          endDate,
+        });
         console.log("Financial KPIs Response:", response);
         setKpis(response);
       } catch (error) {
@@ -37,7 +46,7 @@ export const FinancialKPICards: React.FC = () => {
     };
 
     fetchData();
-  }, []);
+  }, [reloadKey, startDate, endDate]);
 
   if (loading) {
     return (
@@ -59,54 +68,107 @@ export const FinancialKPICards: React.FC = () => {
     return isNaN(num) ? 0 : num;
   };
 
+  const formatMoney = (val: any) => `$${safeNumber(val).toFixed(0)}`;
+
+  const summary = kpis?.kpis || kpis || {};
+  const daily = kpis?.daily || {};
+  const weekly = kpis?.weekly || {};
+  const monthly = kpis?.monthly || {};
+
+  const hasCustomRange = Boolean(startDate || endDate);
+  const rangeLabel = hasCustomRange ? "(rango)" : "";
+  const todayLabel = hasCustomRange ? "Ventas rango" : "Ventas Hoy";
+  const todayRevenueLabel = hasCustomRange ? "Ingresos rango" : "Ingresos Hoy";
+  const todayProfitLabel = hasCustomRange ? "Ganancia rango" : "Ganancia Hoy";
+  const weekSalesLabel = hasCustomRange ? "Ventas rango" : "Ventas Semana";
+  const weekRevenueLabel = hasCustomRange
+    ? "Ingresos rango"
+    : "Ingresos Semana";
+  const weekProfitLabel = hasCustomRange ? "Ganancia rango" : "Ganancia Semana";
+  const monthSalesLabel = hasCustomRange ? "Ventas rango" : "Ventas Mes";
+  const monthRevenueLabel = hasCustomRange ? "Ingresos rango" : "Ingresos Mes";
+  const monthProfitLabel = hasCustomRange ? "Ganancia rango" : "Ganancia Mes";
+  const avgTicketLabel = hasCustomRange
+    ? "Ticket promedio rango"
+    : "Ticket promedio";
+
   const kpiCards: KPI[] = [
     {
-      label: "Ventas Hoy",
-      value: safeNumber(kpis.daily?.sales),
+      id: "todaySales",
+      label: todayLabel,
+      value: safeNumber(daily.sales ?? summary.todaySales),
       icon: <ShoppingCart className="h-8 w-8" />,
       color: "bg-purple-500",
     },
     {
-      label: "Ingresos del Mes",
-      value: `$${safeNumber(kpis.monthly?.revenue).toFixed(2)}`,
+      id: "todayRevenue",
+      label: todayRevenueLabel,
+      value: formatMoney(daily.revenue ?? summary.todayRevenue),
       icon: <DollarSign className="h-8 w-8" />,
-      color: "bg-green-500",
+      color: "bg-violet-500",
     },
     {
-      label: "Ganancia del Mes",
-      value: `$${safeNumber(kpis.monthly?.profit).toFixed(2)}`,
+      id: "todayProfit",
+      label: todayProfitLabel,
+      value: formatMoney(daily.profit ?? summary.todayProfit),
       icon: <TrendingUp className="h-8 w-8" />,
-      color: "bg-blue-500",
+      color: "bg-emerald-500",
     },
     {
-      label: "Ticket Promedio",
-      value: `$${safeNumber(kpis.avgTicket).toFixed(2)}`,
-      icon: <Target className="h-8 w-8" />,
-      color: "bg-orange-500",
-    },
-    {
-      label: "Ventas Semana",
-      value: safeNumber(kpis.weekly?.sales),
+      id: "weekSales",
+      label: weekSalesLabel,
+      value: safeNumber(weekly.sales ?? summary.weekSales),
       icon: <ShoppingCart className="h-8 w-8" />,
       color: "bg-pink-500",
     },
     {
-      label: "Ingresos Semana",
-      value: `$${safeNumber(kpis.weekly?.revenue).toFixed(2)}`,
+      id: "weekRevenue",
+      label: weekRevenueLabel,
+      value: formatMoney(weekly.revenue ?? summary.weekRevenue),
       icon: <DollarSign className="h-8 w-8" />,
       color: "bg-teal-500",
     },
     {
-      label: "Ventas del Día",
-      value: safeNumber(kpis.daily?.sales),
-      icon: <ShoppingCart className="h-8 w-8" />,
-      color: "bg-indigo-500",
+      id: "weekProfit",
+      label: weekProfitLabel,
+      value: formatMoney(weekly.profit ?? summary.weekProfit),
+      icon: <TrendingUp className="h-8 w-8" />,
+      color: "bg-green-500",
     },
     {
-      label: "Ingresos del Día",
-      value: `$${safeNumber(kpis.daily?.revenue).toFixed(2)}`,
+      id: "monthSales",
+      label: monthSalesLabel,
+      value: safeNumber(monthly.sales ?? summary.monthSales),
+      icon: <ShoppingCart className="h-8 w-8" />,
+      color: "bg-blue-500",
+    },
+    {
+      id: "monthRevenue",
+      label: monthRevenueLabel,
+      value: formatMoney(monthly.revenue ?? summary.monthRevenue),
       icon: <DollarSign className="h-8 w-8" />,
-      color: "bg-violet-500",
+      color: "bg-indigo-600",
+    },
+    {
+      id: "monthProfit",
+      label: monthProfitLabel,
+      value: formatMoney(monthly.profit ?? summary.monthProfit),
+      icon: <TrendingUp className="h-8 w-8" />,
+      color: "bg-cyan-600",
+    },
+    {
+      id: "avgTicket",
+      label: avgTicketLabel,
+      value: formatMoney(summary.averageTicket ?? kpis?.avgTicket),
+      icon: <Target className="h-8 w-8" />,
+      color: "bg-orange-500",
+    },
+    {
+      id: "activeDistributors",
+      label: "Distribuidores activos",
+      value: safeNumber(summary.totalActiveDistributors),
+      icon: <Users className="h-8 w-8" />,
+      color: "bg-gray-600",
     },
   ];
 
@@ -114,7 +176,7 @@ export const FinancialKPICards: React.FC = () => {
     <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
       {kpiCards.map((kpi, index) => (
         <motion.div
-          key={kpi.label}
+          key={kpi.id}
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.3, delay: index * 0.05 }}

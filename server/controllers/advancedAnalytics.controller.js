@@ -66,13 +66,20 @@ export const getSalesTimeline = async (req, res) => {
     const timezone = "America/Bogota";
     let groupBy;
 
+    const opDate = {
+      $ifNull: [
+        "$saleDate",
+        { $ifNull: ["$paymentConfirmedAt", "$createdAt"] },
+      ],
+    };
+
     // Determinar agrupación según período
     switch (period) {
       case "day":
         groupBy = {
           $dateToString: {
             format: "%Y-%m-%d",
-            date: "$saleDate",
+            date: opDate,
             timezone,
           },
         };
@@ -81,7 +88,7 @@ export const getSalesTimeline = async (req, res) => {
         groupBy = {
           $dateToString: {
             format: "%Y-W%V",
-            date: "$saleDate",
+            date: opDate,
             timezone,
           },
         };
@@ -90,7 +97,7 @@ export const getSalesTimeline = async (req, res) => {
         groupBy = {
           $dateToString: {
             format: "%Y-%m",
-            date: "$saleDate",
+            date: opDate,
             timezone,
           },
         };
@@ -99,7 +106,7 @@ export const getSalesTimeline = async (req, res) => {
         groupBy = {
           $dateToString: {
             format: "%Y-%m",
-            date: "$saleDate",
+            date: opDate,
             timezone,
           },
         };
@@ -116,22 +123,68 @@ export const getSalesTimeline = async (req, res) => {
       customStartDate,
       customEndDate
     );
-    if (saleDateFilter) {
-      matchFilter.saleDate = saleDateFilter;
-    }
+    const opDateMatch = saleDateFilter
+      ? { $match: { opDate: saleDateFilter } }
+      : null;
 
     const timeline = await Sale.aggregate([
       { $match: matchFilter },
+      { $addFields: { opDate } },
+      ...(opDateMatch ? [opDateMatch] : []),
+      {
+        $project: {
+          opDate: 1,
+          revenue: { $multiply: ["$salePrice", "$quantity"] },
+          profit: "$totalProfit",
+        },
+      },
+      {
+        $unionWith: {
+          coll: "specialsales",
+          pipeline: [
+            { $match: { status: "active", business: businessObjectId } },
+            ...(saleDateFilter
+              ? [
+                  {
+                    $addFields: {
+                      opDate: { $ifNull: ["$saleDate", "$createdAt"] },
+                    },
+                  },
+                  { $match: { opDate: saleDateFilter } },
+                ]
+              : [
+                  {
+                    $addFields: {
+                      opDate: { $ifNull: ["$saleDate", "$createdAt"] },
+                    },
+                  },
+                ]),
+            {
+              $project: {
+                opDate: 1,
+                revenue: { $multiply: ["$specialPrice", "$quantity"] },
+                profit: "$totalProfit",
+              },
+            },
+          ],
+        },
+      },
       {
         $group: {
-          _id: groupBy,
+          _id: {
+            $dateToString: {
+              format: groupBy.$dateToString.format,
+              date: "$opDate",
+              timezone,
+            },
+          },
           totalSales: { $sum: 1 },
-          totalRevenue: { $sum: { $multiply: ["$salePrice", "$quantity"] } },
-          totalProfit: { $sum: "$totalProfit" },
+          totalRevenue: { $sum: "$revenue" },
+          totalProfit: { $sum: "$profit" },
         },
       },
       { $sort: { _id: 1 } },
-      { $limit: 100 }, // Limitar a últimos 100 períodos para no sobrecargar
+      { $limit: 100 },
     ]);
 
     console.log(`Sales Timeline - Found ${timeline.length} records`);
@@ -175,10 +228,36 @@ export const getTopProducts = async (req, res) => {
     const topProducts = await Sale.aggregate([
       { $match: matchFilter },
       {
+        $project: {
+          product: "$product",
+          quantity: "$quantity",
+          revenue: { $multiply: ["$salePrice", "$quantity"] },
+        },
+      },
+      {
+        $unionWith: {
+          coll: "specialsales",
+          pipeline: [
+            { $match: { status: "active", business: businessObjectId } },
+            ...(saleDateFilter
+              ? [{ $match: { saleDate: saleDateFilter } }]
+              : []),
+            { $match: { "product.productId": { $exists: true, $ne: null } } },
+            {
+              $project: {
+                product: "$product.productId",
+                quantity: "$quantity",
+                revenue: { $multiply: ["$specialPrice", "$quantity"] },
+              },
+            },
+          ],
+        },
+      },
+      {
         $group: {
           _id: "$product",
           totalQuantity: { $sum: "$quantity" },
-          totalRevenue: { $sum: { $multiply: ["$salePrice", "$quantity"] } },
+          totalRevenue: { $sum: "$revenue" },
           salesCount: { $sum: 1 },
         },
       },
@@ -234,6 +313,32 @@ export const getSalesByCategory = async (req, res) => {
     const salesByCategory = await Sale.aggregate([
       { $match: matchFilter },
       {
+        $project: {
+          product: "$product",
+          quantity: "$quantity",
+          revenue: { $multiply: ["$salePrice", "$quantity"] },
+        },
+      },
+      {
+        $unionWith: {
+          coll: "specialsales",
+          pipeline: [
+            { $match: { status: "active", business: businessObjectId } },
+            ...(saleDateFilter
+              ? [{ $match: { saleDate: saleDateFilter } }]
+              : []),
+            { $match: { "product.productId": { $exists: true, $ne: null } } },
+            {
+              $project: {
+                product: "$product.productId",
+                quantity: "$quantity",
+                revenue: { $multiply: ["$specialPrice", "$quantity"] },
+              },
+            },
+          ],
+        },
+      },
+      {
         $lookup: {
           from: "products",
           localField: "product",
@@ -256,7 +361,7 @@ export const getSalesByCategory = async (req, res) => {
           _id: "$categoryInfo._id",
           name: { $first: "$categoryInfo.name" },
           totalSales: { $sum: "$quantity" },
-          totalRevenue: { $sum: { $multiply: ["$salePrice", "$quantity"] } },
+          totalRevenue: { $sum: "$revenue" },
           color: { $first: "$categoryInfo.color" },
         },
       },
@@ -300,12 +405,37 @@ export const getDistributorRankings = async (req, res) => {
         },
       },
       {
+        $project: {
+          distributor: "$distributor",
+          revenue: { $multiply: ["$salePrice", "$quantity"] },
+          profit: "$totalProfit",
+        },
+      },
+      {
+        $unionWith: {
+          coll: "specialsales",
+          pipeline: [
+            { $match: { status: "active", business: businessObjectId } },
+            ...(saleDateFilter
+              ? [{ $match: { saleDate: saleDateFilter } }]
+              : []),
+            {
+              $project: {
+                distributor: null, // ventas especiales tratadas como admin
+                revenue: { $multiply: ["$specialPrice", "$quantity"] },
+                profit: "$totalProfit",
+              },
+            },
+          ],
+        },
+      },
+      {
         $group: {
           _id: "$distributor",
           totalSales: { $sum: 1 },
-          totalRevenue: { $sum: { $multiply: ["$salePrice", "$quantity"] } },
-          totalProfit: { $sum: "$totalProfit" },
-          avgOrderValue: { $avg: { $multiply: ["$salePrice", "$quantity"] } },
+          totalRevenue: { $sum: "$revenue" },
+          totalProfit: { $sum: "$profit" },
+          avgOrderValue: { $avg: "$revenue" },
         },
       },
       {
@@ -325,7 +455,7 @@ export const getDistributorRankings = async (req, res) => {
       {
         $project: {
           name: {
-            $ifNull: ["$distributorInfo.name", "Distribuidor desconocido"],
+            $ifNull: ["$distributorInfo.name", "Ventas administradas"],
           },
           email: { $ifNull: ["$distributorInfo.email", ""] },
           totalSales: 1,
@@ -453,6 +583,33 @@ export const getProductRotation = async (req, res) => {
         },
       },
       {
+        $project: {
+          product: "$product",
+          quantity: "$quantity",
+        },
+      },
+      {
+        $unionWith: {
+          coll: "specialsales",
+          pipeline: [
+            {
+              $match: {
+                status: "active",
+                saleDate: { $gte: startDate },
+                business: businessObjectId,
+              },
+            },
+            { $match: { "product.productId": { $exists: true, $ne: null } } },
+            {
+              $project: {
+                product: "$product.productId",
+                quantity: "$quantity",
+              },
+            },
+          ],
+        },
+      },
+      {
         $group: {
           _id: "$product",
           totalSold: { $sum: "$quantity" },
@@ -504,13 +661,14 @@ export const getFinancialKPIs = async (req, res) => {
     const businessObjectId = new mongoose.Types.ObjectId(businessId);
 
     const today = new Date();
+    const { startDate, endDate } = req.query;
 
     // Ajustar a zona horaria de Colombia (UTC-5)
     // El día en Colombia comienza a las 5:00 AM UTC y termina a las 4:59:59 AM UTC del día siguiente
     const colombiaOffset = -5 * 60; // -5 horas en minutos
     const colombiaTime = new Date(today.getTime() + colombiaOffset * 60000);
 
-    // Inicio del día actual en Colombia (medianoche Colombia = 5:00 AM UTC)
+    // Inicio y fin del día actual en Colombia (00:00-23:59:59 Colombia = 05:00-04:59:59 UTC)
     const startOfToday = new Date(
       Date.UTC(
         colombiaTime.getUTCFullYear(),
@@ -520,6 +678,17 @@ export const getFinancialKPIs = async (req, res) => {
         0,
         0,
         0
+      )
+    );
+    const endOfToday = new Date(
+      Date.UTC(
+        colombiaTime.getUTCFullYear(),
+        colombiaTime.getUTCMonth(),
+        colombiaTime.getUTCDate() + 1,
+        4,
+        59,
+        59,
+        999
       )
     );
 
@@ -541,92 +710,167 @@ export const getFinancialKPIs = async (req, res) => {
       )
     );
 
-    console.log("KPI Dates:", {
-      now: today.toISOString(),
-      colombiaTime: colombiaTime.toISOString(),
-      startOfToday: startOfToday.toISOString(),
-      startOfThisWeek: startOfThisWeek.toISOString(),
-      startOfThisMonth: startOfThisMonth.toISOString(),
-    });
+    const baseMatch = {
+      paymentStatus: "confirmado",
+      business: businessObjectId,
+    };
 
-    const [dailyStats, weeklyStats, monthlyStats, avgTicket] =
-      await Promise.all([
-        // Daily stats
-        Sale.aggregate([
-          {
-            $match: {
-              saleDate: { $gte: startOfToday },
-              paymentStatus: "confirmado",
-              business: businessObjectId,
+    // Si vienen filtros manuales, úsalos para todo (override), sino usamos ventanas relativas
+    const customDateFilter = buildColombiaSaleDateFilter(startDate, endDate);
+
+    const buildStatsPipeline = (fromDate, toDate = null) => {
+      const dateMatch = { $gte: fromDate };
+      if (toDate) {
+        dateMatch.$lte = toDate;
+      }
+
+      return [
+        { $match: baseMatch },
+        {
+          $addFields: {
+            opDate: {
+              $ifNull: [
+                "$saleDate",
+                { $ifNull: ["$paymentConfirmedAt", "$createdAt"] },
+              ],
             },
           },
-          {
-            $group: {
-              _id: null,
-              revenue: { $sum: { $multiply: ["$salePrice", "$quantity"] } },
-              profit: { $sum: "$totalProfit" },
-              sales: { $sum: 1 },
-            },
+        },
+        { $match: { opDate: dateMatch } },
+        {
+          $project: {
+            opDate: 1,
+            revenue: { $multiply: ["$salePrice", "$quantity"] },
+            profit: "$totalProfit",
+            sales: 1,
           },
-        ]),
-        // Weekly stats
-        Sale.aggregate([
-          {
-            $match: {
-              saleDate: { $gte: startOfThisWeek },
-              paymentStatus: "confirmado",
-              business: businessObjectId,
-            },
+        },
+        {
+          $unionWith: {
+            coll: "specialsales",
+            pipeline: [
+              { $match: { status: "active", business: businessObjectId } },
+              {
+                $addFields: {
+                  opDate: { $ifNull: ["$saleDate", "$createdAt"] },
+                },
+              },
+              { $match: { opDate: dateMatch } },
+              {
+                $project: {
+                  opDate: 1,
+                  revenue: { $multiply: ["$specialPrice", "$quantity"] },
+                  profit: "$totalProfit",
+                  sales: 1,
+                },
+              },
+            ],
           },
-          {
-            $group: {
-              _id: null,
-              revenue: { $sum: { $multiply: ["$salePrice", "$quantity"] } },
-              profit: { $sum: "$totalProfit" },
-              sales: { $sum: 1 },
-            },
+        },
+        {
+          $group: {
+            _id: null,
+            revenue: { $sum: "$revenue" },
+            profit: { $sum: "$profit" },
+            sales: { $sum: 1 },
           },
-        ]),
-        // Monthly stats
-        Sale.aggregate([
-          {
-            $match: {
-              saleDate: { $gte: startOfThisMonth },
-              paymentStatus: "confirmado",
-              business: businessObjectId,
-            },
+        },
+      ];
+    };
+
+    const [
+      dailyStats,
+      weeklyStats,
+      monthlyStats,
+      avgTicket,
+      activeDistributors,
+    ] = await Promise.all([
+      // Si hay filtro custom, úsalo en diario también (para exportar/rango)
+      Sale.aggregate(
+        customDateFilter
+          ? buildStatsPipeline(customDateFilter.$gte, customDateFilter.$lte)
+          : buildStatsPipeline(startOfToday, endOfToday)
+      ),
+      Sale.aggregate(
+        customDateFilter
+          ? buildStatsPipeline(customDateFilter.$gte, customDateFilter.$lte)
+          : buildStatsPipeline(startOfThisWeek)
+      ),
+      Sale.aggregate(
+        customDateFilter
+          ? buildStatsPipeline(customDateFilter.$gte, customDateFilter.$lte)
+          : buildStatsPipeline(startOfThisMonth)
+      ),
+      // Average ticket
+      Sale.aggregate([
+        {
+          $match: {
+            ...baseMatch,
+            ...(customDateFilter ? { saleDate: customDateFilter } : {}),
           },
-          {
-            $group: {
-              _id: null,
-              revenue: { $sum: { $multiply: ["$salePrice", "$quantity"] } },
-              profit: { $sum: "$totalProfit" },
-              sales: { $sum: 1 },
-            },
+        },
+        {
+          $project: {
+            ticket: { $multiply: ["$salePrice", "$quantity"] },
           },
-        ]),
-        // Average ticket
-        Sale.aggregate([
-          {
-            $match: {
-              paymentStatus: "confirmado",
-              business: businessObjectId,
-            },
+        },
+        {
+          $unionWith: {
+            coll: "specialsales",
+            pipeline: [
+              { $match: { status: "active", business: businessObjectId } },
+              ...(customDateFilter
+                ? [{ $match: { saleDate: customDateFilter } }]
+                : []),
+              {
+                $project: {
+                  ticket: { $multiply: ["$specialPrice", "$quantity"] },
+                },
+              },
+            ],
           },
-          {
-            $group: {
-              _id: null,
-              avgTicket: { $avg: { $multiply: ["$salePrice", "$quantity"] } },
-            },
+        },
+        {
+          $group: {
+            _id: null,
+            avgTicket: { $avg: "$ticket" },
           },
-        ]),
-      ]);
+        },
+      ]),
+      Sale.distinct("distributor", {
+        ...baseMatch,
+        distributor: { $exists: true, $ne: null },
+        ...(customDateFilter ? { saleDate: customDateFilter } : {}),
+      }),
+    ]);
+
+    const daily = dailyStats[0] || { revenue: 0, profit: 0, sales: 0 };
+    const weekly = weeklyStats[0] || { revenue: 0, profit: 0, sales: 0 };
+    const monthly = monthlyStats[0] || { revenue: 0, profit: 0, sales: 0 };
+    const avgTicketValue = avgTicket[0]?.avgTicket || 0;
+
+    const kpis = {
+      todaySales: daily.sales || 0,
+      todayRevenue: daily.revenue || 0,
+      todayProfit: daily.profit || 0,
+      weekSales: weekly.sales || 0,
+      weekRevenue: weekly.revenue || 0,
+      weekProfit: weekly.profit || 0,
+      monthSales: monthly.sales || 0,
+      monthRevenue: monthly.revenue || 0,
+      monthProfit: monthly.profit || 0,
+      averageTicket: avgTicketValue,
+      totalActiveDistributors: Array.isArray(activeDistributors)
+        ? activeDistributors.length
+        : 0,
+    };
 
     res.json({
-      daily: dailyStats[0] || { revenue: 0, profit: 0, sales: 0 },
-      weekly: weeklyStats[0] || { revenue: 0, profit: 0, sales: 0 },
-      monthly: monthlyStats[0] || { revenue: 0, profit: 0, sales: 0 },
-      avgTicket: avgTicket[0]?.avgTicket || 0,
+      daily,
+      weekly,
+      monthly,
+      avgTicket: avgTicketValue,
+      kpis,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -683,41 +927,53 @@ export const getComparativeAnalysis = async (req, res) => {
       thisMonthStart: thisMonthStart.toISOString(),
     });
 
+    const aggregateWindow = (start, end = null) => [
+      { $match: { paymentStatus: "confirmado", business: businessObjectId } },
+      {
+        $project: {
+          saleDate: 1,
+          revenue: { $multiply: ["$salePrice", "$quantity"] },
+          profit: "$totalProfit",
+        },
+      },
+      {
+        $match: {
+          saleDate: end ? { $gte: start, $lte: end } : { $gte: start },
+        },
+      },
+      {
+        $unionWith: {
+          coll: "specialsales",
+          pipeline: [
+            { $match: { status: "active", business: businessObjectId } },
+            {
+              $project: {
+                saleDate: "$saleDate",
+                revenue: { $multiply: ["$specialPrice", "$quantity"] },
+                profit: "$totalProfit",
+              },
+            },
+            {
+              $match: end
+                ? { saleDate: { $gte: start, $lte: end } }
+                : { saleDate: { $gte: start } },
+            },
+          ],
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          revenue: { $sum: "$revenue" },
+          profit: { $sum: "$profit" },
+          sales: { $sum: 1 },
+        },
+      },
+    ];
+
     const [lastMonth, thisMonth] = await Promise.all([
-      Sale.aggregate([
-        {
-          $match: {
-            saleDate: { $gte: lastMonthStart, $lte: lastMonthEnd },
-            paymentStatus: "confirmado",
-            business: businessObjectId,
-          },
-        },
-        {
-          $group: {
-            _id: null,
-            revenue: { $sum: { $multiply: ["$salePrice", "$quantity"] } },
-            profit: { $sum: "$totalProfit" },
-            sales: { $sum: 1 },
-          },
-        },
-      ]),
-      Sale.aggregate([
-        {
-          $match: {
-            saleDate: { $gte: thisMonthStart },
-            paymentStatus: "confirmado",
-            business: businessObjectId,
-          },
-        },
-        {
-          $group: {
-            _id: null,
-            revenue: { $sum: { $multiply: ["$salePrice", "$quantity"] } },
-            profit: { $sum: "$totalProfit" },
-            sales: { $sum: 1 },
-          },
-        },
-      ]),
+      Sale.aggregate(aggregateWindow(lastMonthStart, lastMonthEnd)),
+      Sale.aggregate(aggregateWindow(thisMonthStart)),
     ]);
 
     const lastMonthData = lastMonth[0] || { revenue: 0, profit: 0, sales: 0 };
@@ -773,10 +1029,33 @@ export const getSalesFunnel = async (req, res) => {
         $match: matchFilter,
       },
       {
+        $project: {
+          status: "$paymentStatus",
+          value: { $multiply: ["$salePrice", "$quantity"] },
+        },
+      },
+      {
+        $unionWith: {
+          coll: "specialsales",
+          pipeline: [
+            { $match: { status: "active", business: businessObjectId } },
+            ...(saleDateFilter
+              ? [{ $match: { saleDate: saleDateFilter } }]
+              : []),
+            {
+              $project: {
+                status: "confirmado", // tratamos ventas especiales activas como confirmadas
+                value: { $multiply: ["$specialPrice", "$quantity"] },
+              },
+            },
+          ],
+        },
+      },
+      {
         $group: {
-          _id: "$paymentStatus",
+          _id: "$status",
           count: { $sum: 1 },
-          totalValue: { $sum: { $multiply: ["$salePrice", "$quantity"] } },
+          totalValue: { $sum: "$value" },
         },
       },
     ]);

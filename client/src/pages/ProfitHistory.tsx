@@ -1,570 +1,435 @@
-import { useEffect, useState } from "react";
-import { businessService, profitHistoryService } from "../api/services";
+import { useEffect, useMemo, useState } from "react";
+import { profitHistoryService } from "../api/services";
 import { useBusiness } from "../context/BusinessContext";
 import type {
-  ComparativeAnalysis,
-  ProfitHistoryEntry,
-  User,
-  UserBalance,
+  ProfitHistoryAdminDistributor,
+  ProfitHistoryAdminEntry,
+  ProfitHistoryAdminOverview,
 } from "../types";
+
+const formatCurrency = (amount: number) =>
+  new Intl.NumberFormat("es-CO", {
+    style: "currency",
+    currency: "COP",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount || 0);
+
+const formatDateTime = (value: string) =>
+  new Date(value).toLocaleString("es-CO", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+const toISODate = (date: Date) => date.toISOString().slice(0, 10);
+
+const quickRanges = [
+  { label: "Últimos 7 días", days: 7 },
+  { label: "Últimos 30 días", days: 30 },
+  { label: "Últimos 90 días", days: 90 },
+];
 
 export default function ProfitHistory() {
   const [loading, setLoading] = useState(true);
-  const [history, setHistory] = useState<ProfitHistoryEntry[]>([]);
-  const [balance, setBalance] = useState<UserBalance | null>(null);
-  const [comparative, setComparative] = useState<ComparativeAnalysis | null>(
+  const [overview, setOverview] = useState<ProfitHistoryAdminOverview | null>(
     null
   );
-  const [users, setUsers] = useState<User[]>([]);
+  const [selectedDistributor, setSelectedDistributor] = useState<string>("");
+  const [limit, setLimit] = useState(150);
 
-  // Pagination
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
-
-  // Filters
-  const [selectedUser, setSelectedUser] = useState<string>("");
-  const [typeFilter, setTypeFilter] = useState<
-    "venta_normal" | "venta_especial" | "ajuste" | "bonus" | ""
-  >("");
-  const [dateRange, setDateRange] = useState({
-    startDate: "",
-    endDate: "",
+  const today = useMemo(() => new Date(), []);
+  const [dateRange, setDateRange] = useState(() => {
+    const start = new Date();
+    start.setDate(start.getDate() - 30);
+    return {
+      startDate: toISODate(start),
+      endDate: toISODate(today),
+    };
   });
 
-  // Admin check
-  const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
   const { businessId } = useBusiness();
-  const isAdminRole =
-    currentUser.role === "admin" ||
-    currentUser.role === "super_admin" ||
-    currentUser.role === "god";
+  const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
+  const isAdmin = ["admin", "super_admin", "god"].includes(currentUser?.role);
 
-  const loadData = async () => {
-    if (!selectedUser) return;
+  const loadOverview = async () => {
+    if (!isAdmin) {
+      setLoading(false);
+      return;
+    }
 
     try {
       setLoading(true);
-
-      const filters = {
-        page: currentPage,
-        limit: 20,
-        ...(typeFilter && { type: typeFilter }),
-        ...(dateRange.startDate && { startDate: dateRange.startDate }),
-        ...(dateRange.endDate && { endDate: dateRange.endDate }),
-        // Si no hay filtros, pedir explícitamente el día de hoy para evitar pérdidas por timezone
-        ...(dateRange.startDate === "" && dateRange.endDate === ""
-          ? { today: true }
-          : {}),
-      };
-
-      // Cargar historial y balance en paralelo
-      const [historyRes, balanceRes] = await Promise.all([
-        profitHistoryService
-          .getUserHistory(selectedUser, filters)
-          .catch(err => {
-            console.error("Error cargando historial:", err);
-            return {
-              history: [],
-              pagination: { page: 1, pages: 1, total: 0 },
-              summary: { totalAmount: 0, count: 0 },
-            };
-          }),
-        profitHistoryService.getUserBalance(selectedUser).catch(err => {
-          console.error("Error cargando balance:", err);
-          return {
-            totalBalance: 0,
-            breakdown: {
-              venta_normal: 0,
-              venta_especial: 0,
-              ajuste: 0,
-              bonus: 0,
-            },
-            transactionCount: 0,
-            lastUpdate: null,
-          };
-        }),
-      ]);
-
-      setHistory(historyRes.history);
-      setBalance(balanceRes);
-      setCurrentPage(historyRes.pagination.page);
-      setTotalPages(historyRes.pagination.pages);
-      setTotalCount(historyRes.pagination.total);
-
-      // Load comparative if admin (no bloquear si falla)
-      if (isAdminRole) {
-        profitHistoryService
-          .getComparativeAnalysis({ userId: selectedUser })
-          .then(comparativeRes => setComparative(comparativeRes))
-          .catch(err => console.error("Error cargando comparativo:", err));
-      }
+      const data = await profitHistoryService.getAdminOverview({
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
+        distributorId: selectedDistributor || undefined,
+        limit,
+      });
+      setOverview(data);
     } catch (error) {
-      console.error("Error cargando datos:", error);
+      console.error("Error cargando overview de ganancias", error);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    const loadUsers = async () => {
-      if (!businessId) {
-        setUsers([]);
-        setSelectedUser("");
-        return;
-      }
-
-      try {
-        const members = await businessService.listMembers(businessId);
-        const relevantUsers = members
-          .filter(m => {
-            const user = m.user as User | undefined;
-            const role = user?.role || (m as unknown as { role?: string }).role;
-            return (
-              !!user &&
-              (role === "distribuidor" ||
-                role === "admin" ||
-                role === "super_admin" ||
-                role === "god")
-            );
-          })
-          .map(m => m.user as User);
-
-        // Si el god/admin actual no tiene membership pero debe poder verse a sí mismo
-        const selfId = currentUser?._id;
-        const hasSelf = selfId && relevantUsers.some(u => u._id === selfId);
-        const withSelf =
-          isAdminRole && selfId && !hasSelf
-            ? [...relevantUsers, currentUser as User]
-            : relevantUsers;
-
-        setUsers(withSelf);
-
-        if (!isAdminRole) {
-          if (currentUser?._id) {
-            setSelectedUser(currentUser._id);
-          }
-          return;
-        }
-
-        if (withSelf.length > 0) {
-          setSelectedUser(prev => {
-            if (prev && withSelf.some(u => u._id === prev)) {
-              return prev;
-            }
-
-            if (selfId && withSelf.some(u => u._id === selfId)) {
-              return selfId;
-            }
-
-            return withSelf[0]._id;
-          });
-        } else {
-          setLoading(false);
-        }
-      } catch (error) {
-        console.error("Error cargando usuarios:", error);
-        setLoading(false);
-      }
-    };
-
-    void loadUsers();
+    // No dependemos de businessId para god/super_admin, pero lo mantenemos para refrescar cuando cambie
+    void loadOverview();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [businessId, isAdminRole]);
+  }, [
+    selectedDistributor,
+    dateRange.startDate,
+    dateRange.endDate,
+    limit,
+    businessId,
+  ]);
 
-  useEffect(() => {
-    if (selectedUser) {
-      loadData();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedUser, currentPage, typeFilter, dateRange, businessId]);
+  const distributors = useMemo<ProfitHistoryAdminDistributor[]>(() => {
+    if (!overview) return [];
+    return overview.distributors;
+  }, [overview]);
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("es-CO", {
-      style: "currency",
-      currency: "COP",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
+  const handleQuickRange = (days: number) => {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(start.getDate() - days);
+    setDateRange({ startDate: toISODate(start), endDate: toISODate(end) });
   };
 
-  const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString("es-CO", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
-  const getTypeLabel = (type: string) => {
-    const labels: Record<string, string> = {
-      venta_normal: "Venta Normal",
-      venta_especial: "Venta Especial",
-      ajuste: "Ajuste",
-      bonus: "Bonus",
-    };
-    return labels[type] || type;
-  };
-
-  const getTypeColor = (type: string) => {
-    const colors: Record<string, string> = {
-      venta_normal: "bg-blue-500/20 text-blue-300",
-      venta_especial: "bg-purple-500/20 text-purple-300",
-      ajuste: "bg-yellow-500/20 text-yellow-300",
-      bonus: "bg-green-500/20 text-green-300",
-    };
-    return colors[type] || "bg-gray-500/20 text-gray-200";
-  };
-
-  const clearFilters = () => {
-    setTypeFilter("");
-    setDateRange({ startDate: "", endDate: "" });
-    setCurrentPage(1);
-  };
-
-  if (loading && !history.length) {
+  if (!isAdmin) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="text-lg text-gray-200">Cargando historial...</div>
+      <div className="flex h-64 items-center justify-center p-6">
+        <div className="text-lg text-gray-200">
+          Solo los administradores pueden ver este módulo.
+        </div>
       </div>
     );
   }
 
   return (
     <div className="space-y-6 p-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-white">
-          Historial de Ganancias
-        </h1>
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <p className="text-sm uppercase tracking-wide text-purple-300/70">
+            Reporte vivo
+          </p>
+          <h1 className="text-3xl font-bold text-white">
+            Historial de ganancias
+          </h1>
+          <p className="text-sm text-gray-400">
+            Calculado directamente desde las ventas, sin depender de registros
+            previos.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {quickRanges.map(range => (
+            <button
+              key={range.days}
+              onClick={() => handleQuickRange(range.days)}
+              className="rounded-full border border-purple-500/30 bg-purple-500/10 px-3 py-1 text-sm font-medium text-purple-100 transition hover:border-purple-400/60 hover:bg-purple-500/20"
+            >
+              {range.label}
+            </button>
+          ))}
+          <button
+            onClick={() => setDateRange({ startDate: "", endDate: "" })}
+            className="rounded-full border border-gray-600 bg-gray-800 px-3 py-1 text-sm text-gray-200 transition hover:border-gray-500"
+          >
+            Todo el tiempo
+          </button>
+        </div>
       </div>
 
-      {/* Balance Card */}
-      {balance && (
-        <div className="bg-linear-to-r rounded-lg from-indigo-500 to-purple-600 p-6 text-white shadow-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-indigo-100">
-                Balance Total
-              </p>
-              <p className="mt-2 text-4xl font-bold">
-                {formatCurrency(balance.totalBalance)}
-              </p>
-            </div>
-            <div className="space-y-2 text-right">
-              <div>
-                <p className="text-xs text-indigo-100">Ventas Normales</p>
-                <p className="text-xl font-semibold">
-                  {formatCurrency(balance.breakdown.venta_normal || 0)}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-indigo-100">Ventas Especiales</p>
-                <p className="text-xl font-semibold">
-                  {formatCurrency(balance.breakdown.venta_especial || 0)}
-                </p>
-              </div>
-              {balance.breakdown.ajuste !== 0 && (
-                <div>
-                  <p className="text-xs text-indigo-100">Ajustes</p>
-                  <p className="text-xl font-semibold">
-                    {formatCurrency(balance.breakdown.ajuste || 0)}
-                  </p>
-                </div>
-              )}
-              {balance.breakdown.bonus !== 0 && (
-                <div>
-                  <p className="text-xs text-indigo-100">Bonus</p>
-                  <p className="text-xl font-semibold">
-                    {formatCurrency(balance.breakdown.bonus || 0)}
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
+        <div className="rounded-xl border border-gray-800 bg-gradient-to-br from-purple-600/30 via-indigo-600/20 to-gray-900 p-4 text-white shadow-lg">
+          <p className="text-sm text-purple-100">Ganancia total</p>
+          <p className="mt-2 text-3xl font-bold">
+            {formatCurrency(overview?.summary.totalProfit || 0)}
+          </p>
+          <p className="text-xs text-purple-100/80">
+            Incluye admin y distribuidores
+          </p>
         </div>
-      )}
-
-      {/* Comparative Analysis */}
-      {isAdminRole && comparative && (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-4">
-            <p className="text-sm font-medium text-gray-400">Mes Actual</p>
-            <p className="mt-1 text-2xl font-bold text-white">
-              {formatCurrency(comparative.currentMonth?.total || 0)}
-            </p>
-            <p className="mt-1 text-sm text-gray-400">
-              {comparative.currentMonth?.count || 0} transacciones
-            </p>
-          </div>
-          <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-4">
-            <p className="text-sm font-medium text-gray-400">Mes Anterior</p>
-            <p className="mt-1 text-2xl font-bold text-white">
-              {formatCurrency(comparative.previousMonth?.total || 0)}
-            </p>
-            <p className="mt-1 text-sm text-gray-400">
-              {comparative.previousMonth?.count || 0} transacciones
-            </p>
-          </div>
-          <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-4">
-            <p className="text-sm font-medium text-gray-400">Cambio</p>
-            <p
-              className={`mt-1 text-2xl font-bold ${
-                (comparative.percentageChange || 0) >= 0
-                  ? "text-green-600"
-                  : "text-red-600"
-              }`}
-            >
-              {(comparative.percentageChange || 0) >= 0 ? "+" : ""}
-              {(comparative.percentageChange || 0).toFixed(1)}%
-            </p>
-            <p
-              className={`mt-1 text-sm ${
-                (comparative.difference || 0) >= 0
-                  ? "text-green-600"
-                  : "text-red-600"
-              }`}
-            >
-              {formatCurrency(Math.abs(comparative.difference || 0))}
-            </p>
-          </div>
+        <div className="rounded-xl border border-gray-800 bg-gray-900/60 p-4 text-white">
+          <p className="text-sm text-gray-300">Ganancia admin</p>
+          <p className="mt-2 text-2xl font-semibold text-emerald-300">
+            {formatCurrency(overview?.summary.adminProfit || 0)}
+          </p>
+          <p className="text-xs text-gray-400">
+            Ventas directas y margen admin
+          </p>
         </div>
-      )}
+        <div className="rounded-xl border border-gray-800 bg-gray-900/60 p-4 text-white">
+          <p className="text-sm text-gray-300">Ganancia distribuidores</p>
+          <p className="mt-2 text-2xl font-semibold text-cyan-300">
+            {formatCurrency(overview?.summary.distributorProfit || 0)}
+          </p>
+          <p className="text-xs text-gray-400">Comisiones pagadas</p>
+        </div>
+        <div className="rounded-xl border border-gray-800 bg-gray-900/60 p-4 text-white">
+          <p className="text-sm text-gray-300">Promedio por venta</p>
+          <p className="mt-2 text-2xl font-semibold text-amber-300">
+            {formatCurrency(overview?.summary.averageTicket || 0)}
+          </p>
+          <p className="text-xs text-gray-400">
+            {overview?.summary.count || 0} ventas en ventana
+          </p>
+        </div>
+      </div>
 
-      {/* Filters */}
-      <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-4">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
-          {isAdminRole && (
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-300">
-                Distribuidor
-              </label>
-              <select
-                value={selectedUser}
-                onChange={e => {
-                  setSelectedUser(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="w-full rounded-md border border-gray-700 bg-gray-900/40 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
-              >
-                <option value="">Seleccionar...</option>
-                {users.map(user => (
-                  <option key={user._id} value={user._id}>
-                    {user.name || user.email || "Mi cuenta"}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
+      <div className="rounded-xl border border-gray-800 bg-gray-900/70 p-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
           <div>
-            <label className="mb-2 block text-sm font-medium text-gray-300">
-              Tipo
+            <label className="mb-1 block text-sm font-medium text-gray-300">
+              Distribuidor
             </label>
             <select
-              value={typeFilter}
-              onChange={e => {
-                setTypeFilter(
-                  e.target.value as
-                    | "venta_normal"
-                    | "venta_especial"
-                    | "ajuste"
-                    | "bonus"
-                    | ""
-                );
-                setCurrentPage(1);
-              }}
-              className="w-full rounded-md border border-gray-700 bg-gray-900/40 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+              value={selectedDistributor}
+              onChange={e => setSelectedDistributor(e.target.value)}
+              className="w-full rounded-md border border-gray-700 bg-gray-950 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
             >
               <option value="">Todos</option>
-              <option value="venta_normal">Venta Normal</option>
-              <option value="venta_especial">Venta Especial</option>
-              <option value="ajuste">Ajuste</option>
-              <option value="bonus">Bonus</option>
+              <option value="admin">Solo ventas admin</option>
+              {distributors
+                .filter(d => d.id !== "admin")
+                .map(d => (
+                  <option key={d.id} value={d.id}>
+                    {d.name} {d.email ? `(${d.email})` : ""}
+                  </option>
+                ))}
             </select>
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-gray-300">
-              Fecha Inicio
+            <label className="mb-1 block text-sm font-medium text-gray-300">
+              Fecha inicio
             </label>
             <input
               type="date"
               value={dateRange.startDate}
-              onChange={e => {
-                setDateRange({ ...dateRange, startDate: e.target.value });
-                setCurrentPage(1);
-              }}
-              className="w-full rounded-md border border-gray-700 bg-gray-900/40 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+              onChange={e =>
+                setDateRange({ ...dateRange, startDate: e.target.value })
+              }
+              className="w-full rounded-md border border-gray-700 bg-gray-950 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
             />
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-gray-300">
-              Fecha Fin
+            <label className="mb-1 block text-sm font-medium text-gray-300">
+              Fecha fin
             </label>
             <input
               type="date"
               value={dateRange.endDate}
-              onChange={e => {
-                setDateRange({ ...dateRange, endDate: e.target.value });
-                setCurrentPage(1);
-              }}
-              className="w-full rounded-md border border-gray-700 bg-gray-900/40 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+              onChange={e =>
+                setDateRange({ ...dateRange, endDate: e.target.value })
+              }
+              className="w-full rounded-md border border-gray-700 bg-gray-950 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
             />
           </div>
 
-          <div className="flex items-end">
-            <button
-              onClick={clearFilters}
-              className="w-full rounded-md border border-gray-700 bg-gray-900/40 px-4 py-2 text-gray-200 transition-colors hover:bg-gray-800"
-            >
-              Limpiar Filtros
-            </button>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-300">
+              Máx. ventas
+            </label>
+            <input
+              type="number"
+              min={20}
+              max={400}
+              value={limit}
+              onChange={e => setLimit(Number(e.target.value) || 0)}
+              className="w-full rounded-md border border-gray-700 bg-gray-950 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+            />
           </div>
         </div>
       </div>
 
-      {/* History Table */}
-      <div className="overflow-hidden rounded-xl border border-gray-700 bg-gray-800/50">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-700">
-            <thead className="bg-gray-900/50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-400">
-                  Fecha
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-400">
-                  Tipo
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-400">
-                  Descripción
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-400">
-                  Monto
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-400">
-                  Balance
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-700">
-              {history.length === 0 ? (
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-4">
+        <div className="rounded-xl border border-gray-800 bg-gray-900/70 shadow-lg xl:col-span-3">
+          <div className="flex items-center justify-between border-b border-gray-800 px-4 py-3">
+            <div>
+              <p className="text-sm text-gray-400">Transacciones recientes</p>
+              <p className="text-lg font-semibold text-white">
+                {overview?.summary.count || 0} ventas
+              </p>
+            </div>
+            <button
+              onClick={loadOverview}
+              className="rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-100 transition hover:border-purple-400 hover:text-white"
+            >
+              Recargar
+            </button>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-800">
+              <thead className="bg-gray-950/60">
                 <tr>
-                  <td
-                    colSpan={5}
-                    className="px-6 py-8 text-center text-gray-400"
-                  >
-                    No hay registros en el historial
-                  </td>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">
+                    Fecha
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">
+                    Venta
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">
+                    Distribuidor
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">
+                    Producto
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-400">
+                    Ganancia dist
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-400">
+                    Ganancia admin
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-400">
+                    Total
+                  </th>
                 </tr>
-              ) : (
-                history.map(entry => (
-                  <tr key={entry._id} className="hover:bg-gray-900/30">
-                    <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-200">
-                      {formatDate(entry.date)}
-                    </td>
-                    <td className="whitespace-nowrap px-6 py-4">
-                      <span
-                        className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold leading-5 ${getTypeColor(
-                          entry.type
-                        )}`}
-                      >
-                        {getTypeLabel(entry.type)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-200">
-                      {entry.description || "-"}
-                    </td>
+              </thead>
+              <tbody className="divide-y divide-gray-800">
+                {loading && (
+                  <tr>
                     <td
-                      className={`whitespace-nowrap px-6 py-4 text-right text-sm font-medium ${
-                        entry.amount >= 0 ? "text-green-600" : "text-red-600"
-                      }`}
+                      colSpan={7}
+                      className="px-4 py-6 text-center text-gray-400"
                     >
-                      {entry.amount >= 0 ? "+" : ""}
-                      {formatCurrency(entry.amount)}
-                    </td>
-                    <td className="whitespace-nowrap px-6 py-4 text-right text-sm font-medium text-gray-200">
-                      {formatCurrency(entry.balanceAfter)}
+                      Cargando...
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                )}
+
+                {!loading && (!overview || overview.entries.length === 0) && (
+                  <tr>
+                    <td
+                      colSpan={7}
+                      className="px-4 py-6 text-center text-gray-400"
+                    >
+                      No hay ventas en el rango seleccionado.
+                    </td>
+                  </tr>
+                )}
+
+                {!loading &&
+                  overview?.entries.map((entry: ProfitHistoryAdminEntry) => (
+                    <tr key={entry.id} className="hover:bg-gray-950/40">
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-200">
+                        {formatDateTime(entry.date)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-300">
+                        <div className="flex flex-col">
+                          <span className="font-semibold">
+                            {entry.saleId || entry.id}
+                          </span>
+                          {entry.eventName && (
+                            <span className="text-xs text-purple-300">
+                              {entry.eventName}
+                            </span>
+                          )}
+                          <span className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-gray-800 px-2 py-0.5 text-[11px] font-semibold uppercase text-gray-200">
+                            <span
+                              className={
+                                entry.source === "special"
+                                  ? "text-pink-300"
+                                  : "text-emerald-300"
+                              }
+                            >
+                              ●
+                            </span>
+                            {entry.source === "special" ? "Especial" : "Normal"}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-100">
+                        <div className="flex flex-col">
+                          <span className="font-semibold">
+                            {entry.distributorName}
+                          </span>
+                          <span className="text-xs text-gray-400">
+                            {entry.distributorEmail || "Admin"}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-200">
+                        {entry.productName || "-"}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-cyan-300">
+                        {formatCurrency(entry.distributorProfit)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-emerald-300">
+                        {formatCurrency(entry.adminProfit)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-purple-200">
+                        {formatCurrency(entry.totalProfit)}
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
         </div>
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between border-t border-gray-700 bg-gray-900/30 px-4 py-3 sm:px-6">
-            <div className="flex flex-1 justify-between sm:hidden">
-              <button
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                className="relative inline-flex items-center rounded-md border border-gray-700 bg-transparent px-4 py-2 text-sm font-medium text-gray-200 hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Anterior
-              </button>
-              <button
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-                className="relative ml-3 inline-flex items-center rounded-md border border-gray-700 bg-transparent px-4 py-2 text-sm font-medium text-gray-200 hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Siguiente
-              </button>
+        <div className="rounded-xl border border-gray-800 bg-gray-900/70 p-4 shadow-lg">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-400">Ranking distribuidores</p>
+              <p className="text-lg font-semibold text-white">Top comisiones</p>
             </div>
-            <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm text-gray-300">
-                  Mostrando{" "}
-                  <span className="font-medium">
-                    {(currentPage - 1) * 20 + 1}
-                  </span>{" "}
-                  a{" "}
-                  <span className="font-medium">
-                    {Math.min(currentPage * 20, totalCount)}
-                  </span>{" "}
-                  de <span className="font-medium">{totalCount}</span>{" "}
-                  resultados
-                </p>
-              </div>
-              <div>
-                <nav className="relative z-0 inline-flex -space-x-px rounded-md shadow-sm">
-                  <button
-                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
-                    className="relative inline-flex items-center rounded-l-md border border-gray-700 bg-transparent px-2 py-2 text-sm font-medium text-gray-300 hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Anterior
-                  </button>
-                  {[...Array(totalPages)].map((_, i) => (
-                    <button
-                      key={i + 1}
-                      onClick={() => setCurrentPage(i + 1)}
-                      className={`relative inline-flex items-center border px-4 py-2 text-sm font-medium ${
-                        currentPage === i + 1
-                          ? "z-10 border-indigo-500 bg-indigo-50 text-indigo-600"
-                          : "border-gray-700 bg-transparent text-gray-300 hover:bg-gray-800"
-                      }`}
-                    >
-                      {i + 1}
-                    </button>
-                  ))}
-                  <button
-                    onClick={() =>
-                      setCurrentPage(p => Math.min(totalPages, p + 1))
-                    }
-                    disabled={currentPage === totalPages}
-                    className="relative inline-flex items-center rounded-r-md border border-gray-700 bg-transparent px-2 py-2 text-sm font-medium text-gray-300 hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Siguiente
-                  </button>
-                </nav>
-              </div>
+            <span className="rounded-full bg-purple-500/20 px-3 py-1 text-xs font-semibold text-purple-200">
+              {distributors.filter(d => d.id !== "admin").length} activos
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            {distributors.length === 0 && (
+              <p className="text-sm text-gray-400">
+                Aún no hay ventas registradas en este rango.
+              </p>
+            )}
+
+            {distributors
+              .filter(d => d.id !== "admin")
+              .map((dist: ProfitHistoryAdminDistributor) => (
+                <div
+                  key={dist.id}
+                  className="flex items-center justify-between rounded-lg border border-gray-800 bg-gray-950/60 px-3 py-2"
+                >
+                  <div>
+                    <p className="font-semibold text-gray-100">{dist.name}</p>
+                    <p className="text-xs text-gray-400">{dist.email || ""}</p>
+                    <p className="text-xs text-gray-500">{dist.sales} ventas</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-cyan-300">
+                      {formatCurrency(dist.distributorProfit)}
+                    </p>
+                    <p className="text-xs text-gray-400">Comisión</p>
+                  </div>
+                </div>
+              ))}
+          </div>
+
+          <div className="mt-5 rounded-lg border border-gray-800 bg-gray-950/60 p-3">
+            <p className="text-sm font-semibold text-white">Ventas admin</p>
+            <p className="text-xs text-gray-400">
+              Incluye ventas directas y margen de cada venta de distribuidor.
+            </p>
+            <div className="mt-2 flex items-center justify-between">
+              <span className="text-sm text-gray-300">Total admin</span>
+              <span className="font-semibold text-emerald-300">
+                {formatCurrency(
+                  distributors.find(d => d.id === "admin")?.adminProfit || 0
+                )}
+              </span>
             </div>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

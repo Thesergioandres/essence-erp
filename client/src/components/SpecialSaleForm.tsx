@@ -1,5 +1,9 @@
-import { useEffect, useState, useCallback } from "react";
-import { productService, specialSaleService, distributorService } from "../api/services";
+import { useCallback, useEffect, useState } from "react";
+import {
+  distributorService,
+  productService,
+  specialSaleService,
+} from "../api/services";
 import type { Product, User } from "../types";
 
 interface Distribution {
@@ -61,7 +65,11 @@ export default function SpecialSaleForm({
     (sum, dist) => sum + (dist.amount || 0),
     0
   );
-  const isValid = Math.abs(distributionSum - totalProfit) < 0.01;
+  const tolerance = 0.01;
+  const remainingProfit = totalProfit - distributionSum;
+  const isOverAllocated = remainingProfit < -tolerance;
+  const isBalanced = Math.abs(remainingProfit) <= tolerance;
+  const isValid = !isOverAllocated;
 
   const loadProducts = useCallback(async () => {
     try {
@@ -79,7 +87,9 @@ export default function SpecialSaleForm({
       const response = await distributorService.getAll(true); // Solo activos
       // Extraer solo distribuidores (role: 'distribuidor')
       const distData = Array.isArray(response) ? response : response.data;
-      const distributorUsers = distData.filter((user: User) => user.role === 'distribuidor');
+      const distributorUsers = distData.filter(
+        (user: User) => user.role === "distribuidor"
+      );
       setDistributors(distributorUsers);
     } catch (error) {
       console.error("Error al cargar distribuidores:", error);
@@ -123,7 +133,7 @@ export default function SpecialSaleForm({
   }, [editData]);
 
   const handleProductSelect = (index: number, productId: string) => {
-    const product = products.find((p) => p._id === productId);
+    const product = products.find(p => p._id === productId);
     if (product) {
       const newItems = [...productItems];
       newItems[index] = {
@@ -163,7 +173,10 @@ export default function SpecialSaleForm({
   };
 
   const addDistributor = () => {
-    setDistribution([...distribution, { name: "", amount: 0, percentage: "", useExisting: true }]);
+    setDistribution([
+      ...distribution,
+      { name: "", amount: 0, percentage: "", useExisting: true },
+    ]);
   };
 
   const removeDistributor = (index: number) => {
@@ -178,25 +191,28 @@ export default function SpecialSaleForm({
     value: string | number | boolean
   ) => {
     const newDistribution = [...distribution];
-    
+
     if (field === "percentage") {
       const percentageValue = value as string;
       newDistribution[index] = {
         ...newDistribution[index],
         percentage: percentageValue,
       };
-      
+
       // Si hay un porcentaje válido, calcular el monto
       if (percentageValue && !isNaN(parseFloat(percentageValue))) {
-        const calculatedAmount = (totalProfit * parseFloat(percentageValue)) / 100;
+        const pct = parseFloat(percentageValue);
+        const calculatedAmount =
+          totalProfit > 0 ? (totalProfit * pct) / 100 : 0;
         newDistribution[index].amount = parseFloat(calculatedAmount.toFixed(2));
       }
     } else if (field === "amount") {
       const amountValue = parseFloat(value as string) || 0;
+      const pct = totalProfit > 0 ? (amountValue / totalProfit) * 100 : 0;
       newDistribution[index] = {
         ...newDistribution[index],
         amount: amountValue,
-        percentage: "", // Limpiar porcentaje cuando se ingresa monto manual
+        percentage: pct ? pct.toFixed(2) : "",
       };
     } else if (field === "distributorId") {
       // Cuando se selecciona un distribuidor existente
@@ -225,7 +241,7 @@ export default function SpecialSaleForm({
         [field]: value,
       };
     }
-    
+
     setDistribution(newDistribution);
   };
 
@@ -233,13 +249,13 @@ export default function SpecialSaleForm({
     if (distribution.length === 0) return;
 
     const validDistributors = distribution.filter(
-      (d) => d.name && d.name.trim() !== ""
+      d => d.name && d.name.trim() !== ""
     );
     if (validDistributors.length === 0) return;
 
     const amountPerPerson = totalProfit / validDistributors.length;
 
-    const newDistribution = distribution.map((dist) => {
+    const newDistribution = distribution.map(dist => {
       if (dist.name && dist.name.trim() !== "") {
         return {
           ...dist,
@@ -253,24 +269,26 @@ export default function SpecialSaleForm({
     setDistribution(newDistribution);
   };
 
-
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!isValid) {
+    if (isOverAllocated) {
       alert(
-        `La suma de distribuciones ($${distributionSum.toFixed(2)}) no coincide con la ganancia total ($${totalProfit.toFixed(2)})`
+        `La suma de distribuciones ($${distributionSum.toFixed(2)}) excede la ganancia total ($${totalProfit.toFixed(2)})`
       );
       return;
     }
 
-    if (distribution.some((d) => !d.name || d.name.trim() === "")) {
+    if (distribution.some(d => !d.name || d.name.trim() === "")) {
       alert("Todos los distribuidores deben tener un nombre");
       return;
     }
 
-    if (productItems.some((item) => !item.productName || item.productName.trim() === "")) {
+    if (
+      productItems.some(
+        item => !item.productName || item.productName.trim() === ""
+      )
+    ) {
       alert("Todos los productos deben tener un nombre");
       return;
     }
@@ -279,10 +297,11 @@ export default function SpecialSaleForm({
 
     try {
       // Para ventas con múltiples productos, crear una venta especial por cada producto
-      const promises = productItems.map((item) => {
+      const promises = productItems.map(item => {
         // Calcular la proporción de distribución para este producto
-        const itemProfit = item.specialPrice * item.quantity - item.cost * item.quantity;
-        const proportionalDistribution = distribution.map((dist) => ({
+        const itemProfit =
+          item.specialPrice * item.quantity - item.cost * item.quantity;
+        const proportionalDistribution = distribution.map(dist => ({
           name: dist.name,
           amount: (dist.amount * itemProfit) / totalProfit,
           notes: dist.notes,
@@ -331,13 +350,13 @@ export default function SpecialSaleForm({
   return (
     <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-4 sm:p-6">
       <div className="mb-6 flex items-center justify-between">
-        <h2 className="text-xl sm:text-2xl font-bold text-white">
+        <h2 className="text-xl font-bold text-white sm:text-2xl">
           {editData ? "Editar" : "Nueva"} Venta Especial
         </h2>
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-lg px-4 py-2 text-sm text-gray-400 hover:bg-gray-700 hover:text-white transition"
+          className="rounded-lg px-4 py-2 text-sm text-gray-400 transition hover:bg-gray-700 hover:text-white"
         >
           Cancelar
         </button>
@@ -352,7 +371,7 @@ export default function SpecialSaleForm({
           <input
             type="text"
             value={eventName}
-            onChange={(e) => setEventName(e.target.value)}
+            onChange={e => setEventName(e.target.value)}
             placeholder="Ej: Black Friday 2024"
             className="w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-3 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
           />
@@ -367,7 +386,7 @@ export default function SpecialSaleForm({
             <button
               type="button"
               onClick={addProductItem}
-              className="rounded-lg bg-purple-600 px-3 py-1 text-xs font-medium text-white hover:bg-purple-700 transition"
+              className="rounded-lg bg-purple-600 px-3 py-1 text-xs font-medium text-white transition hover:bg-purple-700"
             >
               + Agregar producto
             </button>
@@ -387,7 +406,7 @@ export default function SpecialSaleForm({
                     <button
                       type="button"
                       onClick={() => removeProductItem(index)}
-                      className="rounded-lg bg-red-600 p-1.5 text-white hover:bg-red-700 transition"
+                      className="rounded-lg bg-red-600 p-1.5 text-white transition hover:bg-red-700"
                     >
                       <svg
                         className="h-4 w-4"
@@ -410,14 +429,14 @@ export default function SpecialSaleForm({
                   {/* Selector de producto */}
                   <div className="sm:col-span-2">
                     {loadingProducts ? (
-                      <p className="text-gray-400 text-sm">
+                      <p className="text-sm text-gray-400">
                         Cargando productos...
                       </p>
                     ) : (
                       <div className="space-y-2">
                         <select
                           value={item.productId || ""}
-                          onChange={(e) => {
+                          onChange={e => {
                             if (e.target.value === "custom") {
                               updateProductItem(index, "productId", "");
                             } else {
@@ -427,8 +446,10 @@ export default function SpecialSaleForm({
                           className="w-full rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
                         >
                           <option value="">Seleccionar producto...</option>
-                          <option value="custom">-- Producto personalizado --</option>
-                          {products.map((product) => (
+                          <option value="custom">
+                            -- Producto personalizado --
+                          </option>
+                          {products.map(product => (
                             <option key={product._id} value={product._id}>
                               {product.name} - $
                               {product.clientPrice?.toLocaleString()}
@@ -440,7 +461,7 @@ export default function SpecialSaleForm({
                           <input
                             type="text"
                             value={item.productName}
-                            onChange={(e) =>
+                            onChange={e =>
                               updateProductItem(
                                 index,
                                 "productName",
@@ -464,7 +485,7 @@ export default function SpecialSaleForm({
                     <input
                       type="number"
                       value={item.quantity || ""}
-                      onChange={(e) =>
+                      onChange={e =>
                         updateProductItem(
                           index,
                           "quantity",
@@ -486,7 +507,7 @@ export default function SpecialSaleForm({
                     <input
                       type="number"
                       value={item.specialPrice || ""}
-                      onChange={(e) =>
+                      onChange={e =>
                         updateProductItem(
                           index,
                           "specialPrice",
@@ -509,7 +530,7 @@ export default function SpecialSaleForm({
                     <input
                       type="number"
                       value={item.cost || ""}
-                      onChange={(e) =>
+                      onChange={e =>
                         updateProductItem(
                           index,
                           "cost",
@@ -539,7 +560,7 @@ export default function SpecialSaleForm({
                       ${(item.cost * item.quantity).toLocaleString()}
                     </span>
                   </div>
-                  <div className="flex justify-between border-t border-gray-600 pt-1 mt-1 font-semibold">
+                  <div className="mt-1 flex justify-between border-t border-gray-600 pt-1 font-semibold">
                     <span className="text-gray-300">Ganancia:</span>
                     <span className="text-green-400">
                       $
@@ -563,7 +584,7 @@ export default function SpecialSaleForm({
           <input
             type="date"
             value={saleDate}
-            onChange={(e) => setSaleDate(e.target.value)}
+            onChange={e => setSaleDate(e.target.value)}
             required
             className="w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-3 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
           />
@@ -609,25 +630,36 @@ export default function SpecialSaleForm({
                 <button
                   type="button"
                   onClick={autoDistribute}
-                  className="rounded-lg bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700 transition"
+                  className="rounded-lg bg-blue-600 px-3 py-1 text-xs font-medium text-white transition hover:bg-blue-700"
                 >
                   Distribuir equitativamente
                 </button>
                 <button
                   type="button"
                   onClick={addDistributor}
-                  className="rounded-lg bg-purple-600 px-3 py-1 text-xs font-medium text-white hover:bg-purple-700 transition"
+                  className="rounded-lg bg-purple-600 px-3 py-1 text-xs font-medium text-white transition hover:bg-purple-700"
                 >
                   + Agregar
                 </button>
               </div>
-              {distributionSum < totalProfit && distributionSum > 0 && (
-                <div className="flex items-center gap-2 rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2">
-                  <svg className="h-4 w-4 text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              {remainingProfit > tolerance && distributionSum > 0 && (
+                <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2">
+                  <svg
+                    className="h-4 w-4 shrink-0 text-amber-400"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
                   </svg>
                   <p className="text-xs text-amber-200">
-                    Restante ${(totalProfit - distributionSum).toLocaleString()} se asignará automáticamente a Admin
+                    Restante {remainingProfit.toLocaleString()} se asignará
+                    automáticamente a Admin
                   </p>
                 </div>
               )}
@@ -646,20 +678,32 @@ export default function SpecialSaleForm({
                       Nombre *
                     </label>
                     {loadingDistributors ? (
-                      <p className="text-xs text-gray-400 py-2">Cargando...</p>
+                      <p className="py-2 text-xs text-gray-400">Cargando...</p>
                     ) : (
                       <div className="space-y-2">
                         <select
-                          value={dist.distributorId || (dist.useExisting ? "" : "custom")}
-                          onChange={(e) => {
-                            updateDistributor(index, "distributorId", e.target.value);
+                          value={
+                            dist.distributorId ||
+                            (dist.useExisting ? "" : "custom")
+                          }
+                          onChange={e => {
+                            updateDistributor(
+                              index,
+                              "distributorId",
+                              e.target.value
+                            );
                           }}
                           className="w-full rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
                         >
                           <option value="">Seleccionar distribuidor...</option>
-                          <option value="custom">-- Persona personalizada --</option>
-                          {distributors.map((distributor) => (
-                            <option key={distributor._id} value={distributor._id}>
+                          <option value="custom">
+                            -- Persona personalizada --
+                          </option>
+                          {distributors.map(distributor => (
+                            <option
+                              key={distributor._id}
+                              value={distributor._id}
+                            >
                               {distributor.name}
                             </option>
                           ))}
@@ -669,7 +713,7 @@ export default function SpecialSaleForm({
                           <input
                             type="text"
                             value={dist.name}
-                            onChange={(e) =>
+                            onChange={e =>
                               updateDistributor(index, "name", e.target.value)
                             }
                             placeholder="Nombre de la persona *"
@@ -687,7 +731,7 @@ export default function SpecialSaleForm({
                     <input
                       type="number"
                       value={dist.percentage || ""}
-                      onChange={(e) =>
+                      onChange={e =>
                         updateDistributor(index, "percentage", e.target.value)
                       }
                       placeholder="0"
@@ -705,7 +749,7 @@ export default function SpecialSaleForm({
                       <input
                         type="number"
                         value={dist.amount || ""}
-                        onChange={(e) =>
+                        onChange={e =>
                           updateDistributor(
                             index,
                             "amount",
@@ -718,14 +762,6 @@ export default function SpecialSaleForm({
                         required
                         className="w-full rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none"
                       />
-                      {dist.percentage && parseFloat(dist.percentage) > 0 && (
-                        <span className="text-xs text-green-400 whitespace-nowrap">
-                          ≈ $
-                          {((totalProfit * parseFloat(dist.percentage)) / 100).toFixed(
-                            2
-                          )}
-                        </span>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -735,7 +771,7 @@ export default function SpecialSaleForm({
                     <button
                       type="button"
                       onClick={() => removeDistributor(index)}
-                      className="inline-flex items-center gap-1 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 transition"
+                      className="inline-flex items-center gap-1 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-red-700"
                     >
                       <svg
                         className="h-4 w-4"
@@ -761,9 +797,9 @@ export default function SpecialSaleForm({
           {/* Verificación de distribución */}
           <div
             className={`mt-3 rounded-lg p-3 ${
-              isValid
-                ? "bg-green-900/30 border border-green-700"
-                : "bg-red-900/30 border border-red-700"
+              isOverAllocated
+                ? "border border-red-700 bg-red-900/30"
+                : "border border-green-700 bg-green-900/30"
             }`}
           >
             <div className="flex items-center justify-between text-sm">
@@ -772,14 +808,32 @@ export default function SpecialSaleForm({
               </span>
               <span
                 className={`font-bold ${
-                  isValid ? "text-green-400" : "text-red-400"
+                  isOverAllocated ? "text-red-400" : "text-green-400"
                 }`}
               >
                 ${distributionSum.toLocaleString()}
               </span>
             </div>
             <div className="mt-1 flex items-center gap-2 text-xs">
-              {isValid ? (
+              {isOverAllocated ? (
+                <>
+                  <svg
+                    className="h-4 w-4 text-red-400"
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  <span className="text-red-400">
+                    ✗ La suma excede la ganancia total ($
+                    {totalProfit.toLocaleString()})
+                  </span>
+                </>
+              ) : isBalanced ? (
                 <>
                   <svg
                     className="h-4 w-4 text-green-400"
@@ -799,18 +853,19 @@ export default function SpecialSaleForm({
               ) : (
                 <>
                   <svg
-                    className="h-4 w-4 text-red-400"
+                    className="h-4 w-4 text-amber-400"
                     fill="currentColor"
                     viewBox="0 0 20 20"
                   >
                     <path
                       fillRule="evenodd"
-                      d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                      d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
                       clipRule="evenodd"
                     />
                   </svg>
-                  <span className="text-red-400">
-                    ✗ La suma debe ser ${totalProfit.toLocaleString()}
+                  <span className="text-amber-200">
+                    Se asignarán ${remainingProfit.toLocaleString()} al Admin
+                    automáticamente
                   </span>
                 </>
               )}
@@ -825,10 +880,10 @@ export default function SpecialSaleForm({
           </label>
           <textarea
             value={observations}
-            onChange={(e) => setObservations(e.target.value)}
+            onChange={e => setObservations(e.target.value)}
             rows={3}
             placeholder="Notas adicionales sobre esta venta especial..."
-            className="w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-3 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
+            className="w-full resize-none rounded-lg border border-gray-600 bg-gray-700 px-4 py-3 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
           />
         </div>
 
@@ -837,7 +892,7 @@ export default function SpecialSaleForm({
           <button
             type="submit"
             disabled={loading || !isValid}
-            className="flex-1 rounded-xl bg-linear-to-r from-purple-600 to-pink-600 px-6 py-3 font-semibold text-white transition hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="bg-linear-to-r flex-1 rounded-xl from-purple-600 to-pink-600 px-6 py-3 font-semibold text-white transition hover:from-purple-700 hover:to-pink-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading
               ? "Guardando..."

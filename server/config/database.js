@@ -1,5 +1,25 @@
 import mongoose from "mongoose";
 
+// Opciones explícitas para diagnosticar timeouts y limitar pool
+const mongoOptions = {
+  serverSelectionTimeoutMS: 10000, // falla rápido si no se conecta
+  socketTimeoutMS: 45000,
+  maxPoolSize: 10,
+};
+
+// Loggers de estado de conexión (se ejecutan una sola vez por proceso)
+mongoose.connection.on("connected", () => {
+  console.log("✅ Evento connected: MongoDB activo");
+});
+
+mongoose.connection.on("disconnected", () => {
+  console.warn("⚠️ Evento disconnected: MongoDB desconectado");
+});
+
+mongoose.connection.on("error", (err) => {
+  console.error("❌ Evento error en MongoDB:", err?.message || err);
+});
+
 const connectDB = async () => {
   try {
     // Soportar tanto MONGODB_URI como MONGO_URI (legacy)
@@ -11,7 +31,7 @@ const connectDB = async () => {
       );
     }
 
-    const conn = await mongoose.connect(mongoUri);
+    const conn = await mongoose.connect(mongoUri, mongoOptions);
     console.log(`✅ MongoDB conectado: ${conn.connection.host}`);
   } catch (error) {
     console.error("❌ Error conectando a MongoDB:", error.message);

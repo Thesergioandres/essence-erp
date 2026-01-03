@@ -27,6 +27,7 @@ import type {
   Product,
   ProductImage,
   ProductProfit,
+  ProfitHistoryAdminOverview,
   ProfitHistoryEntry,
   ProfitHistoryResponse,
   ProfitSummary,
@@ -1281,7 +1282,14 @@ export const advancedAnalyticsService = {
     return response.data;
   },
 
-  async getFinancialKPIs(): Promise<{
+  async getFinancialKPIs(params?: {
+    startDate?: string;
+    endDate?: string;
+  }): Promise<{
+    daily: { sales: number; revenue: number; profit: number };
+    weekly: { sales: number; revenue: number; profit: number };
+    monthly: { sales: number; revenue: number; profit: number };
+    avgTicket: number;
     kpis: {
       todaySales: number;
       todayRevenue: number;
@@ -1296,7 +1304,9 @@ export const advancedAnalyticsService = {
       totalActiveDistributors: number;
     };
   }> {
-    const response = await api.get("/advanced-analytics/financial-kpis");
+    const response = await api.get("/advanced-analytics/financial-kpis", {
+      params,
+    });
     return response.data;
   },
 
@@ -1554,6 +1564,18 @@ export const profitHistoryService = {
     userId?: string;
   }): Promise<ComparativeAnalysis> {
     const response = await api.get("/profit-history/comparative", { params });
+    return response.data;
+  },
+
+  async getAdminOverview(params?: {
+    startDate?: string;
+    endDate?: string;
+    distributorId?: string;
+    limit?: number;
+  }): Promise<ProfitHistoryAdminOverview> {
+    const response = await api.get("/profit-history/admin/overview", {
+      params,
+    });
     return response.data;
   },
 

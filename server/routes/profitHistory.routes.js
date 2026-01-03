@@ -2,6 +2,7 @@ import express from "express";
 import {
   backfillProfitHistoryFromSales,
   createProfitEntry,
+  getAdminProfitHistoryOverview,
   getComparativeAnalysis,
   getProfitSummary,
   getUserBalance,
@@ -24,6 +25,7 @@ router.get("/balance/:userId", getUserBalance);
 // Rutas admin
 router.get("/summary", admin, getProfitSummary);
 router.get("/comparative", admin, getComparativeAnalysis);
+router.get("/admin/overview", admin, getAdminProfitHistoryOverview);
 router.post("/", admin, createProfitEntry);
 router.post("/backfill/sales", admin, backfillProfitHistoryFromSales);
 

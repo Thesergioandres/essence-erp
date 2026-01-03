@@ -1,16 +1,19 @@
 import { motion } from "framer-motion";
 import { Award, Medal, TrendingUp, Trophy } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { advancedAnalyticsService } from "../../api/services";
 
 interface DistributorRankingsTableProps {
   startDate?: string;
   endDate?: string;
+  limit?: number;
+  search?: string;
+  reloadKey?: number;
 }
 
 export const DistributorRankingsTable: React.FC<
   DistributorRankingsTableProps
-> = ({ startDate, endDate }) => {
+> = ({ startDate, endDate, limit = 10, search = "", reloadKey = 0 }) => {
   const [rankings, setRankings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -44,7 +47,15 @@ export const DistributorRankingsTable: React.FC<
     };
 
     fetchData();
-  }, [startDate, endDate]);
+  }, [startDate, endDate, reloadKey]);
+
+  const filteredRankings = useMemo(() => {
+    const term = search.toLowerCase();
+    const filtered = rankings.filter(r =>
+      `${r.name || ""} ${r.email || ""}`.toLowerCase().includes(term)
+    );
+    return filtered.slice(0, limit);
+  }, [limit, rankings, search]);
 
   const getRankIcon = (rank: number) => {
     switch (rank) {
@@ -64,6 +75,24 @@ export const DistributorRankingsTable: React.FC<
       <div className="flex h-96 items-center justify-center rounded-lg border border-gray-800 bg-gray-900/60">
         <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-purple-600"></div>
       </div>
+    );
+  }
+
+  if (!loading && filteredRankings.length === 0) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="rounded-lg border border-gray-800 bg-gray-900 p-6 text-center"
+      >
+        <h3 className="text-xl font-bold text-white">
+          Ranking de Distribuidores
+        </h3>
+        <p className="mt-2 text-gray-400">
+          No hay distribuidores para los filtros seleccionados.
+        </p>
+      </motion.div>
     );
   }
 
@@ -108,66 +137,69 @@ export const DistributorRankingsTable: React.FC<
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-800 bg-gray-900">
-            {rankings.map((distributor, index) => (
-              <motion.tr
-                key={distributor._id}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.3, delay: index * 0.05 }}
-                className={`hover:bg-white/5 ${
-                  distributor.rank <= 3 ? "bg-purple-500/10" : ""
-                }`}
-              >
-                <td className="whitespace-nowrap px-6 py-4">
-                  <div className="flex items-center justify-center">
-                    {getRankIcon(distributor.rank)}
-                  </div>
-                </td>
-                <td className="whitespace-nowrap px-6 py-4">
-                  <div className="text-sm font-medium text-white">
-                    {distributor.name}
-                  </div>
-                  <div className="text-sm text-gray-400">
-                    {distributor.email}
-                  </div>
-                </td>
-                <td className="whitespace-nowrap px-6 py-4">
-                  <div className="text-sm font-semibold text-white">
-                    {distributor.totalSales}
-                  </div>
-                </td>
-                <td className="whitespace-nowrap px-6 py-4">
-                  <div className="text-sm font-semibold text-green-600">
-                    ${(Number(distributor.revenue) || 0).toFixed(2)}
-                  </div>
-                </td>
-                <td className="whitespace-nowrap px-6 py-4">
-                  <div className="text-sm font-semibold text-blue-600">
-                    ${(Number(distributor.profit) || 0).toFixed(2)}
-                  </div>
-                </td>
-                <td className="whitespace-nowrap px-6 py-4">
-                  <div className="flex items-center">
-                    <div
-                      className={`text-sm font-semibold ${
-                        distributor.conversionRate >= 70
-                          ? "text-green-600"
-                          : distributor.conversionRate >= 50
-                            ? "text-yellow-600"
-                            : "text-red-600"
-                      }`}
-                    >
-                      {(Number(distributor.conversionRate) || 0).toFixed(1)}%
+            {filteredRankings.map((distributor, index) => {
+              const position = index + 1;
+              return (
+                <motion.tr
+                  key={distributor._id}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.3, delay: index * 0.05 }}
+                  className={`hover:bg-white/5 ${
+                    position <= 3 ? "bg-purple-500/10" : ""
+                  }`}
+                >
+                  <td className="whitespace-nowrap px-6 py-4">
+                    <div className="flex items-center justify-center">
+                      {getRankIcon(position)}
                     </div>
-                  </div>
-                </td>
-                <td className="whitespace-nowrap px-6 py-4">
-                  <div className="text-sm text-white">
-                    ${(Number(distributor.averageOrderValue) || 0).toFixed(2)}
-                  </div>
-                </td>
-              </motion.tr>
-            ))}
+                  </td>
+                  <td className="whitespace-nowrap px-6 py-4">
+                    <div className="text-sm font-medium text-white">
+                      {distributor.name}
+                    </div>
+                    <div className="text-sm text-gray-400">
+                      {distributor.email}
+                    </div>
+                  </td>
+                  <td className="whitespace-nowrap px-6 py-4">
+                    <div className="text-sm font-semibold text-white">
+                      {distributor.totalSales}
+                    </div>
+                  </td>
+                  <td className="whitespace-nowrap px-6 py-4">
+                    <div className="text-sm font-semibold text-green-600">
+                      ${(Number(distributor.revenue) || 0).toFixed(2)}
+                    </div>
+                  </td>
+                  <td className="whitespace-nowrap px-6 py-4">
+                    <div className="text-sm font-semibold text-blue-600">
+                      ${(Number(distributor.profit) || 0).toFixed(2)}
+                    </div>
+                  </td>
+                  <td className="whitespace-nowrap px-6 py-4">
+                    <div className="flex items-center">
+                      <div
+                        className={`text-sm font-semibold ${
+                          distributor.conversionRate >= 70
+                            ? "text-green-600"
+                            : distributor.conversionRate >= 50
+                              ? "text-yellow-600"
+                              : "text-red-600"
+                        }`}
+                      >
+                        {(Number(distributor.conversionRate) || 0).toFixed(1)}%
+                      </div>
+                    </div>
+                  </td>
+                  <td className="whitespace-nowrap px-6 py-4">
+                    <div className="text-sm text-white">
+                      ${(Number(distributor.averageOrderValue) || 0).toFixed(2)}
+                    </div>
+                  </td>
+                </motion.tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

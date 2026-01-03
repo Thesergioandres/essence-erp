@@ -44,7 +44,17 @@ export const businessContext = async (req, res, next) => {
 
     // Si el creador (super admin) perdió acceso, bloquear a los distribuidores del negocio
     if (!isTest && membership?.role === "distribuidor" && !isGod) {
-      const owner = await User.findById(business.createdBy).select(
+      // Resolver owner/admin principal: membership admin más antiguo o creador
+      const primaryAdminMembership = await Membership.findOne({
+        business: businessId,
+        role: "admin",
+        status: "active",
+      })
+        .sort({ createdAt: 1 })
+        .lean();
+
+      const ownerUserId = primaryAdminMembership?.user || business.createdBy;
+      const owner = await User.findById(ownerUserId).select(
         "role status active subscriptionExpiresAt"
       );
 
@@ -52,14 +62,15 @@ export const businessContext = async (req, res, next) => {
         owner?.subscriptionExpiresAt &&
         new Date(owner.subscriptionExpiresAt).getTime() < Date.now();
 
-      const ownerRestricted =
-        owner?.role === "super_admin" &&
-        (!owner.active || owner.status !== "active" || ownerExpired);
+      const ownerInactive =
+        !owner || !owner.active || owner.status !== "active" || ownerExpired;
 
-      if (ownerRestricted) {
+      if (ownerInactive) {
         return res.status(403).json({
           message:
-            "Acceso deshabilitado: el super admin del negocio no tiene acceso activo",
+            "Acceso deshabilitado: el administrador del negocio no tiene acceso activo",
+          code: "owner_inactive",
+          subscriptionExpiresAt: owner?.subscriptionExpiresAt || null,
         });
       }
     }

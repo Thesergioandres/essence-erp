@@ -79,6 +79,19 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
 
       syncBusinessId(nextId);
     } catch (err) {
+      const status = (err as { response?: { status?: number; data?: any } })
+        ?.response?.status;
+      const code = (err as { response?: { status?: number; data?: any } })
+        ?.response?.data?.code;
+
+      // Si el token quedó viejo/ilegal y el backend responde 401/403, limpia sesión para evitar loops en público
+      if (status === 401 || (status === 403 && code !== "owner_inactive")) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        syncBusinessId(null);
+        setMemberships([]);
+      }
+
       console.error("Error fetching memberships", err);
       setError("No se pudieron cargar tus negocios");
     } finally {

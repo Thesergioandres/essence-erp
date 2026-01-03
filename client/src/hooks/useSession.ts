@@ -34,9 +34,12 @@ export function useSession() {
           return { user: merged, loading: false, error: null };
         });
 
-        // Si es god y no hay businessId, intenta fijar el único negocio asignado
+        // Si es god o distribuidor y no hay businessId, intenta fijar el único negocio asignado
         const hasBusiness = !!localStorage.getItem("businessId");
-        if (profile.role === "god" && !hasBusiness) {
+        if (
+          (profile.role === "god" || profile.role === "distribuidor") &&
+          !hasBusiness
+        ) {
           try {
             const { data } = await api.get<{ memberships: Membership[] }>(
               "/business/me/memberships"
@@ -47,13 +50,26 @@ export function useSession() {
             }
           } catch (err) {
             console.warn(
-              "No se pudo fijar businessId para god en session",
+              "No se pudo fijar businessId para usuario en session",
               err
             );
           }
         }
       } catch (error) {
         console.error("useSession profile error", error);
+
+        const status = (error as { response?: { status?: number; data?: any } })
+          ?.response?.status;
+        const code = (error as { response?: { status?: number; data?: any } })
+          ?.response?.data?.code;
+
+        // Si el token expiró o no tiene permisos, limpia sesión para evitar más peticiones 403/401 en páginas públicas
+        if (status === 401 || (status === 403 && code !== "owner_inactive")) {
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
+          localStorage.removeItem("businessId");
+        }
+
         if (!mounted) return;
         setState(prev => ({
           ...prev,

@@ -7,11 +7,12 @@ export function useBrandLogo() {
   const [customLogo, setCustomLogo] = useState<string | null>(null);
 
   useEffect(() => {
-    const stored = localStorage.getItem("brandLogoUrl");
-    setCustomLogo(stored);
+    const stored = localStorage.getItem("brandLogoUrl") || undefined;
+    setCustomLogo(stored || null);
 
     const handleUpdate = () => {
-      setCustomLogo(localStorage.getItem("brandLogoUrl"));
+      const updated = localStorage.getItem("brandLogoUrl") || undefined;
+      setCustomLogo(updated || null);
     };
 
     window.addEventListener("storage", handleUpdate);
@@ -23,5 +24,16 @@ export function useBrandLogo() {
     };
   }, []);
 
-  return business?.logoUrl || customLogo || "/erp-logo.png";
+  const businessLogo =
+    business?.logoUrl?.trim() ||
+    (typeof (business as Record<string, unknown> | null)?.logo === "string"
+      ? ((business as Record<string, string>).logo || "").trim()
+      : (
+          business as Record<string, { url?: string }> | null
+        )?.logo?.url?.trim()) ||
+    null;
+
+  const storedLogo = customLogo?.trim() || null;
+
+  return businessLogo || storedLogo || "/erp-logo.png";
 }

@@ -44,6 +44,14 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   response => response,
   error => {
+    const code = (error.response?.data as { code?: string } | undefined)?.code;
+
+    if (error.response?.status === 403 && code === "owner_inactive") {
+      localStorage.setItem("accessHoldReason", "owner_inactive");
+      window.location.href = "/account-hold?reason=owner_inactive";
+      return Promise.reject(error);
+    }
+
     if (error.response?.status === 401) {
       const token = localStorage.getItem("token");
       // Solo redirige a login si había sesión; evita mandar a login a usuarios públicos del catálogo

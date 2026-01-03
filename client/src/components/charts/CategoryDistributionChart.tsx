@@ -13,6 +13,7 @@ import { advancedAnalyticsService } from "../../api/services";
 interface CategoryDistributionChartProps {
   startDate?: string;
   endDate?: string;
+  reloadKey?: number;
 }
 
 const COLORS = [
@@ -28,7 +29,7 @@ const COLORS = [
 
 export const CategoryDistributionChart: React.FC<
   CategoryDistributionChartProps
-> = ({ startDate, endDate }) => {
+> = ({ startDate, endDate, reloadKey = 0 }) => {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -58,7 +59,7 @@ export const CategoryDistributionChart: React.FC<
     };
 
     fetchData();
-  }, [startDate, endDate]);
+  }, [startDate, endDate, reloadKey]);
 
   if (loading) {
     return (

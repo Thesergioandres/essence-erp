@@ -25,6 +25,12 @@ export default function DashboardLayout() {
   const user = authService.getCurrentUser();
   const { business } = useBusiness();
   const logoUrl = useBrandLogo();
+  const brandLogo = (
+    business?.logoUrl?.trim() ||
+    logoUrl ||
+    "/erp-logo.png"
+  ).trim();
+  const brandName = business?.name || "Selecciona un negocio";
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const handleLogout = () => {
@@ -57,13 +63,13 @@ export default function DashboardLayout() {
           <div className="shrink-0 border-b border-gray-800 px-4 py-4 sm:py-6">
             <div className="flex items-center gap-3">
               <img
-                src={logoUrl}
-                alt={business?.name || "Logo"}
+                src={brandLogo}
+                alt={brandName}
                 className="h-10 w-10 rounded-lg bg-white/5 drop-shadow-lg sm:h-12 sm:w-12"
               />
               <div>
                 <h1 className="bg-linear-to-r from-purple-400 to-pink-400 bg-clip-text text-2xl font-bold text-transparent sm:text-3xl">
-                  {business?.name || ""}
+                  {brandName}
                 </h1>
                 <p className="mt-0.5 text-xs text-gray-400 sm:text-sm">
                   Panel Admin
@@ -463,7 +469,7 @@ export default function DashboardLayout() {
 
       {/* Header (mobile + desktop) */}
       <div className="fixed left-0 right-0 top-0 z-30 h-14 border-b border-gray-800 bg-[#0d0e16]/80 backdrop-blur-lg lg:h-16">
-        <div className="flex h-full items-center justify-between px-3 sm:px-5 lg:px-8">
+        <div className="flex h-full items-center justify-between px-3 sm:px-5 lg:px-8 lg:pl-[19rem]">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen(true)}
@@ -485,12 +491,16 @@ export default function DashboardLayout() {
               </svg>
             </button>
             <div className="flex items-center gap-2">
-              <img src="/logo-essence.svg" alt="Essence" className="h-8 w-8" />
+              <img
+                src={brandLogo}
+                alt={brandName}
+                className="h-9 w-9 rounded-lg bg-white/5 drop-shadow"
+              />
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
-                  Multi-negocio
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">
+                  Identidad
                 </p>
-                <p className="text-sm font-bold text-white">Essence Admin</p>
+                <p className="text-sm font-bold text-white">{brandName}</p>
               </div>
             </div>
           </div>

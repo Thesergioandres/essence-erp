@@ -334,6 +334,39 @@ export const generateBusinessAssistantRecommendations = async ({
       },
     },
     {
+      $project: {
+        product: "$product",
+        saleDate: "$saleDate",
+        quantity: "$quantity",
+        salePrice: "$salePrice",
+        totalProfit: "$totalProfit",
+      },
+    },
+    {
+      $unionWith: {
+        coll: "specialsales",
+        pipeline: [
+          {
+            $match: {
+              status: "active",
+              business: businessObjectId,
+              saleDate: matchSaleDate,
+              "product.productId": { $exists: true, $ne: null },
+            },
+          },
+          {
+            $project: {
+              product: "$product.productId",
+              saleDate: "$saleDate",
+              quantity: "$quantity",
+              salePrice: "$specialPrice",
+              totalProfit: "$totalProfit",
+            },
+          },
+        ],
+      },
+    },
+    {
       $group: {
         _id: "$product",
 

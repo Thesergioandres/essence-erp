@@ -13,46 +13,24 @@ import { admin, protect } from "../middleware/auth.middleware.js";
 import { businessContext } from "../middleware/business.middleware.js";
 import { cacheMiddleware } from "../middleware/cache.middleware.js";
 
+// Solo usar caché si está habilitado en entorno
+const cacheIfEnabled =
+  process.env.ENABLE_REDIS_CACHE === "true"
+    ? cacheMiddleware(300, "analytics")
+    : (req, res, next) => next();
+
 const router = express.Router();
 
 // Caché de 5 minutos para analytics (scoped por negocio)
 router.use(protect, businessContext, admin);
 
-router.get(
-  "/monthly-profit",
-  cacheMiddleware(300, "analytics"),
-  getMonthlyProfit
-);
-router.get(
-  "/profit-by-product",
-  cacheMiddleware(300, "analytics"),
-  getProfitByProduct
-);
-router.get(
-  "/profit-by-distributor",
-  cacheMiddleware(300, "analytics"),
-  getProfitByDistributor
-);
-router.get("/averages", cacheMiddleware(300, "analytics"), getAverages);
-router.get(
-  "/sales-timeline",
-  cacheMiddleware(300, "analytics"),
-  getSalesTimeline
-);
-router.get(
-  "/financial-summary",
-  cacheMiddleware(300, "analytics"),
-  getFinancialSummary
-);
-router.get(
-  "/dashboard",
-  cacheMiddleware(300, "analytics"),
-  getAnalyticsDashboard
-);
-router.get(
-  "/combined-summary",
-  cacheMiddleware(300, "analytics"),
-  getCombinedSummary
-);
+router.get("/monthly-profit", cacheIfEnabled, getMonthlyProfit);
+router.get("/profit-by-product", cacheIfEnabled, getProfitByProduct);
+router.get("/profit-by-distributor", cacheIfEnabled, getProfitByDistributor);
+router.get("/averages", cacheIfEnabled, getAverages);
+router.get("/sales-timeline", cacheIfEnabled, getSalesTimeline);
+router.get("/financial-summary", cacheIfEnabled, getFinancialSummary);
+router.get("/dashboard", cacheIfEnabled, getAnalyticsDashboard);
+router.get("/combined-summary", cacheIfEnabled, getCombinedSummary);
 
 export default router;

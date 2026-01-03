@@ -3,7 +3,9 @@ import { Minus, TrendingDown, TrendingUp } from "lucide-react";
 import { useEffect, useState } from "react";
 import { advancedAnalyticsService } from "../../api/services";
 
-export const ComparativeAnalysisView: React.FC = () => {
+export const ComparativeAnalysisView: React.FC<{ reloadKey?: number }> = ({
+  reloadKey = 0,
+}) => {
   const [comparison, setComparison] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -22,7 +24,7 @@ export const ComparativeAnalysisView: React.FC = () => {
     };
 
     fetchData();
-  }, []);
+  }, [reloadKey]);
 
   const getGrowthIcon = (growth: number) => {
     if (growth > 0) return <TrendingUp className="h-5 w-5" />;

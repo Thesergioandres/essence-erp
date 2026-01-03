@@ -2,12 +2,13 @@ import { endOfMonth, format, startOfMonth, subDays } from "date-fns";
 import { motion } from "framer-motion";
 import {
   BarChart3,
-  Calendar,
   Download,
   FileText,
+  RefreshCcw,
+  Search,
   TrendingUp,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { advancedAnalyticsService } from "../api/services";
 import {
   CategoryDistributionChart,
@@ -18,6 +19,7 @@ import {
   SalesTimelineChart,
   TopProductsChart,
 } from "../components/charts";
+import { formatCurrency } from "../utils";
 import {
   exportKPIsToPDF,
   exportRankingsToExcel,
@@ -25,54 +27,126 @@ import {
 } from "../utils/exportUtils";
 
 export default function AdvancedDashboard() {
-  const [period, setPeriod] = useState<"day" | "week" | "month">("week");
-  const [dateRange, setDateRange] = useState({
+  const [overviewRange, setOverviewRange] = useState({
+    startDate: format(subDays(new Date(), 7), "yyyy-MM-dd"),
+    endDate: format(new Date(), "yyyy-MM-dd"),
+  });
+  const [timelineRange, setTimelineRange] = useState({
+    startDate: format(subDays(new Date(), 7), "yyyy-MM-dd"),
+    endDate: format(new Date(), "yyyy-MM-dd"),
+  });
+  const [timelinePeriod, setTimelinePeriod] = useState<
+    "day" | "week" | "month"
+  >("day");
+  const [productsRange, setProductsRange] = useState({
     startDate: format(subDays(new Date(), 30), "yyyy-MM-dd"),
     endDate: format(new Date(), "yyyy-MM-dd"),
   });
+  const [distributorsRange, setDistributorsRange] = useState({
+    startDate: format(subDays(new Date(), 30), "yyyy-MM-dd"),
+    endDate: format(new Date(), "yyyy-MM-dd"),
+  });
+  const [reloadKey, setReloadKey] = useState(0);
+  const [topProductsLimit, setTopProductsLimit] = useState(10);
+  const [rankingLimit, setRankingLimit] = useState(10);
+  const [rankingSearch, setRankingSearch] = useState("");
   const [activeTab, setActiveTab] = useState<
     "overview" | "products" | "distributors" | "stock"
   >("overview");
 
-  const [funnelLoading, setFunnelLoading] = useState(true);
-  const [salesFunnel, setSalesFunnel] = useState<null | {
+  const [salesFunnel, setSalesFunnel] = useState<{
     pending: { count: number; totalValue: number };
     confirmed: { count: number; totalValue: number };
     conversionRate: number;
-  }>(null);
+  } | null>(null);
+  const [funnelLoading, setFunnelLoading] = useState(false);
 
   const [rotationDays, setRotationDays] = useState(30);
   const [rotationLoading, setRotationLoading] = useState(false);
   const [productRotation, setProductRotation] = useState<
-    Array<{
+    {
       _id: string;
       name: string;
       totalSold: number;
       frequency: number;
       currentStock: number;
       rotationRate: number;
-    }>
+    }[]
   >([]);
 
-  const dateRangeError = useMemo(() => {
-    if (!dateRange.startDate || !dateRange.endDate) return null;
-    return dateRange.startDate > dateRange.endDate
+  const validateRange = (range: { startDate: string; endDate: string }) => {
+    if (!range.startDate || !range.endDate) return null;
+    return range.startDate > range.endDate
       ? "La fecha inicio no puede ser mayor que la fecha fin."
       : null;
-  }, [dateRange.endDate, dateRange.startDate]);
-
-  const formatCurrency = (value: number) => {
-    const num = Number(value) || 0;
-    return `$${num.toFixed(0)}`;
   };
+
+  const isSameRange = (
+    range: { startDate: string; endDate: string },
+    days: number
+  ) => {
+    const today = format(new Date(), "yyyy-MM-dd");
+    const start = format(subDays(new Date(), days), "yyyy-MM-dd");
+    return range.startDate === start && range.endDate === today;
+  };
+
+  const isCurrentMonthRange = (range: {
+    startDate: string;
+    endDate: string;
+  }) => {
+    const start = format(startOfMonth(new Date()), "yyyy-MM-dd");
+    const end = format(endOfMonth(new Date()), "yyyy-MM-dd");
+    return range.startDate === start && range.endDate === end;
+  };
+
+  const rangeBtn = (active: boolean) =>
+    `${active ? "border-purple-500 bg-purple-500/10 text-white" : "border-gray-700 text-gray-100"} rounded-md border px-3 py-2 text-sm transition hover:border-purple-500`;
+
+  const applyQuickRange = (
+    setter: (r: { startDate: string; endDate: string }) => void,
+    days: number
+  ) => {
+    setter({
+      startDate: format(subDays(new Date(), days), "yyyy-MM-dd"),
+      endDate: format(new Date(), "yyyy-MM-dd"),
+    });
+  };
+
+  const applyCurrentMonth = (
+    setter: (r: { startDate: string; endDate: string }) => void
+  ) => {
+    setter({
+      startDate: format(startOfMonth(new Date()), "yyyy-MM-dd"),
+      endDate: format(endOfMonth(new Date()), "yyyy-MM-dd"),
+    });
+  };
+
+  const clearRange = (
+    setter: (r: { startDate: string; endDate: string }) => void
+  ) => setter({ startDate: "", endDate: "" });
+
+  const handleReload = () => {
+    setReloadKey(key => key + 1);
+  };
+
+  const [deferHeavy, setDeferHeavy] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setDeferHeavy(true), 350);
+    return () => clearTimeout(t);
+  }, []);
+
+  const overviewRangeError = validateRange(overviewRange);
+  const timelineRangeError = validateRange(timelineRange);
+  const productsRangeError = validateRange(productsRange);
+  const distributorsRangeError = validateRange(distributorsRange);
 
   useEffect(() => {
     const fetchFunnel = async () => {
       try {
         setFunnelLoading(true);
         const response = await advancedAnalyticsService.getSalesFunnel({
-          startDate: dateRange.startDate,
-          endDate: dateRange.endDate,
+          startDate: overviewRange.startDate || undefined,
+          endDate: overviewRange.endDate || undefined,
         });
         setSalesFunnel(response.funnel);
       } catch (error) {
@@ -83,10 +157,10 @@ export default function AdvancedDashboard() {
       }
     };
 
-    if (!dateRangeError) {
+    if (!validateRange(overviewRange)) {
       fetchFunnel();
     }
-  }, [dateRange.endDate, dateRange.startDate, dateRangeError]);
+  }, [overviewRange.endDate, overviewRange.startDate, reloadKey]);
 
   useEffect(() => {
     const fetchRotation = async () => {
@@ -107,12 +181,15 @@ export default function AdvancedDashboard() {
     if (activeTab === "products") {
       fetchRotation();
     }
-  }, [activeTab, rotationDays]);
+  }, [activeTab, rotationDays, reloadKey]);
 
   const handleExportKPIs = async () => {
     try {
-      const response = await advancedAnalyticsService.getFinancialKPIs();
-      exportKPIsToPDF(response.kpis);
+      const response = await advancedAnalyticsService.getFinancialKPIs({
+        startDate: overviewRange.startDate || undefined,
+        endDate: overviewRange.endDate || undefined,
+      });
+      exportKPIsToPDF(response.kpis || response);
     } catch (error) {
       console.error("Error al exportar KPIs:", error);
     }
@@ -121,8 +198,8 @@ export default function AdvancedDashboard() {
   const handleExportRankings = async (format: "pdf" | "excel") => {
     try {
       const response = await advancedAnalyticsService.getDistributorRankings({
-        startDate: dateRange.startDate,
-        endDate: dateRange.endDate,
+        startDate: distributorsRange.startDate || undefined,
+        endDate: distributorsRange.endDate || undefined,
       });
 
       if (format === "pdf") {
@@ -163,6 +240,13 @@ export default function AdvancedDashboard() {
 
           <div className="mt-4 flex items-center space-x-4 md:mt-0">
             <button
+              onClick={handleReload}
+              className="flex items-center rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-gray-100 transition-colors hover:border-purple-500 hover:text-white"
+            >
+              <RefreshCcw className="mr-2 h-4 w-4" />
+              Recargar
+            </button>
+            <button
               onClick={handleExportKPIs}
               className="flex items-center rounded-lg bg-purple-600 px-4 py-2 text-white transition-colors hover:bg-purple-700"
             >
@@ -173,102 +257,15 @@ export default function AdvancedDashboard() {
         </div>
       </motion.div>
 
-      {/* Filters */}
+      {/* Filters info */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.1 }}
-        className="mb-8 rounded-xl border border-gray-700 bg-gray-800/50 p-6"
+        className="mb-8 rounded-xl border border-gray-700 bg-gray-800/40 p-4 text-sm text-gray-300"
       >
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <div>
-            <label className="mb-2 block text-sm font-medium text-gray-300">
-              <Calendar className="mr-2 inline h-4 w-4" />
-              Periodo
-            </label>
-            <select
-              value={period}
-              onChange={e =>
-                setPeriod(e.target.value as "day" | "week" | "month")
-              }
-              className="w-full rounded-lg border border-gray-700 bg-gray-900/40 px-4 py-2 text-gray-100 focus:border-transparent focus:ring-2 focus:ring-purple-500/40"
-            >
-              <option value="day">Diario</option>
-              <option value="week">Semanal</option>
-              <option value="month">Mensual</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-medium text-gray-300">
-              Fecha Inicio
-            </label>
-            <input
-              type="date"
-              value={dateRange.startDate}
-              onChange={e =>
-                setDateRange({ ...dateRange, startDate: e.target.value })
-              }
-              className="w-full rounded-lg border border-gray-700 bg-gray-900/40 px-4 py-2 text-gray-100 focus:border-transparent focus:ring-2 focus:ring-purple-500/40"
-            />
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-medium text-gray-300">
-              Fecha Fin
-            </label>
-            <input
-              type="date"
-              value={dateRange.endDate}
-              onChange={e =>
-                setDateRange({ ...dateRange, endDate: e.target.value })
-              }
-              className="w-full rounded-lg border border-gray-700 bg-gray-900/40 px-4 py-2 text-gray-100 focus:border-transparent focus:ring-2 focus:ring-purple-500/40"
-            />
-          </div>
-        </div>
-
-        <div className="mt-4 flex space-x-2">
-          <button
-            onClick={() =>
-              setDateRange({
-                startDate: format(subDays(new Date(), 7), "yyyy-MM-dd"),
-                endDate: format(new Date(), "yyyy-MM-dd"),
-              })
-            }
-            className="rounded-lg border border-gray-700 px-3 py-1 text-sm text-gray-200 transition-colors hover:bg-gray-800"
-          >
-            Últimos 7 días
-          </button>
-          <button
-            onClick={() =>
-              setDateRange({
-                startDate: format(subDays(new Date(), 30), "yyyy-MM-dd"),
-                endDate: format(new Date(), "yyyy-MM-dd"),
-              })
-            }
-            className="rounded-lg border border-gray-700 px-3 py-1 text-sm text-gray-200 transition-colors hover:bg-gray-800"
-          >
-            Últimos 30 días
-          </button>
-          <button
-            onClick={() =>
-              setDateRange({
-                startDate: format(startOfMonth(new Date()), "yyyy-MM-dd"),
-                endDate: format(endOfMonth(new Date()), "yyyy-MM-dd"),
-              })
-            }
-            className="rounded-lg border border-gray-700 px-3 py-1 text-sm text-gray-200 transition-colors hover:bg-gray-800"
-          >
-            Este mes
-          </button>
-        </div>
-
-        {dateRangeError && (
-          <div className="mt-4 rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
-            {dateRangeError}
-          </div>
-        )}
+        Cada bloque tiene sus propios filtros rápidos (fechas, período, top N).
+        Ajusta en el mismo bloque según lo que quieras analizar.
       </motion.div>
 
       {/* Tabs */}
@@ -300,11 +297,98 @@ export default function AdvancedDashboard() {
       <div className="space-y-8">
         {activeTab === "overview" && (
           <>
+            {/* Filtros Overview */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="rounded-xl border border-gray-800 bg-gray-900/70 p-4"
+            >
+              <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-sm text-gray-300">
+                      Fecha inicio (KPIs / Embudo)
+                    </label>
+                    <input
+                      type="date"
+                      value={overviewRange.startDate}
+                      onChange={e =>
+                        setOverviewRange({
+                          ...overviewRange,
+                          startDate: e.target.value,
+                        })
+                      }
+                      className="w-full rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 text-gray-100 focus:border-purple-500/40 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm text-gray-300">
+                      Fecha fin
+                    </label>
+                    <input
+                      type="date"
+                      value={overviewRange.endDate}
+                      onChange={e =>
+                        setOverviewRange({
+                          ...overviewRange,
+                          endDate: e.target.value,
+                        })
+                      }
+                      className="w-full rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 text-gray-100 focus:border-purple-500/40 focus:outline-none"
+                    />
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => applyQuickRange(setOverviewRange, 7)}
+                    className={rangeBtn(isSameRange(overviewRange, 7))}
+                  >
+                    Últimos 7 días
+                  </button>
+                  <button
+                    onClick={() => applyQuickRange(setOverviewRange, 30)}
+                    className={rangeBtn(isSameRange(overviewRange, 30))}
+                  >
+                    Últimos 30 días
+                  </button>
+                  <button
+                    onClick={() => applyQuickRange(setOverviewRange, 90)}
+                    className={rangeBtn(isSameRange(overviewRange, 90))}
+                  >
+                    Últimos 90 días
+                  </button>
+                  <button
+                    onClick={() => applyCurrentMonth(setOverviewRange)}
+                    className={rangeBtn(isCurrentMonthRange(overviewRange))}
+                  >
+                    Mes actual
+                  </button>
+                  <button
+                    onClick={() => clearRange(setOverviewRange)}
+                    className={rangeBtn(
+                      !overviewRange.startDate && !overviewRange.endDate
+                    )}
+                  >
+                    Todo
+                  </button>
+                </div>
+              </div>
+              {overviewRangeError && (
+                <p className="mt-3 text-sm text-red-300">
+                  {overviewRangeError}
+                </p>
+              )}
+            </motion.div>
+
             {/* KPIs */}
-            <FinancialKPICards />
+            <FinancialKPICards
+              reloadKey={reloadKey}
+              startDate={overviewRange.startDate || undefined}
+              endDate={overviewRange.endDate || undefined}
+            />
 
             {/* Comparative Analysis */}
-            <ComparativeAnalysisView />
+            <ComparativeAnalysisView reloadKey={reloadKey} />
 
             {/* Sales Funnel */}
             <motion.div
@@ -318,8 +402,8 @@ export default function AdvancedDashboard() {
                   Embudo de pagos
                 </h3>
                 <span className="text-sm text-gray-400">
-                  {dateRange.startDate && dateRange.endDate
-                    ? `${dateRange.startDate} → ${dateRange.endDate}`
+                  {overviewRange.startDate && overviewRange.endDate
+                    ? `${overviewRange.startDate} → ${overviewRange.endDate}`
                     : "Global"}
                 </span>
               </div>
@@ -364,120 +448,381 @@ export default function AdvancedDashboard() {
             </motion.div>
 
             {/* Sales Timeline */}
-            <SalesTimelineChart
-              period={period}
-              startDate={dateRange.startDate}
-              endDate={dateRange.endDate}
-            />
+            <div className="rounded-xl border border-gray-800 bg-gray-900 p-4">
+              <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                <div>
+                  <h3 className="text-xl font-semibold text-white">
+                    Línea de tiempo de ventas
+                  </h3>
+                  <p className="text-sm text-gray-400">
+                    Ajusta periodo y rango solo para esta vista.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <select
+                    value={timelinePeriod}
+                    onChange={e =>
+                      setTimelinePeriod(
+                        e.target.value as "day" | "week" | "month"
+                      )
+                    }
+                    className="rounded-md border border-gray-700 bg-gray-950 px-3 py-2 text-sm text-gray-100 focus:border-purple-500"
+                  >
+                    <option value="day">Diario</option>
+                    <option value="week">Semanal</option>
+                    <option value="month">Mensual</option>
+                  </select>
+                  <input
+                    type="date"
+                    value={timelineRange.startDate}
+                    onChange={e =>
+                      setTimelineRange({
+                        ...timelineRange,
+                        startDate: e.target.value,
+                      })
+                    }
+                    className="rounded-md border border-gray-700 bg-gray-950 px-3 py-2 text-sm text-gray-100 focus:border-purple-500"
+                  />
+                  <input
+                    type="date"
+                    value={timelineRange.endDate}
+                    onChange={e =>
+                      setTimelineRange({
+                        ...timelineRange,
+                        endDate: e.target.value,
+                      })
+                    }
+                    className="rounded-md border border-gray-700 bg-gray-950 px-3 py-2 text-sm text-gray-100 focus:border-purple-500"
+                  />
+                  <button
+                    onClick={() => applyQuickRange(setTimelineRange, 7)}
+                    className={rangeBtn(isSameRange(timelineRange, 7))}
+                  >
+                    7d
+                  </button>
+                  <button
+                    onClick={() => applyQuickRange(setTimelineRange, 14)}
+                    className={rangeBtn(isSameRange(timelineRange, 14))}
+                  >
+                    14d
+                  </button>
+                  <button
+                    onClick={() => applyQuickRange(setTimelineRange, 30)}
+                    className={rangeBtn(isSameRange(timelineRange, 30))}
+                  >
+                    30d
+                  </button>
+                  <button
+                    onClick={() => applyQuickRange(setTimelineRange, 90)}
+                    className={rangeBtn(isSameRange(timelineRange, 90))}
+                  >
+                    90d
+                  </button>
+                </div>
+              </div>
+              {timelineRangeError && (
+                <p className="mb-2 text-sm text-red-300">
+                  {timelineRangeError}
+                </p>
+              )}
+              <SalesTimelineChart
+                period={timelinePeriod}
+                startDate={timelineRange.startDate || undefined}
+                endDate={timelineRange.endDate || undefined}
+                reloadKey={reloadKey}
+              />
+            </div>
           </>
         )}
 
         {activeTab === "products" && (
           <>
+            <div className="rounded-xl border border-gray-800 bg-gray-900/70 p-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-sm text-gray-300">
+                      Fecha inicio (Productos)
+                    </label>
+                    <input
+                      type="date"
+                      value={productsRange.startDate}
+                      onChange={e =>
+                        setProductsRange({
+                          ...productsRange,
+                          startDate: e.target.value,
+                        })
+                      }
+                      className="w-full rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 text-gray-100 focus:border-purple-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm text-gray-300">
+                      Fecha fin
+                    </label>
+                    <input
+                      type="date"
+                      value={productsRange.endDate}
+                      onChange={e =>
+                        setProductsRange({
+                          ...productsRange,
+                          endDate: e.target.value,
+                        })
+                      }
+                      className="w-full rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 text-gray-100 focus:border-purple-500"
+                    />
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => applyQuickRange(setProductsRange, 7)}
+                    className={rangeBtn(isSameRange(productsRange, 7))}
+                  >
+                    7d
+                  </button>
+                  <button
+                    onClick={() => applyQuickRange(setProductsRange, 30)}
+                    className={rangeBtn(isSameRange(productsRange, 30))}
+                  >
+                    30d
+                  </button>
+                  <button
+                    onClick={() => applyQuickRange(setProductsRange, 90)}
+                    className={rangeBtn(isSameRange(productsRange, 90))}
+                  >
+                    90d
+                  </button>
+                  <button
+                    onClick={() => applyCurrentMonth(setProductsRange)}
+                    className={rangeBtn(isCurrentMonthRange(productsRange))}
+                  >
+                    Mes actual
+                  </button>
+                  <button
+                    onClick={() => clearRange(setProductsRange)}
+                    className={rangeBtn(
+                      !productsRange.startDate && !productsRange.endDate
+                    )}
+                  >
+                    Todo
+                  </button>
+                  <select
+                    value={topProductsLimit}
+                    onChange={e => setTopProductsLimit(Number(e.target.value))}
+                    className="rounded-md border border-gray-700 bg-gray-950 px-3 py-2 text-sm text-gray-100 focus:border-purple-500"
+                  >
+                    {[5, 10, 15, 20].map(n => (
+                      <option key={n} value={n}>
+                        Top {n}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              {productsRangeError && (
+                <p className="mt-2 text-sm text-red-300">
+                  {productsRangeError}
+                </p>
+              )}
+            </div>
+
             {/* Top Products */}
             <TopProductsChart
-              limit={10}
-              startDate={dateRange.startDate}
-              endDate={dateRange.endDate}
+              limit={topProductsLimit}
+              startDate={productsRange.startDate || undefined}
+              endDate={productsRange.endDate || undefined}
+              reloadKey={reloadKey}
             />
 
             {/* Category Distribution */}
             <CategoryDistributionChart
-              startDate={dateRange.startDate}
-              endDate={dateRange.endDate}
+              startDate={productsRange.startDate || undefined}
+              endDate={productsRange.endDate || undefined}
+              reloadKey={reloadKey}
             />
 
             {/* Product Rotation */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="rounded-lg border border-gray-800 bg-gray-900 p-6"
-            >
-              <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <h3 className="text-xl font-bold text-white">
-                  Rotación de productos
-                </h3>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setRotationDays(7)}
-                    className={`rounded-lg border border-gray-700 px-3 py-1 text-sm text-gray-200 transition-colors hover:bg-gray-800 ${
-                      rotationDays === 7 ? "bg-gray-800" : ""
-                    }`}
-                  >
-                    7 días
-                  </button>
-                  <button
-                    onClick={() => setRotationDays(30)}
-                    className={`rounded-lg border border-gray-700 px-3 py-1 text-sm text-gray-200 transition-colors hover:bg-gray-800 ${
-                      rotationDays === 30 ? "bg-gray-800" : ""
-                    }`}
-                  >
-                    30 días
-                  </button>
-                  <button
-                    onClick={() => setRotationDays(90)}
-                    className={`rounded-lg border border-gray-700 px-3 py-1 text-sm text-gray-200 transition-colors hover:bg-gray-800 ${
-                      rotationDays === 90 ? "bg-gray-800" : ""
-                    }`}
-                  >
-                    90 días
-                  </button>
+            {deferHeavy && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+                className="rounded-lg border border-gray-800 bg-gray-900 p-6"
+              >
+                <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <h3 className="text-xl font-bold text-white">
+                    Rotación de productos
+                  </h3>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setRotationDays(7)}
+                      className={`rounded-lg border border-gray-700 px-3 py-1 text-sm text-gray-200 transition-colors hover:bg-gray-800 ${
+                        rotationDays === 7 ? "bg-gray-800" : ""
+                      }`}
+                    >
+                      7 días
+                    </button>
+                    <button
+                      onClick={() => setRotationDays(30)}
+                      className={`rounded-lg border border-gray-700 px-3 py-1 text-sm text-gray-200 transition-colors hover:bg-gray-800 ${
+                        rotationDays === 30 ? "bg-gray-800" : ""
+                      }`}
+                    >
+                      30 días
+                    </button>
+                    <button
+                      onClick={() => setRotationDays(90)}
+                      className={`rounded-lg border border-gray-700 px-3 py-1 text-sm text-gray-200 transition-colors hover:bg-gray-800 ${
+                        rotationDays === 90 ? "bg-gray-800" : ""
+                      }`}
+                    >
+                      90 días
+                    </button>
+                  </div>
                 </div>
-              </div>
 
-              {rotationLoading ? (
-                <div className="flex h-40 items-center justify-center">
-                  <div className="h-10 w-10 animate-spin rounded-full border-b-2 border-purple-600"></div>
-                </div>
-              ) : productRotation.length === 0 ? (
-                <div className="text-gray-400">
-                  No hay datos de rotación disponibles.
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-gray-900/50 text-gray-300">
-                      <tr>
-                        <th className="px-4 py-3 text-left">Producto</th>
-                        <th className="px-4 py-3 text-right">Unidades</th>
-                        <th className="px-4 py-3 text-right">Frecuencia</th>
-                        <th className="px-4 py-3 text-right">Stock</th>
-                        <th className="px-4 py-3 text-right">Rotación</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-800 text-gray-200">
-                      {productRotation.slice(0, 20).map(p => (
-                        <tr key={p._id} className="hover:bg-gray-900/30">
-                          <td className="px-4 py-3">
-                            <span className="font-medium text-gray-100">
-                              {p.name}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            {Number(p.totalSold) || 0}
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            {Number(p.frequency) || 0}
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            {Number(p.currentStock) || 0}
-                          </td>
-                          <td className="px-4 py-3 text-right font-semibold text-purple-300">
-                            {((Number(p.rotationRate) || 0) * 100).toFixed(1)}%
-                          </td>
+                {rotationLoading ? (
+                  <div className="flex h-40 items-center justify-center">
+                    <div className="h-10 w-10 animate-spin rounded-full border-b-2 border-purple-600"></div>
+                  </div>
+                ) : productRotation.length === 0 ? (
+                  <div className="text-gray-400">
+                    No hay datos de rotación disponibles.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-900/50 text-gray-300">
+                        <tr>
+                          <th className="px-4 py-3 text-left">Producto</th>
+                          <th className="px-4 py-3 text-right">Unidades</th>
+                          <th className="px-4 py-3 text-right">Frecuencia</th>
+                          <th className="px-4 py-3 text-right">Stock</th>
+                          <th className="px-4 py-3 text-right">Rotación</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </motion.div>
+                      </thead>
+                      <tbody className="divide-y divide-gray-800 text-gray-200">
+                        {productRotation.slice(0, 20).map(p => (
+                          <tr key={p._id} className="hover:bg-gray-900/30">
+                            <td className="px-4 py-3">
+                              <span className="font-medium text-gray-100">
+                                {p.name}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              {Number(p.totalSold) || 0}
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              {Number(p.frequency) || 0}
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              {Number(p.currentStock) || 0}
+                            </td>
+                            <td className="px-4 py-3 text-right font-semibold text-purple-300">
+                              {((Number(p.rotationRate) || 0) * 100).toFixed(1)}
+                              %
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </motion.div>
+            )}
           </>
         )}
 
         {activeTab === "distributors" && (
           <>
+            <div className="rounded-xl border border-gray-800 bg-gray-900/70 p-4">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                <div>
+                  <label className="mb-1 block text-sm text-gray-300">
+                    Fecha inicio (Distribuidores)
+                  </label>
+                  <input
+                    type="date"
+                    value={distributorsRange.startDate}
+                    onChange={e =>
+                      setDistributorsRange({
+                        ...distributorsRange,
+                        startDate: e.target.value,
+                      })
+                    }
+                    className="w-full rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 text-gray-100 focus:border-purple-500"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm text-gray-300">
+                    Fecha fin
+                  </label>
+                  <input
+                    type="date"
+                    value={distributorsRange.endDate}
+                    onChange={e =>
+                      setDistributorsRange({
+                        ...distributorsRange,
+                        endDate: e.target.value,
+                      })
+                    }
+                    className="w-full rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 text-gray-100 focus:border-purple-500"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm text-gray-300">
+                    Buscar distribuidor
+                  </label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-3 h-4 w-4 text-gray-500" />
+                    <input
+                      type="text"
+                      value={rankingSearch}
+                      onChange={e => setRankingSearch(e.target.value)}
+                      placeholder="Nombre o correo"
+                      className="w-full rounded-lg border border-gray-700 bg-gray-950 px-10 py-2 text-sm text-gray-100 focus:border-purple-500"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  onClick={() => applyQuickRange(setDistributorsRange, 30)}
+                  className="rounded-md border border-gray-700 px-3 py-2 text-sm text-gray-100 transition hover:border-purple-500"
+                >
+                  30d
+                </button>
+                <button
+                  onClick={() => applyQuickRange(setDistributorsRange, 90)}
+                  className="rounded-md border border-gray-700 px-3 py-2 text-sm text-gray-100 transition hover:border-purple-500"
+                >
+                  90d
+                </button>
+                <button
+                  onClick={() => applyCurrentMonth(setDistributorsRange)}
+                  className="rounded-md border border-gray-700 px-3 py-2 text-sm text-gray-100 transition hover:border-purple-500"
+                >
+                  Mes actual
+                </button>
+                <select
+                  value={rankingLimit}
+                  onChange={e => setRankingLimit(Number(e.target.value))}
+                  className="rounded-md border border-gray-700 bg-gray-950 px-3 py-2 text-sm text-gray-100 focus:border-purple-500"
+                >
+                  {[5, 10, 15, 25].map(n => (
+                    <option key={n} value={n}>
+                      Top {n}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {distributorsRangeError && (
+                <p className="mt-2 text-sm text-red-300">
+                  {distributorsRangeError}
+                </p>
+              )}
+            </div>
+
             {/* Export Buttons */}
             <motion.div
               initial={{ opacity: 0 }}
@@ -501,17 +846,22 @@ export default function AdvancedDashboard() {
             </motion.div>
 
             {/* Rankings */}
-            <DistributorRankingsTable
-              startDate={dateRange.startDate}
-              endDate={dateRange.endDate}
-            />
+            {deferHeavy && (
+              <DistributorRankingsTable
+                startDate={distributorsRange.startDate || undefined}
+                endDate={distributorsRange.endDate || undefined}
+                limit={rankingLimit}
+                search={rankingSearch}
+                reloadKey={reloadKey}
+              />
+            )}
           </>
         )}
 
         {activeTab === "stock" && (
           <>
             {/* Low Stock Alerts */}
-            <LowStockAlertsVisual />
+            <LowStockAlertsVisual reloadKey={reloadKey} />
           </>
         )}
       </div>

@@ -237,7 +237,7 @@ export const getMyMemberships = async (req, res) => {
     })
       .populate(
         "business",
-        "name description config status contactEmail contactPhone contactWhatsapp contactLocation metadata"
+        "name description config status contactEmail contactPhone contactWhatsapp contactLocation metadata logoUrl logoPublicId"
       )
       .lean();
     res.json({ memberships });
