@@ -62,6 +62,10 @@ export const register = async (req, res) => {
       return res.status(400).json({ message: "El usuario ya existe" });
     }
 
+    // Verificar si es el primer usuario (será GOD)
+    const userCount = await User.countDocuments();
+    const isFirstUser = userCount === 0;
+
     // Hash de la contraseña
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
@@ -70,9 +74,9 @@ export const register = async (req, res) => {
       name,
       email,
       password: hashedPassword,
-      role: "super_admin",
-      status: "pending",
-      active: false,
+      role: isFirstUser ? "god" : "super_admin",
+      status: isFirstUser ? "active" : "pending",
+      active: isFirstUser ? true : false,
       ...(phone ? { phone } : {}),
       ...(address ? { address } : {}),
     });
