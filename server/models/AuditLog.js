@@ -60,6 +60,20 @@ const auditLogSchema = new mongoose.Schema(
         "stock_withdrawn",
         "stock_adjusted",
 
+        // Promociones
+        "promotion_created",
+        "promotion_updated",
+        "promotion_deleted",
+        "promotion_evaluated",
+
+        // Clientes / CRM
+        "customer_created",
+        "customer_updated",
+        "customer_deleted",
+        "segment_created",
+        "segment_updated",
+        "segment_deleted",
+
         // Ventas
         "sale_registered",
         "payment_confirmed",
@@ -87,6 +101,8 @@ const auditLogSchema = new mongoose.Schema(
         "distributors",
         "stock",
         "sales",
+        "promotions",
+        "clients",
         "defective_products",
         "analytics",
         "system",
@@ -110,6 +126,9 @@ const auditLogSchema = new mongoose.Schema(
         "Sale",
         "DistributorStock",
         "DefectiveProduct",
+        "Promotion",
+        "Customer",
+        "Segment",
         null,
       ],
     },

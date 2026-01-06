@@ -11,10 +11,11 @@ import {
   markBonusPaid,
   updateConfig,
 } from "../controllers/gamification.controller.js";
-import { admin, protect } from "../middleware/auth.middleware.js";
+import { protect } from "../middleware/auth.middleware.js";
 import {
   businessContext,
   requireFeature,
+  requirePermission,
 } from "../middleware/business.middleware.js";
 import { cacheMiddleware } from "../middleware/cache.middleware.js";
 
@@ -26,8 +27,15 @@ router.use(protect, businessContext, requireFeature("gamification"));
 // Rutas de configuración (solo admin)
 router
   .route("/config")
-  .get(admin, cacheMiddleware(600, "gamification"), getConfig)
-  .put(admin, updateConfig);
+  .get(
+    requirePermission({ module: "promotions", action: "read" }),
+    cacheMiddleware(600, "gamification"),
+    getConfig
+  )
+  .put(
+    requirePermission({ module: "promotions", action: "update" }),
+    updateConfig
+  );
 
 // Rutas de ranking y ganadores con caché de 2 minutos
 router.get("/ranking", cacheMiddleware(120, "gamification"), getRanking);
@@ -43,10 +51,22 @@ router.get(
   getAdjustedCommission
 );
 
-// Rutas de evaluación (solo admin)
-router.post("/evaluate", admin, evaluatePeriod);
-router.post("/check-period", admin, checkAndEvaluatePeriod);
-router.put("/winners/:winnerId/pay", admin, markBonusPaid);
+// Rutas de evaluación
+router.post(
+  "/evaluate",
+  requirePermission({ module: "promotions", action: "update" }),
+  evaluatePeriod
+);
+router.post(
+  "/check-period",
+  requirePermission({ module: "promotions", action: "update" }),
+  checkAndEvaluatePeriod
+);
+router.put(
+  "/winners/:winnerId/pay",
+  requirePermission({ module: "promotions", action: "update" }),
+  markBonusPaid
+);
 
 // Rutas de estadísticas de distribuidor con caché de 2 minutos
 router.get(

@@ -1,6 +1,11 @@
 import Business from "../models/Business.js";
 import Membership from "../models/Membership.js";
 import User from "../models/User.js";
+import { logAuthError } from "../utils/logger.js";
+import {
+  buildEffectivePermissions,
+  isActionAllowed,
+} from "../utils/permissions.js";
 
 // Resuelve el contexto de negocio a partir del header/query y valida membership
 export const businessContext = async (req, res, next) => {
@@ -36,14 +41,33 @@ export const businessContext = async (req, res, next) => {
       });
 
       if (!membership) {
-        return res
-          .status(403)
-          .json({ message: "No tienes acceso a este negocio" });
+        const isOwner =
+          business.createdBy?.toString() === req.user?.id?.toString();
+        // Permitir al creador del negocio actuar como admin aunque no exista membership explícita
+        if (isOwner) {
+          membership = new Membership({
+            user: req.user?.id,
+            business: businessId,
+            role: "admin",
+            status: "active",
+          });
+        } else {
+          logAuthError({
+            message: "No tienes acceso a este negocio",
+            module: "businessContext",
+            requestId: req.reqId,
+            userId: req.user?.id,
+            businessId,
+          });
+          return res
+            .status(403)
+            .json({ message: "No tienes acceso a este negocio" });
+        }
       }
     }
 
     // Si el creador (super admin) perdió acceso, bloquear a los distribuidores del negocio
-    if (!isTest && membership?.role === "distribuidor" && !isGod) {
+    if (membership?.role === "distribuidor" && !isGod) {
       // Resolver owner/admin principal: membership admin más antiguo o creador
       const primaryAdminMembership = await Membership.findOne({
         business: businessId,
@@ -66,6 +90,14 @@ export const businessContext = async (req, res, next) => {
         !owner || !owner.active || owner.status !== "active" || ownerExpired;
 
       if (ownerInactive) {
+        logAuthError({
+          message: "Acceso deshabilitado: owner_inactive",
+          module: "businessContext",
+          requestId: req.reqId,
+          userId: req.user?.id,
+          businessId,
+          extra: { code: "owner_inactive" },
+        });
         return res.status(403).json({
           message:
             "Acceso deshabilitado: el administrador del negocio no tiene acceso activo",
@@ -80,7 +112,13 @@ export const businessContext = async (req, res, next) => {
     req.membership = membership;
     next();
   } catch (error) {
-    console.error("businessContext error", error);
+    logAuthError({
+      message: "Error resolviendo negocio",
+      module: "businessContext",
+      requestId: req.reqId,
+      userId: req.user?.id,
+      stack: error.stack,
+    });
     res
       .status(500)
       .json({ message: "Error resolviendo negocio", error: error.message });
@@ -114,6 +152,91 @@ export const requireRole = (roles = [], options = {}) => {
   };
 };
 
+// Permisos granulares por módulo/acción con soporte de sede
+export const requirePermission = ({ module, action, branchResolver } = {}) => {
+  return (req, res, next) => {
+    const isSuperAdmin = req.user?.role === "super_admin";
+    const isGod = req.user?.role === "god";
+
+    // Super admin y god pueden pasar, pero si hay branchScope configurado lo respetamos
+    if (isSuperAdmin || isGod) {
+      return next();
+    }
+
+    // Si no hay membership, usar el rol del usuario como fallback (útil para tests)
+    const membership =
+      req.membership ||
+      (req.user
+        ? { role: req.user.role, permissions: {}, allowedBranches: [] }
+        : null);
+
+    if (!membership) {
+      logAuthError({
+        message: "Acceso denegado (sin membership)",
+        module: "requirePermission",
+        requestId: req.reqId,
+        userId: req.user?.id,
+        businessId: req.businessId,
+      });
+      return res.status(403).json({ message: "Acceso denegado" });
+    }
+
+    const effective = buildEffectivePermissions(membership);
+    const allowed = isActionAllowed(effective, module, action);
+
+    if (!allowed) {
+      logAuthError({
+        message: "Permiso denegado",
+        module: "requirePermission",
+        requestId: req.reqId,
+        userId: req.user?.id,
+        businessId: req.businessId,
+        extra: { module, action },
+      });
+      return res.status(403).json({
+        message: "Permiso denegado",
+        module,
+        action,
+      });
+    }
+
+    // Validar sede si el membership está restringido
+    const branchId =
+      branchResolver?.(req) ||
+      req.params?.branchId ||
+      req.body?.branchId ||
+      req.body?.branch;
+
+    if (
+      branchId &&
+      Array.isArray(membership.allowedBranches) &&
+      membership.allowedBranches.length > 0
+    ) {
+      const hasAccess = membership.allowedBranches.some(
+        (b) => b?.toString() === branchId?.toString()
+      );
+
+      if (!hasAccess) {
+        logAuthError({
+          message: "No tienes acceso a esta sede",
+          module: "requirePermission",
+          requestId: req.reqId,
+          userId: req.user?.id,
+          businessId: req.businessId,
+          extra: { module, action, branchId },
+        });
+        return res.status(403).json({
+          message: "No tienes acceso a esta sede",
+          module,
+          action,
+        });
+      }
+    }
+
+    next();
+  };
+};
+
 // Verifica que la feature esté activa para el negocio seleccionado
 export const requireFeature = (featureKey) => {
   return (req, res, next) => {
@@ -128,6 +251,14 @@ export const requireFeature = (featureKey) => {
     // Si no está definido, asumir habilitado para no bloquear rutas por config incompleta
     if (isEnabled !== false) return next();
 
+    logAuthError({
+      message: "Funcionalidad desactivada para este negocio",
+      module: "requireFeature",
+      requestId: req.reqId,
+      userId: req.user?.id,
+      businessId: req.businessId,
+      extra: { featureKey },
+    });
     return res
       .status(403)
       .json({ message: "Funcionalidad desactivada para este negocio" });

@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import BusinessGate from "./components/BusinessGate";
 import LoadingProgress from "./components/LoadingProgress";
 import QuickGodAccess from "./components/QuickGodAccess";
+import { ToastContainer } from "./components/ui/Toast";
 import ProtectedRoute from "./routes/ProtectedRoute";
 
 // Loading component con duración corta para minimizar pantalla en blanco
@@ -52,6 +53,11 @@ const SpecialSales = lazy(() => import("./pages/SpecialSales"));
 const ProfitHistory = lazy(() => import("./pages/ProfitHistory"));
 const Expenses = lazy(() => import("./pages/Expenses"));
 const BusinessAssistant = lazy(() => import("./pages/BusinessAssistant"));
+const Credits = lazy(() => import("./pages/Credits"));
+const Notifications = lazy(() => import("./pages/Notifications"));
+const Providers = lazy(() => import("./pages/Providers"));
+const Promotions = lazy(() => import("./pages/Promotions"));
+const Customers = lazy(() => import("./pages/Customers"));
 
 // Distributor pages
 const DistributorDashboardLayout = lazy(
@@ -71,6 +77,7 @@ const TransferHistory = lazy(() => import("./pages/TransferHistory"));
 export default function App() {
   return (
     <Suspense fallback={<PageLoader />}>
+      <ToastContainer position="top-right" />
       <QuickGodAccess />
       <Routes>
         {/* Public Routes */}
@@ -279,6 +286,46 @@ export default function App() {
             element={
               <BusinessGate requiredFeature="transfers">
                 <TransferHistory />
+              </BusinessGate>
+            }
+          />
+          <Route
+            path="credits"
+            element={
+              <BusinessGate>
+                <Credits />
+              </BusinessGate>
+            }
+          />
+          <Route
+            path="notifications"
+            element={
+              <BusinessGate>
+                <Notifications />
+              </BusinessGate>
+            }
+          />
+          <Route
+            path="providers"
+            element={
+              <BusinessGate requiredFeature="inventory">
+                <Providers />
+              </BusinessGate>
+            }
+          />
+          <Route
+            path="promotions"
+            element={
+              <BusinessGate requiredFeature="promotions">
+                <Promotions />
+              </BusinessGate>
+            }
+          />
+          <Route
+            path="customers"
+            element={
+              <BusinessGate>
+                <Customers />
               </BusinessGate>
             }
           />

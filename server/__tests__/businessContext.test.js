@@ -129,4 +129,20 @@ describe("businessContext middleware - owner_inactive", () => {
     expect(statusCode).toBe(403);
     expect(jsonPayload?.code).toBe("owner_inactive");
   });
+
+  it("super_admin en test sin businessId pasa el middleware", async () => {
+    const originalEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "test";
+
+    const { statusCode, nextCalled } = await runMiddleware({
+      headers: {},
+      query: {},
+      user: { id: "super", role: "super_admin" },
+    });
+
+    expect(statusCode).toBeNull();
+    expect(nextCalled).toBe(true);
+
+    process.env.NODE_ENV = originalEnv;
+  });
 });

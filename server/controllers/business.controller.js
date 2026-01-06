@@ -1,5 +1,33 @@
+import AuditLog from "../models/AuditLog.js";
+import Branch from "../models/Branch.js";
+import BranchStock from "../models/BranchStock.js";
+import BranchTransfer from "../models/BranchTransfer.js";
 import Business from "../models/Business.js";
+import BusinessAssistantConfig from "../models/BusinessAssistantConfig.js";
+import Category from "../models/Category.js";
+import Credit from "../models/Credit.js";
+import CreditPayment from "../models/CreditPayment.js";
+import Customer from "../models/Customer.js";
+import DefectiveProduct from "../models/DefectiveProduct.js";
+import DistributorStats from "../models/DistributorStats.js";
+import DistributorStock from "../models/DistributorStock.js";
+import Expense from "../models/Expense.js";
+import GamificationConfig from "../models/GamificationConfig.js";
+import InventoryEntry from "../models/InventoryEntry.js";
+import IssueReport from "../models/IssueReport.js";
 import Membership from "../models/Membership.js";
+import Notification from "../models/Notification.js";
+import PeriodWinner from "../models/PeriodWinner.js";
+import Product from "../models/Product.js";
+import ProfitHistory from "../models/ProfitHistory.js";
+import Promotion from "../models/Promotion.js";
+import Provider from "../models/Provider.js";
+import Sale from "../models/Sale.js";
+import Segment from "../models/Segment.js";
+import SpecialSale from "../models/SpecialSale.js";
+import Stock from "../models/Stock.js";
+import StockTransfer from "../models/StockTransfer.js";
+import { logApiError, logApiInfo } from "../utils/logger.js";
 
 export const createBusiness = async (req, res) => {
   try {
@@ -135,14 +163,19 @@ export const updateBusinessFeatures = async (req, res) => {
 
 export const addMember = async (req, res) => {
   try {
-    const { userId, role } = req.body;
+    const { userId, role, permissions, allowedBranches } = req.body;
     if (!userId || !role) {
       return res.status(400).json({ message: "userId y role son requeridos" });
     }
 
     const membership = await Membership.findOneAndUpdate(
       { user: userId, business: req.businessId },
-      { role, status: "active" },
+      {
+        role,
+        status: "active",
+        ...(permissions ? { permissions } : {}),
+        ...(Array.isArray(allowedBranches) ? { allowedBranches } : {}),
+      },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
 
@@ -157,11 +190,16 @@ export const addMember = async (req, res) => {
 export const updateMember = async (req, res) => {
   try {
     const { membershipId } = req.params;
-    const { role, status } = req.body;
+    const { role, status, permissions, allowedBranches } = req.body;
 
     const membership = await Membership.findOneAndUpdate(
       { _id: membershipId, business: req.businessId },
-      { ...(role ? { role } : {}), ...(status ? { status } : {}) },
+      {
+        ...(role ? { role } : {}),
+        ...(status ? { status } : {}),
+        ...(permissions ? { permissions } : {}),
+        ...(Array.isArray(allowedBranches) ? { allowedBranches } : {}),
+      },
       { new: true }
     );
 
@@ -198,18 +236,106 @@ export const removeMember = async (req, res) => {
 };
 
 export const deleteBusiness = async (req, res) => {
+  const requestId = req.reqId;
+  const userId = req.user?.id;
+
   try {
     const { businessId } = req.params;
 
-    const business = await Business.findByIdAndDelete(businessId);
+    const business = await Business.findById(businessId);
     if (!business) {
-      return res.status(404).json({ message: "Negocio no encontrado" });
+      return res
+        .status(404)
+        .json({ message: "Negocio no encontrado", requestId });
     }
 
-    await Membership.deleteMany({ business: businessId });
+    logApiInfo({
+      message: "delete_business_cascade_started",
+      module: "business",
+      requestId,
+      userId,
+      businessId,
+    });
 
-    res.json({ message: "Negocio eliminado", businessId });
+    // CASCADA COMPLETA: Eliminar todas las entidades relacionadas
+    const deleteResults = await Promise.all([
+      // Ventas y finanzas
+      Sale.deleteMany({ business: businessId }),
+      SpecialSale.deleteMany({ business: businessId }),
+      ProfitHistory.deleteMany({ business: businessId }),
+      Expense.deleteMany({ business: businessId }),
+
+      // Productos e inventario
+      Product.deleteMany({ business: businessId }),
+      Category.deleteMany({ business: businessId }),
+      Stock.deleteMany({ business: businessId }),
+      StockTransfer.deleteMany({ business: businessId }),
+      DistributorStock.deleteMany({ business: businessId }),
+      InventoryEntry.deleteMany({ business: businessId }),
+      DefectiveProduct.deleteMany({ business: businessId }),
+
+      // Sedes y transferencias
+      Branch.deleteMany({ business: businessId }),
+      BranchStock.deleteMany({ business: businessId }),
+      BranchTransfer.deleteMany({ business: businessId }),
+
+      // Clientes y créditos
+      Customer.deleteMany({ business: businessId }),
+      Credit.deleteMany({ business: businessId }),
+      CreditPayment.deleteMany({ business: businessId }),
+      Segment.deleteMany({ business: businessId }),
+
+      // Proveedores y promociones
+      Provider.deleteMany({ business: businessId }),
+      Promotion.deleteMany({ business: businessId }),
+
+      // Distribuidores y gamificación
+      DistributorStats.deleteMany({ business: businessId }),
+      PeriodWinner.deleteMany({ business: businessId }),
+      GamificationConfig.deleteMany({ business: businessId }),
+
+      // Notificaciones e incidencias
+      Notification.deleteMany({ business: businessId }),
+      IssueReport.deleteMany({ business: businessId }),
+
+      // Configuración y auditoría
+      BusinessAssistantConfig.deleteMany({ business: businessId }),
+      AuditLog.deleteMany({ business: businessId }),
+
+      // Memberships del negocio
+      Membership.deleteMany({ business: businessId }),
+    ]);
+
+    // Finalmente eliminar el negocio
+    await business.deleteOne();
+
+    logApiInfo({
+      message: "delete_business_cascade_complete",
+      module: "business",
+      requestId,
+      userId,
+      businessId,
+      extra: {
+        businessName: business.name,
+        collectionsAffected: deleteResults.length,
+      },
+    });
+
+    res.json({
+      success: true,
+      message: "Negocio y todos sus datos eliminados",
+      businessId,
+      requestId,
+    });
   } catch (error) {
+    logApiError({
+      message: "delete_business_error",
+      module: "business",
+      requestId,
+      userId,
+      businessId: req.params.businessId,
+      stack: error.stack,
+    });
     res
       .status(500)
       .json({ message: "Error eliminando negocio", error: error.message });

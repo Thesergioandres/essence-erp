@@ -61,6 +61,7 @@ export interface BusinessFeatures {
   assistant?: boolean;
   reports?: boolean;
   transfers?: boolean;
+  promotions?: boolean;
 }
 
 export interface BusinessConfig {
@@ -110,6 +111,23 @@ export interface Membership {
   user: User | string;
   role: "admin" | "distribuidor" | "super_admin";
   status: "active" | "invited" | "inactive";
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Customer {
+  _id: string;
+  business: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  segment?: string;
+  segments?: string[];
+  points: number;
+  totalSpend: number;
+  totalDebt: number;
+  ordersCount: number;
+  lastPurchaseAt?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -471,6 +489,20 @@ export interface AnalyticsDashboard {
     totalSales: number;
     totalProfit: number;
   }>;
+  creditMetrics?: {
+    totalCredits: number;
+    totalDebt: number;
+    totalPaid: number;
+    overdueCount: number;
+    overdueAmount: number;
+    recoveryRate: number | string;
+    topDebtors: Array<{
+      customerId: string;
+      customerName: string;
+      totalDebt: number;
+      creditsCount: number;
+    }>;
+  };
 }
 
 // ==================== PROFIT HISTORY TYPES ====================
@@ -864,6 +896,124 @@ export interface IssueReport {
   screenshotPublicId?: string;
   status: "open" | "reviewing" | "closed";
   user?: Pick<User, "_id" | "name" | "email" | "role">;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// ==================== CREDIT/FIADO TYPES ====================
+
+export interface CreditItem {
+  product?: string;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  subtotal: number;
+}
+
+export interface CreditStatusHistory {
+  status: string;
+  changedAt: string;
+  changedBy?: string;
+  note?: string;
+}
+
+export interface Credit {
+  _id: string;
+  customer: Customer | string;
+  business: string;
+  sale?: string;
+  branch?: Branch | string;
+  createdBy: User | string;
+  originalAmount: number;
+  remainingAmount: number;
+  paidAmount: number;
+  status: "pending" | "partial" | "paid" | "overdue" | "cancelled";
+  dueDate?: string;
+  description?: string;
+  items: CreditItem[];
+  lastPaymentAt?: string;
+  paidAt?: string;
+  statusHistory: CreditStatusHistory[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CreditPayment {
+  _id: string;
+  credit: string;
+  business: string;
+  amount: number;
+  paymentMethod: "cash" | "transfer" | "card" | "other";
+  registeredBy: User | string;
+  branch?: Branch | string;
+  notes?: string;
+  receiptUrl?: string;
+  balanceBefore: number;
+  balanceAfter: number;
+  paymentDate: string;
+  createdAt?: string;
+}
+
+export interface CreditMetrics {
+  total: {
+    totalCredits: number;
+    totalOriginalAmount: number;
+    totalRemainingAmount: number;
+    totalPaidAmount: number;
+  };
+  overdue: {
+    count: number;
+    amount: number;
+  };
+  byStatus: Record<string, { count: number; amount: number }>;
+  topDebtors: Array<{
+    customerId: string;
+    customerName: string;
+    customerPhone?: string;
+    totalDebt: number;
+    creditsCount: number;
+  }>;
+  recentPayments: CreditPayment[];
+  recoveryRate: number | string;
+}
+
+// ==================== NOTIFICATION TYPES ====================
+
+export type NotificationType =
+  | "sale"
+  | "low_stock"
+  | "stock_entry"
+  | "promotion"
+  | "credit_overdue"
+  | "credit_payment"
+  | "subscription"
+  | "incident"
+  | "achievement"
+  | "ranking"
+  | "system"
+  | "reminder";
+
+export type NotificationPriority = "low" | "medium" | "high" | "urgent";
+
+export interface Notification {
+  _id: string;
+  business: string;
+  user?: string;
+  targetRole?: "admin" | "distribuidor" | "all";
+  type: NotificationType;
+  title: string;
+  message: string;
+  priority: NotificationPriority;
+  read: boolean;
+  readAt?: string;
+  link?: string;
+  relatedEntity?: {
+    type: string;
+    id: string;
+  };
+  data?: Record<string, unknown>;
+  expiresAt?: string;
+  pushSent: boolean;
   createdAt?: string;
   updatedAt?: string;
 }

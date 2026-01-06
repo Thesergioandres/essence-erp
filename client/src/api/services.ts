@@ -14,6 +14,9 @@ import type {
   BusinessFeatures,
   Category,
   ComparativeAnalysis,
+  Credit,
+  CreditMetrics,
+  CreditPayment,
   DailySummary,
   DefectiveProduct,
   DistributorProfit,
@@ -26,6 +29,7 @@ import type {
   IssueReport,
   Membership,
   MonthlyProfitData,
+  Notification,
   PeriodWinner,
   Product,
   ProductImage,
@@ -48,6 +52,8 @@ import api from "./axios.ts";
 
 interface AuthResponse extends User {
   token: string;
+  refreshToken?: string;
+  refreshExpiresAt?: string;
 }
 
 async function trySetBusinessForGod(role: string) {
@@ -70,6 +76,81 @@ type DurationPayload = {
   months?: number;
   years?: number;
 };
+
+// Tipos para métricas globales GOD
+interface GodCreditStatusMetrics {
+  count: number;
+  totalAmount: number;
+  totalPaid: number;
+}
+
+interface GodMetrics {
+  users: {
+    total: number;
+    byStatus: Record<string, number>;
+    expiringSubscriptions: number;
+  };
+  businesses: {
+    total: number;
+    byStatus: Record<string, number>;
+    activeMemberships: number;
+  };
+  products: { total: number };
+  sales: {
+    total: number;
+    totalRevenue: number;
+    totalProfit: number;
+    avgSaleValue: number;
+  };
+  credits: {
+    pending: GodCreditStatusMetrics;
+    paid: GodCreditStatusMetrics;
+    overdue: GodCreditStatusMetrics;
+    totalOutstanding: number;
+  };
+  recentUsers: Array<{
+    _id: string;
+    name: string;
+    email: string;
+    role: string;
+    status: string;
+    createdAt: string;
+    subscriptionExpiresAt?: string;
+  }>;
+  recentBusinesses: Array<{
+    _id: string;
+    name: string;
+    status: string;
+    createdAt: string;
+  }>;
+  topBusinessesBySales: Array<{
+    businessId: string;
+    businessName: string;
+    salesCount: number;
+    totalRevenue: number;
+    totalProfit: number;
+  }>;
+}
+
+interface GodMetricsResponse {
+  success: boolean;
+  metrics: GodMetrics;
+}
+
+interface SubscriptionsSummaryResponse {
+  success: boolean;
+  subscriptions: {
+    expiringToday: number;
+    expiringWeek: number;
+    expiringMonth: number;
+    recentExpired: Array<{
+      _id: string;
+      name: string;
+      email: string;
+      subscriptionExpiresAt: string;
+    }>;
+  };
+}
 
 type ProductPayload = {
   name: string;
@@ -103,6 +184,9 @@ export const authService = {
     if (response.data.token) {
       localStorage.setItem("token", response.data.token);
       localStorage.setItem("user", JSON.stringify(response.data));
+      if (response.data.refreshToken) {
+        localStorage.setItem("refreshToken", response.data.refreshToken);
+      }
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("auth-changed"));
       }
@@ -120,6 +204,9 @@ export const authService = {
     if (response.data.token) {
       localStorage.setItem("token", response.data.token);
       localStorage.setItem("user", JSON.stringify(response.data));
+      if (response.data.refreshToken) {
+        localStorage.setItem("refreshToken", response.data.refreshToken);
+      }
       await trySetBusinessForGod(response.data.role);
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("auth-changed"));
@@ -129,8 +216,53 @@ export const authService = {
     return response.data;
   },
 
+  async refreshToken(): Promise<{
+    token: string;
+    refreshToken: string;
+  } | null> {
+    const refreshToken = localStorage.getItem("refreshToken");
+    if (!refreshToken) return null;
+
+    try {
+      const response = await api.post<{
+        token: string;
+        refreshToken: string;
+        refreshExpiresAt: string;
+        user: User;
+      }>("/auth/refresh", { refreshToken });
+
+      if (response.data.token) {
+        localStorage.setItem("token", response.data.token);
+        localStorage.setItem("refreshToken", response.data.refreshToken);
+        if (response.data.user) {
+          localStorage.setItem("user", JSON.stringify(response.data.user));
+        }
+      }
+
+      return {
+        token: response.data.token,
+        refreshToken: response.data.refreshToken,
+      };
+    } catch (error) {
+      // Si falla el refresh, limpiar tokens
+      console.error("[UI ERROR] Token refresh failed", error);
+      localStorage.removeItem("refreshToken");
+      return null;
+    }
+  },
+
   logout(): void {
+    const refreshToken = localStorage.getItem("refreshToken");
+
+    // Intentar revocar el refresh token en el servidor
+    if (refreshToken) {
+      api.post("/auth/logout", { refreshToken }).catch(() => {
+        // Ignorar errores de logout
+      });
+    }
+
     localStorage.removeItem("token");
+    localStorage.removeItem("refreshToken");
     localStorage.removeItem("user");
     localStorage.removeItem("businessId");
     if (typeof window !== "undefined") {
@@ -141,6 +273,14 @@ export const authService = {
   getCurrentUser(): (AuthResponse & { token: string }) | null {
     const user = localStorage.getItem("user");
     return user ? (JSON.parse(user) as AuthResponse & { token: string }) : null;
+  },
+
+  isAuthenticated(): boolean {
+    return !!localStorage.getItem("token");
+  },
+
+  hasRefreshToken(): boolean {
+    return !!localStorage.getItem("refreshToken");
   },
 
   async getProfile(): Promise<User> {
@@ -201,6 +341,18 @@ export const userAccessService = {
       `/users/god/${id}/resume`
     );
     return response.data.user;
+  },
+
+  async getGlobalMetrics(): Promise<GodMetricsResponse> {
+    const response = await api.get<GodMetricsResponse>("/users/god/metrics");
+    return response.data;
+  },
+
+  async getSubscriptionsSummary(): Promise<SubscriptionsSummaryResponse> {
+    const response = await api.get<SubscriptionsSummaryResponse>(
+      "/users/god/subscriptions"
+    );
+    return response.data;
   },
 };
 
@@ -1788,6 +1940,156 @@ export const expenseService = {
 
   async delete(id: string): Promise<{ message: string }> {
     const response = await api.delete(`/expenses/${id}`);
+    return response.data;
+  },
+};
+
+// ==================== CREDIT/FIADO SERVICE ====================
+export const creditService = {
+  async getAll(params?: {
+    status?: string;
+    customerId?: string;
+    branchId?: string;
+    overdue?: boolean;
+    page?: number;
+    limit?: number;
+  }): Promise<{
+    credits: Credit[];
+    pagination: { page: number; limit: number; total: number; pages: number };
+  }> {
+    const response = await api.get("/credits", { params });
+    return response.data;
+  },
+
+  async getById(
+    id: string
+  ): Promise<{ credit: Credit; payments: CreditPayment[] }> {
+    const response = await api.get(`/credits/${id}`);
+    return response.data;
+  },
+
+  async create(payload: {
+    customerId: string;
+    amount: number;
+    dueDate?: string;
+    description?: string;
+    items?: Array<{
+      product?: string;
+      productName: string;
+      quantity: number;
+      unitPrice: number;
+      subtotal: number;
+    }>;
+    saleId?: string;
+    branchId?: string;
+  }): Promise<{ credit: Credit }> {
+    const response = await api.post("/credits", payload);
+    return response.data;
+  },
+
+  async registerPayment(
+    creditId: string,
+    payload: {
+      amount: number;
+      paymentMethod?: "cash" | "transfer" | "card" | "other";
+      notes?: string;
+      branchId?: string;
+      paymentDate?: string;
+    }
+  ): Promise<{ payment: CreditPayment; credit: Credit }> {
+    const response = await api.post(`/credits/${creditId}/payments`, payload);
+    return response.data;
+  },
+
+  async getPaymentHistory(
+    creditId: string
+  ): Promise<{ payments: CreditPayment[] }> {
+    const response = await api.get(`/credits/${creditId}/payments`);
+    return response.data;
+  },
+
+  async cancel(creditId: string, reason?: string): Promise<{ credit: Credit }> {
+    const response = await api.post(`/credits/${creditId}/cancel`, { reason });
+    return response.data;
+  },
+
+  async getMetrics(params?: {
+    branchId?: string;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<{ metrics: CreditMetrics }> {
+    const response = await api.get("/credits/metrics", { params });
+    return response.data;
+  },
+
+  async getCustomerCredits(customerId: string): Promise<{
+    credits: Credit[];
+    summary: {
+      totalCredits: number;
+      totalOriginal: number;
+      totalPending: number;
+      totalPaid: number;
+    };
+  }> {
+    const response = await api.get(`/credits/customer/${customerId}`);
+    return response.data;
+  },
+};
+
+// ==================== NOTIFICATION SERVICE ====================
+export const notificationService = {
+  async getAll(params?: {
+    read?: boolean;
+    type?: string;
+    limit?: number;
+    page?: number;
+  }): Promise<{
+    notifications: Notification[];
+    unreadCount: number;
+    pagination: { page: number; limit: number; total: number; pages: number };
+  }> {
+    const response = await api.get("/notifications", { params });
+    return response.data;
+  },
+
+  async getUnreadCount(): Promise<{ unreadCount: number }> {
+    const response = await api.get("/notifications/unread-count");
+    return response.data;
+  },
+
+  async markAsRead(id: string): Promise<{ notification: Notification }> {
+    const response = await api.patch(`/notifications/${id}/read`);
+    return response.data;
+  },
+
+  async markAllAsRead(): Promise<{ modifiedCount: number }> {
+    const response = await api.post("/notifications/read-all");
+    return response.data;
+  },
+
+  async create(payload: {
+    type: string;
+    title: string;
+    message: string;
+    priority?: "low" | "medium" | "high" | "urgent";
+    link?: string;
+    targetUserId?: string;
+    targetRole?: "admin" | "distribuidor" | "all";
+    data?: Record<string, unknown>;
+  }): Promise<{ notification: Notification }> {
+    const response = await api.post("/notifications", payload);
+    return response.data;
+  },
+
+  async delete(id: string): Promise<{ message: string }> {
+    const response = await api.delete(`/notifications/${id}`);
+    return response.data;
+  },
+
+  async cleanup(daysOld?: number): Promise<{ deletedCount: number }> {
+    const response = await api.delete("/notifications/cleanup", {
+      params: { daysOld },
+    });
     return response.data;
   },
 };

@@ -10,15 +10,21 @@ import {
   getSalesTimeline,
   getTopProducts,
 } from "../controllers/advancedAnalytics.controller.js";
-import { admin, protect } from "../middleware/auth.middleware.js";
+import { protect } from "../middleware/auth.middleware.js";
 import {
   businessContext,
   requireFeature,
+  requirePermission,
 } from "../middleware/business.middleware.js";
 
 const router = express.Router();
 
-router.use(protect, businessContext, requireFeature("reports"), admin);
+router.use(
+  protect,
+  businessContext,
+  requireFeature("reports"),
+  requirePermission({ module: "analytics", action: "read" })
+);
 
 router.get("/sales-timeline", getSalesTimeline);
 router.get("/top-products", getTopProducts);

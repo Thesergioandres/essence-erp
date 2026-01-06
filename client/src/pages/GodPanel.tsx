@@ -9,6 +9,60 @@ interface DurationForm {
   years: number;
 }
 
+interface GodCreditStatusMetrics {
+  count: number;
+  totalAmount: number;
+  totalPaid: number;
+}
+
+interface GodMetrics {
+  users: {
+    total: number;
+    byStatus: Record<string, number>;
+    expiringSubscriptions: number;
+  };
+  businesses: {
+    total: number;
+    byStatus: Record<string, number>;
+    activeMemberships: number;
+  };
+  products: { total: number };
+  sales: {
+    total: number;
+    totalRevenue: number;
+    totalProfit: number;
+    avgSaleValue: number;
+  };
+  credits: {
+    pending: GodCreditStatusMetrics;
+    paid: GodCreditStatusMetrics;
+    overdue: GodCreditStatusMetrics;
+    totalOutstanding: number;
+  };
+  recentUsers: Array<{
+    _id: string;
+    name: string;
+    email: string;
+    role: string;
+    status: string;
+    createdAt: string;
+    subscriptionExpiresAt?: string;
+  }>;
+  recentBusinesses: Array<{
+    _id: string;
+    name: string;
+    status: string;
+    createdAt: string;
+  }>;
+  topBusinessesBySales: Array<{
+    businessId: string;
+    businessName: string;
+    salesCount: number;
+    totalRevenue: number;
+    totalProfit: number;
+  }>;
+}
+
 type ActionKey =
   | "activate"
   | "extend"
@@ -58,6 +112,25 @@ export default function GodPanel() {
   >("open");
   const [issueAction, setIssueAction] = useState<string | null>(null);
   const [confirmUser, setConfirmUser] = useState<User | null>(null);
+
+  // Métricas globales del sistema
+  const [metrics, setMetrics] = useState<GodMetrics | null>(null);
+  const [metricsLoading, setMetricsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<"metrics" | "users" | "issues">(
+    "metrics"
+  );
+
+  const loadMetrics = async () => {
+    setMetricsLoading(true);
+    try {
+      const res = await userAccessService.getGlobalMetrics();
+      setMetrics(res.metrics);
+    } catch (err) {
+      console.error("god panel metrics error", err);
+    } finally {
+      setMetricsLoading(false);
+    }
+  };
 
   const loadIssues = async (
     status: "all" | "open" | "reviewing" | "closed" = "open"
@@ -110,6 +183,7 @@ export default function GodPanel() {
     };
 
     load();
+    void loadMetrics();
   }, [currentUser?.role, navigate]);
 
   useEffect(() => {
@@ -226,10 +300,10 @@ export default function GodPanel() {
               Modo GOD
             </p>
             <h1 className="text-2xl font-bold sm:text-3xl">
-              Control total de usuarios
+              Panel de Control Global
             </h1>
             <p className="mt-1 text-sm text-gray-300">
-              Activa, suspende, extiende y administra suscripciones manuales.
+              Métricas del sistema, gestión de usuarios y reportes.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -249,7 +323,8 @@ export default function GodPanel() {
                 try {
                   const data = await userAccessService.list();
                   setUsers(data.filter(u => u.role === "super_admin"));
-                  setFeedback("Lista actualizada");
+                  await loadMetrics();
+                  setFeedback("Datos actualizados");
                 } catch (err) {
                   console.error("god panel refresh error", err);
                   setError("No se pudo refrescar");
@@ -273,375 +348,713 @@ export default function GodPanel() {
           </div>
         </header>
 
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        {/* Tabs de navegación */}
+        <div className="flex gap-2 rounded-lg border border-white/10 bg-white/5 p-1">
           {[
-            {
-              label: "Activos",
-              value: counts.active,
-              tone: "from-emerald-500/30 to-emerald-700/20",
-            },
-            {
-              label: "Pendientes",
-              value: counts.pending,
-              tone: "from-amber-400/30 to-amber-600/20",
-            },
-            {
-              label: "Expirados",
-              value: counts.expired,
-              tone: "from-red-500/25 to-red-700/20",
-            },
-            {
-              label: "Suspendidos",
-              value: counts.suspended,
-              tone: "from-orange-500/25 to-orange-700/20",
-            },
-            {
-              label: "Pausados",
-              value: counts.paused,
-              tone: "from-sky-500/25 to-sky-700/20",
-            },
-          ].map(card => (
-            <div
-              key={card.label}
-              className={`rounded-xl border border-white/10 bg-gradient-to-br ${card.tone} px-4 py-4 shadow-lg shadow-black/20`}
+            { key: "metrics", label: "📊 Métricas Globales" },
+            { key: "users", label: "👥 Usuarios" },
+            { key: "issues", label: "🐛 Reportes" },
+          ].map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key as typeof activeTab)}
+              className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition ${
+                activeTab === tab.key
+                  ? "bg-purple-600/40 text-white"
+                  : "text-gray-300 hover:bg-white/10"
+              }`}
             >
-              <p className="text-xs uppercase tracking-[0.22em] text-gray-200/80">
-                {card.label}
-              </p>
-              <p className="mt-1 text-3xl font-bold">{card.value}</p>
-            </div>
+              {tab.label}
+            </button>
           ))}
-        </section>
-
-        <div className="rounded-2xl border border-white/10 bg-gray-900/70 shadow-2xl shadow-purple-900/20">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/5 bg-white/5 px-4 py-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-purple-200/80">
-                Usuarios
-              </p>
-              <h2 className="text-lg font-bold text-white">Super admins</h2>
-              <p className="text-xs text-gray-400">
-                Ajusta vigencias y estado sin perder de vista la info clave.
-              </p>
-            </div>
-            <div className="flex items-center gap-2 text-xs text-gray-300">
-              <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1">
-                <span className="h-2 w-2 rounded-full bg-green-400" />
-                <span>{counts.active} activos</span>
-              </div>
-              <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1">
-                <span className="h-2 w-2 rounded-full bg-amber-400" />
-                <span>{counts.pending} pendientes</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-3 p-4">
-            {users.map(user => {
-              const duration = getDuration(user._id);
-              const isSelf = currentUser?._id === user._id;
-              const loadingThis = actionKey?.endsWith(user._id) || false;
-
-              return (
-                <div
-                  key={user._id}
-                  className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 shadow-sm shadow-black/10 transition hover:border-purple-500/30 hover:bg-purple-500/5"
-                >
-                  <div className="grid grid-cols-12 gap-3">
-                    <div className="col-span-12 space-y-2 sm:col-span-8">
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-gray-400">
-                        <span className="rounded-full bg-white/10 px-2 py-0.5 text-white">
-                          {user._id.slice(-6)}
-                        </span>
-                        <span className="rounded-full bg-purple-500/15 px-2 py-0.5 text-purple-100">
-                          {user.role}
-                        </span>
-                        <span className="text-gray-500">•</span>
-                        <span>{user.email}</span>
-                        {user.phone && (
-                          <span className="text-gray-500">· {user.phone}</span>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap items-center gap-3">
-                        <div>
-                          <p className="text-base font-semibold text-white">
-                            {user.name}
-                          </p>
-                          <p className="text-xs text-gray-400">Super admin</p>
-                        </div>
-                        <span
-                          className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${
-                            statusBadgeStyles[user.status || "pending"] ||
-                            "border-gray-500/40 bg-gray-500/10 text-gray-200"
-                          }`}
-                        >
-                          <span className="h-2 w-2 rounded-full bg-current opacity-70" />
-                          {formatStatus(user.status)}
-                        </span>
-                        <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-gray-200">
-                          Expira: {formatDateTime(user.subscriptionExpiresAt)}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="col-span-12 flex flex-wrap items-center gap-2 sm:col-span-4 sm:justify-end">
-                      <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs">
-                        <label className="text-gray-300">D</label>
-                        <input
-                          type="number"
-                          min={0}
-                          value={duration.days}
-                          onChange={e =>
-                            onDurationChange(user._id, "days", e.target.value)
-                          }
-                          className="w-12 rounded bg-transparent px-2 py-1 text-white outline-none"
-                        />
-                        <label className="text-gray-300">M</label>
-                        <input
-                          type="number"
-                          min={0}
-                          value={duration.months}
-                          onChange={e =>
-                            onDurationChange(user._id, "months", e.target.value)
-                          }
-                          className="w-12 rounded bg-transparent px-2 py-1 text-white outline-none"
-                        />
-                        <label className="text-gray-300">A</label>
-                        <input
-                          type="number"
-                          min={0}
-                          value={duration.years}
-                          onChange={e =>
-                            onDurationChange(user._id, "years", e.target.value)
-                          }
-                          className="w-12 rounded bg-transparent px-2 py-1 text-white outline-none"
-                        />
-                      </div>
-
-                      <ActionButton
-                        label="Activar"
-                        tone="primary"
-                        disabled={isSelf}
-                        loading={
-                          loadingThis && actionKey?.startsWith("activate")
-                        }
-                        onClick={() => handleAction(user._id, "activate")}
-                      />
-                      <ActionButton
-                        label="Extender"
-                        tone="muted"
-                        disabled={isSelf}
-                        loading={loadingThis && actionKey?.startsWith("extend")}
-                        onClick={() => handleAction(user._id, "extend")}
-                      />
-                      {user.status === "active" && (
-                        <ActionButton
-                          label="Pausar"
-                          tone="info"
-                          disabled={isSelf}
-                          loading={
-                            loadingThis && actionKey?.startsWith("pause")
-                          }
-                          onClick={() => handleAction(user._id, "pause")}
-                        />
-                      )}
-                      {user.status === "paused" && (
-                        <ActionButton
-                          label="Reanudar"
-                          tone="success"
-                          disabled={isSelf}
-                          loading={
-                            loadingThis && actionKey?.startsWith("resume")
-                          }
-                          onClick={() => handleAction(user._id, "resume")}
-                        />
-                      )}
-                      {user.status !== "suspended" && (
-                        <ActionButton
-                          label="Suspender"
-                          tone="warning"
-                          disabled={isSelf}
-                          loading={
-                            loadingThis && actionKey?.startsWith("suspend")
-                          }
-                          onClick={() => handleAction(user._id, "suspend")}
-                        />
-                      )}
-                      <ActionButton
-                        label="Eliminar"
-                        tone="danger"
-                        disabled={isSelf}
-                        loading={loadingThis && actionKey?.startsWith("remove")}
-                        onClick={() => setConfirmUser(user)}
-                      />
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
         </div>
-        {/* Issues internos */}
-        <div className="rounded-2xl border border-white/10 bg-gray-900/70 p-6 shadow-2xl shadow-purple-900/20">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-purple-200/80">
-                Reportes internos
-              </p>
-              <h2 className="text-xl font-bold">Buzón de fallos</h2>
-              <p className="text-sm text-gray-400">
-                Logs, contexto y capturas enviados desde la app.
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <select
-                value={issueStatus}
-                onChange={e => setIssueStatus(e.target.value as any)}
-                className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-white focus:border-purple-400 focus:outline-none"
-              >
-                <option value="all">Todos</option>
-                <option value="open">Abiertos</option>
-                <option value="reviewing">En revisión</option>
-                <option value="closed">Cerrados</option>
-              </select>
-              <button
-                onClick={() => loadIssues(issueStatus)}
-                className="rounded-lg border border-purple-500/40 bg-purple-500/20 px-3 py-2 text-sm font-semibold text-purple-50 transition hover:border-purple-300/60 hover:bg-purple-500/30"
-              >
-                Refrescar
-              </button>
-            </div>
-          </div>
 
-          {issuesError && (
-            <div className="mb-4 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">
-              {issuesError}
-            </div>
-          )}
+        {/* Tab: Métricas Globales */}
+        {activeTab === "metrics" && (
+          <div className="space-y-6">
+            {metricsLoading ? (
+              <div className="flex justify-center py-8">
+                <div className="animate-pulse text-gray-400">
+                  Cargando métricas...
+                </div>
+              </div>
+            ) : metrics ? (
+              <>
+                {/* Tarjetas principales */}
+                <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="rounded-xl border border-white/10 bg-gradient-to-br from-blue-500/20 to-blue-700/10 px-4 py-4 shadow-lg">
+                    <p className="text-xs uppercase tracking-widest text-blue-200/80">
+                      Total Usuarios
+                    </p>
+                    <p className="mt-1 text-3xl font-bold">
+                      {metrics.users.total}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      {metrics.users.expiringSubscriptions} por expirar
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-white/10 bg-gradient-to-br from-purple-500/20 to-purple-700/10 px-4 py-4 shadow-lg">
+                    <p className="text-xs uppercase tracking-widest text-purple-200/80">
+                      Total Negocios
+                    </p>
+                    <p className="mt-1 text-3xl font-bold">
+                      {metrics.businesses.total}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      {metrics.businesses.activeMemberships} memberships
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-white/10 bg-gradient-to-br from-green-500/20 to-green-700/10 px-4 py-4 shadow-lg">
+                    <p className="text-xs uppercase tracking-widest text-green-200/80">
+                      Total Ventas
+                    </p>
+                    <p className="mt-1 text-3xl font-bold">
+                      {metrics.sales.total.toLocaleString()}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      $
+                      {metrics.sales.totalRevenue.toLocaleString(undefined, {
+                        maximumFractionDigits: 0,
+                      })}{" "}
+                      ingresos
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-white/10 bg-gradient-to-br from-amber-500/20 to-amber-700/10 px-4 py-4 shadow-lg">
+                    <p className="text-xs uppercase tracking-widest text-amber-200/80">
+                      Productos
+                    </p>
+                    <p className="mt-1 text-3xl font-bold">
+                      {metrics.products.total}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      En el catálogo global
+                    </p>
+                  </div>
+                </section>
 
-          {issuesLoading ? (
-            <div className="flex h-48 items-center justify-center text-sm text-gray-300">
-              Cargando reportes...
-            </div>
-          ) : issues.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-white/15 p-6 text-center text-sm text-gray-400">
-              No hay reportes con este filtro.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {issues.map(report => (
-                <div
-                  key={report._id}
-                  className="rounded-xl border border-white/10 bg-white/5 p-4 shadow-sm shadow-black/20"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2 text-xs text-gray-400">
-                        <span className="rounded-full bg-purple-500/20 px-2 py-0.5 text-purple-200">
-                          {report.user?.role || "-"}
-                        </span>
-                        <span>{report.user?.name || "Usuario"}</span>
-                        <span className="text-gray-500">•</span>
-                        <span>
-                          {report.createdAt
-                            ? new Date(report.createdAt).toLocaleString(
-                                "es-ES",
-                                {
-                                  dateStyle: "medium",
-                                  timeStyle: "short",
-                                }
-                              )
-                            : "-"}
-                        </span>
-                      </div>
-                      <p className="text-sm font-semibold text-white">
-                        {report.message}
-                      </p>
-                      {report.clientContext?.url && (
+                {/* Métricas de ventas y créditos */}
+                <section className="grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-xl border border-white/10 bg-white/5 p-5">
+                    <h3 className="mb-4 text-sm font-semibold uppercase tracking-widest text-emerald-300">
+                      📈 Resumen de Ventas
+                    </h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
                         <p className="text-xs text-gray-400">
-                          URL: {report.clientContext.url}
+                          Ingresos Totales
                         </p>
-                      )}
-                      {report.clientContext?.appVersion && (
-                        <p className="text-xs text-gray-500">
-                          Versión: {report.clientContext.appVersion}
+                        <p className="text-xl font-bold text-emerald-400">
+                          $
+                          {metrics.sales.totalRevenue.toLocaleString(
+                            undefined,
+                            { maximumFractionDigits: 0 }
+                          )}
                         </p>
-                      )}
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span
-                        className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${
-                          report.status === "open"
-                            ? "bg-red-500/20 text-red-200"
-                            : report.status === "reviewing"
-                              ? "bg-amber-500/20 text-amber-100"
-                              : "bg-green-500/20 text-green-100"
-                        }`}
-                      >
-                        {report.status}
-                      </span>
-                      <button
-                        disabled={issueAction === report._id}
-                        onClick={() => updateIssueStatus(report._id, "open")}
-                        className="rounded-lg border border-white/20 bg-white/5 px-3 py-1 text-xs font-semibold text-white transition hover:border-white/40 hover:bg-white/10 disabled:opacity-50"
-                      >
-                        Reabrir
-                      </button>
-                      <button
-                        disabled={issueAction === report._id}
-                        onClick={() =>
-                          updateIssueStatus(report._id, "reviewing")
-                        }
-                        className="rounded-lg border border-amber-400/40 bg-amber-500/20 px-3 py-1 text-xs font-semibold text-amber-50 transition hover:border-amber-300/60 hover:bg-amber-500/30 disabled:opacity-50"
-                      >
-                        Revisando
-                      </button>
-                      <button
-                        disabled={issueAction === report._id}
-                        onClick={() => updateIssueStatus(report._id, "closed")}
-                        className="rounded-lg border border-green-400/40 bg-green-500/20 px-3 py-1 text-xs font-semibold text-green-50 transition hover:border-green-300/60 hover:bg-green-500/30 disabled:opacity-50"
-                      >
-                        Cerrar
-                      </button>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400">
+                          Ganancias Totales
+                        </p>
+                        <p className="text-xl font-bold text-emerald-400">
+                          $
+                          {metrics.sales.totalProfit.toLocaleString(undefined, {
+                            maximumFractionDigits: 0,
+                          })}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400">Venta Promedio</p>
+                        <p className="text-xl font-bold">
+                          $
+                          {metrics.sales.avgSaleValue.toLocaleString(
+                            undefined,
+                            { maximumFractionDigits: 0 }
+                          )}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400">
+                          Total Transacciones
+                        </p>
+                        <p className="text-xl font-bold">
+                          {metrics.sales.total.toLocaleString()}
+                        </p>
+                      </div>
                     </div>
                   </div>
 
-                  {report.logs?.length > 0 && (
-                    <details className="mt-3 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-gray-200">
-                      <summary className="cursor-pointer text-gray-300">
-                        Ver logs ({report.logs.length})
-                      </summary>
-                      <pre className="mt-2 whitespace-pre-wrap text-[11px] text-gray-300">
-                        {report.logs.join("\n")}
-                      </pre>
-                    </details>
-                  )}
-                  {report.stackTrace && (
-                    <details className="mt-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-gray-200">
-                      <summary className="cursor-pointer text-gray-300">
-                        Stacktrace
-                      </summary>
-                      <pre className="mt-2 whitespace-pre-wrap text-[11px] text-gray-300">
-                        {report.stackTrace}
-                      </pre>
-                    </details>
-                  )}
-                  {report.screenshotUrl && (
-                    <a
-                      href={report.screenshotUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-2 inline-flex items-center gap-2 text-xs text-purple-200 hover:text-purple-100"
-                    >
-                      Ver captura ↗
-                    </a>
-                  )}
+                  <div className="rounded-xl border border-white/10 bg-white/5 p-5">
+                    <h3 className="mb-4 text-sm font-semibold uppercase tracking-widest text-amber-300">
+                      💳 Créditos (Fiado)
+                    </h3>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <p className="text-xs text-gray-400">Pendientes</p>
+                        <p className="text-lg font-bold text-amber-400">
+                          {metrics.credits.pending.count}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          $
+                          {metrics.credits.pending.totalAmount.toLocaleString(
+                            undefined,
+                            { maximumFractionDigits: 0 }
+                          )}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400">Pagados</p>
+                        <p className="text-lg font-bold text-green-400">
+                          {metrics.credits.paid.count}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          $
+                          {metrics.credits.paid.totalAmount.toLocaleString(
+                            undefined,
+                            { maximumFractionDigits: 0 }
+                          )}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400">Vencidos</p>
+                        <p className="text-lg font-bold text-red-400">
+                          {metrics.credits.overdue.count}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          $
+                          {metrics.credits.overdue.totalAmount.toLocaleString(
+                            undefined,
+                            { maximumFractionDigits: 0 }
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-4 border-t border-white/10 pt-3">
+                      <p className="text-xs text-gray-400">
+                        Deuda Total Pendiente
+                      </p>
+                      <p className="text-2xl font-bold text-red-400">
+                        $
+                        {metrics.credits.totalOutstanding.toLocaleString(
+                          undefined,
+                          { maximumFractionDigits: 0 }
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </section>
+
+                {/* Top negocios por ventas */}
+                {metrics.topBusinessesBySales.length > 0 && (
+                  <section className="rounded-xl border border-white/10 bg-white/5 p-5">
+                    <h3 className="mb-4 text-sm font-semibold uppercase tracking-widest text-purple-300">
+                      🏆 Top Negocios por Ventas
+                    </h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-white/10 text-left text-xs uppercase text-gray-400">
+                            <th className="pb-2">#</th>
+                            <th className="pb-2">Negocio</th>
+                            <th className="pb-2 text-right">Ventas</th>
+                            <th className="pb-2 text-right">Ingresos</th>
+                            <th className="pb-2 text-right">Ganancias</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {metrics.topBusinessesBySales.map((biz, idx) => (
+                            <tr
+                              key={biz.businessId}
+                              className="border-b border-white/5"
+                            >
+                              <td className="py-2 text-gray-400">{idx + 1}</td>
+                              <td className="py-2 font-medium">
+                                {biz.businessName}
+                              </td>
+                              <td className="py-2 text-right">
+                                {biz.salesCount.toLocaleString()}
+                              </td>
+                              <td className="py-2 text-right text-green-400">
+                                $
+                                {biz.totalRevenue.toLocaleString(undefined, {
+                                  maximumFractionDigits: 0,
+                                })}
+                              </td>
+                              <td className="py-2 text-right text-emerald-400">
+                                $
+                                {biz.totalProfit.toLocaleString(undefined, {
+                                  maximumFractionDigits: 0,
+                                })}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+                )}
+
+                {/* Usuarios y negocios recientes */}
+                <section className="grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-xl border border-white/10 bg-white/5 p-5">
+                    <h3 className="mb-4 text-sm font-semibold uppercase tracking-widest text-blue-300">
+                      👤 Usuarios Recientes
+                    </h3>
+                    <div className="max-h-60 space-y-2 overflow-y-auto">
+                      {metrics.recentUsers.map(user => (
+                        <div
+                          key={user._id}
+                          className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2 text-sm"
+                        >
+                          <div>
+                            <p className="font-medium">{user.name}</p>
+                            <p className="text-xs text-gray-400">
+                              {user.email}
+                            </p>
+                          </div>
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-xs ${statusBadgeStyles[user.status] || "bg-gray-500/20 text-gray-300"}`}
+                          >
+                            {user.status}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-white/10 bg-white/5 p-5">
+                    <h3 className="mb-4 text-sm font-semibold uppercase tracking-widest text-purple-300">
+                      🏢 Negocios Recientes
+                    </h3>
+                    <div className="max-h-60 space-y-2 overflow-y-auto">
+                      {metrics.recentBusinesses.map(biz => (
+                        <div
+                          key={biz._id}
+                          className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2 text-sm"
+                        >
+                          <div>
+                            <p className="font-medium">{biz.name}</p>
+                            <p className="text-xs text-gray-400">
+                              {new Date(biz.createdAt).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-xs ${biz.status === "active" ? "bg-green-500/20 text-green-300" : "bg-gray-500/20 text-gray-300"}`}
+                          >
+                            {biz.status}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </section>
+              </>
+            ) : (
+              <div className="py-8 text-center text-gray-400">
+                No se pudieron cargar las métricas
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab: Usuarios (contenido existente) */}
+        {activeTab === "users" && (
+          <div className="space-y-6">
+            <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+              {[
+                {
+                  label: "Activos",
+                  value: counts.active,
+                  tone: "from-emerald-500/30 to-emerald-700/20",
+                },
+                {
+                  label: "Pendientes",
+                  value: counts.pending,
+                  tone: "from-amber-400/30 to-amber-600/20",
+                },
+                {
+                  label: "Expirados",
+                  value: counts.expired,
+                  tone: "from-red-500/25 to-red-700/20",
+                },
+                {
+                  label: "Suspendidos",
+                  value: counts.suspended,
+                  tone: "from-orange-500/25 to-orange-700/20",
+                },
+                {
+                  label: "Pausados",
+                  value: counts.paused,
+                  tone: "from-sky-500/25 to-sky-700/20",
+                },
+              ].map(card => (
+                <div
+                  key={card.label}
+                  className={`rounded-xl border border-white/10 bg-gradient-to-br ${card.tone} px-4 py-4 shadow-lg shadow-black/20`}
+                >
+                  <p className="text-xs uppercase tracking-[0.22em] text-gray-200/80">
+                    {card.label}
+                  </p>
+                  <p className="mt-1 text-3xl font-bold">{card.value}</p>
                 </div>
               ))}
+            </section>
+
+            <div className="rounded-2xl border border-white/10 bg-gray-900/70 shadow-2xl shadow-purple-900/20">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/5 bg-white/5 px-4 py-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-purple-200/80">
+                    Usuarios
+                  </p>
+                  <h2 className="text-lg font-bold text-white">Super admins</h2>
+                  <p className="text-xs text-gray-400">
+                    Ajusta vigencias y estado sin perder de vista la info clave.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-gray-300">
+                  <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1">
+                    <span className="h-2 w-2 rounded-full bg-green-400" />
+                    <span>{counts.active} activos</span>
+                  </div>
+                  <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1">
+                    <span className="h-2 w-2 rounded-full bg-amber-400" />
+                    <span>{counts.pending} pendientes</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3 p-4">
+                {users.map(user => {
+                  const duration = getDuration(user._id);
+                  const isSelf = currentUser?._id === user._id;
+                  const loadingThis = actionKey?.endsWith(user._id) || false;
+
+                  return (
+                    <div
+                      key={user._id}
+                      className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 shadow-sm shadow-black/10 transition hover:border-purple-500/30 hover:bg-purple-500/5"
+                    >
+                      <div className="grid grid-cols-12 gap-3">
+                        <div className="col-span-12 space-y-2 sm:col-span-8">
+                          <div className="flex flex-wrap items-center gap-2 text-xs text-gray-400">
+                            <span className="rounded-full bg-white/10 px-2 py-0.5 text-white">
+                              {user._id.slice(-6)}
+                            </span>
+                            <span className="rounded-full bg-purple-500/15 px-2 py-0.5 text-purple-100">
+                              {user.role}
+                            </span>
+                            <span className="text-gray-500">•</span>
+                            <span>{user.email}</span>
+                            {user.phone && (
+                              <span className="text-gray-500">
+                                · {user.phone}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-3">
+                            <div>
+                              <p className="text-base font-semibold text-white">
+                                {user.name}
+                              </p>
+                              <p className="text-xs text-gray-400">
+                                Super admin
+                              </p>
+                            </div>
+                            <span
+                              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${
+                                statusBadgeStyles[user.status || "pending"] ||
+                                "border-gray-500/40 bg-gray-500/10 text-gray-200"
+                              }`}
+                            >
+                              <span className="h-2 w-2 rounded-full bg-current opacity-70" />
+                              {formatStatus(user.status)}
+                            </span>
+                            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-gray-200">
+                              Expira:{" "}
+                              {formatDateTime(user.subscriptionExpiresAt)}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="col-span-12 flex flex-wrap items-center gap-2 sm:col-span-4 sm:justify-end">
+                          <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs">
+                            <label className="text-gray-300">D</label>
+                            <input
+                              type="number"
+                              min={0}
+                              value={duration.days}
+                              onChange={e =>
+                                onDurationChange(
+                                  user._id,
+                                  "days",
+                                  e.target.value
+                                )
+                              }
+                              className="w-12 rounded bg-transparent px-2 py-1 text-white outline-none"
+                            />
+                            <label className="text-gray-300">M</label>
+                            <input
+                              type="number"
+                              min={0}
+                              value={duration.months}
+                              onChange={e =>
+                                onDurationChange(
+                                  user._id,
+                                  "months",
+                                  e.target.value
+                                )
+                              }
+                              className="w-12 rounded bg-transparent px-2 py-1 text-white outline-none"
+                            />
+                            <label className="text-gray-300">A</label>
+                            <input
+                              type="number"
+                              min={0}
+                              value={duration.years}
+                              onChange={e =>
+                                onDurationChange(
+                                  user._id,
+                                  "years",
+                                  e.target.value
+                                )
+                              }
+                              className="w-12 rounded bg-transparent px-2 py-1 text-white outline-none"
+                            />
+                          </div>
+
+                          <ActionButton
+                            label="Activar"
+                            tone="primary"
+                            disabled={isSelf}
+                            loading={
+                              loadingThis && actionKey?.startsWith("activate")
+                            }
+                            onClick={() => handleAction(user._id, "activate")}
+                          />
+                          <ActionButton
+                            label="Extender"
+                            tone="muted"
+                            disabled={isSelf}
+                            loading={
+                              loadingThis && actionKey?.startsWith("extend")
+                            }
+                            onClick={() => handleAction(user._id, "extend")}
+                          />
+                          {user.status === "active" && (
+                            <ActionButton
+                              label="Pausar"
+                              tone="info"
+                              disabled={isSelf}
+                              loading={
+                                loadingThis && actionKey?.startsWith("pause")
+                              }
+                              onClick={() => handleAction(user._id, "pause")}
+                            />
+                          )}
+                          {user.status === "paused" && (
+                            <ActionButton
+                              label="Reanudar"
+                              tone="success"
+                              disabled={isSelf}
+                              loading={
+                                loadingThis && actionKey?.startsWith("resume")
+                              }
+                              onClick={() => handleAction(user._id, "resume")}
+                            />
+                          )}
+                          {user.status !== "suspended" && (
+                            <ActionButton
+                              label="Suspender"
+                              tone="warning"
+                              disabled={isSelf}
+                              loading={
+                                loadingThis && actionKey?.startsWith("suspend")
+                              }
+                              onClick={() => handleAction(user._id, "suspend")}
+                            />
+                          )}
+                          <ActionButton
+                            label="Eliminar"
+                            tone="danger"
+                            disabled={isSelf}
+                            loading={
+                              loadingThis && actionKey?.startsWith("remove")
+                            }
+                            onClick={() => setConfirmUser(user)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
+        {/* Issues internos */}
+        {activeTab === "issues" && (
+          <div className="rounded-2xl border border-white/10 bg-gray-900/70 p-6 shadow-2xl shadow-purple-900/20">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-purple-200/80">
+                  Reportes internos
+                </p>
+                <h2 className="text-xl font-bold">Buzón de fallos</h2>
+                <p className="text-sm text-gray-400">
+                  Logs, contexto y capturas enviados desde la app.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  value={issueStatus}
+                  onChange={e => setIssueStatus(e.target.value as any)}
+                  className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-white focus:border-purple-400 focus:outline-none"
+                >
+                  <option value="all">Todos</option>
+                  <option value="open">Abiertos</option>
+                  <option value="reviewing">En revisión</option>
+                  <option value="closed">Cerrados</option>
+                </select>
+                <button
+                  onClick={() => loadIssues(issueStatus)}
+                  className="rounded-lg border border-purple-500/40 bg-purple-500/20 px-3 py-2 text-sm font-semibold text-purple-50 transition hover:border-purple-300/60 hover:bg-purple-500/30"
+                >
+                  Refrescar
+                </button>
+              </div>
+            </div>
+
+            {issuesError && (
+              <div className="mb-4 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">
+                {issuesError}
+              </div>
+            )}
+
+            {issuesLoading ? (
+              <div className="flex h-48 items-center justify-center text-sm text-gray-300">
+                Cargando reportes...
+              </div>
+            ) : issues.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-white/15 p-6 text-center text-sm text-gray-400">
+                No hay reportes con este filtro.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {issues.map(report => (
+                  <div
+                    key={report._id}
+                    className="rounded-xl border border-white/10 bg-white/5 p-4 shadow-sm shadow-black/20"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-xs text-gray-400">
+                          <span className="rounded-full bg-purple-500/20 px-2 py-0.5 text-purple-200">
+                            {report.user?.role || "-"}
+                          </span>
+                          <span>{report.user?.name || "Usuario"}</span>
+                          <span className="text-gray-500">•</span>
+                          <span>
+                            {report.createdAt
+                              ? new Date(report.createdAt).toLocaleString(
+                                  "es-ES",
+                                  {
+                                    dateStyle: "medium",
+                                    timeStyle: "short",
+                                  }
+                                )
+                              : "-"}
+                          </span>
+                        </div>
+                        <p className="text-sm font-semibold text-white">
+                          {report.message}
+                        </p>
+                        {report.clientContext?.url && (
+                          <p className="text-xs text-gray-400">
+                            URL: {report.clientContext.url}
+                          </p>
+                        )}
+                        {report.clientContext?.appVersion && (
+                          <p className="text-xs text-gray-500">
+                            Versión: {report.clientContext.appVersion}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${
+                            report.status === "open"
+                              ? "bg-red-500/20 text-red-200"
+                              : report.status === "reviewing"
+                                ? "bg-amber-500/20 text-amber-100"
+                                : "bg-green-500/20 text-green-100"
+                          }`}
+                        >
+                          {report.status}
+                        </span>
+                        <button
+                          disabled={issueAction === report._id}
+                          onClick={() => updateIssueStatus(report._id, "open")}
+                          className="rounded-lg border border-white/20 bg-white/5 px-3 py-1 text-xs font-semibold text-white transition hover:border-white/40 hover:bg-white/10 disabled:opacity-50"
+                        >
+                          Reabrir
+                        </button>
+                        <button
+                          disabled={issueAction === report._id}
+                          onClick={() =>
+                            updateIssueStatus(report._id, "reviewing")
+                          }
+                          className="rounded-lg border border-amber-400/40 bg-amber-500/20 px-3 py-1 text-xs font-semibold text-amber-50 transition hover:border-amber-300/60 hover:bg-amber-500/30 disabled:opacity-50"
+                        >
+                          Revisando
+                        </button>
+                        <button
+                          disabled={issueAction === report._id}
+                          onClick={() =>
+                            updateIssueStatus(report._id, "closed")
+                          }
+                          className="rounded-lg border border-green-400/40 bg-green-500/20 px-3 py-1 text-xs font-semibold text-green-50 transition hover:border-green-300/60 hover:bg-green-500/30 disabled:opacity-50"
+                        >
+                          Cerrar
+                        </button>
+                      </div>
+                    </div>
+
+                    {report.logs?.length > 0 && (
+                      <details className="mt-3 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-gray-200">
+                        <summary className="cursor-pointer text-gray-300">
+                          Ver logs ({report.logs.length})
+                        </summary>
+                        <pre className="mt-2 whitespace-pre-wrap text-[11px] text-gray-300">
+                          {report.logs.join("\n")}
+                        </pre>
+                      </details>
+                    )}
+                    {report.stackTrace && (
+                      <details className="mt-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-gray-200">
+                        <summary className="cursor-pointer text-gray-300">
+                          Stacktrace
+                        </summary>
+                        <pre className="mt-2 whitespace-pre-wrap text-[11px] text-gray-300">
+                          {report.stackTrace}
+                        </pre>
+                      </details>
+                    )}
+                    {report.screenshotUrl && (
+                      <a
+                        href={report.screenshotUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-2 inline-flex items-center gap-2 text-xs text-purple-200 hover:text-purple-100"
+                      >
+                        Ver captura ↗
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         {confirmUser && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
             <div className="w-full max-w-md rounded-2xl border border-white/10 bg-gray-900/90 p-6 shadow-2xl shadow-black/40">

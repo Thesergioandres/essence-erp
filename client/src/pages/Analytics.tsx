@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { analyticsService } from "../api/services";
 import type {
+  AnalyticsDashboard,
   DistributorProfit,
   FinancialSummary,
   MonthlyProfitData,
@@ -40,6 +41,7 @@ export default function Analytics() {
   const [distributors, setDistributors] = useState<DistributorProfit[]>([]);
   const [timeline, setTimeline] = useState<TimelineData[]>([]);
   const [financial, setFinancial] = useState<FinancialSummary | null>(null);
+  const [dashboard, setDashboard] = useState<AnalyticsDashboard | null>(null);
 
   const [period, setPeriod] = useState<Period>("month");
   const [timelineDays, setTimelineDays] = useState(30);
@@ -67,21 +69,22 @@ export default function Analytics() {
       setLoading(true);
       setError(null);
 
-      const [monthlyRes, prodRes, distRes, timeRes, finRes] = await Promise.all(
-        [
+      const [monthlyRes, prodRes, distRes, timeRes, finRes, dashRes] =
+        await Promise.all([
           analyticsService.getMonthlyProfit(),
           analyticsService.getProfitByProduct(filters),
           analyticsService.getProfitByDistributor(filters),
           analyticsService.getSalesTimeline({ days: timelineDays, ...filters }),
           analyticsService.getFinancialSummary(filters),
-        ]
-      );
+          analyticsService.getAnalyticsDashboard(),
+        ]);
 
       setMonthly(monthlyRes);
       setProducts(prodRes);
       setDistributors(distRes);
       setTimeline(timeRes);
       setFinancial(finRes);
+      setDashboard(dashRes);
     } catch (err: any) {
       console.error("Error cargando analytics", err);
       setError(err?.message || "No se pudo cargar analytics");
@@ -296,6 +299,108 @@ export default function Analytics() {
           )}
         />
       </div>
+
+      {/* Sección Métricas de Créditos/Fiados */}
+      {dashboard?.creditMetrics && (
+        <div className="rounded-xl border border-amber-800/50 bg-gradient-to-br from-amber-900/20 to-gray-900/70 p-4">
+          <div className="mb-4">
+            <h2 className="text-xl font-semibold text-amber-300">
+              📋 Cartera de Fiados
+            </h2>
+            <p className="text-sm text-gray-400">
+              Resumen de créditos y deudas pendientes
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-6">
+            <StatCard
+              title="Total Créditos"
+              subtitle="Registrados"
+              value={String(dashboard.creditMetrics.totalCredits)}
+            />
+            <StatCard
+              title="Deuda Total"
+              subtitle="Pendiente"
+              value={currency(dashboard.creditMetrics.totalDebt)}
+              tone="negative"
+            />
+            <StatCard
+              title="Pagado"
+              subtitle="Recuperado"
+              value={currency(dashboard.creditMetrics.totalPaid)}
+              tone="positive"
+            />
+            <StatCard
+              title="Vencidos"
+              subtitle="Cantidad"
+              value={String(dashboard.creditMetrics.overdueCount)}
+              tone={
+                dashboard.creditMetrics.overdueCount > 0
+                  ? "negative"
+                  : undefined
+              }
+            />
+            <StatCard
+              title="Monto Vencido"
+              subtitle="En mora"
+              value={currency(dashboard.creditMetrics.overdueAmount)}
+              tone="negative"
+            />
+            <StatCard
+              title="Tasa Recuperación"
+              subtitle="% cobrado"
+              value={`${dashboard.creditMetrics.recoveryRate}%`}
+              tone={
+                Number(dashboard.creditMetrics.recoveryRate) >= 50
+                  ? "positive"
+                  : "negative"
+              }
+            />
+          </div>
+
+          {dashboard.creditMetrics.topDebtors.length > 0 && (
+            <div className="mt-4">
+              <h3 className="mb-2 text-sm font-medium text-amber-300/80">
+                Top Deudores
+              </h3>
+              <div className="overflow-hidden rounded-lg border border-amber-800/30">
+                <table className="min-w-full divide-y divide-amber-800/30 bg-gray-950/60">
+                  <thead>
+                    <tr className="bg-amber-900/20">
+                      <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-amber-300/70">
+                        Cliente
+                      </th>
+                      <th className="px-4 py-2 text-right text-xs font-semibold uppercase tracking-wide text-amber-300/70">
+                        Deuda
+                      </th>
+                      <th className="px-4 py-2 text-right text-xs font-semibold uppercase tracking-wide text-amber-300/70">
+                        Créditos
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-amber-800/20">
+                    {dashboard.creditMetrics.topDebtors.map((debtor, idx) => (
+                      <tr
+                        key={debtor.customerId || idx}
+                        className="hover:bg-amber-900/10"
+                      >
+                        <td className="px-4 py-2 text-sm text-gray-100">
+                          {debtor.customerName}
+                        </td>
+                        <td className="px-4 py-2 text-right text-sm font-semibold text-red-300">
+                          {currency(debtor.totalDebt)}
+                        </td>
+                        <td className="px-4 py-2 text-right text-sm text-gray-300">
+                          {debtor.creditsCount}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="rounded-xl border border-gray-800 bg-gray-900/70 p-4">
         <div className="mb-3 flex items-center justify-between">

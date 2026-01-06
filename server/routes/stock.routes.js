@@ -10,10 +10,11 @@ import {
   transferStockBetweenDistributors,
   withdrawStockFromDistributor,
 } from "../controllers/stock.controller.js";
-import { admin, protect } from "../middleware/auth.middleware.js";
+import { protect } from "../middleware/auth.middleware.js";
 import {
   businessContext,
   requireFeature,
+  requirePermission,
 } from "../middleware/business.middleware.js";
 import { cacheMiddleware } from "../middleware/cache.middleware.js";
 
@@ -24,24 +25,24 @@ router.post(
   "/assign",
   protect,
   businessContext,
-  admin,
   requireFeature("inventory"),
+  requirePermission({ module: "inventory", action: "create" }),
   assignStockToDistributor
 );
 router.post(
   "/withdraw",
   protect,
   businessContext,
-  admin,
   requireFeature("inventory"),
+  requirePermission({ module: "inventory", action: "update" }),
   withdrawStockFromDistributor
 );
 router.get(
   "/all",
   protect,
   businessContext,
-  admin,
   requireFeature("inventory"),
+  requirePermission({ module: "inventory", action: "read" }),
   cacheMiddleware(60, "stock:all"),
   getAllDistributorsStock
 );
@@ -49,16 +50,16 @@ router.get(
   "/branch/:branchId?",
   protect,
   businessContext,
-  admin,
   requireFeature("inventory"),
+  requirePermission({ module: "inventory", action: "read" }),
   getBranchStock
 );
 router.get(
   "/alerts",
   protect,
   businessContext,
-  admin,
   requireFeature("inventory"),
+  requirePermission({ module: "inventory", action: "read" }),
   cacheMiddleware(30, "stock:alerts"),
   getStockAlerts
 );
@@ -66,8 +67,8 @@ router.get(
   "/branch-alerts",
   protect,
   businessContext,
-  admin,
   requireFeature("inventory"),
+  requirePermission({ module: "inventory", action: "read" }),
   cacheMiddleware(30, "stock:branch-alerts"),
   getBranchStockAlerts
 );
@@ -75,9 +76,9 @@ router.get(
   "/transfers",
   protect,
   businessContext,
-  admin,
   requireFeature("inventory"),
   requireFeature("transfers"),
+  requirePermission({ module: "transfers", action: "read" }),
   getTransferHistory
 ); // Historial de transferencias
 
@@ -87,6 +88,7 @@ router.get(
   protect,
   businessContext,
   requireFeature("inventory"),
+  requirePermission({ module: "inventory", action: "read" }),
   getDistributorStock
 );
 router.post(
@@ -95,6 +97,7 @@ router.post(
   businessContext,
   requireFeature("inventory"),
   requireFeature("transfers"),
+  requirePermission({ module: "transfers", action: "create" }),
   transferStockBetweenDistributors
 );
 

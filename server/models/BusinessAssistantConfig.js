@@ -5,7 +5,6 @@ const businessAssistantConfigSchema = new mongoose.Schema(
     business: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Business",
-      index: true,
     },
     // Ventanas por defecto
     horizonDaysDefault: { type: Number, default: 90, min: 1 },

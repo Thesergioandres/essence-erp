@@ -9,8 +9,12 @@ import {
   getProfitByProduct,
   getSalesTimeline,
 } from "../controllers/analytics.controller.js";
-import { admin, protect } from "../middleware/auth.middleware.js";
-import { businessContext } from "../middleware/business.middleware.js";
+import { protect } from "../middleware/auth.middleware.js";
+import {
+  businessContext,
+  requireFeature,
+  requirePermission,
+} from "../middleware/business.middleware.js";
 import { cacheMiddleware } from "../middleware/cache.middleware.js";
 
 // Solo usar caché si está habilitado en entorno
@@ -22,7 +26,12 @@ const cacheIfEnabled =
 const router = express.Router();
 
 // Caché de 5 minutos para analytics (scoped por negocio)
-router.use(protect, businessContext, admin);
+router.use(
+  protect,
+  businessContext,
+  requireFeature("analytics"),
+  requirePermission({ module: "analytics", action: "read" })
+);
 
 router.get("/monthly-profit", cacheIfEnabled, getMonthlyProfit);
 router.get("/profit-by-product", cacheIfEnabled, getProfitByProduct);

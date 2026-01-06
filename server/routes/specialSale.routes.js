@@ -10,33 +10,67 @@ import {
   getTopProducts,
   updateSpecialSale,
 } from "../controllers/specialSale.controller.js";
-import { admin, protect } from "../middleware/auth.middleware.js";
+import { protect } from "../middleware/auth.middleware.js";
 import {
   businessContext,
   requireFeature,
+  requirePermission,
 } from "../middleware/business.middleware.js";
 
 const router = express.Router();
 
-// Proteger todas las rutas y solo permitir admin
+// Proteger todas las rutas con permisos granulares
 router.use(protect, businessContext, requireFeature("sales"));
-router.use(admin);
 
 // Rutas de estadísticas
-router.get("/stats/overview", getSpecialSalesStatistics);
-router.get("/stats/distribution", getDistributionByPerson);
-router.get("/stats/top-products", getTopProducts);
+router.get(
+  "/stats/overview",
+  requirePermission({ module: "promotions", action: "read" }),
+  getSpecialSalesStatistics
+);
+router.get(
+  "/stats/distribution",
+  requirePermission({ module: "promotions", action: "read" }),
+  getDistributionByPerson
+);
+router.get(
+  "/stats/top-products",
+  requirePermission({ module: "promotions", action: "read" }),
+  getTopProducts
+);
 
 // Rutas CRUD
-router.route("/").post(createSpecialSale).get(getAllSpecialSales);
+router
+  .route("/")
+  .post(
+    requirePermission({ module: "promotions", action: "create" }),
+    createSpecialSale
+  )
+  .get(
+    requirePermission({ module: "promotions", action: "read" }),
+    getAllSpecialSales
+  );
 
 router
   .route("/:id")
-  .get(getSpecialSaleById)
-  .put(updateSpecialSale)
-  .delete(deleteSpecialSale);
+  .get(
+    requirePermission({ module: "promotions", action: "read" }),
+    getSpecialSaleById
+  )
+  .put(
+    requirePermission({ module: "promotions", action: "update" }),
+    updateSpecialSale
+  )
+  .delete(
+    requirePermission({ module: "promotions", action: "delete" }),
+    deleteSpecialSale
+  );
 
 // Ruta para cancelar venta especial
-router.put("/:id/cancel", cancelSpecialSale);
+router.put(
+  "/:id/cancel",
+  requirePermission({ module: "promotions", action: "update" }),
+  cancelSpecialSale
+);
 
 export default router;

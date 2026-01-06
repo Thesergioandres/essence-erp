@@ -22,6 +22,18 @@ const membershipSchema = new mongoose.Schema(
       enum: ["active", "invited", "disabled"],
       default: "active",
     },
+    // Lista de sedes a las que está restringido. Si está vacío, tiene acceso a todas.
+    allowedBranches: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Branch",
+      },
+    ],
+    // Matriz de permisos granular por módulo/acción
+    permissions: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
   },
   { timestamps: true }
 );

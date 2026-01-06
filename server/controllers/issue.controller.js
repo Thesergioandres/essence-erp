@@ -124,3 +124,23 @@ export const updateIssueStatus = async (req, res) => {
     res.status(500).json({ message: "No se pudo actualizar el reporte" });
   }
 };
+
+/**
+ * @desc    Eliminar un reporte de incidencia
+ * @route   DELETE /api/issues/:id
+ * @access  Private/GOD
+ */
+export const deleteIssue = async (req, res) => {
+  try {
+    const report = await IssueReport.findByIdAndDelete(req.params.id);
+
+    if (!report) {
+      return res.status(404).json({ message: "Reporte no encontrado" });
+    }
+
+    res.json({ success: true, message: "Reporte eliminado correctamente" });
+  } catch (error) {
+    console.error("Error eliminando issue", error);
+    res.status(500).json({ message: "No se pudo eliminar el reporte" });
+  }
+};

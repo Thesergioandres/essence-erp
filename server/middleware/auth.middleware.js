@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
+import { logAuthError } from "../utils/logger.js";
 
 // Proteger rutas - verificar JWT
 export const protect = async (req, res, next) => {
@@ -22,7 +23,11 @@ export const protect = async (req, res, next) => {
       const userId = decoded.id || decoded.userId;
 
       if (!userId) {
-        console.log("❌ Token no contiene 'id' ni 'userId'");
+        logAuthError({
+          message: "Token inválido: falta ID de usuario",
+          module: "auth",
+          requestId: req.reqId,
+        });
         return res
           .status(401)
           .json({ message: "Token inválido: falta ID de usuario" });
@@ -31,7 +36,12 @@ export const protect = async (req, res, next) => {
       const user = await User.findById(userId).select("-password");
 
       if (!user) {
-        console.log("❌ Usuario no encontrado:", userId);
+        logAuthError({
+          message: "Usuario no encontrado",
+          module: "auth",
+          requestId: req.reqId,
+          userId,
+        });
         return res.status(401).json({ message: "Usuario no encontrado" });
       }
 
@@ -68,6 +78,13 @@ export const protect = async (req, res, next) => {
         }
 
         if (user.status !== "active") {
+          logAuthError({
+            message: "Acceso restringido por estado de cuenta",
+            module: "auth",
+            requestId: req.reqId,
+            userId: user._id?.toString(),
+            extra: { code: user.status },
+          });
           return res.status(403).json({
             message: "Acceso restringido por estado de cuenta",
             code: user.status,
@@ -84,11 +101,20 @@ export const protect = async (req, res, next) => {
 
       next();
     } catch (error) {
-      console.log("❌ Error en autenticación:", error.message);
+      logAuthError({
+        message: "Token inválido",
+        module: "auth",
+        requestId: req.reqId,
+        stack: error.stack,
+      });
       res.status(401).json({ message: "No autorizado, token inválido" });
     }
   } else {
-    console.log("❌ No se proporcionó token");
+    logAuthError({
+      message: "No se proporcionó token",
+      module: "auth",
+      requestId: req.reqId,
+    });
     res.status(401).json({ message: "No autorizado, sin token" });
   }
 };
@@ -108,6 +134,12 @@ export const admin = (req, res, next) => {
   if (hasAdminUserRole || hasAdminMembership) {
     next();
   } else {
+    logAuthError({
+      message: "Acceso denegado. Solo administradores",
+      module: "auth",
+      requestId: req.reqId,
+      userId: req.user?.id,
+    });
     res.status(403).json({ message: "Acceso denegado. Solo administradores" });
   }
 };
@@ -116,6 +148,12 @@ export const god = (req, res, next) => {
   if (req.user && req.user.role === "god") {
     next();
   } else {
+    logAuthError({
+      message: "Acceso denegado. Solo rol god",
+      module: "auth",
+      requestId: req.reqId,
+      userId: req.user?.id,
+    });
     res.status(403).json({ message: "Acceso denegado. Solo rol god" });
   }
 };
@@ -131,6 +169,12 @@ export const distributor = (req, res, next) => {
   ) {
     next();
   } else {
+    logAuthError({
+      message: "Acceso denegado. Solo distribuidores",
+      module: "auth",
+      requestId: req.reqId,
+      userId: req.user?.id,
+    });
     res.status(403).json({ message: "Acceso denegado. Solo distribuidores" });
   }
 };
@@ -146,6 +190,12 @@ export const adminOrDistributor = (req, res, next) => {
   ) {
     next();
   } else {
+    logAuthError({
+      message: "Acceso denegado",
+      module: "auth",
+      requestId: req.reqId,
+      userId: req.user?.id,
+    });
     res.status(403).json({ message: "Acceso denegado" });
   }
 };

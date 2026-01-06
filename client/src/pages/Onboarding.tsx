@@ -208,6 +208,7 @@ export default function Onboarding() {
                     "gamification",
                     "transfers",
                     "incidents",
+                    "promotions",
                   ] as (keyof BusinessFeatures)[]
                 ).map(key => {
                   const meta: Record<
@@ -249,6 +250,10 @@ export default function Onboarding() {
                     transfers: {
                       label: "Transferencias",
                       desc: "Movimientos entre bodegas y traspasos.",
+                    },
+                    promotions: {
+                      label: "Promociones",
+                      desc: "Ofertas, descuentos y campañas por temporada.",
                     },
                   };
                   return (

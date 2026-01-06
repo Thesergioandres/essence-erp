@@ -11,14 +11,17 @@ import { MongoMemoryServer } from "mongodb-memory-server";
 import mongoose from "mongoose";
 import request from "supertest";
 import AuditLog from "../models/AuditLog.js";
+import Business from "../models/Business.js";
 import Category from "../models/Category.js";
 import DistributorStock from "../models/DistributorStock.js";
+import Membership from "../models/Membership.js";
 import Product from "../models/Product.js";
 import User from "../models/User.js";
 
 describe("Stock Transfer Between Distributors Tests", () => {
   let app;
   let mongoServer;
+  let businessId;
   let dist1Token;
   let dist1Id;
   let dist2Token;
@@ -26,6 +29,7 @@ describe("Stock Transfer Between Distributors Tests", () => {
   let adminToken;
   let categoryId;
   let productId;
+  let otherBusinessId;
 
   beforeAll(async () => {
     process.env.NODE_ENV = "test";
@@ -39,6 +43,8 @@ describe("Stock Transfer Between Distributors Tests", () => {
 
     // Limpiar base de datos
     await User.deleteMany({});
+    await Business.deleteMany({});
+    await Membership.deleteMany({});
     await Product.deleteMany({});
     await DistributorStock.deleteMany({});
     await Category.deleteMany({});
@@ -58,12 +64,27 @@ describe("Stock Transfer Between Distributors Tests", () => {
       email: "admin.transfer@test.com",
       password: adminHashed,
       role: "admin",
+      status: "active",
     });
+
+    const adminUser = await User.findOne({ email: "admin.transfer@test.com" });
 
     const adminLogin = await request(app)
       .post("/api/auth/login")
       .send({ email: "admin.transfer@test.com", password: "password123" });
     adminToken = adminLogin.body.token;
+
+    const business = await Business.create({
+      name: "Negocio Transfer",
+      createdBy: adminUser._id,
+    });
+    businessId = business._id.toString();
+
+    const otherBusiness = await Business.create({
+      name: "Negocio Transfer Secundario",
+      createdBy: adminUser._id,
+    });
+    otherBusinessId = otherBusiness._id.toString();
 
     // Crear distribuidor 1 (origen)
     const dist1Hashed = await bcrypt.hash("password123", 10);
@@ -110,12 +131,38 @@ describe("Stock Transfer Between Distributors Tests", () => {
       totalStock: 100,
       warehouseStock: 50,
       featured: false,
+      business: businessId,
     });
     productId = product._id;
+
+    // Crear memberships
+    await Membership.create({
+      user: adminUser._id,
+      business: businessId,
+      role: "admin",
+      status: "active",
+    });
+
+    await Membership.create({
+      user: dist1Id,
+      business: businessId,
+      role: "distribuidor",
+      status: "active",
+      permissions: { transfers: { create: true } },
+    });
+
+    await Membership.create({
+      user: dist2Id,
+      business: businessId,
+      role: "distribuidor",
+      status: "active",
+    });
   });
 
   afterAll(async () => {
     await User.deleteMany({});
+    await Business.deleteMany({});
+    await Membership.deleteMany({});
     await Product.deleteMany({});
     await DistributorStock.deleteMany({});
     await Category.deleteMany({});
@@ -133,6 +180,7 @@ describe("Stock Transfer Between Distributors Tests", () => {
       distributor: dist1Id,
       product: productId,
       quantity: 20,
+      business: businessId,
     });
   });
 
@@ -146,6 +194,7 @@ describe("Stock Transfer Between Distributors Tests", () => {
 
       const response = await request(app)
         .post("/api/stock/transfer")
+        .set("x-business-id", businessId)
         .set("Authorization", `Bearer ${dist1Token}`)
         .send(transferData)
         .expect(200);
@@ -180,6 +229,7 @@ describe("Stock Transfer Between Distributors Tests", () => {
 
       await request(app)
         .post("/api/stock/transfer")
+        .set("x-business-id", businessId)
         .set("Authorization", `Bearer ${dist1Token}`)
         .send(transferData)
         .expect(200);
@@ -206,6 +256,7 @@ describe("Stock Transfer Between Distributors Tests", () => {
 
       await request(app)
         .post("/api/stock/transfer")
+        .set("x-business-id", businessId)
         .set("Authorization", `Bearer ${dist1Token}`)
         .send(transferData)
         .expect(200);
@@ -225,6 +276,7 @@ describe("Stock Transfer Between Distributors Tests", () => {
 
       const response = await request(app)
         .post("/api/stock/transfer")
+        .set("x-business-id", businessId)
         .set("Authorization", `Bearer ${dist1Token}`)
         .send(transferData)
         .expect(400);
@@ -241,6 +293,7 @@ describe("Stock Transfer Between Distributors Tests", () => {
 
       const response1 = await request(app)
         .post("/api/stock/transfer")
+        .set("x-business-id", businessId)
         .set("Authorization", `Bearer ${dist1Token}`)
         .send(transferData1)
         .expect(400);
@@ -257,6 +310,7 @@ describe("Stock Transfer Between Distributors Tests", () => {
 
       const response2 = await request(app)
         .post("/api/stock/transfer")
+        .set("x-business-id", businessId)
         .set("Authorization", `Bearer ${dist1Token}`)
         .send(transferData2)
         .expect(400);
@@ -275,6 +329,7 @@ describe("Stock Transfer Between Distributors Tests", () => {
 
       const response = await request(app)
         .post("/api/stock/transfer")
+        .set("x-business-id", businessId)
         .set("Authorization", `Bearer ${dist1Token}`)
         .send(transferData)
         .expect(400);
@@ -294,11 +349,31 @@ describe("Stock Transfer Between Distributors Tests", () => {
 
       const response = await request(app)
         .post("/api/stock/transfer")
+        .set("x-business-id", businessId)
         .set("Authorization", `Bearer ${dist1Token}`)
         .send(transferData)
         .expect(400);
 
       expect(response.body.message).toContain("destino no es distribuidor");
+    });
+
+    it("rechaza transferencias hacia otro negocio cuando el origen no es miembro", async () => {
+      const transferData = {
+        toDistributorId: dist2Id,
+        productId: productId,
+        quantity: 3,
+      };
+
+      const response = await request(app)
+        .post("/api/stock/transfer")
+        .set("x-business-id", otherBusinessId)
+        .set("Authorization", `Bearer ${dist1Token}`)
+        .send(transferData)
+        .expect(403);
+
+      expect(response.body.message).toContain(
+        "No tienes acceso a este negocio"
+      );
     });
 
     it("debería fallar si el producto no existe", async () => {
@@ -312,6 +387,7 @@ describe("Stock Transfer Between Distributors Tests", () => {
 
       const response = await request(app)
         .post("/api/stock/transfer")
+        .set("x-business-id", businessId)
         .set("Authorization", `Bearer ${dist1Token}`)
         .send(transferData)
         .expect(404);
@@ -328,6 +404,7 @@ describe("Stock Transfer Between Distributors Tests", () => {
 
       const response = await request(app)
         .post("/api/stock/transfer")
+        .set("x-business-id", businessId)
         .send(transferData)
         .expect(401);
 
@@ -343,6 +420,7 @@ describe("Stock Transfer Between Distributors Tests", () => {
 
       const response = await request(app)
         .post("/api/stock/transfer")
+        .set("x-business-id", businessId)
         .set("Authorization", `Bearer ${adminToken}`)
         .send(transferData)
         .expect(403);
@@ -353,6 +431,7 @@ describe("Stock Transfer Between Distributors Tests", () => {
     it("debería fallar si faltan datos requeridos", async () => {
       const response1 = await request(app)
         .post("/api/stock/transfer")
+        .set("x-business-id", businessId)
         .set("Authorization", `Bearer ${dist1Token}`)
         .send({ productId: productId, quantity: 5 })
         .expect(400);
@@ -361,6 +440,7 @@ describe("Stock Transfer Between Distributors Tests", () => {
 
       const response2 = await request(app)
         .post("/api/stock/transfer")
+        .set("x-business-id", businessId)
         .set("Authorization", `Bearer ${dist1Token}`)
         .send({ toDistributorId: dist2Id, quantity: 5 })
         .expect(400);
@@ -369,6 +449,7 @@ describe("Stock Transfer Between Distributors Tests", () => {
 
       const response3 = await request(app)
         .post("/api/stock/transfer")
+        .set("x-business-id", businessId)
         .set("Authorization", `Bearer ${dist1Token}`)
         .send({ toDistributorId: dist2Id, productId: productId })
         .expect(400);
@@ -382,6 +463,7 @@ describe("Stock Transfer Between Distributors Tests", () => {
         distributor: dist2Id,
         product: productId,
         quantity: 10,
+        business: businessId,
       });
 
       const transferData = {
@@ -392,6 +474,7 @@ describe("Stock Transfer Between Distributors Tests", () => {
 
       const response = await request(app)
         .post("/api/stock/transfer")
+        .set("x-business-id", businessId)
         .set("Authorization", `Bearer ${dist1Token}`)
         .send(transferData)
         .expect(200);
@@ -409,6 +492,7 @@ describe("Stock Transfer Between Distributors Tests", () => {
       // Primera transferencia
       await request(app)
         .post("/api/stock/transfer")
+        .set("x-business-id", businessId)
         .set("Authorization", `Bearer ${dist1Token}`)
         .send({
           toDistributorId: dist2Id,
@@ -420,6 +504,7 @@ describe("Stock Transfer Between Distributors Tests", () => {
       // Segunda transferencia
       await request(app)
         .post("/api/stock/transfer")
+        .set("x-business-id", businessId)
         .set("Authorization", `Bearer ${dist1Token}`)
         .send({
           toDistributorId: dist2Id,
@@ -450,6 +535,7 @@ describe("Stock Transfer Between Distributors Tests", () => {
 
       const response = await request(app)
         .post("/api/stock/transfer")
+        .set("x-business-id", businessId)
         .set("Authorization", `Bearer ${dist1Token}`)
         .send(transferData)
         .expect(200);
@@ -481,6 +567,7 @@ describe("Stock Transfer Between Distributors Tests", () => {
 
       await request(app)
         .post("/api/stock/transfer")
+        .set("x-business-id", businessId)
         .set("Authorization", `Bearer ${dist1Token}`)
         .send(transferData)
         .expect(500);

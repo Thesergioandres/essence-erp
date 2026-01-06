@@ -6,10 +6,11 @@ import {
   getExpenses,
   updateExpense,
 } from "../controllers/expense.controller.js";
-import { admin, protect } from "../middleware/auth.middleware.js";
+import { protect } from "../middleware/auth.middleware.js";
 import {
   businessContext,
   requireFeature,
+  requirePermission,
 } from "../middleware/business.middleware.js";
 import { cacheMiddleware } from "../middleware/cache.middleware.js";
 
@@ -17,11 +18,33 @@ const router = express.Router();
 
 router.use(protect, businessContext, requireFeature("expenses"));
 
-router.get("/", admin, cacheMiddleware(120, "expenses"), getExpenses);
-router.post("/", admin, createExpense);
+router.get(
+  "/",
+  requirePermission({ module: "expenses", action: "read" }),
+  cacheMiddleware(120, "expenses"),
+  getExpenses
+);
+router.post(
+  "/",
+  requirePermission({ module: "expenses", action: "create" }),
+  createExpense
+);
 
-router.get("/:id", admin, cacheMiddleware(300, "expense"), getExpenseById);
-router.put("/:id", admin, updateExpense);
-router.delete("/:id", admin, deleteExpense);
+router.get(
+  "/:id",
+  requirePermission({ module: "expenses", action: "read" }),
+  cacheMiddleware(300, "expense"),
+  getExpenseById
+);
+router.put(
+  "/:id",
+  requirePermission({ module: "expenses", action: "update" }),
+  updateExpense
+);
+router.delete(
+  "/:id",
+  requirePermission({ module: "expenses", action: "delete" }),
+  deleteExpense
+);
 
 export default router;

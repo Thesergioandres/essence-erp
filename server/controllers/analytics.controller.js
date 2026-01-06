@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import Credit from "../models/Credit.js";
 import DefectiveProduct from "../models/DefectiveProduct.js";
 import Sale from "../models/Sale.js";
 import SpecialSale from "../models/SpecialSale.js";
@@ -8,6 +9,17 @@ const buildBusinessFilter = (req) =>
   req.businessId
     ? { business: new mongoose.Types.ObjectId(req.businessId) }
     : {};
+
+const ensureBusinessId = (req, res) => {
+  const businessId =
+    req.businessId || req.headers?.["x-business-id"] || req.query?.businessId;
+  if (!businessId) {
+    res.status(400).json({ message: "Falta x-business-id" });
+    return null;
+  }
+  req.businessId = businessId;
+  return businessId;
+};
 
 // Construye un rango de fechas usando la zona horaria de Colombia (UTC-5)
 const buildColombiaRange = (startStr, endStr) => {
@@ -52,6 +64,8 @@ const buildColombiaRange = (startStr, endStr) => {
 // @access  Private/Admin
 export const getMonthlyProfit = async (req, res) => {
   try {
+    const businessId = ensureBusinessId(req, res);
+    if (!businessId) return;
     const businessFilter = buildBusinessFilter(req);
 
     // Límites de mes en UTC para evitar desfaces por timezone
@@ -187,6 +201,8 @@ export const getMonthlyProfit = async (req, res) => {
 // @access  Private/Admin
 export const getProfitByProduct = async (req, res) => {
   try {
+    const businessId = ensureBusinessId(req, res);
+    if (!businessId) return;
     const businessFilter = buildBusinessFilter(req);
     const { startDate, endDate } = req.query;
 
@@ -1043,10 +1059,96 @@ export const getAnalyticsDashboard = async (req, res) => {
       monthlyTotals.totalSales += 1;
     });
 
+    // Métricas de créditos/fiados
+    const creditStats = await Credit.aggregate([
+      { $match: businessFilter },
+      {
+        $facet: {
+          totals: [
+            {
+              $group: {
+                _id: null,
+                totalCredits: { $sum: 1 },
+                totalDebt: { $sum: "$remainingAmount" },
+                totalPaid: { $sum: "$paidAmount" },
+                totalOriginal: { $sum: "$originalAmount" },
+              },
+            },
+          ],
+          overdue: [
+            {
+              $match: {
+                status: { $in: ["pending", "partial", "overdue"] },
+                dueDate: { $lt: new Date() },
+              },
+            },
+            {
+              $group: {
+                _id: null,
+                count: { $sum: 1 },
+                amount: { $sum: "$remainingAmount" },
+              },
+            },
+          ],
+          topDebtors: [
+            {
+              $match: {
+                status: { $in: ["pending", "partial", "overdue"] },
+              },
+            },
+            {
+              $group: {
+                _id: "$customer",
+                totalDebt: { $sum: "$remainingAmount" },
+                creditsCount: { $sum: 1 },
+              },
+            },
+            { $sort: { totalDebt: -1 } },
+            { $limit: 5 },
+            {
+              $lookup: {
+                from: "customers",
+                localField: "_id",
+                foreignField: "_id",
+                as: "customer",
+              },
+            },
+            { $unwind: "$customer" },
+            {
+              $project: {
+                customerId: "$_id",
+                customerName: "$customer.name",
+                totalDebt: 1,
+                creditsCount: 1,
+              },
+            },
+          ],
+        },
+      },
+    ]);
+
+    const creditMetrics = {
+      totalCredits: creditStats[0]?.totals[0]?.totalCredits || 0,
+      totalDebt: creditStats[0]?.totals[0]?.totalDebt || 0,
+      totalPaid: creditStats[0]?.totals[0]?.totalPaid || 0,
+      overdueCount: creditStats[0]?.overdue[0]?.count || 0,
+      overdueAmount: creditStats[0]?.overdue[0]?.amount || 0,
+      recoveryRate:
+        creditStats[0]?.totals[0]?.totalOriginal > 0
+          ? (
+              (creditStats[0]?.totals[0]?.totalPaid /
+                creditStats[0]?.totals[0]?.totalOriginal) *
+              100
+            ).toFixed(2)
+          : 0,
+      topDebtors: creditStats[0]?.topDebtors || [],
+    };
+
     res.json({
       monthlyTotals,
       topProducts,
       topDistributors,
+      creditMetrics,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });

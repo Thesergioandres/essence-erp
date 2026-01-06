@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from "react";
+import { logUI } from "../utils/logger";
 
 interface Props {
   children: ReactNode;
@@ -23,10 +24,10 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: { componentStack: string }) {
-    // Log consolidado para depurar fallos en render
-    console.error("[UI ERROR]", {
-      message: error.message,
-      name: error.name,
+    // Usar logger centralizado
+    logUI.error(`ErrorBoundary: ${error.message}`, {
+      component: "ErrorBoundary",
+      errorName: error.name,
       stack: error.stack,
       componentStack: info?.componentStack,
     });

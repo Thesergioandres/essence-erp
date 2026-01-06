@@ -63,4 +63,9 @@ const userSchema = new mongoose.Schema(
   }
 );
 
+// Índices para búsquedas frecuentes
+userSchema.index({ role: 1, status: 1 });
+userSchema.index({ status: 1, subscriptionExpiresAt: 1 });
+userSchema.index({ role: 1, active: 1 });
+
 export default mongoose.model("User", userSchema);

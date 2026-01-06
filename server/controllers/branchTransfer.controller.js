@@ -36,7 +36,11 @@ const ensureWarehouseBranch = async (businessId) => {
 
 const validateBranch = async (businessId, branchId) => {
   const branch = await Branch.findOne({ _id: branchId, business: businessId });
-  if (!branch) throw new Error("Sede inválida para este negocio");
+  if (!branch) {
+    const err = new Error("Sede inválida para este negocio");
+    err.statusCode = 404;
+    throw err;
+  }
   return branch;
 };
 
@@ -89,14 +93,10 @@ export const createBranchTransfer = async (req, res) => {
     const productCache = new Map();
     const getProduct = async (productId) => {
       if (productCache.has(productId)) return productCache.get(productId);
-      const query = { _id: productId };
-      // Permitir productos sin campo business (tests) o asignados al negocio
-      query.$or = [
-        { business: businessId },
-        { business: { $exists: false } },
-        { business: null },
-      ];
-      const product = await Product.findOne(query);
+      const product = await Product.findOne({
+        _id: productId,
+        business: businessId,
+      });
       productCache.set(productId, product);
       return product;
     };
@@ -179,8 +179,9 @@ export const createBranchTransfer = async (req, res) => {
     res.status(201).json({ transfer });
   } catch (error) {
     console.error("createBranchTransfer error", error);
+    const status = error?.statusCode || 500;
     res
-      .status(500)
+      .status(status)
       .json({ message: error?.message || "No se pudo crear la transferencia" });
   }
 };

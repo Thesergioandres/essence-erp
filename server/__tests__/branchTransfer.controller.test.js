@@ -28,6 +28,7 @@ describe("Branch transfers", () => {
   let originBranchId;
   let targetBranchId;
   let productId;
+  let foreignProductId;
 
   beforeAll(async () => {
     process.env.NODE_ENV = "test";
@@ -90,8 +91,27 @@ describe("Branch transfers", () => {
       totalStock: 100,
       warehouseStock: 50,
       featured: false,
+      business: businessId,
     });
     productId = product._id.toString();
+
+    const otherBiz = await Business.create({
+      name: "Negocio Externo",
+      createdBy: adminId,
+    });
+    const foreignProduct = await Product.create({
+      name: "Producto Externo",
+      description: "Fuera del negocio",
+      purchasePrice: 5,
+      distributorPrice: 8,
+      clientPrice: 12,
+      category: new mongoose.Types.ObjectId(),
+      totalStock: 30,
+      warehouseStock: 30,
+      featured: false,
+      business: otherBiz._id,
+    });
+    foreignProductId = foreignProduct._id.toString();
   });
 
   afterAll(async () => {
@@ -213,9 +233,24 @@ describe("Branch transfers", () => {
         targetBranchId: foreignBranch._id.toString(),
         items: [{ product: productId, quantity: 1 }],
       })
-      .expect(500);
+      .expect(404);
 
     expect(res.body.message).toContain("Sede inválida");
+  });
+
+  it("rechaza transferencia con producto de otro negocio", async () => {
+    const res = await request(app)
+      .post("/api/branch-transfers")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .set("x-business-id", businessId)
+      .send({
+        originBranchId,
+        targetBranchId,
+        items: [{ product: foreignProductId, quantity: 1 }],
+      })
+      .expect(404);
+
+    expect(res.body.message).toContain("Producto no encontrado");
   });
 
   it("lista las transferencias creadas", async () => {

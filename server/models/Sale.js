@@ -12,6 +12,19 @@ const saleSchema = new mongoose.Schema(
       ref: "Branch",
       index: true,
     },
+    customer: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Customer",
+      index: true,
+    },
+    customerSegment: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Segment",
+    },
+    customerSegments: [{ type: String, trim: true }],
+    customerName: { type: String, trim: true },
+    customerEmail: { type: String, trim: true, lowercase: true },
+    customerPhone: { type: String, trim: true },
     saleId: {
       type: String,
       required: true,
@@ -114,6 +127,7 @@ saleSchema.index({ business: 1, saleDate: -1 });
 saleSchema.index({ distributor: 1, saleDate: -1 });
 saleSchema.index({ business: 1, distributor: 1, saleDate: -1 });
 saleSchema.index({ business: 1, branch: 1, saleDate: -1 });
+saleSchema.index({ business: 1, customer: 1, saleDate: -1 });
 saleSchema.index({ paymentStatus: 1, saleDate: -1 });
 saleSchema.index({ business: 1, paymentStatus: 1, saleDate: -1 });
 // Unicidad por negocio

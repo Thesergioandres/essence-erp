@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import api from "../api/axios";
 import {
   authService,
   branchService,
@@ -7,8 +8,9 @@ import {
   saleService,
 } from "../api/services";
 import { Button } from "../components/Button";
+import PointsRedemption from "../components/PointsRedemption";
 import { useBusiness } from "../context/BusinessContext";
-import type { Branch, Product } from "../types";
+import type { Branch, Customer, Product } from "../types";
 
 interface SaleItem {
   id: string;
@@ -38,6 +40,11 @@ export default function AdminRegisterSale() {
   const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
+    null
+  );
+  const [pointsToRedeem, setPointsToRedeem] = useState<number>(0);
   const [saleItems, setSaleItems] = useState<SaleItem[]>([]);
   const [formData, setFormData] = useState<FormState>({
     productId: "",
@@ -54,7 +61,7 @@ export default function AdminRegisterSale() {
 
   useEffect(() => {
     if (!businessId || businessHydrating || businessLoading) return;
-    void Promise.all([loadProducts(), loadBranches()]);
+    void Promise.all([loadProducts(), loadBranches(), loadCustomers()]);
   }, [businessId, businessHydrating, businessLoading]);
 
   const loadProducts = async () => {
@@ -79,6 +86,34 @@ export default function AdminRegisterSale() {
         "No se pudieron cargar las sedes. Verifica el negocio seleccionado."
       );
     }
+  };
+
+  const loadCustomers = async () => {
+    try {
+      if (!businessId) return;
+      const { data } = await api.get<{ customers: Customer[] }>("/customers");
+      setCustomers(data.customers || []);
+    } catch {
+      console.error("No se pudieron cargar los clientes");
+    }
+  };
+
+  const handleCustomerChange = (customerId: string) => {
+    if (!customerId) {
+      setSelectedCustomer(null);
+      setPointsToRedeem(0);
+      return;
+    }
+    const customer = customers.find(c => c._id === customerId);
+    setSelectedCustomer(customer || null);
+    setPointsToRedeem(0);
+  };
+
+  const handlePointsRedemption = (data: {
+    points: number;
+    discountAmount: number;
+  }) => {
+    setPointsToRedeem(data.points);
   };
 
   const handleProductChange = (productId: string) => {
@@ -246,7 +281,10 @@ export default function AdminRegisterSale() {
         sum + (item.salePrice - item.purchasePrice) * item.quantity,
       0
     );
-    return { totalSale, totalProfit };
+    // Calcular descuento de puntos (cada punto = $0.01 por defecto)
+    const pointsDiscount = pointsToRedeem * 0.01;
+    const finalTotal = Math.max(0, totalSale - pointsDiscount);
+    return { totalSale, totalProfit, pointsDiscount, finalTotal };
   };
 
   const formatCurrency = (value: number) => {
@@ -458,12 +496,30 @@ export default function AdminRegisterSale() {
               </h2>
               <div className="space-y-3">
                 <div className="flex justify-between text-lg">
-                  <span className="font-semibold text-white">Total venta:</span>
+                  <span className="font-semibold text-white">Subtotal:</span>
                   <span className="font-bold text-green-400">
                     {formatCurrency(totals.totalSale)}
                   </span>
                 </div>
+                {totals.pointsDiscount > 0 && (
+                  <div className="flex justify-between text-lg">
+                    <span className="font-semibold text-amber-400">
+                      Descuento por puntos ({pointsToRedeem} pts):
+                    </span>
+                    <span className="font-bold text-amber-400">
+                      -{formatCurrency(totals.pointsDiscount)}
+                    </span>
+                  </div>
+                )}
                 <div className="flex justify-between border-t border-gray-600 pt-3 text-lg">
+                  <span className="font-semibold text-white">
+                    Total a pagar:
+                  </span>
+                  <span className="font-bold text-green-400">
+                    {formatCurrency(totals.finalTotal)}
+                  </span>
+                </div>
+                <div className="flex justify-between text-lg">
                   <span className="font-semibold text-white">
                     Ganancia total:
                   </span>
@@ -544,7 +600,42 @@ export default function AdminRegisterSale() {
                   placeholder="Cliente, método de pago, etc."
                 />
               </div>
+              <div>
+                <label
+                  htmlFor="customerId"
+                  className="mb-2 block text-sm font-medium text-gray-300"
+                >
+                  Cliente (opcional - para acumular/canjear puntos)
+                </label>
+                <select
+                  id="customerId"
+                  value={selectedCustomer?._id || ""}
+                  onChange={e => handleCustomerChange(e.target.value)}
+                  className="w-full rounded-lg border border-gray-600 bg-gray-900/50 px-4 py-3 text-white focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Sin cliente asociado</option>
+                  {customers.map(customer => (
+                    <option key={customer._id} value={customer._id}>
+                      {customer.name}{" "}
+                      {customer.phone ? `(${customer.phone})` : ""} -{" "}
+                      {customer.points || 0} pts
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
+
+            {/* Sección de puntos si hay cliente seleccionado */}
+            {selectedCustomer && businessId && (
+              <div className="mt-6 border-t border-gray-700 pt-6">
+                <PointsRedemption
+                  customerId={selectedCustomer._id}
+                  businessId={businessId}
+                  saleTotal={totals.totalSale}
+                  onRedemptionChange={handlePointsRedemption}
+                />
+              </div>
+            )}
           </div>
 
           {/* Botones de acción */}

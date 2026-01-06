@@ -1,5 +1,6 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { businessService, uploadService } from "../api/services";
+import PushNotificationSettings from "../components/PushNotificationSettings";
 import { useBusiness } from "../context/BusinessContext";
 import type { BusinessFeatures } from "../types";
 import AuditLogs from "./AuditLogs";
@@ -48,7 +49,12 @@ export default function BusinessSettings() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedView, setSelectedView] = useState<
-    "business" | "distributors" | "gamification" | "rankings" | "audit"
+    | "business"
+    | "distributors"
+    | "gamification"
+    | "rankings"
+    | "audit"
+    | "notifications"
   >("business");
 
   const sectionCards = useMemo(
@@ -77,6 +83,11 @@ export default function BusinessSettings() {
         key: "audit" as const,
         title: "Auditoría",
         desc: "Historial de acciones y logs",
+      },
+      {
+        key: "notifications" as const,
+        title: "Notificaciones",
+        desc: "Configura notificaciones push",
       },
     ],
     []
@@ -391,6 +402,7 @@ export default function BusinessSettings() {
                           "gamification",
                           "transfers",
                           "incidents",
+                          "promotions",
                         ] as (keyof BusinessFeatures)[]
                       ).map(key => {
                         const labelMap: Record<keyof BusinessFeatures, string> =
@@ -404,6 +416,7 @@ export default function BusinessSettings() {
                             assistant: "Business Assistant",
                             reports: "Reportes",
                             transfers: "Transferencias",
+                            promotions: "Promociones",
                           };
                         return (
                           <button
@@ -460,6 +473,7 @@ export default function BusinessSettings() {
             {selectedView === "gamification" && <GamificationConfig />}
             {selectedView === "rankings" && <Rankings />}
             {selectedView === "audit" && <AuditLogs />}
+            {selectedView === "notifications" && <PushNotificationSettings />}
           </Suspense>
         </div>
       </main>

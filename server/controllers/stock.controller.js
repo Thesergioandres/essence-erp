@@ -5,6 +5,7 @@ import Membership from "../models/Membership.js";
 import Product from "../models/Product.js";
 import StockTransfer from "../models/StockTransfer.js";
 import User from "../models/User.js";
+import { logApiError, logApiInfo, logStockError } from "../utils/logger.js";
 
 const resolveBusinessId = (req) =>
   req.businessId ||
@@ -19,7 +20,7 @@ export const assignStockToDistributor = async (req, res) => {
   try {
     const businessId = resolveBusinessId(req);
     const isTest = process.env.NODE_ENV === "test";
-    if (!businessId && req.user.role !== "super_admin" && !isTest) {
+    if (!businessId && !isTest) {
       return res.status(400).json({ message: "Falta x-business-id" });
     }
 
@@ -52,8 +53,18 @@ export const assignStockToDistributor = async (req, res) => {
     }
 
     if (product.warehouseStock < quantity) {
+      logStockError({
+        userId: req.user?.id,
+        cantidad: quantity,
+        sede: "warehouse",
+        motivo: "stock_insuficiente",
+        requestId: req.reqId,
+        businessId,
+        extra: { productId, disponible: product.warehouseStock },
+      });
       return res.status(400).json({
         message: `Stock insuficiente en bodega. Disponible: ${product.warehouseStock}`,
+        requestId: req.reqId,
       });
     }
 
@@ -86,6 +97,15 @@ export const assignStockToDistributor = async (req, res) => {
       await distributor.save();
     }
 
+    logApiInfo({
+      message: "stock_assigned_to_distributor",
+      module: "stock",
+      requestId: req.reqId,
+      userId: req.user?.id,
+      businessId,
+      extra: { distributorId, productId, quantity },
+    });
+
     res.json({
       message: "Stock asignado correctamente",
       distributorStock: await distributorStock.populate([
@@ -93,9 +113,18 @@ export const assignStockToDistributor = async (req, res) => {
         { path: "product", select: "name" },
       ]),
       warehouseStock: product.warehouseStock,
+      requestId: req.reqId,
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    logApiError({
+      message: "stock_assign_error",
+      module: "stock",
+      requestId: req.reqId,
+      userId: req.user?.id,
+      businessId: resolveBusinessId(req),
+      stack: error.stack,
+    });
+    res.status(500).json({ message: error.message, requestId: req.reqId });
   }
 };
 
@@ -105,7 +134,8 @@ export const assignStockToDistributor = async (req, res) => {
 export const withdrawStockFromDistributor = async (req, res) => {
   try {
     const businessId = resolveBusinessId(req);
-    if (!businessId && req.user.role !== "super_admin") {
+    const isTest = process.env.NODE_ENV === "test";
+    if (!businessId && !isTest) {
       return res.status(400).json({ message: "Falta x-business-id" });
     }
 
@@ -172,7 +202,8 @@ export const withdrawStockFromDistributor = async (req, res) => {
 export const getDistributorStock = async (req, res) => {
   try {
     const businessId = resolveBusinessId(req);
-    if (!businessId && req.user.role !== "super_admin") {
+    const isTest = process.env.NODE_ENV === "test";
+    if (!businessId && !isTest) {
       return res.status(400).json({ message: "Falta x-business-id" });
     }
 
@@ -227,7 +258,8 @@ export const getDistributorStock = async (req, res) => {
 export const getAllDistributorsStock = async (req, res) => {
   try {
     const businessId = resolveBusinessId(req);
-    if (!businessId && req.user.role !== "super_admin") {
+    const isTest = process.env.NODE_ENV === "test";
+    if (!businessId && !isTest) {
       return res.status(400).json({ message: "Falta x-business-id" });
     }
 
@@ -251,7 +283,8 @@ export const getAllDistributorsStock = async (req, res) => {
 export const getStockAlerts = async (req, res) => {
   try {
     const businessId = resolveBusinessId(req);
-    if (!businessId && req.user.role !== "super_admin") {
+    const isTest = process.env.NODE_ENV === "test";
+    if (!businessId && !isTest) {
       return res.status(400).json({ message: "Falta x-business-id" });
     }
 
@@ -290,7 +323,8 @@ export const getStockAlerts = async (req, res) => {
 export const getBranchStock = async (req, res) => {
   try {
     const businessId = resolveBusinessId(req);
-    if (!businessId && req.user.role !== "super_admin") {
+    const isTest = process.env.NODE_ENV === "test";
+    if (!businessId && !isTest) {
       return res.status(400).json({ message: "Falta x-business-id" });
     }
 
@@ -321,7 +355,8 @@ export const getBranchStock = async (req, res) => {
 export const getBranchStockAlerts = async (req, res) => {
   try {
     const businessId = resolveBusinessId(req);
-    if (!businessId && req.user.role !== "super_admin") {
+    const isTest = process.env.NODE_ENV === "test";
+    if (!businessId && !isTest) {
       return res.status(400).json({ message: "Falta x-business-id" });
     }
 
@@ -351,7 +386,7 @@ export const transferStockBetweenDistributors = async (req, res) => {
   try {
     const businessId = resolveBusinessId(req);
     const isTest = process.env.NODE_ENV === "test";
-    if (!businessId && req.user.role !== "super_admin" && !isTest) {
+    if (!businessId && !isTest) {
       return res.status(400).json({ message: "Falta x-business-id" });
     }
 
@@ -413,6 +448,18 @@ export const transferStockBetweenDistributors = async (req, res) => {
     }
 
     if (businessId) {
+      const fromMembership = await Membership.findOne({
+        business: businessId,
+        user: fromDistributorId,
+        status: "active",
+      });
+
+      if (!fromMembership) {
+        return res.status(403).json({
+          message: "El distribuidor origen no pertenece a este negocio",
+        });
+      }
+
       const toMembership = await Membership.findOne({
         business: businessId,
         user: toDistributorId,
@@ -602,7 +649,8 @@ export const transferStockBetweenDistributors = async (req, res) => {
 export const getTransferHistory = async (req, res) => {
   try {
     const businessId = resolveBusinessId(req);
-    if (!businessId && req.user.role !== "super_admin") {
+    const isTest = process.env.NODE_ENV === "test";
+    if (!businessId && !isTest) {
       return res.status(400).json({ message: "Falta x-business-id" });
     }
 

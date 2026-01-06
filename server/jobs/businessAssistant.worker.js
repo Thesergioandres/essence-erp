@@ -1,6 +1,11 @@
 import { Worker } from "bullmq";
 import { getRedisClient } from "../config/redis.js";
 import { generateBusinessAssistantRecommendations } from "../controllers/businessAssistant.controller.js";
+import {
+  logWorkerError,
+  logWorkerJobFinished,
+  logWorkerJobStarted,
+} from "../utils/logger.js";
 
 let worker;
 
@@ -19,24 +24,58 @@ export const startBusinessAssistantWorker = () => {
     "business-assistant",
     async (job) => {
       const { params, businessId } = job.data || {};
-      const result = await generateBusinessAssistantRecommendations({
+
+      logWorkerJobStarted({
+        jobName: "business-assistant",
+        jobId: job.id,
         businessId,
-        ...params,
-        redis: getRedisClient(),
-        // no cache within job unless explicitly requested; jobs are already async
-        bypassCache: true,
       });
-      return result;
+
+      try {
+        const result = await generateBusinessAssistantRecommendations({
+          businessId,
+          ...params,
+          redis: getRedisClient(),
+          bypassCache: true,
+        });
+
+        logWorkerJobFinished({
+          jobName: "business-assistant",
+          jobId: job.id,
+          businessId,
+          success: true,
+        });
+
+        return result;
+      } catch (error) {
+        logWorkerError({
+          jobName: "business-assistant",
+          jobId: job.id,
+          businessId,
+          message: error.message,
+          stack: error.stack,
+        });
+        throw error;
+      }
     },
     { connection }
   );
 
   worker.on("failed", (job, err) => {
-    console.error("❌ BusinessAssistant job failed", job?.id, err?.message);
+    logWorkerError({
+      jobName: "business-assistant",
+      jobId: job?.id,
+      message: err?.message || "Job failed",
+      stack: err?.stack,
+    });
   });
 
   worker.on("completed", (job) => {
-    console.log("✅ BusinessAssistant job completed", job?.id);
+    logWorkerJobFinished({
+      jobName: "business-assistant",
+      jobId: job?.id,
+      success: true,
+    });
   });
 
   return worker;

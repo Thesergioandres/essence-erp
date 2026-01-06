@@ -10,14 +10,17 @@ import {
   registerAdminSale,
   registerSale,
 } from "../controllers/sale.controller.js";
-import { admin, protect } from "../middleware/auth.middleware.js";
+import { protect } from "../middleware/auth.middleware.js";
 import {
   businessContext,
   requireFeature,
+  requirePermission,
 } from "../middleware/business.middleware.js";
 import { cacheMiddleware } from "../middleware/cache.middleware.js";
 
 const router = express.Router();
+const branchFromReq = (req) =>
+  req.body?.branch || req.body?.branchId || req.params?.branchId;
 
 // ⚠️ IMPORTANTE: Las rutas específicas deben ir ANTES de las rutas con parámetros
 // POST /admin debe ir ANTES de GET / para evitar que "admin" sea interpretado como un ID
@@ -28,7 +31,11 @@ router.post(
   protect,
   businessContext,
   requireFeature("sales"),
-  admin,
+  requirePermission({
+    module: "sales",
+    action: "create",
+    branchResolver: branchFromReq,
+  }),
   registerAdminSale
 );
 
@@ -38,7 +45,7 @@ router.post(
   protect,
   businessContext,
   requireFeature("sales"),
-  admin,
+  requirePermission({ module: "sales", action: "update" }),
   fixAdminSales
 );
 
@@ -48,6 +55,11 @@ router.post(
   protect,
   businessContext,
   requireFeature("sales"),
+  requirePermission({
+    module: "sales",
+    action: "create",
+    branchResolver: branchFromReq,
+  }),
   registerSale
 );
 router.get(
@@ -55,6 +67,7 @@ router.get(
   protect,
   businessContext,
   requireFeature("sales"),
+  requirePermission({ module: "sales", action: "read" }),
   getDistributorSales
 );
 
@@ -64,7 +77,7 @@ router.get(
   protect,
   businessContext,
   requireFeature("sales"),
-  admin,
+  requirePermission({ module: "sales", action: "read" }),
   cacheMiddleware(15, "sales:list"),
   cacheMiddleware(60, "sales"),
   getAllSales
@@ -74,7 +87,7 @@ router.get(
   protect,
   businessContext,
   requireFeature("sales"),
-  admin,
+  requirePermission({ module: "sales", action: "read" }),
   getSalesByProduct
 );
 router.get(
@@ -82,7 +95,7 @@ router.get(
   protect,
   businessContext,
   requireFeature("sales"),
-  admin,
+  requirePermission({ module: "sales", action: "read" }),
   getSalesByDistributor
 );
 router.put(
@@ -90,7 +103,7 @@ router.put(
   protect,
   businessContext,
   requireFeature("sales"),
-  admin,
+  requirePermission({ module: "sales", action: "update" }),
   confirmPayment
 );
 
@@ -100,7 +113,7 @@ router.delete(
   protect,
   businessContext,
   requireFeature("sales"),
-  admin,
+  requirePermission({ module: "sales", action: "delete" }),
   deleteSale
 );
 
