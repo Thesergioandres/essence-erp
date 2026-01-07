@@ -229,6 +229,10 @@ export const updateProduct = async (req, res) => {
       return res.status(404).json({ message: "Producto no encontrado" });
     }
 
+    // Actualizar datos del producto
+    const updateData = { ...req.body };
+    updateData.business = businessId;
+
     // Manejar imagen subida
     if (req.file) {
       // Si hay imagen anterior de Cloudinary, eliminarla
@@ -259,10 +263,6 @@ export const updateProduct = async (req, res) => {
         };
       }
     }
-
-    // Actualizar datos del producto
-    const updateData = { ...req.body };
-    updateData.business = businessId;
 
     // Parsear arrays que vienen como JSON strings desde FormData
     if (typeof updateData.ingredients === "string") {
@@ -305,14 +305,6 @@ export const updateProduct = async (req, res) => {
       updateData.lowStockAlert = Number(updateData.lowStockAlert);
     if (typeof updateData.featured === "string")
       updateData.featured = updateData.featured === "true";
-
-    // Manejar nueva imagen de Cloudinary si se subió
-    if (req.file) {
-      updateData.image = {
-        url: req.file.path,
-        publicId: req.file.filename,
-      };
-    }
 
     const updatedProduct = await Product.findOneAndUpdate(
       { _id: req.params.id, business: businessId },

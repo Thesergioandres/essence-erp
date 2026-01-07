@@ -99,7 +99,7 @@ export default function AddProduct() {
       if (name === "purchasePrice" && value) {
         const purchase = Number(value);
         if (!isNaN(purchase)) {
-          updated.suggestedPrice = (purchase * 1.3).toFixed(2);
+          updated.suggestedPrice = Math.round(purchase * 1.3).toString();
         }
       }
 

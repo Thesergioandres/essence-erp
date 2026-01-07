@@ -1,10 +1,7 @@
 import type { ChangeEvent, FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import {
-  categoryService,
-  productService,
-} from "../api/services";
+import { categoryService, productService } from "../api/services";
 import type { Category, Product } from "../types";
 
 interface FormState {
@@ -118,14 +115,28 @@ export default function EditProduct() {
 
     // Auto-calcular suggestedPrice cuando cambia purchasePrice
     if (name === "purchasePrice") {
-      const purchasePrice = parseFloat(value) || 0;
-      const suggestedPrice = purchasePrice * 1.3;
+      const purchasePrice = Number(value) || 0;
+      const suggestedPrice = Math.round(purchasePrice * 1.3);
       setFormData(current =>
         current
           ? {
               ...current,
               purchasePrice: value,
-              suggestedPrice: suggestedPrice.toFixed(0),
+              suggestedPrice: suggestedPrice.toString(),
+            }
+          : current
+      );
+    }
+    // Auto-calcular distributorPrice cuando cambia clientPrice (80%)
+    else if (name === "clientPrice") {
+      const clientPrice = Number(value) || 0;
+      const distributorPrice = Math.round(clientPrice * 0.8);
+      setFormData(current =>
+        current
+          ? {
+              ...current,
+              clientPrice: value,
+              distributorPrice: distributorPrice.toString(),
             }
           : current
       );
@@ -297,7 +308,9 @@ export default function EditProduct() {
                     step="1"
                     className="w-full rounded-lg border border-gray-600 bg-gray-900/50 px-4 py-3 text-white placeholder-gray-500 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-purple-500"
                   />
-                  <p className="mt-1 text-xs text-gray-500">Costo base del producto</p>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Costo base del producto
+                  </p>
                 </div>
 
                 <div>
@@ -313,7 +326,9 @@ export default function EditProduct() {
                     step="1"
                     className="w-full rounded-lg border border-green-500 bg-green-900/20 px-4 py-3 text-white placeholder-gray-500 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-green-500"
                   />
-                  <p className="mt-1 text-xs text-green-600">Auto-calculado: Compra × 1.3</p>
+                  <p className="mt-1 text-xs text-green-600">
+                    Auto-calculado: Compra × 1.3
+                  </p>
                 </div>
 
                 <div>
@@ -329,7 +344,9 @@ export default function EditProduct() {
                     step="1"
                     className="w-full rounded-lg border border-blue-500 bg-blue-900/20 px-4 py-3 text-white placeholder-gray-500 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
-                  <p className="mt-1 text-xs text-blue-600">Precio que paga el distribuidor</p>
+                  <p className="mt-1 text-xs text-blue-600">
+                    Precio que paga el distribuidor
+                  </p>
                 </div>
 
                 <div>
@@ -345,17 +362,25 @@ export default function EditProduct() {
                     step="1"
                     className="w-full rounded-lg border border-purple-500 bg-purple-900/20 px-4 py-3 text-white placeholder-gray-500 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-purple-500"
                   />
-                  <p className="mt-1 text-xs text-purple-600">Precio sugerido de venta</p>
+                  <p className="mt-1 text-xs text-purple-600">
+                    Precio sugerido de venta
+                  </p>
                 </div>
 
                 <div className="rounded-lg border border-gray-700 bg-gray-900/40 px-4 py-3">
-                  <p className="text-xs text-gray-400 mb-1">Resumen de rentabilidad</p>
+                  <p className="mb-1 text-xs text-gray-400">
+                    Resumen de rentabilidad
+                  </p>
                   <div className="space-y-1 text-xs">
                     <p className="text-green-400">
-                      Ganancia Admin: ${Number(formData.distributorPrice || 0) - Number(formData.purchasePrice || 0)}
+                      Ganancia Admin: $
+                      {Number(formData.distributorPrice || 0) -
+                        Number(formData.purchasePrice || 0)}
                     </p>
                     <p className="text-yellow-400">
-                      Ganancia Distribuidor: ${Number(formData.clientPrice || 0) - Number(formData.distributorPrice || 0)}
+                      Ganancia Distribuidor: $
+                      {Number(formData.clientPrice || 0) -
+                        Number(formData.distributorPrice || 0)}
                     </p>
                   </div>
                 </div>
@@ -391,7 +416,9 @@ export default function EditProduct() {
                     min="0"
                     className="w-full rounded-lg border border-gray-600 bg-gray-900/50 px-4 py-3 text-white placeholder-gray-500 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-purple-500"
                   />
-                  <p className="mt-1 text-xs text-gray-500">Disponible para asignar</p>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Disponible para asignar
+                  </p>
                 </div>
 
                 <div>
@@ -534,7 +561,7 @@ export default function EditProduct() {
           <button
             type="submit"
             disabled={saving}
-            className="rounded-lg bg-linear-to-r from-purple-600 to-pink-600 px-6 py-3 font-semibold text-white transition hover:from-purple-700 hover:to-pink-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="bg-linear-to-r rounded-lg from-purple-600 to-pink-600 px-6 py-3 font-semibold text-white transition hover:from-purple-700 hover:to-pink-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving ? "Guardando..." : "Guardar cambios"}
           </button>
