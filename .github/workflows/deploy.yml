@@ -18,12 +18,37 @@ jobs:
           ssh-private-key: ${{ secrets.CLOUDING_SSH_KEY }}
 
       - name: Deploy via SSH
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
+          CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
         run: |
           ssh -o StrictHostKeyChecking=no deploy@93.189.89.195 '
             cd /home/deploy/app &&
             git reset --hard HEAD &&
             git clean -fd &&
             git pull origin main &&
+            
+            # Crear archivo .env en el servidor con las mismas variables que desarrollo
+            cat > server/.env << EOL
+MONGODB_URI='"$MONGODB_URI"'
+PORT=5000
+JWT_SECRET='"$JWT_SECRET"'
+ENABLE_CLOUDINARY=true
+CLOUDINARY_CLOUD_NAME='"$CLOUDINARY_CLOUD_NAME"'
+CLOUDINARY_API_KEY='"$CLOUDINARY_API_KEY"'
+CLOUDINARY_API_SECRET='"$CLOUDINARY_API_SECRET"'
+NODE_ENV=production
+VAPID_PUBLIC_KEY='"$VAPID_PUBLIC_KEY"'
+VAPID_PRIVATE_KEY='"$VAPID_PRIVATE_KEY"'
+VAPID_SUBJECT='"$VAPID_SUBJECT"'
+EOL
+            
             cd client && npm install && npm run build &&
             cd .. &&
             docker-compose down --remove-orphans &&
