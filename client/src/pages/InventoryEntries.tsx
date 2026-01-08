@@ -894,10 +894,7 @@ export default function InventoryEntries() {
                   <p className="text-sm text-gray-400">
                     Total unidades:{" "}
                     <span className="font-semibold text-white">
-                      {cart.reduce(
-                        (sum, item) => sum + parseInt(item.quantity),
-                        0
-                      )}
+                      {cart.reduce((sum, item) => sum + item.quantity, 0)}
                     </span>
                   </p>
                 </div>
