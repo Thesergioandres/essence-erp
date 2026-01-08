@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { branchService, distributorService, stockService } from "../api/services";
+import {
+  branchService,
+  distributorService,
+  stockService,
+} from "../api/services";
 import LoadingSpinner from "../components/LoadingSpinner";
 import type { Branch, DistributorStock, User } from "../types";
 
@@ -10,7 +14,9 @@ export default function TransferStock() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  const [transferType, setTransferType] = useState<"distributor" | "branch">("distributor");
+  const [transferType, setTransferType] = useState<"distributor" | "branch">(
+    "distributor"
+  );
   const [selectedDistributor, setSelectedDistributor] = useState("");
   const [selectedBranch, setSelectedBranch] = useState("");
   const [selectedProduct, setSelectedProduct] = useState("");
@@ -82,7 +88,7 @@ export default function TransferStock() {
       setMessage(null);
 
       let result;
-      
+
       if (transferType === "distributor") {
         // Transferir a otro distribuidor
         result = await stockService.transferStock({
@@ -91,9 +97,7 @@ export default function TransferStock() {
           quantity,
         });
       } else {
-        // Transferir a sede - necesitamos obtener el distributor stock para usar como origin
-        const user = JSON.parse(localStorage.getItem("user") || "{}");
-        // Para transferir a sede, usamos la sede principal del distribuidor como origen
+        // Transferir a sede
         result = await stockService.transferStockToBranch({
           toBranchId: selectedBranch,
           productId: selectedProduct,
@@ -101,7 +105,10 @@ export default function TransferStock() {
         });
       }
 
-      setMessage({ type: "success", text: result.message || "Transferencia realizada exitosamente" });
+      setMessage({
+        type: "success",
+        text: result.message || "Transferencia realizada exitosamente",
+      });
 
       // Limpiar formulario
       setTransferType("distributor");
@@ -239,7 +246,7 @@ export default function TransferStock() {
                     : "border-gray-700 bg-gray-900/40 text-gray-400 hover:border-gray-600"
                 }`}
               >
-                <div className="text-2xl mb-1">👥</div>
+                <div className="mb-1 text-2xl">👥</div>
                 <div className="font-medium">A Distribuidor</div>
               </button>
               <button
@@ -254,7 +261,7 @@ export default function TransferStock() {
                     : "border-gray-700 bg-gray-900/40 text-gray-400 hover:border-gray-600"
                 }`}
               >
-                <div className="text-2xl mb-1">🏢</div>
+                <div className="mb-1 text-2xl">🏢</div>
                 <div className="font-medium">A Sede</div>
               </button>
             </div>
@@ -294,7 +301,8 @@ export default function TransferStock() {
                 <option value="">Selecciona una sede</option>
                 {branches.map(branch => (
                   <option key={branch._id} value={branch._id}>
-                    {branch.name}{branch.address ? ` - ${branch.address}` : ""}
+                    {branch.name}
+                    {branch.address ? ` - ${branch.address}` : ""}
                   </option>
                 ))}
               </select>
@@ -387,11 +395,13 @@ export default function TransferStock() {
                 <strong>Destino:</strong> {getDestinationName()}
               </p>
               <p>
-                <strong>Tipo:</strong> {transferType === "distributor" ? "Distribuidor" : "Sede"}
+                <strong>Tipo:</strong>{" "}
+                {transferType === "distributor" ? "Distribuidor" : "Sede"}
               </p>
               <p className="mt-4 text-sm text-amber-300">
                 ⚠️ Esta acción no se puede deshacer. El stock se restará de tu
-                inventario y se agregará al inventario del {transferType === "distributor" ? "distribuidor" : "sede"}{" "}
+                inventario y se agregará al inventario del{" "}
+                {transferType === "distributor" ? "distribuidor" : "sede"}{" "}
                 seleccionado{transferType === "distributor" ? "" : "."}.
               </p>
             </div>

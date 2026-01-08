@@ -280,7 +280,7 @@ export default function DefectiveReports() {
                 </label>
                 <ProductSelector
                   value={formData.productId}
-                  onChange={(id) => {
+                  onChange={id => {
                     setFormData({
                       ...formData,
                       productId: id,

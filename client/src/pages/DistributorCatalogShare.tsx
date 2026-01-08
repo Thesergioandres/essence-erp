@@ -1,20 +1,17 @@
-import { useState, useEffect } from "react";
-import { Share2, Copy, Check, Eye, ExternalLink } from "lucide-react";
-import { distributorService } from "../api/services";
+import { Check, Copy, ExternalLink, Eye, Share2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import LoadingSpinner from "../components/LoadingSpinner";
 
 export default function DistributorCatalogShare() {
   const [loading, setLoading] = useState(true);
   const [catalogUrl, setCatalogUrl] = useState("");
   const [copied, setCopied] = useState(false);
-  const [distributorId, setDistributorId] = useState("");
 
   useEffect(() => {
     const loadData = async () => {
       try {
         const user = JSON.parse(localStorage.getItem("user") || "{}");
-        setDistributorId(user._id);
-        
+
         // Generar URL del catálogo
         const baseUrl = window.location.origin;
         const url = `${baseUrl}/distributor-catalog/${user._id}`;
@@ -101,7 +98,9 @@ export default function DistributorCatalogShare() {
               </button>
             </div>
             {copied && (
-              <p className="mt-2 text-sm text-green-400">¡URL copiada al portapapeles!</p>
+              <p className="mt-2 text-sm text-green-400">
+                ¡URL copiada al portapapeles!
+              </p>
             )}
           </div>
 
@@ -139,10 +138,19 @@ export default function DistributorCatalogShare() {
           <div className="rounded-lg border border-gray-700 bg-gray-900/40 p-4">
             <h3 className="mb-2 font-medium text-white">ℹ️ Información</h3>
             <ul className="space-y-1 text-sm text-gray-300">
-              <li>• El catálogo muestra todos los productos que tienes disponibles</li>
-              <li>• Los clientes pueden ver los precios y detalles de los productos</li>
-              <li>• La URL es pública y puede ser compartida con cualquier persona</li>
-              <li>• El catálogo se actualiza automáticamente con tu inventario</li>
+              <li>
+                • El catálogo muestra todos los productos que tienes disponibles
+              </li>
+              <li>
+                • Los clientes pueden ver los precios y detalles de los
+                productos
+              </li>
+              <li>
+                • La URL es pública y puede ser compartida con cualquier persona
+              </li>
+              <li>
+                • El catálogo se actualiza automáticamente con tu inventario
+              </li>
             </ul>
           </div>
 

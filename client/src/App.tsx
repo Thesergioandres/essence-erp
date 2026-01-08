@@ -75,7 +75,9 @@ const DistributorSales = lazy(() => import("./pages/DistributorSales"));
 const DistributorStats = lazy(() => import("./pages/DistributorStats"));
 const DefectiveReports = lazy(() => import("./pages/DefectiveReports"));
 const DistributorCatalog = lazy(() => import("./pages/DistributorCatalog"));
-const DistributorCatalogShare = lazy(() => import("./pages/DistributorCatalogShare"));
+const DistributorCatalogShare = lazy(
+  () => import("./pages/DistributorCatalogShare")
+);
 const Branches = lazy(() => import("./pages/Branches"));
 const TransferStock = lazy(() => import("./pages/TransferStock"));
 const TransferHistory = lazy(() => import("./pages/TransferHistory"));

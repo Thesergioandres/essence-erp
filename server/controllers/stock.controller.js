@@ -836,7 +836,9 @@ export const transferStockToBranch = async (req, res) => {
     // Verificar que el usuario sea distribuidor
     const distributor = await User.findById(distributorId);
     if (!distributor || distributor.role !== "distribuidor") {
-      return res.status(403).json({ message: "Solo distribuidores pueden realizar esta acción" });
+      return res
+        .status(403)
+        .json({ message: "Solo distribuidores pueden realizar esta acción" });
     }
 
     // Verificar membership del distribuidor
@@ -865,7 +867,8 @@ export const transferStockToBranch = async (req, res) => {
     }
 
     // Verificar que el distribuidor tiene acceso a esta sede
-    const allowedBranchIds = membership.allowedBranches?.map((b) => b.toString()) || [];
+    const allowedBranchIds =
+      membership.allowedBranches?.map((b) => b.toString()) || [];
     if (allowedBranchIds.length > 0 && !allowedBranchIds.includes(toBranchId)) {
       return res.status(403).json({
         message: "No tienes acceso a esta sede",
@@ -984,4 +987,3 @@ export const transferStockToBranch = async (req, res) => {
     });
   }
 };
-

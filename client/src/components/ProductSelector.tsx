@@ -8,8 +8,14 @@ import {
   SortDesc,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { categoryService, productService } from "../api/services";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { useDebounce, useProductCache } from "../hooks";
 
 interface Product {
   _id: string;
@@ -19,11 +25,6 @@ interface Product {
   purchasePrice?: number;
   suggestedPrice?: number;
   image?: { url: string };
-}
-
-interface Category {
-  _id: string;
-  name: string;
 }
 
 type SortOption =
@@ -54,37 +55,17 @@ export default function ProductSelector({
   excludeProductIds = [],
 }: ProductSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search, 300); // Debounce para optimizar búsqueda
   const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [sortBy, setSortBy] = useState<SortOption>("name-asc");
   const [showFilters, setShowFilters] = useState(false);
 
+  // Usar hook de caché para productos y categorías
+  const { products, categories, loading } = useProductCache();
+
   const containerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
-
-  // Cargar productos y categorías
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [productsRes, categoriesRes] = await Promise.all([
-        productService.getAll({ limit: 1000 }),
-        categoryService.getAll(),
-      ]);
-      setProducts((productsRes.data || []) as Product[]);
-      setCategories(categoriesRes || []);
-    } catch (error) {
-      console.error("Error loading products:", error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
 
   // Cerrar dropdown al hacer click fuera
   useEffect(() => {
@@ -114,21 +95,24 @@ export default function ProductSelector({
     [products, value]
   );
 
-  // Obtener nombre de categoría
-  const getCategoryName = (product: Product): string => {
-    if (!product.category) return "";
-    if (typeof product.category === "string") {
-      const cat = categories.find(c => c._id === product.category);
-      return cat?.name || "";
-    }
-    return product.category.name || "";
-  };
+  // Obtener nombre de categoría - memoizado
+  const getCategoryName = useCallback(
+    (product: Product): string => {
+      if (!product.category) return "";
+      if (typeof product.category === "string") {
+        const cat = categories.find(c => c._id === product.category);
+        return cat?.name || "";
+      }
+      return product.category.name || "";
+    },
+    [categories]
+  );
 
-  const getCategoryId = (product: Product): string => {
+  const getCategoryId = useCallback((product: Product): string => {
     if (!product.category) return "";
     if (typeof product.category === "string") return product.category;
     return product.category._id || "";
-  };
+  }, []);
 
   // Filtrar y ordenar productos
   const filteredProducts = useMemo(() => {
@@ -139,9 +123,9 @@ export default function ProductSelector({
       result = result.filter(p => !excludeProductIds.includes(p._id));
     }
 
-    // Filtrar por búsqueda
-    if (search.trim()) {
-      const searchLower = search.toLowerCase();
+    // Filtrar por búsqueda (usando debouncedSearch para mejor rendimiento)
+    if (debouncedSearch.trim()) {
+      const searchLower = debouncedSearch.toLowerCase();
       result = result.filter(
         p =>
           p.name.toLowerCase().includes(searchLower) ||
@@ -177,23 +161,29 @@ export default function ProductSelector({
     return result;
   }, [
     products,
-    search,
+    debouncedSearch,
     selectedCategory,
     sortBy,
     categories,
     excludeProductIds,
   ]);
 
-  const handleSelect = (product: Product) => {
-    onChange(product._id, product);
-    setIsOpen(false);
-    setSearch("");
-  };
+  const handleSelect = useCallback(
+    (product: Product) => {
+      onChange(product._id, product);
+      setIsOpen(false);
+      setSearch("");
+    },
+    [onChange]
+  );
 
-  const handleClear = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onChange("", undefined);
-  };
+  const handleClear = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      onChange("", undefined);
+    },
+    [onChange]
+  );
 
   return (
     <div ref={containerRef} className={`relative ${className}`}>
@@ -383,8 +373,8 @@ export default function ProductSelector({
             </div>
           )}
 
-          {/* Products List */}
-          <div className="max-h-64 overflow-y-auto">
+          {/* Products List - Con lazy loading de imágenes */}
+          <div className="scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800 max-h-64 overflow-y-auto">
             {loading ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin text-purple-500" />
@@ -409,6 +399,7 @@ export default function ProductSelector({
                         src={product.image.url}
                         alt=""
                         className="h-8 w-8 rounded object-cover"
+                        loading="lazy"
                       />
                     ) : (
                       <div className="flex h-8 w-8 items-center justify-center rounded bg-gray-700">

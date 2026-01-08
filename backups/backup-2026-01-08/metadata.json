@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-01-08T07:28:51.279Z",
+  "totalCollections": 0,
+  "totalDocuments": 0,
+  "environment": "development",
+  "mongoUri": "mongodb+srv://*****:*****@cluster0.ztdix.mongodb.net/essence?retryWrites=true&w=majority&appName=Cluster0"
+}

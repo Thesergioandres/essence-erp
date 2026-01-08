@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 
+// Re-export del hook de caché de productos
+export { invalidateProductCache, useProductCache } from "./useProductCache";
+
 /**
  * Hook para detectar el tamaño de ventana
  */
@@ -48,7 +51,8 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
 
   const setValue = (value: T | ((val: T) => T)) => {
     try {
-      const valueToStore = value instanceof Function ? value(storedValue) : value;
+      const valueToStore =
+        value instanceof Function ? value(storedValue) : value;
       setStoredValue(valueToStore);
       window.localStorage.setItem(key, JSON.stringify(valueToStore));
     } catch (error) {
