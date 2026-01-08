@@ -157,8 +157,8 @@ export default function AdminRegisterSale() {
         }));
         setSelectedPaymentMethod(defaultMethod);
       }
-    } catch {
-      console.error("No se pudieron cargar los métodos de pago");
+    } catch (error) {
+      console.error("No se pudieron cargar los métodos de pago", error);
     }
   };
 

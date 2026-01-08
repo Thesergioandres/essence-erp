@@ -2899,7 +2899,8 @@ export interface PaymentMethod {
 export const paymentMethodService = {
   async getAll(): Promise<{ paymentMethods: PaymentMethod[] }> {
     const response = await api.get("/payment-methods");
-    return response.data;
+    // El backend devuelve array directo, lo envolvemos en objeto
+    return { paymentMethods: response.data };
   },
 
   async getById(id: string): Promise<{ paymentMethod: PaymentMethod }> {

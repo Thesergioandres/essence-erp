@@ -1,0 +1,14 @@
+[
+  {
+    "_id": "69600ac4c2a1ce493840c108",
+    "business": "696008a0c2a1ce493840c032",
+    "name": "The Arca",
+    "contactName": "Santiago Ramirez",
+    "address": "",
+    "notes": "",
+    "active": true,
+    "createdAt": "2026-01-08T19:51:32.756Z",
+    "updatedAt": "2026-01-08T19:51:32.756Z",
+    "__v": 0
+  }
+]

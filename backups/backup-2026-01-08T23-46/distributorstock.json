@@ -1,0 +1,222 @@
+[
+  {
+    "_id": "69601555345581f803e26ea1",
+    "business": "696008a0c2a1ce493840c032",
+    "distributor": "69601090c2a1ce493840c23b",
+    "product": "69600ca0c2a1ce493840c15e",
+    "quantity": 1,
+    "lowStockAlert": 5,
+    "createdAt": "2026-01-08T20:36:37.237Z",
+    "updatedAt": "2026-01-08T20:36:37.237Z",
+    "__v": 0
+  },
+  {
+    "_id": "69601557345581f803e26ead",
+    "business": "696008a0c2a1ce493840c032",
+    "distributor": "69601090c2a1ce493840c23b",
+    "product": "69600b91c2a1ce493840c136",
+    "quantity": 2,
+    "lowStockAlert": 5,
+    "createdAt": "2026-01-08T20:36:39.934Z",
+    "updatedAt": "2026-01-08T20:36:39.934Z",
+    "__v": 0
+  },
+  {
+    "_id": "6960155a345581f803e26eb9",
+    "business": "696008a0c2a1ce493840c032",
+    "distributor": "69601090c2a1ce493840c23b",
+    "product": "69600d6dc2a1ce493840c186",
+    "quantity": 1,
+    "lowStockAlert": 5,
+    "createdAt": "2026-01-08T20:36:42.601Z",
+    "updatedAt": "2026-01-08T20:36:42.601Z",
+    "__v": 0
+  },
+  {
+    "_id": "6960155d345581f803e26ec5",
+    "business": "696008a0c2a1ce493840c032",
+    "distributor": "69601090c2a1ce493840c23b",
+    "product": "69600d04c2a1ce493840c16b",
+    "quantity": 3,
+    "lowStockAlert": 5,
+    "createdAt": "2026-01-08T20:36:45.895Z",
+    "updatedAt": "2026-01-08T20:36:45.895Z",
+    "__v": 0
+  },
+  {
+    "_id": "696018fd6f61bbc228e178cd",
+    "business": "696008a0c2a1ce493840c032",
+    "distributor": "696010bac2a1ce493840c248",
+    "product": "69600ca0c2a1ce493840c15e",
+    "quantity": 3,
+    "lowStockAlert": 5,
+    "createdAt": "2026-01-08T20:52:13.072Z",
+    "updatedAt": "2026-01-08T20:52:13.072Z",
+    "__v": 0
+  },
+  {
+    "_id": "696018ff6f61bbc228e178d9",
+    "business": "696008a0c2a1ce493840c032",
+    "distributor": "696010bac2a1ce493840c248",
+    "product": "69600b91c2a1ce493840c136",
+    "quantity": 1,
+    "lowStockAlert": 5,
+    "createdAt": "2026-01-08T20:52:15.369Z",
+    "updatedAt": "2026-01-08T20:52:15.369Z",
+    "__v": 0
+  },
+  {
+    "_id": "696019016f61bbc228e178e5",
+    "business": "696008a0c2a1ce493840c032",
+    "distributor": "696010bac2a1ce493840c248",
+    "product": "69600d04c2a1ce493840c16b",
+    "quantity": 2,
+    "lowStockAlert": 5,
+    "createdAt": "2026-01-08T20:52:17.645Z",
+    "updatedAt": "2026-01-08T20:52:17.645Z",
+    "__v": 0
+  },
+  {
+    "_id": "696019036f61bbc228e178f1",
+    "business": "696008a0c2a1ce493840c032",
+    "distributor": "696010bac2a1ce493840c248",
+    "product": "69600de6c2a1ce493840c193",
+    "quantity": 3,
+    "lowStockAlert": 5,
+    "createdAt": "2026-01-08T20:52:19.989Z",
+    "updatedAt": "2026-01-08T20:52:19.989Z",
+    "__v": 0
+  },
+  {
+    "_id": "6960199e6f61bbc228e17919",
+    "business": "696008a0c2a1ce493840c032",
+    "distributor": "696010d7c2a1ce493840c255",
+    "product": "69600d04c2a1ce493840c16b",
+    "quantity": 1,
+    "lowStockAlert": 5,
+    "createdAt": "2026-01-08T20:54:54.482Z",
+    "updatedAt": "2026-01-08T20:54:54.482Z",
+    "__v": 0
+  },
+  {
+    "_id": "696019a06f61bbc228e17925",
+    "business": "696008a0c2a1ce493840c032",
+    "distributor": "696010d7c2a1ce493840c255",
+    "product": "69600e89c2a1ce493840c1bb",
+    "quantity": 1,
+    "lowStockAlert": 5,
+    "createdAt": "2026-01-08T20:54:56.747Z",
+    "updatedAt": "2026-01-08T20:54:56.747Z",
+    "__v": 0
+  },
+  {
+    "_id": "696019a36f61bbc228e17931",
+    "business": "696008a0c2a1ce493840c032",
+    "distributor": "696010d7c2a1ce493840c255",
+    "product": "69600e25c2a1ce493840c1a0",
+    "quantity": 1,
+    "lowStockAlert": 5,
+    "createdAt": "2026-01-08T20:54:59.004Z",
+    "updatedAt": "2026-01-08T20:54:59.004Z",
+    "__v": 0
+  },
+  {
+    "_id": "696019a56f61bbc228e1793d",
+    "business": "696008a0c2a1ce493840c032",
+    "distributor": "696010d7c2a1ce493840c255",
+    "product": "69600de6c2a1ce493840c193",
+    "quantity": 2,
+    "lowStockAlert": 5,
+    "createdAt": "2026-01-08T20:55:01.269Z",
+    "updatedAt": "2026-01-08T20:55:01.269Z",
+    "__v": 0
+  },
+  {
+    "_id": "696019a76f61bbc228e17949",
+    "business": "696008a0c2a1ce493840c032",
+    "distributor": "696010d7c2a1ce493840c255",
+    "product": "69600ca0c2a1ce493840c15e",
+    "quantity": 3,
+    "lowStockAlert": 5,
+    "createdAt": "2026-01-08T20:55:03.534Z",
+    "updatedAt": "2026-01-08T20:55:03.534Z",
+    "__v": 0
+  },
+  {
+    "_id": "696019a96f61bbc228e17955",
+    "business": "696008a0c2a1ce493840c032",
+    "distributor": "696010d7c2a1ce493840c255",
+    "product": "69600b91c2a1ce493840c136",
+    "quantity": 4,
+    "lowStockAlert": 5,
+    "createdAt": "2026-01-08T20:55:05.797Z",
+    "updatedAt": "2026-01-08T20:55:05.797Z",
+    "__v": 0
+  },
+  {
+    "_id": "696019ac6f61bbc228e17961",
+    "business": "696008a0c2a1ce493840c032",
+    "distributor": "696010d7c2a1ce493840c255",
+    "product": "69600d6dc2a1ce493840c186",
+    "quantity": 3,
+    "lowStockAlert": 5,
+    "createdAt": "2026-01-08T20:55:08.458Z",
+    "updatedAt": "2026-01-08T20:55:08.458Z",
+    "__v": 0
+  },
+  {
+    "_id": "696019af6f61bbc228e1796d",
+    "business": "696008a0c2a1ce493840c032",
+    "distributor": "696010d7c2a1ce493840c255",
+    "product": "69600f12c2a1ce493840c1f1",
+    "quantity": 1,
+    "lowStockAlert": 5,
+    "createdAt": "2026-01-08T20:55:11.117Z",
+    "updatedAt": "2026-01-08T20:55:11.117Z",
+    "__v": 0
+  },
+  {
+    "_id": "696019d76f61bbc228e17995",
+    "business": "696008a0c2a1ce493840c032",
+    "distributor": "696010fbc2a1ce493840c262",
+    "product": "69600d04c2a1ce493840c16b",
+    "quantity": 4,
+    "lowStockAlert": 5,
+    "createdAt": "2026-01-08T20:55:51.009Z",
+    "updatedAt": "2026-01-08T20:55:51.009Z",
+    "__v": 0
+  },
+  {
+    "_id": "696019d96f61bbc228e179a1",
+    "business": "696008a0c2a1ce493840c032",
+    "distributor": "696010fbc2a1ce493840c262",
+    "product": "69600ca0c2a1ce493840c15e",
+    "quantity": 3,
+    "lowStockAlert": 5,
+    "createdAt": "2026-01-08T20:55:53.271Z",
+    "updatedAt": "2026-01-08T20:55:53.271Z",
+    "__v": 0
+  },
+  {
+    "_id": "696019db6f61bbc228e179ad",
+    "business": "696008a0c2a1ce493840c032",
+    "distributor": "696010fbc2a1ce493840c262",
+    "product": "69600f51c2a1ce493840c1fe",
+    "quantity": 5,
+    "lowStockAlert": 5,
+    "createdAt": "2026-01-08T20:55:55.537Z",
+    "updatedAt": "2026-01-08T20:55:55.537Z",
+    "__v": 0
+  },
+  {
+    "_id": "696019dd6f61bbc228e179b9",
+    "business": "696008a0c2a1ce493840c032",
+    "distributor": "696010fbc2a1ce493840c262",
+    "product": "69600edfc2a1ce493840c1e4",
+    "quantity": 2,
+    "lowStockAlert": 5,
+    "createdAt": "2026-01-08T20:55:57.799Z",
+    "updatedAt": "2026-01-08T20:55:57.799Z",
+    "__v": 0
+  }
+]
