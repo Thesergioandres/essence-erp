@@ -1,8 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import {
-  distributorService,
-  stockService,
-} from "../api/services";
+import { distributorService, stockService } from "../api/services";
 import LoadingSpinner from "../components/LoadingSpinner";
 import type { Branch, DistributorStock, User } from "../types";
 
@@ -41,11 +38,12 @@ export default function TransferStock() {
         return;
       }
 
-      const [distributorsData, stockData, allowedBranchesData] = await Promise.all([
-        distributorService.getAll({ active: true }),
-        stockService.getDistributorStock(user._id),
-        stockService.getMyAllowedBranches(),
-      ]);
+      const [distributorsData, stockData, allowedBranchesData] =
+        await Promise.all([
+          distributorService.getAll({ active: true }),
+          stockService.getDistributorStock(user._id),
+          stockService.getMyAllowedBranches(),
+        ]);
 
       // Filtrar el distribuidor actual de la lista
       const allDistributors = Array.isArray(distributorsData)

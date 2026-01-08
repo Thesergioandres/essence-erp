@@ -22,7 +22,9 @@ export default function PublicDistributorCatalog() {
       try {
         setLoading(true);
         // Obtener productos del distribuidor
-        const response = await api.get(`/distributors/${distributorId}/catalog`);
+        const response = await api.get(
+          `/distributors/${distributorId}/catalog`
+        );
         setProducts(response.data.products || []);
         setDistributor(response.data.distributor || null);
       } catch (err: any) {
@@ -60,9 +62,7 @@ export default function PublicDistributorCatalog() {
         <div className="text-center">
           <div className="mb-4 text-6xl">😕</div>
           <h1 className="mb-2 text-2xl font-bold text-white">{error}</h1>
-          <p className="text-gray-400">
-            Verifica que el enlace sea correcto
-          </p>
+          <p className="text-gray-400">Verifica que el enlace sea correcto</p>
         </div>
       </div>
     );
@@ -78,14 +78,10 @@ export default function PublicDistributorCatalog() {
               Catálogo de {distributor?.name || "Productos"}
             </h1>
             {distributor?.phone && (
-              <p className="mt-2 text-gray-300">
-                📱 {distributor.phone}
-              </p>
+              <p className="mt-2 text-gray-300">📱 {distributor.phone}</p>
             )}
             {distributor?.email && (
-              <p className="mt-1 text-gray-400">
-                ✉️ {distributor.email}
-              </p>
+              <p className="mt-1 text-gray-400">✉️ {distributor.email}</p>
             )}
           </div>
         </div>
@@ -130,7 +126,7 @@ export default function PublicDistributorCatalog() {
                   <h3 className="mb-2 line-clamp-2 text-lg font-semibold text-white">
                     {product.name}
                   </h3>
-                  
+
                   {product.description && (
                     <p className="mb-3 line-clamp-2 text-sm text-gray-400">
                       {product.description}
@@ -147,7 +143,9 @@ export default function PublicDistributorCatalog() {
                       <div className="text-right">
                         <p className="text-xs text-gray-500">Disponible</p>
                         <p className="font-semibold text-green-400">
-                          {product.totalStock > 0 ? `${product.totalStock} unid.` : "Agotado"}
+                          {product.totalStock > 0
+                            ? `${product.totalStock} unid.`
+                            : "Agotado"}
                         </p>
                       </div>
                     )}
@@ -162,9 +160,7 @@ export default function PublicDistributorCatalog() {
       {/* Footer */}
       <div className="border-t border-gray-700/50 bg-gray-900/50 py-6 backdrop-blur-sm">
         <div className="mx-auto max-w-7xl px-4 text-center text-sm text-gray-400">
-          <p>
-            Para realizar un pedido, contacta directamente al distribuidor
-          </p>
+          <p>Para realizar un pedido, contacta directamente al distribuidor</p>
         </div>
       </div>
     </div>
