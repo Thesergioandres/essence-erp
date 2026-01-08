@@ -1571,18 +1571,34 @@ export const getEstimatedProfit = async (req, res) => {
       const adminInvestment = purchasePrice * stock.quantity;
       const adminSalesValue = distributorPrice * stock.quantity;
       const adminProfit = adminSalesValue - adminInvestment;
-      
+
       // Ganancia bruta del distribuidor (para referencia)
       const distributorInvestment = distributorPrice * stock.quantity;
       const distributorSalesValue = clientPrice * stock.quantity;
-      const distributorGrossProfit = distributorSalesValue - distributorInvestment;
+      const distributorGrossProfit =
+        distributorSalesValue - distributorInvestment;
 
       distStockByDist[distId].investment += adminInvestment;
       distStockByDist[distId].salesValue += adminSalesValue;
       distStockByDist[distId].adminProfit += adminProfit; // Admin gana solo el markup
       distStockByDist[distId].grossProfit += distributorGrossProfit; // Ganancia del distribuidor (referencia)
       distStockByDist[distId].totalProducts += 1;
-      distadminProfitTotal =
+      distStockByDist[distId].totalUnits += stock.quantity;
+    }
+
+    for (const [distId, data] of Object.entries(distStockByDist)) {
+      distributorsEstimate.grossProfit += data.grossProfit;
+      distributorsEstimate.adminProfit += data.adminProfit;
+      distributorsEstimate.investment += data.investment;
+      distributorsEstimate.salesValue += data.salesValue;
+      distributorsEstimate.totalProducts += data.totalProducts;
+      distributorsEstimate.totalUnits += data.totalUnits;
+      distributorsEstimate.distributors.push({ id: distId, ...data });
+    }
+    distributorsEstimate.netProfit = distributorsEstimate.grossProfit;
+
+    // Calcular totales consolidados
+    const adminProfitTotal =
       warehouseEstimate.adminProfit +
       branchesEstimate.adminProfit +
       distributorsEstimate.adminProfit;
@@ -1617,7 +1633,8 @@ export const getEstimatedProfit = async (req, res) => {
 
     // Determinar el escenario
     let scenario = "D"; // Default: tiene sedes y distribuidores
-    let message = "Tu ganancia si se vende todo el inventario de bodega, sedes y distribuidores.";
+    let message =
+      "Tu ganancia si se vende todo el inventario de bodega, sedes y distribuidores.";
 
     if (!hasBranches && !hasDistributors) {
       scenario = "A";
@@ -1625,7 +1642,8 @@ export const getEstimatedProfit = async (req, res) => {
         "Tu ganancia si se vende todo el inventario de la bodega principal.";
     } else if (!hasBranches && hasDistributors) {
       scenario = "B";
-      message = "Tu ganancia si se vende todo el inventario de bodega y distribuidores.";
+      message =
+        "Tu ganancia si se vende todo el inventario de bodega y distribuidores.";
     } else if (hasBranches && !hasDistributors) {
       scenario = "C";
       message = "Tu ganancia si se vende todo el inventario de bodega y sedes.";
