@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-  branchService,
   distributorService,
   stockService,
 } from "../api/services";
@@ -42,10 +41,10 @@ export default function TransferStock() {
         return;
       }
 
-      const [distributorsData, branchesData, stockData] = await Promise.all([
+      const [distributorsData, stockData, allowedBranchesData] = await Promise.all([
         distributorService.getAll({ active: true }),
-        branchService.list(),
         stockService.getDistributorStock(user._id),
+        stockService.getMyAllowedBranches(),
       ]);
 
       // Filtrar el distribuidor actual de la lista
@@ -58,7 +57,8 @@ export default function TransferStock() {
       );
 
       setDistributors(filteredDistributors);
-      setBranches(branchesData);
+      // Solo mostrar las sedes a las que tiene acceso
+      setBranches(allowedBranchesData.branches || []);
       setMyStock(stockData);
     } catch (error) {
       console.error("Error al cargar datos:", error);

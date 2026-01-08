@@ -78,6 +78,9 @@ const DistributorCatalog = lazy(() => import("./pages/DistributorCatalog"));
 const DistributorCatalogShare = lazy(
   () => import("./pages/DistributorCatalogShare")
 );
+const PublicDistributorCatalog = lazy(
+  () => import("./pages/PublicDistributorCatalog")
+);
 const Branches = lazy(() => import("./pages/Branches"));
 const TransferStock = lazy(() => import("./pages/TransferStock"));
 const TransferHistory = lazy(() => import("./pages/TransferHistory"));
@@ -94,6 +97,10 @@ export default function App() {
         <Route path="/productos" element={<Catalog />} />
         <Route path="/producto/:id" element={<ProductDetail />} />
         <Route path="/categoria/:slug" element={<CategoryProducts />} />
+        <Route
+          path="/distributor-catalog/:distributorId"
+          element={<PublicDistributorCatalog />}
+        />
 
         {/* Auth Routes */}
         <Route path="/login" element={<Login />} />

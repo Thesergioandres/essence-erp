@@ -478,3 +478,59 @@ export const toggleDistributorActive = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+// @desc    Obtener catálogo público de un distribuidor
+// @route   GET /api/distributors/:id/catalog
+// @access  Public
+export const getDistributorPublicCatalog = async (req, res) => {
+  try {
+    const distributorId = req.params.id;
+
+    // Obtener información del distribuidor
+    const distributor = await User.findOne({
+      _id: distributorId,
+      role: "distribuidor",
+      active: true,
+    }).select("name email phone");
+
+    if (!distributor) {
+      return res.status(404).json({ message: "Distribuidor no encontrado" });
+    }
+
+    // Obtener el inventario del distribuidor con productos poblados
+    const distributorStock = await DistributorStock.find({
+      distributor: distributorId,
+      quantity: { $gt: 0 },
+    })
+      .populate({
+        path: "product",
+        select: "name description clientPrice image totalStock category",
+      })
+      .lean();
+
+    // Filtrar y formatear productos
+    const products = distributorStock
+      .filter((item) => item.product && item.product.totalStock > 0)
+      .map((item) => ({
+        _id: item.product._id,
+        name: item.product.name,
+        description: item.product.description,
+        clientPrice: item.product.clientPrice,
+        image: item.product.image,
+        totalStock: item.quantity, // Mostrar solo el stock del distribuidor
+        category: item.product.category,
+      }));
+
+    res.json({
+      distributor: {
+        name: distributor.name,
+        email: distributor.email,
+        phone: distributor.phone,
+      },
+      products,
+    });
+  } catch (error) {
+    console.error("Error al obtener catálogo público:", error);
+    res.status(500).json({ message: "Error al cargar el catálogo" });
+  }
+};

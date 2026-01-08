@@ -965,6 +965,26 @@ export default function RegisterSale() {
             </h2>
 
             <div className="grid gap-4 md:grid-cols-2">
+              {/* Cliente (opcional para ventas normales, obligatorio para crédito) */}
+              <div className="md:col-span-2">
+                <label className="mb-2 block text-sm font-medium text-gray-300">
+                  Cliente {selectedPaymentMethod?.isCredit ? "*" : "(Opcional)"}
+                </label>
+                <CustomerSelector
+                  value={formData.customerId}
+                  onChange={handleCustomerChange}
+                  placeholder="Buscar cliente por nombre o teléfono..."
+                  required={selectedPaymentMethod?.isCredit}
+                  allowCreate={true}
+                  onCreateSuccess={handleCustomerCreated}
+                />
+                <p className="mt-1 text-xs text-gray-400">
+                  {selectedPaymentMethod?.isCredit
+                    ? "Requerido para ventas a crédito"
+                    : "Registra el cliente para acumular puntos y llevar historial"}
+                </p>
+              </div>
+
               <div>
                 <label className="mb-2 block text-sm font-medium text-gray-300">
                   Fecha de la venta *
@@ -1071,20 +1091,6 @@ export default function RegisterSale() {
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
                     <label className="mb-2 block text-sm font-medium text-gray-300">
-                      Cliente *
-                    </label>
-                    <CustomerSelector
-                      value={formData.customerId}
-                      onChange={handleCustomerChange}
-                      placeholder="Buscar cliente por nombre o teléfono..."
-                      required={true}
-                      allowCreate={true}
-                      onCreateSuccess={handleCustomerCreated}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-gray-300">
                       Fecha de vencimiento *
                     </label>
                     <input
@@ -1098,7 +1104,7 @@ export default function RegisterSale() {
                     />
                   </div>
 
-                  <div className="md:col-span-2">
+                  <div>
                     <label className="mb-2 block text-sm font-medium text-gray-300">
                       Abono inicial (opcional)
                     </label>

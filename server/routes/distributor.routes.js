@@ -3,6 +3,7 @@ import {
   createDistributor,
   deleteDistributor,
   getDistributorById,
+  getDistributorPublicCatalog,
   getDistributors,
   toggleDistributorActive,
   updateDistributor,
@@ -15,6 +16,9 @@ import {
 import { cacheMiddleware } from "../middleware/cache.middleware.js";
 
 const router = express.Router();
+
+// Ruta pública para catálogo de distribuidor
+router.get("/:id/catalog", getDistributorPublicCatalog);
 
 // Rutas que distribuidores también pueden usar
 router.get(
