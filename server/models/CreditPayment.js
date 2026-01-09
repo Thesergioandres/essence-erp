@@ -52,6 +52,16 @@ const creditPaymentSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    // Comprobante de pago (imagen base64) - para distribuidores
+    paymentProof: {
+      type: String,
+      default: null,
+    },
+    // Tipo MIME del comprobante
+    paymentProofMimeType: {
+      type: String,
+      default: null,
+    },
     // Saldo antes del pago
     balanceBefore: {
       type: Number,

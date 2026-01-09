@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { saleService } from "../api/services";
 import type { Sale } from "../types";
 
@@ -14,6 +15,9 @@ export default function DistributorSales() {
     startDate: "",
     endDate: "",
   });
+  const [filterType, setFilterType] = useState<"all" | "credit" | "paid">(
+    "all"
+  );
 
   useEffect(() => {
     const loadSales = async () => {
@@ -51,6 +55,7 @@ export default function DistributorSales() {
 
   const clearFilters = () => {
     setFilters({ startDate: "", endDate: "" });
+    setFilterType("all");
   };
 
   const formatCurrency = (value: number) => {
@@ -71,6 +76,47 @@ export default function DistributorSales() {
     });
   };
 
+  // Helper para verificar crédito activo
+  const hasActiveCredit = (sale: Sale): boolean => {
+    if (!sale.credit) return false;
+    const credit = sale.credit;
+    if (typeof credit === "object" && credit.remainingAmount !== undefined) {
+      return credit.remainingAmount > 0;
+    }
+    return true;
+  };
+
+  // Calcular estadísticas de créditos
+  const creditStats = {
+    salesWithCredit: sales.filter(s => s.credit).length,
+    pendingCollection: sales.filter(s => hasActiveCredit(s)).length,
+    pendingAmount: sales
+      .filter(s => hasActiveCredit(s))
+      .reduce((sum, s) => {
+        const credit = s.credit;
+        if (credit && typeof credit === "object" && credit.remainingAmount !== undefined) {
+          return sum + credit.remainingAmount;
+        }
+        return sum + s.salePrice * s.quantity;
+      }, 0),
+    collectedAmount: sales
+      .filter(s => s.credit)
+      .reduce((sum, s) => {
+        const credit = s.credit;
+        if (credit && typeof credit === "object" && credit.paidAmount !== undefined) {
+          return sum + credit.paidAmount;
+        }
+        return sum;
+      }, 0),
+  };
+
+  // Filtrar ventas según el tipo seleccionado
+  const filteredSales = sales.filter(sale => {
+    if (filterType === "credit") return hasActiveCredit(sale);
+    if (filterType === "paid") return !hasActiveCredit(sale);
+    return true;
+  });
+
   if (loading) {
     return (
       <div className="flex h-96 items-center justify-center">
@@ -82,39 +128,68 @@ export default function DistributorSales() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-4xl font-bold text-white">Mis Ventas</h1>
-        <p className="mt-2 text-gray-400">Historial completo de tus ventas</p>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-4xl font-bold text-white">Mis Ventas</h1>
+          <p className="mt-2 text-gray-400">Historial completo de tus ventas</p>
+        </div>
+        <Link
+          to="/distributor/credits"
+          className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 font-medium text-white transition hover:bg-orange-700"
+        >
+          <svg
+            className="h-5 w-5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"
+            />
+          </svg>
+          Gestionar Cobros
+        </Link>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-6 md:grid-cols-3">
-        <div className="bg-linear-to-br rounded-xl border border-gray-700 from-blue-900/50 to-gray-800/50 p-6">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-xl border border-gray-700 bg-gradient-to-br from-blue-900/50 to-gray-800/50 p-5">
           <p className="text-sm text-gray-400">Total Ventas</p>
           <p className="mt-2 text-3xl font-bold text-white">
             {stats.totalSales}
           </p>
         </div>
-        <div className="bg-linear-to-br rounded-xl border border-gray-700 from-green-900/50 to-gray-800/50 p-6">
+        <div className="rounded-xl border border-gray-700 bg-gradient-to-br from-green-900/50 to-gray-800/50 p-5">
           <p className="text-sm text-gray-400">Ingresos Totales</p>
           <p className="mt-2 text-2xl font-bold text-white">
             {formatCurrency(stats.totalRevenue)}
           </p>
         </div>
-        <div className="bg-linear-to-br rounded-xl border border-gray-700 from-purple-900/50 to-gray-800/50 p-6">
+        <div className="rounded-xl border border-gray-700 bg-gradient-to-br from-purple-900/50 to-gray-800/50 p-5">
           <p className="text-sm text-gray-400">Mis Ganancias</p>
           <p className="mt-2 text-2xl font-bold text-white">
             {formatCurrency(stats.totalProfit)}
           </p>
         </div>
+        <div className="rounded-xl border border-orange-700/50 bg-gradient-to-br from-orange-900/30 to-gray-800/50 p-5">
+          <p className="text-sm text-orange-300">💳 Por Cobrar</p>
+          <p className="mt-2 text-2xl font-bold text-orange-400">
+            {creditStats.pendingCollection}
+          </p>
+          <p className="mt-1 text-xs text-orange-300/70">
+            {formatCurrency(creditStats.pendingAmount)}
+          </p>
+        </div>
       </div>
 
       {/* Filters */}
-      <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-6">
-        <h2 className="mb-4 text-lg font-semibold text-white">Filtros</h2>
+      <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-4">
         <div className="flex flex-wrap gap-4">
-          <div className="min-w-[200px] flex-1">
-            <label className="mb-2 block text-sm font-medium text-gray-300">
+          <div className="min-w-[180px] flex-1">
+            <label className="mb-1 block text-sm font-medium text-gray-300">
               Fecha inicio
             </label>
             <input
@@ -122,11 +197,11 @@ export default function DistributorSales() {
               name="startDate"
               value={filters.startDate}
               onChange={handleFilterChange}
-              className="w-full rounded-lg border border-gray-600 bg-gray-900/50 px-4 py-2 text-white focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-lg border border-gray-600 bg-gray-900/50 px-3 py-2 text-white focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
-          <div className="min-w-[200px] flex-1">
-            <label className="mb-2 block text-sm font-medium text-gray-300">
+          <div className="min-w-[180px] flex-1">
+            <label className="mb-1 block text-sm font-medium text-gray-300">
               Fecha fin
             </label>
             <input
@@ -134,13 +209,33 @@ export default function DistributorSales() {
               name="endDate"
               value={filters.endDate}
               onChange={handleFilterChange}
-              className="w-full rounded-lg border border-gray-600 bg-gray-900/50 px-4 py-2 text-white focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-lg border border-gray-600 bg-gray-900/50 px-3 py-2 text-white focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+          </div>
+          <div className="min-w-[200px] flex-1">
+            <label className="mb-1 block text-sm font-medium text-gray-300">
+              Estado
+            </label>
+            <select
+              value={filterType}
+              onChange={e =>
+                setFilterType(e.target.value as "all" | "credit" | "paid")
+              }
+              className="w-full rounded-lg border border-gray-600 bg-gray-900/50 px-3 py-2 text-white focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">Todas ({sales.length})</option>
+              <option value="credit">
+                Pendientes de cobro ({creditStats.pendingCollection})
+              </option>
+              <option value="paid">
+                Pagadas ({sales.length - creditStats.pendingCollection})
+              </option>
+            </select>
           </div>
           <div className="flex items-end">
             <button
               onClick={clearFilters}
-              className="rounded-lg bg-gray-700 px-6 py-2 text-white hover:bg-gray-600"
+              className="rounded-lg bg-gray-700 px-4 py-2 text-white hover:bg-gray-600"
             >
               Limpiar
             </button>
@@ -149,12 +244,12 @@ export default function DistributorSales() {
       </div>
 
       {/* Sales Table */}
-      <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-6">
+      <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-4 sm:p-6">
         <h2 className="mb-4 text-lg font-semibold text-white">
-          Historial de Ventas ({sales.length})
+          Historial de Ventas ({filteredSales.length})
         </h2>
 
-        {sales.length === 0 ? (
+        {filteredSales.length === 0 ? (
           <div className="rounded-lg border border-dashed border-gray-600 p-12 text-center">
             <svg
               className="mx-auto h-16 w-16 text-gray-600"
@@ -172,7 +267,7 @@ export default function DistributorSales() {
             <p className="mt-4 text-lg text-gray-400">
               No se encontraron ventas
             </p>
-            {(filters.startDate || filters.endDate) && (
+            {(filters.startDate || filters.endDate || filterType !== "all") && (
               <p className="mt-2 text-sm text-gray-500">
                 Intenta ajustar los filtros de búsqueda
               </p>
@@ -183,40 +278,44 @@ export default function DistributorSales() {
             <table className="min-w-full divide-y divide-gray-700">
               <thead>
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-400">
+                  <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-400">
                     ID
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-400">
+                  <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-400">
                     Fecha
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-400">
+                  <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-400">
                     Producto
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-400">
-                    Cantidad
+                  <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-400">
+                    Cliente
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-400">
-                    Precio Unit.
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-400">
+                  <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-400">
                     Total
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-400">
+                  <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-400">
+                    Estado
+                  </th>
+                  <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-400">
                     Rango
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-400">
+                  <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-400">
                     Ganancia
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-400">
-                    Notas
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-700">
-                {sales.map(sale => {
+                {filteredSales.map(sale => {
                   const product =
                     typeof sale.product === "object" ? sale.product : null;
+                  const customer =
+                    typeof sale.customer === "object" ? sale.customer : null;
+                  const credit =
+                    sale.credit
+                      ? sale.credit
+                      : null;
                   const total = sale.salePrice * sale.quantity;
+                  const isActiveCredit = hasActiveCredit(sale);
 
                   // Determinar rango según comisión
                   let rankBadge = {
@@ -246,49 +345,71 @@ export default function DistributorSales() {
 
                   return (
                     <tr key={sale._id} className="hover:bg-gray-700/30">
-                      <td className="px-4 py-3 text-sm">
+                      <td className="px-3 py-3 text-sm">
                         <span className="font-mono text-xs text-blue-400">
                           {sale.saleId || sale._id.slice(-8)}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-300">
+                      <td className="whitespace-nowrap px-3 py-3 text-sm text-gray-300">
                         {formatDate(sale.saleDate)}
                       </td>
-                      <td className="px-4 py-3 text-sm">
-                        <div className="flex items-center gap-3">
+                      <td className="px-3 py-3 text-sm">
+                        <div className="flex items-center gap-2">
                           {product?.image?.url && (
                             <img
                               src={product.image.url}
                               alt={product.name}
-                              className="h-10 w-10 rounded object-cover"
+                              className="h-8 w-8 rounded object-cover"
                             />
                           )}
-                          <span className="font-medium text-white">
-                            {product?.name || "N/A"}
-                          </span>
+                          <div>
+                            <span className="block font-medium text-white">
+                              {product?.name || "N/A"}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              x{sale.quantity}
+                            </span>
+                          </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-300">
-                        {sale.quantity}
+                      <td className="px-3 py-3 text-sm text-gray-300">
+                        {customer?.name || "-"}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-300">
-                        {formatCurrency(sale.salePrice)}
-                      </td>
-                      <td className="px-4 py-3 text-sm font-semibold text-white">
+                      <td className="px-3 py-3 text-sm font-semibold text-white">
                         {formatCurrency(total)}
                       </td>
-                      <td className="px-4 py-3 text-sm">
+                      <td className="px-3 py-3 text-sm">
+                        {isActiveCredit ? (
+                          <div className="flex flex-col">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-orange-900/30 px-2 py-1 text-xs font-semibold text-orange-400">
+                              💳 Por cobrar
+                            </span>
+                            {credit && (
+                              <span className="mt-1 text-xs text-orange-300/70">
+                                Debe:{" "}
+                                {formatCurrency(credit.remainingAmount || 0)}
+                              </span>
+                            )}
+                          </div>
+                        ) : sale.credit ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-green-900/30 px-2 py-1 text-xs font-semibold text-green-400">
+                            ✓ Cobrado
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-green-900/30 px-2 py-1 text-xs font-semibold text-green-400">
+                            ✓ Pagado
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-3 py-3 text-sm">
                         <span
                           className={`rounded-full px-2 py-1 text-xs font-semibold ${rankBadge.color}`}
                         >
                           {rankBadge.emoji} {rankBadge.text}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm font-bold text-green-400">
+                      <td className="px-3 py-3 text-sm font-bold text-green-400">
                         {formatCurrency(sale.distributorProfit)}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-400">
-                        {sale.notes || "-"}
                       </td>
                     </tr>
                   );

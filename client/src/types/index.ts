@@ -972,6 +972,8 @@ export interface CreditPayment {
   branch?: Branch | string;
   notes?: string;
   receiptUrl?: string;
+  paymentProof?: string;
+  paymentProofMimeType?: string;
   balanceBefore: number;
   balanceAfter: number;
   paymentDate: string;

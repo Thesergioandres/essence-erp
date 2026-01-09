@@ -1235,10 +1235,12 @@ export const getDistributorSales = async (req, res) => {
 
     const sales = await Sale.find(filter)
       .select(
-        "product distributor salePrice quantity saleDate distributorProfit adminProfit saleStatus paymentStatus"
+        "product distributor salePrice quantity saleDate distributorProfit adminProfit saleStatus paymentStatus isCredit creditId notes customer distributorProfitPercentage saleId"
       )
       .populate("product", "name image")
       .populate("distributor", "name email")
+      .populate("customer", "name phone")
+      .populate("creditId", "originalAmount paidAmount remainingAmount status dueDate")
       .sort({ saleDate: -1 })
       .limit(limit)
       .lean();

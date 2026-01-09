@@ -7,7 +7,9 @@ import {
   getCreditMetrics,
   getCredits,
   getCustomerCredits,
+  getDistributorCredits,
   getPaymentHistory,
+  registerDistributorPayment,
   registerPayment,
 } from "../controllers/credit.controller.js";
 import { admin, protect } from "../middleware/auth.middleware.js";
@@ -50,6 +52,20 @@ router.use(businessContext);
  *                   type: number
  */
 router.get("/metrics", admin, getCreditMetrics);
+
+/**
+ * @swagger
+ * /credits/my-sales:
+ *   get:
+ *     summary: Obtener créditos de ventas del distribuidor actual
+ *     tags: [Credits]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Lista de créditos de ventas del distribuidor
+ */
+router.get("/my-sales", getDistributorCredits);
 
 /**
  * @swagger
@@ -273,5 +289,42 @@ router
  *         description: Crédito cancelado
  */
 router.post("/:id/cancel", creditValidation.getById, admin, cancelCredit);
+
+/**
+ * @swagger
+ * /credits/{id}/distributor-payment:
+ *   post:
+ *     summary: Distribuidor registra pago de su propio crédito
+ *     tags: [Credits]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [amount]
+ *             properties:
+ *               amount:
+ *                 type: number
+ *               paymentMethod:
+ *                 type: string
+ *               notes:
+ *                 type: string
+ *               paymentProof:
+ *                 type: string
+ *                 description: Imagen base64 del comprobante
+ *     responses:
+ *       200:
+ *         description: Pago registrado
+ */
+router.post("/:id/distributor-payment", creditValidation.getById, registerDistributorPayment);
 
 export default router;

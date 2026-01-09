@@ -44,6 +44,8 @@ export default function Credits() {
     "cash" | "transfer" | "card" | "other"
   >("cash");
   const [paymentNotes, setPaymentNotes] = useState("");
+  const [paymentProof, setPaymentProof] = useState<string | null>(null);
+  const [paymentProofPreview, setPaymentProofPreview] = useState<string | null>(null);
   const [selectedCustomerName, setSelectedCustomerName] = useState("");
 
   const loadData = useCallback(async () => {
@@ -108,6 +110,8 @@ export default function Credits() {
         amount: parseFloat(paymentAmount),
         paymentMethod,
         notes: paymentNotes,
+        paymentProof: paymentProof || undefined,
+        paymentProofMimeType: paymentProof ? "image/jpeg" : undefined,
       });
       logUI.info("debt_payment_registered", {
         module: "credits",
@@ -117,6 +121,8 @@ export default function Credits() {
       setShowPaymentModal(false);
       setPaymentAmount("");
       setPaymentNotes("");
+      setPaymentProof(null);
+      setPaymentProofPreview(null);
       setSelectedCredit(null);
       loadData();
     } catch (err) {
@@ -565,6 +571,60 @@ export default function Credits() {
                   className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:ring-2 focus:ring-indigo-500"
                   placeholder="Referencia o nota..."
                 />
+              </div>
+
+              {/* Comprobante de pago */}
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-300">
+                  Comprobante de Consignación (Opcional)
+                </label>
+                {paymentProofPreview ? (
+                  <div className="relative">
+                    <img
+                      src={paymentProofPreview}
+                      alt="Comprobante"
+                      className="h-32 w-full rounded-lg object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPaymentProof(null);
+                        setPaymentProofPreview(null);
+                      }}
+                      className="absolute right-2 top-2 rounded-full bg-red-600 p-1 text-white hover:bg-red-700"
+                    >
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-gray-600 p-4 transition-colors hover:border-gray-500">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={e => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            const base64 = reader.result as string;
+                            setPaymentProof(base64);
+                            setPaymentProofPreview(base64);
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                      className="hidden"
+                    />
+                    <div className="text-center">
+                      <svg className="mx-auto h-8 w-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      <p className="mt-1 text-sm text-gray-400">Subir comprobante</p>
+                    </div>
+                  </label>
+                )}
               </div>
 
               <div className="flex justify-end gap-3 pt-4">

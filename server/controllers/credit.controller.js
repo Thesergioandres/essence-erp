@@ -249,8 +249,14 @@ export const getCreditById = async (req, res) => {
     })
       .populate("customer", "name email phone address")
       .populate("branch", "name")
-      .populate("createdBy", "name")
-      .populate("sale")
+      .populate("createdBy", "name email")
+      .populate({
+        path: "sale",
+        populate: {
+          path: "distributor",
+          select: "name email phone",
+        },
+      })
       .populate("items.product", "name");
 
     if (!credit) {
@@ -297,7 +303,7 @@ export const registerPayment = async (req, res) => {
   const userId = req.user?.id;
 
   try {
-    const { amount, paymentMethod, notes, branchId, paymentDate } = req.body;
+    const { amount, paymentMethod, notes, branchId, paymentDate, paymentProof, paymentProofMimeType } = req.body;
 
     if (!amount || amount <= 0) {
       return res.status(400).json({
@@ -346,6 +352,8 @@ export const registerPayment = async (req, res) => {
       registeredBy: userId,
       branch: branchId || null,
       notes,
+      paymentProof: paymentProof || null,
+      paymentProofMimeType: paymentProof ? (paymentProofMimeType || "image/jpeg") : null,
       balanceBefore,
       balanceAfter,
       paymentDate: paymentDate ? new Date(paymentDate) : new Date(),
@@ -1017,6 +1025,254 @@ export const getCustomerCredits = async (req, res) => {
       module: "credit",
       requestId,
       businessId,
+      stack: error.stack,
+    });
+    res.status(500).json({
+      message: error.message,
+      requestId,
+    });
+  }
+};
+
+/**
+ * @desc    Obtener créditos de ventas del distribuidor actual
+ * @route   GET /api/credits/my-sales
+ * @access  Private/Distributor
+ */
+export const getDistributorCredits = async (req, res) => {
+  const requestId = req.reqId;
+  const businessId = req.businessId;
+  const userId = req.user?.id;
+
+  try {
+    // Buscar ventas del distribuidor que tienen crédito asociado
+    const sales = await Sale.find({
+      business: businessId,
+      distributor: userId,
+      isCredit: true,
+    }).select("_id");
+
+    const saleIds = sales.map((s) => s._id);
+
+    // Buscar créditos asociados a esas ventas
+    const credits = await Credit.find({
+      business: businessId,
+      sale: { $in: saleIds },
+    })
+      .populate("customer", "name phone")
+      .populate("sale", "saleDate salePrice quantity product")
+      .sort({ createdAt: -1 });
+
+    // Calcular estadísticas
+    const stats = {
+      totalCredits: credits.length,
+      pendingCount: credits.filter((c) =>
+        ["pending", "partial", "overdue"].includes(c.status)
+      ).length,
+      totalPending: credits
+        .filter((c) => ["pending", "partial", "overdue"].includes(c.status))
+        .reduce((sum, c) => sum + c.remainingAmount, 0),
+      totalCollected: credits.reduce((sum, c) => sum + c.paidAmount, 0),
+    };
+
+    logApiInfo({
+      message: "distributor_credits_loaded",
+      module: "credit",
+      requestId,
+      businessId,
+      userId,
+      extra: { count: credits.length },
+    });
+
+    res.json({
+      success: true,
+      credits,
+      stats,
+      requestId,
+    });
+  } catch (error) {
+    logApiError({
+      message: "Error al obtener créditos del distribuidor",
+      module: "credit",
+      requestId,
+      businessId,
+      userId,
+      stack: error.stack,
+    });
+    res.status(500).json({
+      message: error.message,
+      requestId,
+    });
+  }
+};
+
+/**
+ * @desc    Distribuidor registra pago de su propio crédito
+ * @route   POST /api/credits/:id/distributor-payment
+ * @access  Private/Distributor
+ */
+export const registerDistributorPayment = async (req, res) => {
+  const requestId = req.reqId;
+  const businessId = req.businessId;
+  const userId = req.user?.id;
+
+  try {
+    const { amount, paymentMethod, notes, paymentProof, paymentProofMimeType } =
+      req.body;
+
+    if (!amount || amount <= 0) {
+      return res.status(400).json({
+        message: "El monto debe ser mayor a 0",
+        requestId,
+      });
+    }
+
+    // Buscar el crédito
+    const credit = await Credit.findOne({
+      _id: req.params.id,
+      business: businessId,
+    })
+      .populate("customer", "name")
+      .populate("sale");
+
+    if (!credit) {
+      return res.status(404).json({
+        message: "Crédito no encontrado",
+        requestId,
+      });
+    }
+
+    // Verificar que el crédito pertenece a una venta del distribuidor
+    if (!credit.sale || credit.sale.distributor?.toString() !== userId) {
+      return res.status(403).json({
+        message: "No tienes permiso para registrar pagos en este crédito",
+        requestId,
+      });
+    }
+
+    if (credit.status === "paid" || credit.status === "cancelled") {
+      return res.status(400).json({
+        message: "Este crédito ya está cerrado",
+        requestId,
+      });
+    }
+
+    if (amount > credit.remainingAmount) {
+      return res.status(400).json({
+        message: `El monto excede el saldo pendiente ($${credit.remainingAmount.toLocaleString()})`,
+        requestId,
+      });
+    }
+
+    const balanceBefore = credit.remainingAmount;
+    const balanceAfter = balanceBefore - amount;
+
+    // Crear registro de pago
+    const payment = await CreditPayment.create({
+      credit: credit._id,
+      business: businessId,
+      amount,
+      paymentMethod: paymentMethod || "cash",
+      registeredBy: userId,
+      notes,
+      paymentProof: paymentProof || null,
+      paymentProofMimeType: paymentProof
+        ? paymentProofMimeType || "image/jpeg"
+        : null,
+      balanceBefore,
+      balanceAfter,
+      paymentDate: new Date(),
+    });
+
+    // Actualizar crédito
+    credit.paidAmount += amount;
+    credit.remainingAmount = balanceAfter;
+    credit.lastPaymentAt = new Date();
+
+    if (balanceAfter === 0) {
+      credit.status = "paid";
+      credit.paidAt = new Date();
+      credit.statusHistory.push({
+        status: "paid",
+        changedAt: new Date(),
+        changedBy: userId,
+        note: `Pagado completo por distribuidor. Último pago: $${amount.toLocaleString()}`,
+      });
+
+      // Actualizar venta asociada
+      await Sale.findByIdAndUpdate(credit.sale._id, {
+        paymentStatus: "confirmado",
+      });
+    } else {
+      credit.status = "partial";
+      credit.statusHistory.push({
+        status: "partial",
+        changedAt: new Date(),
+        changedBy: userId,
+        note: `Pago parcial por distribuidor: $${amount.toLocaleString()}. Saldo: $${balanceAfter.toLocaleString()}`,
+      });
+    }
+
+    await credit.save();
+
+    // Actualizar deuda del cliente
+    await Customer.findByIdAndUpdate(credit.customer, {
+      $inc: { totalDebt: -amount },
+    });
+
+    // Notificar al admin
+    await Notification.createWithLog(
+      {
+        business: businessId,
+        targetRole: "admin",
+        type: "credit_payment",
+        title: "Abono registrado por distribuidor",
+        message: `${req.user?.name || "Distribuidor"} registró un abono de $${amount.toLocaleString()} al crédito de ${credit.customer?.name || "cliente"}`,
+        priority: "medium",
+        link: `/admin/credits/${credit._id}`,
+        relatedEntity: { type: "Credit", id: credit._id },
+      },
+      requestId
+    );
+
+    logApiInfo({
+      message: "distributor_payment_registered",
+      module: "credit",
+      requestId,
+      businessId,
+      userId,
+      extra: {
+        creditId: credit._id.toString(),
+        amount,
+        hasProof: !!paymentProof,
+      },
+    });
+
+    res.json({
+      success: true,
+      payment: {
+        ...payment.toObject(),
+        paymentProof: undefined, // No devolver la imagen base64 en respuesta
+      },
+      credit: {
+        _id: credit._id,
+        remainingAmount: credit.remainingAmount,
+        paidAmount: credit.paidAmount,
+        status: credit.status,
+      },
+      message:
+        balanceAfter === 0
+          ? "¡Crédito pagado completamente!"
+          : `Abono registrado. Saldo pendiente: $${balanceAfter.toLocaleString()}`,
+      requestId,
+    });
+  } catch (error) {
+    logApiError({
+      message: "Error al registrar pago de distribuidor",
+      module: "credit",
+      requestId,
+      businessId,
+      userId,
       stack: error.stack,
     });
     res.status(500).json({

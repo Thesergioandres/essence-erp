@@ -2346,9 +2346,41 @@ export const creditService = {
       notes?: string;
       branchId?: string;
       paymentDate?: string;
+      paymentProof?: string;
+      paymentProofMimeType?: string;
     }
   ): Promise<{ payment: CreditPayment; credit: Credit }> {
     const response = await api.post(`/credits/${creditId}/payments`, payload);
+    return response.data;
+  },
+
+  async registerDistributorPayment(
+    creditId: string,
+    payload: {
+      amount: number;
+      paymentMethod?: "cash" | "transfer" | "card" | "other";
+      notes?: string;
+      paymentProof?: string;
+      paymentProofMimeType?: string;
+    }
+  ): Promise<{ payment: CreditPayment; credit: Credit; message: string }> {
+    const response = await api.post(
+      `/credits/${creditId}/distributor-payment`,
+      payload
+    );
+    return response.data;
+  },
+
+  async getDistributorCredits(): Promise<{
+    credits: Credit[];
+    stats: {
+      totalCredits: number;
+      pendingCount: number;
+      totalPending: number;
+      totalCollected: number;
+    };
+  }> {
+    const response = await api.get("/credits/my-sales");
     return response.data;
   },
 

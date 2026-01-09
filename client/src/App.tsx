@@ -72,6 +72,7 @@ const DistributorDashboard = lazy(() => import("./pages/DistributorDashboard"));
 const DistributorProducts = lazy(() => import("./pages/DistributorProducts"));
 const RegisterSale = lazy(() => import("./pages/RegisterSale"));
 const DistributorSales = lazy(() => import("./pages/DistributorSales"));
+const DistributorCredits = lazy(() => import("./pages/DistributorCredits"));
 const DistributorStats = lazy(() => import("./pages/DistributorStats"));
 const DefectiveReports = lazy(() => import("./pages/DefectiveReports"));
 const DistributorCatalog = lazy(() => import("./pages/DistributorCatalog"));
@@ -431,6 +432,14 @@ export default function App() {
             element={
               <BusinessGate requiredFeature="sales">
                 <DistributorSales />
+              </BusinessGate>
+            }
+          />
+          <Route
+            path="credits"
+            element={
+              <BusinessGate requiredFeature="sales">
+                <DistributorCredits />
               </BusinessGate>
             }
           />

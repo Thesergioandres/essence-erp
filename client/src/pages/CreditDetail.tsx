@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { creditService } from "../api/services";
-import type { Credit, CreditPayment, Customer } from "../types";
+import type { Credit, CreditPayment, Customer, Sale, User } from "../types";
 
 export default function CreditDetail() {
   const { id } = useParams<{ id: string }>();
@@ -101,6 +101,9 @@ export default function CreditDetail() {
   }
 
   const customer = credit.customer as Customer;
+  const sale = credit.sale as Sale | undefined;
+  const createdBy = credit.createdBy as User | undefined;
+  const distributor = sale?.distributor as User | undefined;
 
   return (
     <div className="space-y-6 p-6">
@@ -177,6 +180,70 @@ export default function CreditDetail() {
           </div>
         </div>
 
+        {/* Responsable Card */}
+        <div className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
+          <h2 className="mb-4 text-lg font-semibold text-gray-900">
+            Responsable del Crédito
+          </h2>
+          <div className="space-y-3">
+            {distributor ? (
+              <>
+                <div className="flex items-center gap-3 rounded-lg border border-indigo-100 bg-indigo-50 p-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-600 text-white">
+                    {distributor.name?.charAt(0).toUpperCase() || "D"}
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900">
+                      {distributor.name}
+                    </p>
+                    <p className="text-sm text-indigo-600">Distribuidor</p>
+                  </div>
+                </div>
+                {distributor.email && (
+                  <div className="flex justify-between border-b border-gray-100 pb-2">
+                    <span className="text-sm text-gray-600">Email:</span>
+                    <span className="text-sm text-gray-900">
+                      {distributor.email}
+                    </span>
+                  </div>
+                )}
+                {distributor.phone && (
+                  <div className="flex justify-between border-b border-gray-100 pb-2">
+                    <span className="text-sm text-gray-600">Teléfono:</span>
+                    <span className="text-sm text-gray-900">
+                      {distributor.phone}
+                    </span>
+                  </div>
+                )}
+              </>
+            ) : createdBy ? (
+              <>
+                <div className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 p-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-600 text-white">
+                    {createdBy.name?.charAt(0).toUpperCase() || "A"}
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900">
+                      {createdBy.name}
+                    </p>
+                    <p className="text-sm text-gray-500">Administrador</p>
+                  </div>
+                </div>
+                {createdBy.email && (
+                  <div className="flex justify-between pt-2">
+                    <span className="text-sm text-gray-600">Email:</span>
+                    <span className="text-sm text-gray-900">
+                      {createdBy.email}
+                    </span>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="text-sm text-gray-500">Sin información</p>
+            )}
+          </div>
+        </div>
+
         {/* Items Card */}
         {credit.items && credit.items.length > 0 && (
           <div className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
@@ -241,6 +308,12 @@ export default function CreditDetail() {
                     Método
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                    Registrado Por
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                    Comprobante
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                     Notas
                   </th>
                 </tr>
@@ -259,6 +332,43 @@ export default function CreditDetail() {
                       {payment.paymentMethod === "transfer" && "Transferencia"}
                       {payment.paymentMethod === "card" && "Tarjeta"}
                       {payment.paymentMethod === "other" && "Otro"}
+                    </td>
+                    <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
+                      {typeof payment.registeredBy === "object"
+                        ? payment.registeredBy?.name || "Sistema"
+                        : "Sistema"}
+                    </td>
+                    <td className="px-6 py-4">
+                      {payment.paymentProof ? (
+                        <button
+                          onClick={() => {
+                            const modal = document.createElement("div");
+                            modal.className =
+                              "fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4";
+                            modal.onclick = () => modal.remove();
+                            modal.innerHTML = `
+                              <img 
+                                src="${payment.paymentProof}" 
+                                alt="Comprobante" 
+                                class="max-h-[90vh] max-w-[90vw] rounded-lg object-contain"
+                              />
+                            `;
+                            document.body.appendChild(modal);
+                          }}
+                          className="group relative"
+                        >
+                          <img
+                            src={payment.paymentProof}
+                            alt="Comprobante"
+                            className="h-12 w-12 rounded-lg object-cover transition group-hover:scale-105"
+                          />
+                          <span className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/50 text-xs text-white opacity-0 transition group-hover:opacity-100">
+                            Ver
+                          </span>
+                        </button>
+                      ) : (
+                        <span className="text-xs text-gray-400">-</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500">
                       {payment.notes || "-"}
