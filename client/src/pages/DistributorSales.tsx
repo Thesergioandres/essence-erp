@@ -76,34 +76,48 @@ export default function DistributorSales() {
     });
   };
 
+  // Helper para obtener el crédito de una venta (puede venir en creditId o credit)
+  const getCreditFromSale = (sale: Sale) => {
+    // El backend devuelve creditId poblado cuando es crédito
+    if (sale.creditId && typeof sale.creditId === "object") {
+      return sale.creditId;
+    }
+    // Fallback a credit si existe
+    if (sale.credit && typeof sale.credit === "object") {
+      return sale.credit;
+    }
+    return null;
+  };
+
   // Helper para verificar crédito activo
   const hasActiveCredit = (sale: Sale): boolean => {
-    if (!sale.credit) return false;
-    const credit = sale.credit;
-    if (typeof credit === "object" && credit.remainingAmount !== undefined) {
+    if (!sale.isCredit) return false;
+    const credit = getCreditFromSale(sale);
+    if (credit && credit.remainingAmount !== undefined) {
       return credit.remainingAmount > 0;
     }
-    return true;
+    // Si es crédito pero no hay info del crédito poblado, asumir activo
+    return sale.isCredit === true;
   };
 
   // Calcular estadísticas de créditos
   const creditStats = {
-    salesWithCredit: sales.filter(s => s.credit).length,
+    salesWithCredit: sales.filter(s => s.isCredit).length,
     pendingCollection: sales.filter(s => hasActiveCredit(s)).length,
     pendingAmount: sales
       .filter(s => hasActiveCredit(s))
       .reduce((sum, s) => {
-        const credit = s.credit;
-        if (credit && typeof credit === "object" && credit.remainingAmount !== undefined) {
+        const credit = getCreditFromSale(s);
+        if (credit && credit.remainingAmount !== undefined) {
           return sum + credit.remainingAmount;
         }
         return sum + s.salePrice * s.quantity;
       }, 0),
     collectedAmount: sales
-      .filter(s => s.credit)
+      .filter(s => s.isCredit)
       .reduce((sum, s) => {
-        const credit = s.credit;
-        if (credit && typeof credit === "object" && credit.paidAmount !== undefined) {
+        const credit = getCreditFromSale(s);
+        if (credit && credit.paidAmount !== undefined) {
           return sum + credit.paidAmount;
         }
         return sum;
@@ -310,10 +324,7 @@ export default function DistributorSales() {
                     typeof sale.product === "object" ? sale.product : null;
                   const customer =
                     typeof sale.customer === "object" ? sale.customer : null;
-                  const credit =
-                    sale.credit
-                      ? sale.credit
-                      : null;
+                  const credit = getCreditFromSale(sale);
                   const total = sale.salePrice * sale.quantity;
                   const isActiveCredit = hasActiveCredit(sale);
 
@@ -391,7 +402,7 @@ export default function DistributorSales() {
                               </span>
                             )}
                           </div>
-                        ) : sale.credit ? (
+                        ) : sale.isCredit ? (
                           <span className="inline-flex items-center gap-1 rounded-full bg-green-900/30 px-2 py-1 text-xs font-semibold text-green-400">
                             ✓ Cobrado
                           </span>

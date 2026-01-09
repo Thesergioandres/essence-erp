@@ -325,6 +325,10 @@ router.post("/:id/cancel", creditValidation.getById, admin, cancelCredit);
  *       200:
  *         description: Pago registrado
  */
-router.post("/:id/distributor-payment", creditValidation.getById, registerDistributorPayment);
+router.post(
+  "/:id/distributor-payment",
+  creditValidation.getById,
+  registerDistributorPayment
+);
 
 export default router;

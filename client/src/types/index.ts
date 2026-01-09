@@ -185,6 +185,17 @@ export interface Sale {
   paymentConfirmedBy?: User | string;
   paymentProof?: string;
   paymentProofMimeType?: string;
+  // Backend fields for credit
+  isCredit?: boolean;
+  creditId?: {
+    _id: string;
+    originalAmount: number;
+    paidAmount: number;
+    remainingAmount: number;
+    status: string;
+    dueDate?: string;
+  } | string | null;
+  // Alternative nested credit field (some endpoints use this)
   credit?: {
     _id: string;
     sale: string;

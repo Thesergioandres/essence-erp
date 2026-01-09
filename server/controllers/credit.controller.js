@@ -303,7 +303,15 @@ export const registerPayment = async (req, res) => {
   const userId = req.user?.id;
 
   try {
-    const { amount, paymentMethod, notes, branchId, paymentDate, paymentProof, paymentProofMimeType } = req.body;
+    const {
+      amount,
+      paymentMethod,
+      notes,
+      branchId,
+      paymentDate,
+      paymentProof,
+      paymentProofMimeType,
+    } = req.body;
 
     if (!amount || amount <= 0) {
       return res.status(400).json({
@@ -353,7 +361,9 @@ export const registerPayment = async (req, res) => {
       branch: branchId || null,
       notes,
       paymentProof: paymentProof || null,
-      paymentProofMimeType: paymentProof ? (paymentProofMimeType || "image/jpeg") : null,
+      paymentProofMimeType: paymentProof
+        ? paymentProofMimeType || "image/jpeg"
+        : null,
       balanceBefore,
       balanceAfter,
       paymentDate: paymentDate ? new Date(paymentDate) : new Date(),
@@ -1227,7 +1237,11 @@ export const registerDistributorPayment = async (req, res) => {
         targetRole: "admin",
         type: "credit_payment",
         title: "Abono registrado por distribuidor",
-        message: `${req.user?.name || "Distribuidor"} registró un abono de $${amount.toLocaleString()} al crédito de ${credit.customer?.name || "cliente"}`,
+        message: `${
+          req.user?.name || "Distribuidor"
+        } registró un abono de $${amount.toLocaleString()} al crédito de ${
+          credit.customer?.name || "cliente"
+        }`,
         priority: "medium",
         link: `/admin/credits/${credit._id}`,
         relatedEntity: { type: "Credit", id: credit._id },

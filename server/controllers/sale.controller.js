@@ -1240,7 +1240,10 @@ export const getDistributorSales = async (req, res) => {
       .populate("product", "name image")
       .populate("distributor", "name email")
       .populate("customer", "name phone")
-      .populate("creditId", "originalAmount paidAmount remainingAmount status dueDate")
+      .populate(
+        "creditId",
+        "originalAmount paidAmount remainingAmount status dueDate"
+      )
       .sort({ saleDate: -1 })
       .limit(limit)
       .lean();
