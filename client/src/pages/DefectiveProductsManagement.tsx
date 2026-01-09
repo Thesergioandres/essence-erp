@@ -690,11 +690,11 @@ export default function DefectiveProductsManagement() {
 
             {actionType === "confirm" && (
               <div className="mb-4">
-                <label className="flex items-center gap-3 rounded-lg border border-gray-700 bg-gray-800 p-4 cursor-pointer hover:border-purple-500 transition">
+                <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-gray-700 bg-gray-800 p-4 transition hover:border-purple-500">
                   <input
                     type="checkbox"
                     checked={hasWarrantyOnConfirm}
-                    onChange={(e) => setHasWarrantyOnConfirm(e.target.checked)}
+                    onChange={e => setHasWarrantyOnConfirm(e.target.checked)}
                     className="h-5 w-5 rounded border-gray-600 bg-gray-700 text-purple-600 focus:ring-2 focus:ring-purple-500 focus:ring-offset-0"
                   />
                   <div className="flex-1">
