@@ -1,5 +1,6 @@
 import { Check, Loader2, Plus, Search, User, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { customerService } from "../api/services";
 
 interface Customer {
@@ -287,24 +288,27 @@ export default function CustomerSelector({
       </div>
 
       {/* Create Customer Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-md rounded-xl border border-gray-700 bg-gray-800 p-6">
-            <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-white">Nuevo Cliente</h2>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowCreateModal(false);
-                  setCreateError("");
-                }}
-                className="rounded p-1 text-gray-400 hover:bg-gray-700 hover:text-white"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
+      {showCreateModal &&
+        createPortal(
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
+            <div className="w-full max-w-md rounded-xl border border-gray-700 bg-gray-800 p-6">
+              <div className="mb-6 flex items-center justify-between">
+                <h2 className="text-xl font-bold text-white">
+                  Nuevo Cliente
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    setCreateError("");
+                  }}
+                  className="rounded p-1 text-gray-400 hover:bg-gray-700 hover:text-white"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
 
-            <form onSubmit={handleCreateCustomer} className="space-y-4">
+              <form onSubmit={handleCreateCustomer} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-300">
                   Nombre *
@@ -377,8 +381,9 @@ export default function CustomerSelector({
               </div>
             </form>
           </div>
-        </div>
-      )}
+        </div>,
+          document.body
+        )}
     </>
   );
 }
