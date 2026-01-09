@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import api from "../api/axios";
+import { authService } from "../api/services";
 import CustomerPointsCard from "../components/CustomerPointsCard";
 
 interface Customer {
@@ -72,6 +73,8 @@ const segmentConfig: Record<
 };
 
 export default function Customers() {
+  const user = authService.getCurrentUser();
+  const isDistributor = user?.role === "distributor";
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -462,13 +465,15 @@ export default function Customers() {
                         >
                           <Edit className="h-4 w-4" />
                         </button>
-                        <button
-                          onClick={() => handleDelete(customer._id)}
-                          className="rounded p-1.5 text-gray-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/30"
-                          title="Eliminar"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        {!isDistributor && (
+                          <button
+                            onClick={() => handleDelete(customer._id)}
+                            className="rounded p-1.5 text-gray-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/30"
+                            title="Eliminar"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

@@ -334,12 +334,9 @@ export default function DashboardLayout() {
               </svg>
               Proveedores
             </NavLink>
-            <FeatureNavLink
+            <NavLink
               to="/admin/customers"
-              feature="customers"
-              className={(isActive: boolean): string =>
-                navLinkClasses(isActive)
-              }
+              className={({ isActive }): string => navLinkClasses(isActive)}
             >
               <svg
                 className="h-5 w-5"
@@ -355,7 +352,7 @@ export default function DashboardLayout() {
                 />
               </svg>
               Clientes
-            </FeatureNavLink>
+            </NavLink>
             <FeatureNavLink
               to="/admin/credits"
               feature="credits"

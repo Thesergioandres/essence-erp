@@ -18,50 +18,27 @@ import {
 
 const router = express.Router();
 
-router.use(protect, businessContext, requireFeature("customers"));
+// Todos los usuarios autenticados pueden acceder a clientes (distribuidores incluidos)
+router.use(protect, businessContext);
 
 router
   .route("/")
-  .post(
-    requirePermission({ module: "customers", action: "create" }),
-    createCustomer
-  )
-  .get(
-    requirePermission({ module: "customers", action: "read" }),
-    listCustomers
-  );
+  .post(createCustomer)
+  .get(listCustomers);
 
-router.get(
-  "/stats",
-  requirePermission({ module: "customers", action: "read" }),
-  customerStats
-);
+router.get("/stats", customerStats);
 
-router.get(
-  "/rfm",
-  requirePermission({ module: "customers", action: "read" }),
-  customerRFM
-);
+router.get("/rfm", customerRFM);
 
 router
   .route("/:id")
-  .get(
-    requirePermission({ module: "customers", action: "read" }),
-    getCustomerById
-  )
-  .put(
-    requirePermission({ module: "customers", action: "update" }),
-    updateCustomer
-  )
+  .get(getCustomerById)
+  .put(updateCustomer)
   .delete(
     requirePermission({ module: "customers", action: "delete" }),
     deleteCustomer
   );
 
-router.post(
-  "/:id/points",
-  requirePermission({ module: "customers", action: "update" }),
-  adjustPoints
-);
+router.post("/:id/points", adjustPoints);
 
 export default router;
