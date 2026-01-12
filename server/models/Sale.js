@@ -29,6 +29,11 @@ const saleSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    // Agrupación de ventas (carrito) - todas las ventas del mismo carrito comparten este ID
+    saleGroupId: {
+      type: String,
+      index: true,
+    },
     distributor: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -220,6 +225,12 @@ const saleSchema = new mongoose.Schema(
     saleGroupId: {
       type: String,
       trim: true,
+      index: true,
+    },
+    // Referencia al pedido de venta (para ventas agrupadas)
+    saleOrder: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "SaleOrder",
       index: true,
     },
     // ============ GANANCIAS NETAS ============

@@ -500,6 +500,7 @@ export const registerAdminSale = async (req, res) => {
       salePrice,
       notes,
       saleDate: normalizedSaleDate || toColombiaStartOfDay(new Date()),
+      saleGroupId: req.body.saleGroupId || null, // ⭐ Campo para agrupar ventas del mismo carrito
       paymentProof,
       paymentProofMimeType: paymentProof
         ? paymentProofMimeType || "image/jpeg"
@@ -1715,11 +1716,32 @@ export const confirmPayment = async (req, res) => {
       return res.status(404).json({ message: "Venta no encontrada" });
     }
 
+    // === VALIDACIÓN DE CRÉDITO ===
+    // Si es una venta a crédito, verificar que el crédito esté completamente pagado
+    if (sale.paymentType === "credit" || sale.isCredit === true) {
+      const Credit = (await import("../models/Credit.js")).default;
+      const credit = await Credit.findOne({ sale: sale._id });
+
+      if (credit && credit.status !== "paid") {
+        return res.status(400).json({
+          message:
+            "No se puede confirmar una venta a crédito hasta que se pague completamente el fiado",
+          creditStatus: credit.status,
+          remainingAmount: credit.remainingAmount,
+          suggestion:
+            "Registre los pagos del crédito primero. La venta se confirmará automáticamente al completar el pago.",
+        });
+      }
+    }
+
     // Marcar la venta como confirmada si aún está pendiente
     if (sale.paymentStatus !== "confirmado") {
       sale.paymentStatus = "confirmado";
+      sale.isConfirmed = true;
       sale.paymentConfirmedAt = new Date();
+      sale.confirmedAt = new Date();
       sale.paymentConfirmedBy = req.user?.id || req.user?._id || null;
+      sale.confirmedBy = req.user?.id || req.user?._id || null;
       await sale.save();
     }
 

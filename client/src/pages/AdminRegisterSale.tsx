@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { v4 as uuidv4 } from "uuid";
 import api from "../api/axios";
 import {
-  authService,
   branchService,
   deliveryMethodService,
   paymentMethodService,
@@ -401,58 +401,36 @@ export default function AdminRegisterSale() {
 
     try {
       setLoading(true);
-      const user = authService.getCurrentUser();
 
-      // Registrar cada venta del pedido
+      // Generar un saleGroupId único para agrupar todas las ventas del carrito
+      const saleGroupId = uuidv4();
+
+      // Registrar cada venta con el mismo saleGroupId
       for (const item of saleItems) {
-        if (
-          user &&
-          (user.role === "admin" ||
-            user.role === "super_admin" ||
-            user.role === "god")
-        ) {
-          await saleService.registerAdmin({
-            productId: item.productId,
-            quantity: item.quantity,
-            salePrice: item.salePrice,
-            branchId: formData.branchId || undefined,
-            notes: formData.notes,
-            saleDate: formData.saleDate,
-            paymentMethodId: formData.paymentMethodId || undefined,
-            paymentType: isCredit ? "credit" : "cash",
-            customerId: isCredit ? formData.customerId : undefined,
-            creditDueDate: isCredit ? formData.creditDueDate : undefined,
-            initialPayment:
-              isCredit && formData.initialPayment > 0
-                ? formData.initialPayment
-                : undefined,
-            deliveryMethodId: formData.deliveryMethodId || undefined,
-            shippingCost: formData.shippingCost || undefined,
-            deliveryAddress: formData.deliveryAddress || undefined,
-            additionalCosts:
-              additionalCosts.length > 0
-                ? additionalCosts.map(c => ({
-                    type: c.type,
-                    description: c.description,
-                    amount: c.amount,
-                  }))
-                : undefined,
-            discount: formData.discount || undefined,
-          });
-        } else {
-          await saleService.register({
-            productId: item.productId,
-            quantity: item.quantity,
-            salePrice: item.salePrice,
-            branchId: formData.branchId || undefined,
-            notes: formData.notes,
-            saleDate: formData.saleDate,
-          });
-        }
+        await saleService.register({
+          productId: item.productId,
+          quantity: item.quantity,
+          salePrice: item.salePrice,
+          branchId: formData.branchId || undefined,
+          notes: formData.notes,
+          saleDate: formData.saleDate,
+          customerId: formData.customerId || undefined,
+          paymentMethodId: formData.paymentMethodId || undefined,
+          deliveryMethodId: formData.deliveryMethodId || undefined,
+          shippingCost: item === saleItems[0] ? formData.shippingCost : 0, // Solo el primer item lleva costo de envío
+          deliveryAddress: formData.deliveryAddress || undefined,
+          paymentType: isCredit ? "credit" : "cash",
+          creditDueDate: isCredit ? formData.creditDueDate : undefined,
+          initialPayment:
+            isCredit && item === saleItems[0] && formData.initialPayment > 0
+              ? formData.initialPayment
+              : undefined,
+          saleGroupId, // ⭐ Asignar el mismo ID de grupo a todas las ventas del carrito
+        });
       }
 
       setSuccess(
-        `¡${saleItems.length} ${saleItems.length === 1 ? "venta registrada" : "ventas registradas"} exitosamente!`
+        `¡Pedido con ${saleItems.length} ${saleItems.length === 1 ? "producto registrado" : "productos registrados"} exitosamente!`
       );
 
       // Limpiar todo

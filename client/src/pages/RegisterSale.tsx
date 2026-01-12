@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { v4 as uuidv4 } from "uuid";
 import {
   authService,
   customerService,
@@ -487,7 +488,10 @@ export default function RegisterSale() {
     try {
       setLoading(true);
 
-      // Registrar cada venta individualmente
+      // Generar un saleGroupId único para agrupar todas las ventas del carrito
+      const saleGroupId = uuidv4();
+
+      // Registrar cada venta individualmente con el mismo saleGroupId
       for (const item of items) {
         const saleData: {
           productId: string;
@@ -512,6 +516,7 @@ export default function RegisterSale() {
             amount: number;
           }>;
           discount?: number;
+          saleGroupId?: string;
         } = {
           productId: item.productId,
           quantity: item.quantity,
@@ -523,6 +528,7 @@ export default function RegisterSale() {
           deliveryMethodId: formData.deliveryMethodId || undefined,
           shippingCost: formData.shippingCost || undefined,
           deliveryAddress: formData.deliveryAddress || undefined,
+          saleGroupId: saleGroupId,
           additionalCosts:
             additionalCosts.length > 0
               ? additionalCosts.map(c => ({

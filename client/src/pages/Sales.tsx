@@ -52,6 +52,7 @@ export default function Sales() {
     startDate: "",
     endDate: "",
   });
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   const currentUser = authService.getCurrentUser();
   const canDeleteSales =
@@ -173,8 +174,6 @@ export default function Sales() {
     }
   };
 
-  // Ya no necesitamos filtrado/ordenamiento local, el servidor lo hace
-
   // Helper para determinar si una venta tiene crédito activo (deuda pendiente)
   const hasActiveCredit = (sale: Sale) => {
     if (!sale.credit) return false;
@@ -185,6 +184,102 @@ export default function Sales() {
       return sale.credit.remainingAmount > 0;
     }
     return true; // Si tiene crédito pero no sabemos el estado, asumimos activo
+  };
+
+  // Agrupar ventas por saleGroupId
+  type SaleGroup = {
+    id: string;
+    sales: Sale[];
+    totalQuantity: number;
+    totalRevenue: number;
+    totalProfit: number;
+    date: string;
+    distributor: Sale["distributor"];
+    branch: Sale["branch"];
+    customer: Sale["customer"];
+    paymentStatus: Sale["paymentStatus"];
+    isGroup: boolean;
+  };
+
+  const groupSales = (): SaleGroup[] => {
+    const grouped = new Map<string, Sale[]>();
+    const individual: Sale[] = [];
+
+    // Separar ventas agrupadas vs individuales
+    sales.forEach(sale => {
+      if (sale.saleGroupId) {
+        if (!grouped.has(sale.saleGroupId)) {
+          grouped.set(sale.saleGroupId, []);
+        }
+        grouped.get(sale.saleGroupId)!.push(sale);
+      } else {
+        individual.push(sale);
+      }
+    });
+
+    const result: SaleGroup[] = [];
+
+    // Procesar grupos
+    grouped.forEach((groupSales, groupId) => {
+      const firstSale = groupSales[0];
+      result.push({
+        id: groupId,
+        sales: groupSales,
+        totalQuantity: groupSales.reduce((sum, s) => sum + s.quantity, 0),
+        totalRevenue: groupSales.reduce(
+          (sum, s) => sum + s.salePrice * s.quantity,
+          0
+        ),
+        totalProfit: groupSales.reduce(
+          (sum, s) => sum + (s.adminProfit || 0),
+          0
+        ),
+        date: firstSale.saleDate,
+        distributor: firstSale.distributor,
+        branch: firstSale.branch,
+        customer: firstSale.customer,
+        paymentStatus: firstSale.paymentStatus,
+        isGroup: true,
+      });
+    });
+
+    // Procesar ventas individuales
+    individual.forEach(sale => {
+      result.push({
+        id: sale._id,
+        sales: [sale],
+        totalQuantity: sale.quantity,
+        totalRevenue: sale.salePrice * sale.quantity,
+        totalProfit: sale.adminProfit || 0,
+        date: sale.saleDate,
+        distributor: sale.distributor,
+        branch: sale.branch,
+        customer: sale.customer,
+        paymentStatus: sale.paymentStatus,
+        isGroup: false,
+      });
+    });
+
+    // Ordenar por fecha
+    result.sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+
+    return result;
+  };
+
+  const saleGroups = groupSales();
+
+  const toggleGroup = (groupId: string) => {
+    setExpandedGroups(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(groupId)) {
+        newSet.delete(groupId);
+      } else {
+        newSet.add(groupId);
+      }
+      return newSet;
+    });
   };
 
   // Calcular ventas con crédito activo
@@ -500,16 +595,16 @@ export default function Sales() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-700">
-                  {sales.map(sale => {
-                    const product =
-                      typeof sale.product === "object" ? sale.product : null;
+                  {saleGroups.map(group => {
+                    const isExpanded = expandedGroups.has(group.id);
+                    const firstSale = group.sales[0];
                     const distributor =
-                      typeof sale.distributor === "object"
-                        ? sale.distributor
+                      typeof group.distributor === "object"
+                        ? group.distributor
                         : null;
                     const branchName =
-                      typeof sale.branch === "object"
-                        ? sale.branch?.name
+                      typeof group.branch === "object"
+                        ? group.branch?.name
                         : undefined;
 
                     // Determinar rango según comisión
@@ -519,7 +614,8 @@ export default function Sales() {
                       color: "bg-purple-500/20 text-purple-300",
                     };
                     if (distributor) {
-                      const percentage = sale.distributorProfitPercentage || 20;
+                      const percentage =
+                        firstSale.distributorProfitPercentage || 20;
                       if (percentage === 25) {
                         rankBadge = {
                           emoji: "🥇",
@@ -548,162 +644,297 @@ export default function Sales() {
                     }
 
                     return (
-                      <tr
-                        key={sale._id}
-                        className="cursor-pointer hover:bg-gray-900/30"
-                        onClick={e => {
-                          // No abrir modal si se hace clic en botones
-                          if ((e.target as HTMLElement).closest("button"))
-                            return;
-                          setSelectedSale(sale);
-                        }}
-                      >
-                        <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-200">
-                          {new Date(sale.saleDate).toLocaleDateString("es-ES", {
-                            year: "numeric",
-                            month: "short",
-                            day: "numeric",
-                          })}
-                        </td>
-                        {branchesEnabled && (
-                          <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-300">
-                            {branchName || "General"}
-                          </td>
-                        )}
-                        {distributorsEnabled && (
-                          <td className="whitespace-nowrap px-6 py-4">
-                            <div className="text-sm font-medium text-gray-200">
-                              {distributor?.name || "Admin"}
-                            </div>
-                            <div className="text-sm text-gray-400">
-                              {distributor?.email || ""}
-                            </div>
-                          </td>
-                        )}
-                        {distributorsEnabled && gamificationEnabled && (
-                          <td className="whitespace-nowrap px-6 py-4">
-                            <span
-                              className={`rounded-full px-2 py-1 text-xs font-semibold ${rankBadge.color}`}
-                            >
-                              {rankBadge.emoji} {rankBadge.text}
-                            </span>
-                          </td>
-                        )}
-                        {distributorsEnabled && (
-                          <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-200">
-                            {distributor
-                              ? `${sale.distributorProfitPercentage ?? 20}%`
-                              : "—"}
-                          </td>
-                        )}
-                        <td className="whitespace-nowrap px-6 py-4">
-                          <div className="flex items-center">
-                            {product?.image?.url && (
-                              <img
-                                src={product.image.url}
-                                alt={product.name}
-                                className="mr-3 h-10 w-10 rounded object-cover"
-                              />
+                      <>
+                        {/* Fila principal del grupo o venta individual */}
+                        <tr
+                          key={group.id}
+                          className={`hover:bg-gray-900/30 ${group.isGroup ? "bg-purple-900/10 font-semibold" : "cursor-pointer"}`}
+                          onClick={e => {
+                            if ((e.target as HTMLElement).closest("button"))
+                              return;
+                            if (!group.isGroup) {
+                              setSelectedSale(firstSale);
+                            }
+                          }}
+                        >
+                          <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-200">
+                            {group.isGroup && (
+                              <button
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  toggleGroup(group.id);
+                                }}
+                                className="mr-2 text-purple-400 hover:text-purple-300"
+                              >
+                                {isExpanded ? "▼" : "▶"}
+                              </button>
                             )}
-                            <span className="text-sm text-gray-200">
-                              {product?.name || "N/A"}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-200">
-                          {sale.customerName || "-"}
-                        </td>
-                        {creditsEnabled && (
+                            {new Date(group.date).toLocaleDateString("es-ES", {
+                              year: "numeric",
+                              month: "short",
+                              day: "numeric",
+                            })}
+                          </td>
+                          {branchesEnabled && (
+                            <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-300">
+                              {branchName || "General"}
+                            </td>
+                          )}
+                          {distributorsEnabled && (
+                            <td className="whitespace-nowrap px-6 py-4">
+                              <div className="text-sm font-medium text-gray-200">
+                                {distributor?.name || "Admin"}
+                              </div>
+                              <div className="text-sm text-gray-400">
+                                {distributor?.email || ""}
+                              </div>
+                            </td>
+                          )}
+                          {distributorsEnabled && gamificationEnabled && (
+                            <td className="whitespace-nowrap px-6 py-4">
+                              <span
+                                className={`rounded-full px-2 py-1 text-xs font-semibold ${rankBadge.color}`}
+                              >
+                                {rankBadge.emoji} {rankBadge.text}
+                              </span>
+                            </td>
+                          )}
+                          {distributorsEnabled && (
+                            <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-200">
+                              {distributor
+                                ? `${firstSale.distributorProfitPercentage ?? 20}%`
+                                : "—"}
+                            </td>
+                          )}
                           <td className="whitespace-nowrap px-6 py-4">
-                            {sale.credit ? (
-                              <div className="flex flex-col gap-1">
-                                <span className="inline-flex items-center gap-1 rounded-full bg-orange-500/10 px-2 py-0.5 text-xs font-medium text-orange-400">
-                                  💳 Crédito
-                                </span>
-                                <span className="text-xs text-gray-400">
-                                  {typeof sale.credit === "object" &&
-                                  sale.credit.remainingAmount !== undefined
-                                    ? new Intl.NumberFormat("es-CO", {
-                                        style: "currency",
-                                        currency: "COP",
-                                        minimumFractionDigits: 0,
-                                      }).format(sale.credit.remainingAmount)
-                                    : "Pendiente"}
+                            {group.isGroup ? (
+                              <span className="text-sm font-medium text-purple-300">
+                                📦 {group.sales.length} productos
+                              </span>
+                            ) : (
+                              <div className="flex items-center">
+                                {typeof firstSale.product === "object" &&
+                                  firstSale.product?.image?.url && (
+                                    <img
+                                      src={firstSale.product.image.url}
+                                      alt={firstSale.product.name}
+                                      className="mr-3 h-10 w-10 rounded object-cover"
+                                    />
+                                  )}
+                                <span className="text-sm text-gray-200">
+                                  {typeof firstSale.product === "object"
+                                    ? firstSale.product?.name
+                                    : "N/A"}
                                 </span>
                               </div>
+                            )}
+                          </td>
+                          <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-200">
+                            {firstSale.customerName || "-"}
+                          </td>
+                          {creditsEnabled && (
+                            <td className="whitespace-nowrap px-6 py-4">
+                              {firstSale.credit ? (
+                                <div className="flex flex-col gap-1">
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-orange-500/10 px-2 py-0.5 text-xs font-medium text-orange-400">
+                                    💳 Crédito
+                                  </span>
+                                  <span className="text-xs text-gray-400">
+                                    {typeof firstSale.credit === "object" &&
+                                    firstSale.credit.remainingAmount !==
+                                      undefined
+                                      ? new Intl.NumberFormat("es-CO", {
+                                          style: "currency",
+                                          currency: "COP",
+                                          minimumFractionDigits: 0,
+                                        }).format(
+                                          firstSale.credit.remainingAmount
+                                        )
+                                      : "Pendiente"}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-gray-500">
+                                  Contado
+                                </span>
+                              )}
+                            </td>
+                          )}
+                          <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-200">
+                            {group.totalQuantity}
+                          </td>
+                          <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-200">
+                            ${group.totalRevenue.toLocaleString()}
+                          </td>
+                          <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-green-400">
+                            ${group.totalProfit.toLocaleString()}
+                          </td>
+                          <td className="whitespace-nowrap px-6 py-4">
+                            {group.paymentStatus === "pendiente" ? (
+                              <span className="inline-flex rounded-full bg-yellow-500/20 px-3 py-1 text-xs font-semibold leading-5 text-yellow-300">
+                                Pendiente
+                              </span>
+                            ) : hasActiveCredit(firstSale) ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-orange-500/20 px-3 py-1 text-xs font-semibold leading-5 text-orange-300">
+                                💳 Por Cobrar
+                              </span>
                             ) : (
-                              <span className="text-xs text-gray-500">
-                                Contado
+                              <span className="inline-flex rounded-full bg-green-500/20 px-3 py-1 text-xs font-semibold leading-5 text-green-300">
+                                Confirmado
                               </span>
                             )}
                           </td>
-                        )}
-                        <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-200">
-                          {sale.quantity}
-                        </td>
-                        <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-200">
-                          ${(sale.salePrice * sale.quantity).toLocaleString()}
-                        </td>
-                        <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-green-400">
-                          ${sale.adminProfit.toLocaleString()}
-                        </td>
-                        <td className="whitespace-nowrap px-6 py-4">
-                          {sale.paymentStatus === "pendiente" ? (
-                            <span className="inline-flex rounded-full bg-yellow-500/20 px-3 py-1 text-xs font-semibold leading-5 text-yellow-300">
-                              Pendiente
-                            </span>
-                          ) : hasActiveCredit(sale) ? (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-orange-500/20 px-3 py-1 text-xs font-semibold leading-5 text-orange-300">
-                              💳 Por Cobrar
-                            </span>
-                          ) : (
-                            <span className="inline-flex rounded-full bg-green-500/20 px-3 py-1 text-xs font-semibold leading-5 text-green-300">
-                              Confirmado
-                            </span>
-                          )}
-                        </td>
-                        <td className="whitespace-nowrap px-6 py-4 text-sm">
-                          <div className="flex gap-2">
-                            {sale.paymentStatus === "pendiente" ? (
-                              <button
-                                onClick={() => handleConfirmPayment(sale._id)}
-                                disabled={confirmingId === sale._id}
-                                className="font-medium text-green-400 hover:text-green-300 disabled:opacity-50"
+                          <td className="whitespace-nowrap px-6 py-4 text-sm">
+                            <div className="flex gap-2">
+                              {!group.isGroup &&
+                              group.paymentStatus === "pendiente" &&
+                              !hasActiveCredit(firstSale) ? (
+                                <button
+                                  onClick={() =>
+                                    handleConfirmPayment(firstSale._id)
+                                  }
+                                  disabled={confirmingId === firstSale._id}
+                                  className="font-medium text-green-400 hover:text-green-300 disabled:opacity-50"
+                                >
+                                  {confirmingId === firstSale._id
+                                    ? "Confirmando..."
+                                    : "Confirmar Pago"}
+                                </button>
+                              ) : !group.isGroup ? (
+                                <span className="text-xs text-gray-400">
+                                  Confirmado el{" "}
+                                  {firstSale.paymentConfirmedAt &&
+                                    new Date(
+                                      firstSale.paymentConfirmedAt
+                                    ).toLocaleDateString()}
+                                </span>
+                              ) : null}
+                              {/* Botón eliminar solo para ventas individuales */}
+                              {!group.isGroup && canDeleteSales && (
+                                <button
+                                  onClick={() =>
+                                    handleDeleteSale(firstSale._id)
+                                  }
+                                  disabled={deletingId === firstSale._id}
+                                  className="font-medium text-red-400 hover:text-red-300 disabled:opacity-50"
+                                >
+                                  {deletingId === firstSale._id
+                                    ? "Eliminando..."
+                                    : "Eliminar"}
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+
+                        {/* Filas expandidas para grupos */}
+                        {group.isGroup &&
+                          isExpanded &&
+                          group.sales.map(sale => {
+                            const product =
+                              typeof sale.product === "object"
+                                ? sale.product
+                                : null;
+
+                            return (
+                              <tr
+                                key={sale._id}
+                                className="cursor-pointer bg-gray-900/20 hover:bg-gray-900/40"
+                                onClick={e => {
+                                  if (
+                                    (e.target as HTMLElement).closest("button")
+                                  )
+                                    return;
+                                  setSelectedSale(sale);
+                                }}
                               >
-                                {confirmingId === sale._id
-                                  ? "Confirmando..."
-                                  : "Confirmar Pago"}
-                              </button>
-                            ) : (
-                              <span className="text-xs text-gray-400">
-                                Confirmado el{" "}
-                                {sale.paymentConfirmedAt &&
-                                  new Date(
-                                    sale.paymentConfirmedAt
-                                  ).toLocaleDateString()}
-                              </span>
-                            )}
-                            {/* Botón eliminar solo para admin */}
-                            {canDeleteSales && (
-                              <button
-                                onClick={() => handleDeleteSale(sale._id)}
-                                disabled={deletingId === sale._id}
-                                className="font-medium text-red-400 hover:text-red-300 disabled:opacity-50"
-                              >
-                                {deletingId === sale._id
-                                  ? "Eliminando..."
-                                  : "Eliminar"}
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
+                                <td className="whitespace-nowrap px-6 py-3 pl-12 text-sm text-gray-400">
+                                  {/* Vacío - fecha ya mostrada */}
+                                </td>
+                                {branchesEnabled && (
+                                  <td className="whitespace-nowrap px-6 py-3 text-sm text-gray-400">
+                                    {/* Vacío */}
+                                  </td>
+                                )}
+                                {distributorsEnabled && (
+                                  <td className="whitespace-nowrap px-6 py-3 text-sm text-gray-400">
+                                    {/* Vacío */}
+                                  </td>
+                                )}
+                                {distributorsEnabled && gamificationEnabled && (
+                                  <td className="whitespace-nowrap px-6 py-3">
+                                    {/* Vacío */}
+                                  </td>
+                                )}
+                                {distributorsEnabled && (
+                                  <td className="whitespace-nowrap px-6 py-3">
+                                    {/* Vacío */}
+                                  </td>
+                                )}
+                                <td className="whitespace-nowrap px-6 py-3">
+                                  <div className="flex items-center">
+                                    {product?.image?.url && (
+                                      <img
+                                        src={product.image.url}
+                                        alt={product.name}
+                                        className="mr-3 h-8 w-8 rounded object-cover"
+                                      />
+                                    )}
+                                    <span className="text-sm text-gray-300">
+                                      {product?.name || "N/A"}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="whitespace-nowrap px-6 py-3 text-sm text-gray-400">
+                                  {/* Vacío */}
+                                </td>
+                                {creditsEnabled && (
+                                  <td className="whitespace-nowrap px-6 py-3">
+                                    {/* Vacío */}
+                                  </td>
+                                )}
+                                <td className="whitespace-nowrap px-6 py-3 text-sm text-gray-300">
+                                  {sale.quantity}
+                                </td>
+                                <td className="whitespace-nowrap px-6 py-3 text-sm text-gray-300">
+                                  $
+                                  {(
+                                    sale.salePrice * sale.quantity
+                                  ).toLocaleString()}
+                                </td>
+                                <td className="whitespace-nowrap px-6 py-3 text-sm text-green-400">
+                                  ${sale.adminProfit.toLocaleString()}
+                                </td>
+                                <td className="whitespace-nowrap px-6 py-3">
+                                  {/* Vacío */}
+                                </td>
+                                <td className="whitespace-nowrap px-6 py-3 text-sm">
+                                  <div className="flex gap-2">
+                                    {canDeleteSales && (
+                                      <button
+                                        onClick={() =>
+                                          handleDeleteSale(sale._id)
+                                        }
+                                        disabled={deletingId === sale._id}
+                                        className="text-xs font-medium text-red-400 hover:text-red-300 disabled:opacity-50"
+                                      >
+                                        {deletingId === sale._id
+                                          ? "Eliminando..."
+                                          : "Eliminar"}
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </>
                     );
                   })}
                 </tbody>
               </table>
 
-              {sales.length === 0 && (
+              {saleGroups.length === 0 && (
                 <div className="py-12 text-center">
                   <p className="text-gray-400">No hay ventas que mostrar</p>
                 </div>

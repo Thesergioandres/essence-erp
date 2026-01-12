@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { v4 as uuidv4 } from "uuid";
 import {
   branchService,
   categoryService,
@@ -84,6 +85,9 @@ export default function InventoryEntries() {
   // Pagination
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+
+  // Expanded groups state
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   // Cart for multiple products
   const [cart, setCart] = useState<
@@ -224,14 +228,18 @@ export default function InventoryEntries() {
     setError("");
 
     try {
-      // Create all entries sequentially
+      // Generar un purchaseGroupId único para agrupar todas las entradas
+      const purchaseGroupId = uuidv4();
+
+      // Registrar cada entrada con el mismo purchaseGroupId
       for (const item of cart) {
-        await inventoryService.createEntry({
+        await inventoryService.addEntry({
           product: item.product,
           quantity: item.quantity,
           branch: item.branch || undefined,
           provider: item.provider || undefined,
           notes: item.notes || undefined,
+          purchaseGroupId, // ⭐ Asignar el mismo ID de grupo
         });
       }
 
@@ -411,6 +419,88 @@ export default function InventoryEntries() {
       entry.requestId?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // Agrupar entradas por purchaseGroupId
+  type EntryGroup = {
+    id: string;
+    entries: InventoryEntry[];
+    totalQuantity: number;
+    date: string;
+    destination: string;
+    branch?: { _id: string; name: string };
+    provider?: { _id: string; name: string };
+    isGroup: boolean;
+  };
+
+  const groupEntries = (): EntryGroup[] => {
+    const grouped = new Map<string, InventoryEntry[]>();
+    const individual: InventoryEntry[] = [];
+
+    filteredEntries.forEach(entry => {
+      // Verificar si tiene purchaseGroupId (campo puede no existir aún)
+      const groupId = (entry as any).purchaseGroupId;
+      if (groupId) {
+        if (!grouped.has(groupId)) {
+          grouped.set(groupId, []);
+        }
+        grouped.get(groupId)!.push(entry);
+      } else {
+        individual.push(entry);
+      }
+    });
+
+    const result: EntryGroup[] = [];
+
+    // Procesar grupos
+    grouped.forEach((groupEntries, groupId) => {
+      const firstEntry = groupEntries[0];
+      result.push({
+        id: groupId,
+        entries: groupEntries,
+        totalQuantity: groupEntries.reduce((sum, e) => sum + e.quantity, 0),
+        date: firstEntry.createdAt,
+        destination: firstEntry.destination,
+        branch: firstEntry.branch,
+        provider: firstEntry.provider,
+        isGroup: true,
+      });
+    });
+
+    // Procesar entradas individuales
+    individual.forEach(entry => {
+      result.push({
+        id: entry._id,
+        entries: [entry],
+        totalQuantity: entry.quantity,
+        date: entry.createdAt,
+        destination: entry.destination,
+        branch: entry.branch,
+        provider: entry.provider,
+        isGroup: false,
+      });
+    });
+
+    // Ordenar por fecha
+    result.sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+
+    return result;
+  };
+
+  const entryGroups = groupEntries();
+
+  const toggleGroup = (groupId: string) => {
+    setExpandedGroups(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(groupId)) {
+        newSet.delete(groupId);
+      } else {
+        newSet.add(groupId);
+      }
+      return newSet;
+    });
+  };
+
   const clearFilters = () => {
     setSearchTerm("");
     setFilterDestination("");
@@ -530,7 +620,7 @@ export default function InventoryEntries() {
         <div className="flex h-64 items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
         </div>
-      ) : filteredEntries.length === 0 ? (
+      ) : entryGroups.length === 0 ? (
         <div className="rounded-lg border border-gray-700 bg-gray-800/50 p-8 text-center">
           <ArrowDownToLine className="mx-auto h-12 w-12 text-gray-600" />
           <h3 className="mt-4 text-lg font-medium text-white">
@@ -581,87 +671,176 @@ export default function InventoryEntries() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-700">
-                {filteredEntries.map(entry => (
-                  <tr key={entry._id} className="hover:bg-gray-800/50">
-                    <td className="px-4 py-3">
-                      <code className="text-xs text-purple-400">
-                        {entry.requestId?.slice(-8) || entry._id.slice(-8)}
-                      </code>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <Package className="h-4 w-4 text-gray-400" />
-                        <span className="font-medium text-white">
-                          {entry.product?.name || "Producto eliminado"}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="inline-flex items-center gap-1 rounded-full bg-green-500/20 px-2 py-0.5 text-xs font-medium text-green-400">
-                        +{entry.quantity}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        {entry.destination === "warehouse" ? (
-                          <>
-                            <Warehouse className="h-4 w-4 text-blue-400" />
-                            <span className="text-gray-300">Bodega</span>
-                          </>
-                        ) : (
-                          <>
-                            <Building2 className="h-4 w-4 text-orange-400" />
-                            <span className="text-gray-300">
-                              {entry.branch?.name || "Sede"}
-                            </span>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      {entry.provider ? (
-                        <div className="flex items-center gap-2">
-                          <Truck className="h-4 w-4 text-gray-400" />
-                          <span className="text-gray-300">
-                            {entry.provider.name}
+                {entryGroups.map(group => {
+                  const isExpanded = expandedGroups.has(group.id);
+                  const firstEntry = group.entries[0];
+
+                  return (
+                    <>
+                      {/* Fila principal del grupo o entrada individual */}
+                      <tr
+                        key={group.id}
+                        className={`hover:bg-gray-800/50 ${group.isGroup ? "bg-purple-900/10 font-semibold" : ""}`}
+                      >
+                        <td className="px-4 py-3">
+                          {group.isGroup && (
+                            <button
+                              onClick={() => toggleGroup(group.id)}
+                              className="mr-2 text-purple-400 hover:text-purple-300"
+                            >
+                              {isExpanded ? "▼" : "▶"}
+                            </button>
+                          )}
+                          <code className="text-xs text-purple-400">
+                            {firstEntry.requestId?.slice(-8) ||
+                              firstEntry._id.slice(-8)}
+                          </code>
+                        </td>
+                        <td className="px-4 py-3">
+                          {group.isGroup ? (
+                            <div className="flex items-center gap-2">
+                              <Package className="h-4 w-4 text-purple-400" />
+                              <span className="font-medium text-purple-300">
+                                📦 {group.entries.length} productos
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <Package className="h-4 w-4 text-gray-400" />
+                              <span className="font-medium text-white">
+                                {firstEntry.product?.name ||
+                                  "Producto eliminado"}
+                              </span>
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-green-500/20 px-2 py-0.5 text-xs font-medium text-green-400">
+                            +{group.totalQuantity}
                           </span>
-                        </div>
-                      ) : (
-                        <span className="text-gray-500">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-gray-300">
-                      {entry.user?.name || "Sistema"}
-                    </td>
-                    <td className="px-4 py-3 text-gray-400">
-                      {new Date(entry.createdAt).toLocaleDateString("es-CO", {
-                        day: "2-digit",
-                        month: "short",
-                        year: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => handleOpenEdit(entry)}
-                          className="rounded p-1.5 text-gray-400 transition hover:bg-gray-700 hover:text-blue-400"
-                          title="Editar"
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => handleOpenDelete(entry)}
-                          className="rounded p-1.5 text-gray-400 transition hover:bg-gray-700 hover:text-red-400"
-                          title="Eliminar"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            {group.destination === "warehouse" ? (
+                              <>
+                                <Warehouse className="h-4 w-4 text-blue-400" />
+                                <span className="text-gray-300">Bodega</span>
+                              </>
+                            ) : (
+                              <>
+                                <Building2 className="h-4 w-4 text-orange-400" />
+                                <span className="text-gray-300">
+                                  {group.branch?.name || "Sede"}
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          {group.provider ? (
+                            <div className="flex items-center gap-2">
+                              <Truck className="h-4 w-4 text-gray-400" />
+                              <span className="text-gray-300">
+                                {group.provider.name}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-gray-500">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-gray-300">
+                          {firstEntry.user?.name || "Sistema"}
+                        </td>
+                        <td className="px-4 py-3 text-gray-400">
+                          {new Date(group.date).toLocaleDateString("es-CO", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </td>
+                        <td className="px-4 py-3">
+                          {!group.isGroup && (
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => handleOpenEdit(firstEntry)}
+                                className="rounded p-1.5 text-gray-400 transition hover:bg-gray-700 hover:text-blue-400"
+                                title="Editar"
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => handleOpenDelete(firstEntry)}
+                                className="rounded p-1.5 text-gray-400 transition hover:bg-gray-700 hover:text-red-400"
+                                title="Eliminar"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+
+                      {/* Filas expandidas para grupos */}
+                      {group.isGroup &&
+                        isExpanded &&
+                        group.entries.map(entry => (
+                          <tr
+                            key={entry._id}
+                            className="bg-gray-900/20 hover:bg-gray-900/40"
+                          >
+                            <td className="px-4 py-2 pl-12 text-xs text-gray-500">
+                              {/* Vacío */}
+                            </td>
+                            <td className="px-4 py-2">
+                              <div className="flex items-center gap-2">
+                                <Package className="h-3 w-3 text-gray-500" />
+                                <span className="text-sm text-gray-300">
+                                  {entry.product?.name || "Producto eliminado"}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-2">
+                              <span className="text-sm text-gray-400">
+                                +{entry.quantity}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2 text-sm text-gray-500">
+                              {/* Vacío */}
+                            </td>
+                            <td className="px-4 py-2 text-sm text-gray-500">
+                              {/* Vacío */}
+                            </td>
+                            <td className="px-4 py-2 text-sm text-gray-500">
+                              {/* Vacío */}
+                            </td>
+                            <td className="px-4 py-2 text-sm text-gray-500">
+                              {/* Vacío */}
+                            </td>
+                            <td className="px-4 py-2">
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  onClick={() => handleOpenEdit(entry)}
+                                  className="rounded p-1 text-gray-500 transition hover:bg-gray-700 hover:text-blue-400"
+                                  title="Editar"
+                                >
+                                  <Edit2 className="h-3 w-3" />
+                                </button>
+                                <button
+                                  onClick={() => handleOpenDelete(entry)}
+                                  className="rounded p-1 text-gray-500 transition hover:bg-gray-700 hover:text-red-400"
+                                  title="Eliminar"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                    </>
+                  );
+                })}
               </tbody>
             </table>
           </div>

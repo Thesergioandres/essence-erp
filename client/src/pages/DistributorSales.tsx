@@ -18,6 +18,7 @@ export default function DistributorSales() {
   const [filterType, setFilterType] = useState<"all" | "credit" | "paid">(
     "all"
   );
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const loadSales = async () => {
@@ -124,12 +125,107 @@ export default function DistributorSales() {
       }, 0),
   };
 
+  // Agrupar ventas por saleGroupId
+  const groupSales = () => {
+    const groups = new Map<
+      string,
+      {
+        groupId: string;
+        sales: Sale[];
+        totalQuantity: number;
+        totalRevenue: number;
+        totalProfit: number;
+        saleDate: string;
+        isCredit: boolean;
+        hasActiveCredit: boolean;
+      }
+    >();
+
+    sales.forEach(sale => {
+      const groupId = sale.saleGroupId || sale._id;
+      if (!groups.has(groupId)) {
+        groups.set(groupId, {
+          groupId,
+          sales: [],
+          totalQuantity: 0,
+          totalRevenue: 0,
+          totalProfit: 0,
+          saleDate: sale.saleDate,
+          isCredit: sale.isCredit || false,
+          hasActiveCredit: hasActiveCredit(sale),
+        });
+      }
+      const group = groups.get(groupId)!;
+      group.sales.push(sale);
+      group.totalQuantity += sale.quantity;
+      group.totalRevenue += sale.salePrice * sale.quantity;
+      group.totalProfit += sale.distributorProfit || 0;
+    });
+
+    return Array.from(groups.values());
+  };
+
+  const toggleGroup = (groupId: string) => {
+    setExpandedGroups(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(groupId)) {
+        newSet.delete(groupId);
+      } else {
+        newSet.add(groupId);
+      }
+      return newSet;
+    });
+  };
+
   // Filtrar ventas según el tipo seleccionado
   const filteredSales = sales.filter(sale => {
     if (filterType === "credit") return hasActiveCredit(sale);
     if (filterType === "paid") return !hasActiveCredit(sale);
     return true;
   });
+
+  // Agrupar las ventas filtradas
+  const saleGroups = (() => {
+    const groups = new Map<
+      string,
+      {
+        groupId: string;
+        sales: Sale[];
+        totalQuantity: number;
+        totalRevenue: number;
+        totalProfit: number;
+        saleDate: string;
+        isCredit: boolean;
+        hasActiveCredit: boolean;
+      }
+    >();
+
+    filteredSales.forEach(sale => {
+      const groupId = sale.saleGroupId || sale._id;
+      if (!groups.has(groupId)) {
+        groups.set(groupId, {
+          groupId,
+          sales: [],
+          totalQuantity: 0,
+          totalRevenue: 0,
+          totalProfit: 0,
+          saleDate: sale.saleDate,
+          isCredit: sale.isCredit || false,
+          hasActiveCredit: hasActiveCredit(sale),
+        });
+      }
+      const group = groups.get(groupId)!;
+      group.sales.push(sale);
+      group.totalQuantity += sale.quantity;
+      group.totalRevenue += sale.salePrice * sale.quantity;
+      group.totalProfit += sale.distributorProfit || 0;
+      if (hasActiveCredit(sale)) {
+        group.hasActiveCredit = true;
+      }
+    });
+
+    return Array.from(groups.values());
+  })();
 
   if (loading) {
     return (
@@ -260,10 +356,11 @@ export default function DistributorSales() {
       {/* Sales Table */}
       <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-4 sm:p-6">
         <h2 className="mb-4 text-lg font-semibold text-white">
-          Historial de Ventas ({filteredSales.length})
+          Historial de Ventas ({saleGroups.length}{" "}
+          {saleGroups.length === 1 ? "registro" : "registros"})
         </h2>
 
-        {filteredSales.length === 0 ? (
+        {saleGroups.length === 0 ? (
           <div className="rounded-lg border border-dashed border-gray-600 p-12 text-center">
             <svg
               className="mx-auto h-16 w-16 text-gray-600"
@@ -319,7 +416,190 @@ export default function DistributorSales() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-700">
-                {filteredSales.map(sale => {
+                {saleGroups.map(group => {
+                  const isGroup = group.sales.length > 1;
+                  const isExpanded = expandedGroups.has(group.groupId);
+
+                  // Si es un grupo, mostrar fila de resumen
+                  if (isGroup) {
+                    return (
+                      <>
+                        <tr
+                          key={group.groupId}
+                          className="cursor-pointer bg-purple-900/10 hover:bg-purple-900/20"
+                          onClick={() => toggleGroup(group.groupId)}
+                        >
+                          <td className="px-3 py-3 text-sm">
+                            <div className="flex items-center gap-2">
+                              <span className="text-purple-400">
+                                {isExpanded ? "▼" : "▶"}
+                              </span>
+                              <span className="font-mono text-xs text-purple-400">
+                                GRUPO-{group.groupId.slice(-6)}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-3 text-sm text-gray-300">
+                            {formatDate(group.saleDate)}
+                          </td>
+                          <td className="px-3 py-3 text-sm">
+                            <span className="font-semibold text-purple-300">
+                              {group.sales.length} productos
+                            </span>
+                          </td>
+                          <td className="px-3 py-3 text-sm text-gray-300">
+                            {typeof group.sales[0].customer === "object"
+                              ? group.sales[0].customer.name
+                              : "-"}
+                          </td>
+                          <td className="px-3 py-3 text-sm font-semibold text-white">
+                            {formatCurrency(group.totalRevenue)}
+                          </td>
+                          <td className="px-3 py-3 text-sm">
+                            {group.hasActiveCredit ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-orange-900/30 px-2 py-1 text-xs font-semibold text-orange-400">
+                                💳 Por cobrar
+                              </span>
+                            ) : group.isCredit ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-green-900/30 px-2 py-1 text-xs font-semibold text-green-400">
+                                ✓ Cobrado
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-green-900/30 px-2 py-1 text-xs font-semibold text-green-400">
+                                ✓ Pagado
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-3 py-3 text-sm">-</td>
+                          <td className="px-3 py-3 text-sm font-bold text-green-400">
+                            {formatCurrency(group.totalProfit)}
+                          </td>
+                        </tr>
+                        {isExpanded &&
+                          group.sales.map(sale => {
+                            const product =
+                              typeof sale.product === "object"
+                                ? sale.product
+                                : null;
+                            const customer =
+                              typeof sale.customer === "object"
+                                ? sale.customer
+                                : null;
+                            const credit = getCreditFromSale(sale);
+                            const total = sale.salePrice * sale.quantity;
+                            const isActiveCredit = hasActiveCredit(sale);
+
+                            let rankBadge = {
+                              emoji: "📊",
+                              text: "Normal",
+                              color: "bg-blue-900/30 text-blue-400",
+                            };
+                            if (sale.distributorProfitPercentage === 25) {
+                              rankBadge = {
+                                emoji: "🥇",
+                                text: "1º",
+                                color: "bg-yellow-900/30 text-yellow-400",
+                              };
+                            } else if (
+                              sale.distributorProfitPercentage === 23
+                            ) {
+                              rankBadge = {
+                                emoji: "🥈",
+                                text: "2º",
+                                color: "bg-gray-700/30 text-gray-300",
+                              };
+                            } else if (
+                              sale.distributorProfitPercentage === 21
+                            ) {
+                              rankBadge = {
+                                emoji: "🥉",
+                                text: "3º",
+                                color: "bg-orange-900/30 text-orange-400",
+                              };
+                            }
+
+                            return (
+                              <tr
+                                key={sale._id}
+                                className="bg-gray-900/30 hover:bg-gray-700/30"
+                              >
+                                <td className="px-3 py-3 pl-10 text-sm">
+                                  <span className="font-mono text-xs text-blue-400">
+                                    {sale.saleId || sale._id.slice(-8)}
+                                  </span>
+                                </td>
+                                <td className="whitespace-nowrap px-3 py-3 text-sm text-gray-300">
+                                  {formatDate(sale.saleDate)}
+                                </td>
+                                <td className="px-3 py-3 text-sm">
+                                  <div className="flex items-center gap-2">
+                                    {product?.image?.url && (
+                                      <img
+                                        src={product.image.url}
+                                        alt={product.name}
+                                        className="h-8 w-8 rounded object-cover"
+                                      />
+                                    )}
+                                    <div>
+                                      <span className="block font-medium text-white">
+                                        {product?.name || "N/A"}
+                                      </span>
+                                      <span className="text-xs text-gray-500">
+                                        x{sale.quantity}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-3 py-3 text-sm text-gray-300">
+                                  {customer?.name || "-"}
+                                </td>
+                                <td className="px-3 py-3 text-sm font-semibold text-white">
+                                  {formatCurrency(total)}
+                                </td>
+                                <td className="px-3 py-3 text-sm">
+                                  {isActiveCredit ? (
+                                    <div className="flex flex-col">
+                                      <span className="inline-flex items-center gap-1 rounded-full bg-orange-900/30 px-2 py-1 text-xs font-semibold text-orange-400">
+                                        💳 Por cobrar
+                                      </span>
+                                      {credit && (
+                                        <span className="mt-1 text-xs text-orange-300/70">
+                                          Debe:{" "}
+                                          {formatCurrency(
+                                            credit.remainingAmount || 0
+                                          )}
+                                        </span>
+                                      )}
+                                    </div>
+                                  ) : sale.isCredit ? (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-green-900/30 px-2 py-1 text-xs font-semibold text-green-400">
+                                      ✓ Cobrado
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-green-900/30 px-2 py-1 text-xs font-semibold text-green-400">
+                                      ✓ Pagado
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="px-3 py-3 text-sm">
+                                  <span
+                                    className={`rounded-full px-2 py-1 text-xs font-semibold ${rankBadge.color}`}
+                                  >
+                                    {rankBadge.emoji} {rankBadge.text}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-3 text-sm font-bold text-green-400">
+                                  {formatCurrency(sale.distributorProfit)}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </>
+                    );
+                  }
+
+                  // Si no es un grupo, mostrar venta individual normal
+                  const sale = group.sales[0];
                   const product =
                     typeof sale.product === "object" ? sale.product : null;
                   const customer =
@@ -328,7 +608,6 @@ export default function DistributorSales() {
                   const total = sale.salePrice * sale.quantity;
                   const isActiveCredit = hasActiveCredit(sale);
 
-                  // Determinar rango según comisión
                   let rankBadge = {
                     emoji: "📊",
                     text: "Normal",

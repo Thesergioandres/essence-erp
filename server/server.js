@@ -53,8 +53,10 @@ import productRoutes from "./routes/product.routes.js";
 import profitHistoryRoutes from "./routes/profitHistory.routes.js";
 import promotionRoutes from "./routes/promotion.routes.js";
 import providerRoutes from "./routes/provider.routes.js";
+// import purchaseOrderRoutes from "./routes/purchaseOrder.routes.js"; // ⚠️ Archivo no existe
 import pushSubscriptionRoutes from "./routes/pushSubscription.routes.js";
 import saleRoutes from "./routes/sale.routes.js";
+// import saleOrderRoutes from "./routes/saleOrder.routes.js"; // ⚠️ Archivo no existe
 import segmentRoutes from "./routes/segment.routes.js";
 import specialSaleRoutes from "./routes/specialSale.routes.js";
 import stockRoutes from "./routes/stock.routes.js";
@@ -216,6 +218,8 @@ app.use("/api/upload", uploadLimiter, uploadRoutes);
 app.use("/api/distributors", distributorRoutes);
 app.use("/api/stock", stockRoutes);
 app.use("/api/sales", saleRoutes);
+// app.use("/api/sale-orders", saleOrderRoutes); // ⚠️ Archivo no existe
+// app.use("/api/purchase-orders", purchaseOrderRoutes); // ⚠️ Archivo no existe
 app.use("/api/special-sales", specialSaleRoutes);
 app.use("/api/defective-products", defectiveProductRoutes);
 app.use("/api/analytics", analyticsRoutes);

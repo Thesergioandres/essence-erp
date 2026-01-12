@@ -38,6 +38,11 @@ const inventoryEntrySchema = new mongoose.Schema(
     averageCostAfter: { type: Number, default: 0 },
     notes: { type: String, trim: true },
     requestId: { type: String, index: true },
+    // Agrupación de recepciones - todas las entradas del mismo pedido comparten este ID
+    purchaseGroupId: {
+      type: String,
+      index: true,
+    },
     destination: {
       type: String,
       enum: ["branch", "warehouse"],
@@ -52,5 +57,6 @@ const inventoryEntrySchema = new mongoose.Schema(
 );
 
 inventoryEntrySchema.index({ business: 1, createdAt: -1 });
+inventoryEntrySchema.index({ business: 1, purchaseOrder: 1 });
 
 export default mongoose.model("InventoryEntry", inventoryEntrySchema);

@@ -123,6 +123,7 @@ export const createInventoryEntry = async (req, res) => {
       notes,
       destination,
       requestId: req.body.requestId || generateRequestId(),
+      purchaseGroupId: req.body.purchaseGroupId || null, // ⭐ Campo para agrupar recepciones
     });
 
     res.status(201).json({

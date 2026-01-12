@@ -1138,6 +1138,7 @@ export const saleService = {
       amount: number;
     }>;
     discount?: number;
+    saleGroupId?: string; // ⭐ Campo para agrupar ventas del mismo carrito
   }): Promise<{
     message: string;
     sale: Sale;
@@ -2903,12 +2904,28 @@ export const inventoryService = {
     branch?: string;
     provider?: string;
     notes?: string;
+    purchaseGroupId?: string; // ⭐ Campo para agrupar recepciones
   }): Promise<{
     entry: InventoryEntry;
     product: { totalStock: number; warehouseStock: number };
   }> {
     const response = await api.post("/inventory/entry", payload);
     return response.data;
+  },
+
+  // Alias para compatibilidad
+  addEntry(payload: {
+    product: string;
+    quantity: number;
+    branch?: string;
+    provider?: string;
+    notes?: string;
+    purchaseGroupId?: string;
+  }): Promise<{
+    entry: InventoryEntry;
+    product: { totalStock: number; warehouseStock: number };
+  }> {
+    return this.createEntry(payload);
   },
 
   async getProductHistory(
@@ -3122,3 +3139,273 @@ export const deliveryMethodService = {
     return response.data;
   },
 };
+
+// ========== SERVICIOS DE ÓRDENES DE VENTA (CARRITO) ==========
+
+export interface SaleOrderItem {
+  productId: string;
+  productName?: string;
+  productImage?: string;
+  quantity: number;
+  unitPrice: number;
+  discount?: number;
+  totalPrice?: number;
+}
+
+export interface SaleOrder {
+  _id: string;
+  orderId: string;
+  business: string;
+  customer?: {
+    _id: string;
+    name: string;
+    phone?: string;
+  };
+  items: Array<{
+    product: {
+      _id: string;
+      name: string;
+      image?: string;
+    };
+    productName: string;
+    quantity: number;
+    unitPrice: number;
+    discount: number;
+    totalPrice: number;
+  }>;
+  totalItems: number;
+  subtotal: number;
+  totalDiscount: number;
+  grandTotal: number;
+  paymentType: "cash" | "credit" | "mixed";
+  paymentMethod?: string;
+  paymentStatus: "pending" | "partial" | "paid";
+  isConfirmed: boolean;
+  confirmedAt?: string;
+  credit?: {
+    _id: string;
+    status: string;
+    remainingAmount: number;
+  };
+  branch?: {
+    _id: string;
+    name: string;
+  };
+  seller?: {
+    _id: string;
+    name: string;
+    email: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+  notes?: string;
+}
+
+export interface SaleOrderStats {
+  totalOrders: number;
+  totalItems: number;
+  totalRevenue: number;
+  confirmedOrders: number;
+  pendingOrders: number;
+}
+
+// ELIMINADO: saleOrderService y purchaseOrderService
+// La funcionalidad de agrupación se implementa directamente en Sales e InventoryEntries
+
+/*
+export const saleOrderService = {
+  async create(data: {
+    items: SaleOrderItem[];
+    customerId?: string;
+    branchId?: string;
+    paymentType?: "cash" | "credit" | "mixed";
+    paymentMethodId?: string;
+    creditDueDate?: string;
+    initialPayment?: number;
+    notes?: string;
+    saleDate?: string;
+  }): Promise<{
+    message: string;
+    order: SaleOrder;
+    salesCreated: number;
+    creditCreated?: boolean;
+  }> {
+    const response = await api.post("/sale-orders", data);
+    return response.data;
+  },
+
+  async getAll(filters?: {
+    page?: number;
+    limit?: number;
+    startDate?: string;
+    endDate?: string;
+    customerId?: string;
+    branchId?: string;
+    paymentStatus?: string;
+    isConfirmed?: boolean;
+    search?: string;
+  }): Promise<{
+    orders: SaleOrder[];
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      pages: number;
+    };
+    stats: SaleOrderStats;
+  }> {
+    const response = await api.get("/sale-orders", { params: filters });
+    return response.data;
+  },
+
+  async getById(id: string): Promise<{ order: SaleOrder }> {
+    const response = await api.get(`/sale-orders/${id}`);
+    return response.data;
+  },
+
+  async confirm(id: string): Promise<{
+    message: string;
+    order: SaleOrder;
+    error?: string;
+  }> {
+    const response = await api.patch(`/sale-orders/${id}/confirm`);
+    return response.data;
+  },
+
+  async delete(id: string): Promise<{
+    message: string;
+    salesDeleted: number;
+    creditDeleted: boolean;
+    stockRestored: number;
+  }> {
+    const response = await api.delete(`/sale-orders/${id}`);
+    return response.data;
+  },
+};
+
+// ========== SERVICIOS DE ÓRDENES DE COMPRA (RECEPCIÓN DE MERCANCÍA) ==========
+
+export interface PurchaseOrderItem {
+  productId: string;
+  quantity: number;
+  unitCost?: number;
+}
+
+export interface PurchaseOrder {
+  _id: string;
+  orderId: string;
+  business: string;
+  provider?: {
+    _id: string;
+    name: string;
+    email?: string;
+    phone?: string;
+  };
+  providerName?: string;
+  branch?: {
+    _id: string;
+    name: string;
+  };
+  destination: "warehouse" | "branch";
+  items: Array<{
+    product: {
+      _id: string;
+      name: string;
+      image?: string;
+    };
+    productName: string;
+    quantity: number;
+    unitCost: number;
+    totalCost: number;
+    previousStock: number;
+    newStock: number;
+    previousAverageCost: number;
+    newAverageCost: number;
+  }>;
+  totalItems: number;
+  totalQuantity: number;
+  totalCost: number;
+  invoiceNumber?: string;
+  invoiceDate?: string;
+  receivedBy?: {
+    _id: string;
+    name: string;
+    email: string;
+  };
+  receivedAt: string;
+  status: "recibido" | "parcial" | "cancelado";
+  notes?: string;
+  createdAt: string;
+}
+
+export interface PurchaseOrderStats {
+  totalOrders: number;
+  totalCost: number;
+  totalQuantity: number;
+  totalItems: number;
+}
+
+export const purchaseOrderService = {
+  async create(data: {
+    items: PurchaseOrderItem[];
+    providerId?: string;
+    branchId?: string;
+    notes?: string;
+    invoiceNumber?: string;
+    invoiceDate?: string;
+  }): Promise<{
+    message: string;
+    order: PurchaseOrder;
+    entriesCreated: number;
+    costInfo: {
+      totalCost: number;
+      averageCostUpdates: Array<{
+        productId: string;
+        productName: string;
+        previousAverageCost: number;
+        newAverageCost: number;
+        stockBefore: number;
+        stockAfter: number;
+      }>;
+    };
+  }> {
+    const response = await api.post("/purchase-orders", data);
+    return response.data;
+  },
+
+  async getAll(filters?: {
+    page?: number;
+    limit?: number;
+    providerId?: string;
+    branchId?: string;
+    startDate?: string;
+    endDate?: string;
+    search?: string;
+  }): Promise<{
+    orders: PurchaseOrder[];
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      pages: number;
+    };
+    stats: PurchaseOrderStats;
+  }> {
+    const response = await api.get("/purchase-orders", { params: filters });
+    return response.data;
+  },
+
+  async getById(id: string): Promise<{ order: PurchaseOrder }> {
+    const response = await api.get(`/purchase-orders/${id}`);
+    return response.data;
+  },
+
+  async delete(id: string): Promise<{
+    message: string;
+    itemsReverted: number;
+  }> {
+    const response = await api.delete(`/purchase-orders/${id}`);
+    return response.data;
+  },
+};
+*/

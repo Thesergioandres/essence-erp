@@ -384,10 +384,41 @@ export const registerPayment = async (req, res) => {
         note: `Pagado completo. Último pago: $${amount.toFixed(2)}`,
       });
 
-      // Actualizar venta asociada si existe
+      // Actualizar venta asociada si existe - marcar como pagada Y confirmada
       if (credit.sale) {
-        await Sale.findByIdAndUpdate(credit.sale, {
+        const saleUpdate = await Sale.findByIdAndUpdate(
+          credit.sale,
+          {
+            paymentStatus: "paid",
+            isConfirmed: true,
+            confirmedAt: new Date(),
+            confirmedBy: userId,
+          },
+          { new: true }
+        );
+
+        if (saleUpdate) {
+          logApiInfo({
+            message: "sale_auto_confirmed_on_credit_payment",
+            module: "credit",
+            requestId,
+            businessId,
+            extra: {
+              saleId: saleUpdate._id.toString(),
+              creditId: credit._id.toString(),
+            },
+          });
+        }
+      }
+
+      // Si hay un SaleOrder asociado, también marcarlo como confirmado
+      if (credit.saleOrder) {
+        const SaleOrder = (await import("../models/SaleOrder.js")).default;
+        await SaleOrder.findByIdAndUpdate(credit.saleOrder, {
           paymentStatus: "paid",
+          isConfirmed: true,
+          confirmedAt: new Date(),
+          confirmedBy: userId,
         });
       }
     } else {

@@ -77,11 +77,14 @@ export const deleteImage = async (publicId) => {
 export const deleteFromCloudinary = deleteImage;
 
 // Función para subir imagen desde base64
-export const uploadToCloudinary = async (base64String, folder = "essence-products") => {
+export const uploadToCloudinary = async (
+  base64String,
+  folder = "essence-products"
+) => {
   if (!isCloudinaryConfigured) {
     throw new Error("Cloudinary no está configurado");
   }
-  
+
   try {
     const result = await cloudinary.uploader.upload(base64String, {
       folder,

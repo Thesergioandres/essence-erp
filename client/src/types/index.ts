@@ -288,6 +288,7 @@ export interface PromotionMetrics {
 export interface Sale {
   _id: string;
   saleId: string;
+  saleGroupId?: string; // ⭐ Campo para agrupar ventas del mismo carrito
   distributor: User | string;
   product: Product | string;
   branch?: Branch | string;

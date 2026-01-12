@@ -24,6 +24,11 @@ const creditSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Sale",
     },
+    // Orden de venta asociada (para ventas agrupadas con múltiples productos)
+    saleOrder: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "SaleOrder",
+    },
     // Sede donde se generó el fiado
     branch: {
       type: mongoose.Schema.Types.ObjectId,
