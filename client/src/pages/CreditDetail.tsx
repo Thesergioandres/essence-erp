@@ -388,14 +388,14 @@ export default function CreditDetail() {
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-gray-600">Margen:</span>
                   <span className="text-lg font-bold text-blue-700">
-                    {profitInfo.profitMarginPercentage.toFixed(1)}%
+                    {(profitInfo.profitMarginPercentage || 0).toFixed(1)}%
                   </span>
                 </div>
                 {profitInfo.isDistributorSale && (
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-gray-600">Comisión Distrib.:</span>
                     <span className="text-indigo-600">
-                      {profitInfo.distributorProfitPercentage}%
+                      {profitInfo.distributorProfitPercentage || 0}%
                     </span>
                   </div>
                 )}
@@ -446,10 +446,12 @@ export default function CreditDetail() {
                 <div className="mb-1 flex justify-between text-xs text-gray-500">
                   <span>Progreso de pago</span>
                   <span>
-                    {(
-                      (profitInfo.paidAmount / profitInfo.originalAmount) *
-                      100
-                    ).toFixed(0)}
+                    {profitInfo.originalAmount > 0
+                      ? (
+                          (profitInfo.paidAmount / profitInfo.originalAmount) *
+                          100
+                        ).toFixed(0)
+                      : 0}
                     %
                   </span>
                 </div>
@@ -457,7 +459,13 @@ export default function CreditDetail() {
                   <div
                     className="h-2 rounded-full bg-gradient-to-r from-yellow-400 to-green-500 transition-all"
                     style={{
-                      width: `${(profitInfo.paidAmount / profitInfo.originalAmount) * 100}%`,
+                      width: `${
+                        profitInfo.originalAmount > 0
+                          ? (profitInfo.paidAmount /
+                              profitInfo.originalAmount) *
+                            100
+                          : 0
+                      }%`,
                     }}
                   ></div>
                 </div>
