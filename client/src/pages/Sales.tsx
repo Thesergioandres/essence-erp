@@ -793,7 +793,8 @@ export default function Sales() {
                           </td>
                           {distributorsEnabled && (
                             <td className="whitespace-nowrap px-6 py-4 text-sm font-medium">
-                              {distributor && group.totalDistributorProfit > 0 ? (
+                              {distributor &&
+                              group.totalDistributorProfit > 0 ? (
                                 <span className="text-yellow-400">
                                   $
                                   {(
@@ -944,7 +945,8 @@ export default function Sales() {
                                 </td>
                                 {distributorsEnabled && (
                                   <td className="whitespace-nowrap px-6 py-3 text-sm text-yellow-400">
-                                    {distributor && (sale.distributorProfit || 0) > 0
+                                    {distributor &&
+                                    (sale.distributorProfit || 0) > 0
                                       ? `$${(sale.salePrice * sale.quantity - (sale.distributorProfit || 0)).toLocaleString()}`
                                       : "-"}
                                   </td>
