@@ -402,6 +402,35 @@ export default function AdminRegisterSale() {
     try {
       setLoading(true);
 
+      // 🔍 Validar stock ANTES de registrar ventas múltiples del mismo producto
+      const productQuantities = new Map<string, number>();
+      for (const item of saleItems) {
+        const currentQty = productQuantities.get(item.productId) || 0;
+        productQuantities.set(item.productId, currentQty + item.quantity);
+      }
+
+      // Verificar que cada producto tenga suficiente stock para la cantidad TOTAL solicitada
+      for (const [productId, totalQuantity] of productQuantities) {
+        const product = products.find(p => p._id === productId);
+        if (!product) continue;
+
+        // Si hay sede seleccionada y NO es bodega, el stock se valida en el servidor
+        // Solo validamos aquí el warehouseStock si no hay sede o si es bodega
+        const selectedBranch = branches.find(b => b._id === formData.branchId);
+        const isWarehouseSale = !formData.branchId || selectedBranch?.isWarehouse;
+
+        if (isWarehouseSale) {
+          const availableStock = product.warehouseStock || 0;
+          if (availableStock < totalQuantity) {
+            setError(
+              `Stock insuficiente de "${product.name}". Disponible en bodega: ${availableStock}, solicitado en total: ${totalQuantity}`
+            );
+            setLoading(false);
+            return;
+          }
+        }
+      }
+
       // Generar un saleGroupId único para agrupar todas las ventas del carrito
       const saleGroupId = uuidv4();
 
