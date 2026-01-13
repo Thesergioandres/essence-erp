@@ -97,32 +97,53 @@ export default function AdminRegisterSale() {
   const [success, setSuccess] = useState("");
   // Stock de la sede seleccionada (para validación de ventas múltiples)
   const [branchStock, setBranchStock] = useState<BranchStock[]>([]);
+  // Productos filtrados según la sede seleccionada
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
+  // Indica si la sede seleccionada es bodega
+  const [isWarehouseSelected, setIsWarehouseSelected] = useState(false);
 
   // Cargar stock de la sede cuando cambia la selección
   const loadBranchStock = useCallback(
     async (branchId: string) => {
       if (!branchId) {
         setBranchStock([]);
+        setFilteredProducts([]);
+        setIsWarehouseSelected(false);
         return;
       }
 
       const selectedBranch = branches.find(b => b._id === branchId);
+      const isWarehouse = selectedBranch?.isWarehouse ?? false;
+      setIsWarehouseSelected(isWarehouse);
 
-      // Si es bodega, no necesitamos cargar BranchStock (usamos warehouseStock del producto)
-      if (!selectedBranch || selectedBranch.isWarehouse) {
+      // Si es bodega, filtrar por warehouseStock > 0
+      if (isWarehouse) {
         setBranchStock([]);
+        const productsWithStock = products.filter(p => (p.warehouseStock || 0) > 0);
+        setFilteredProducts(productsWithStock);
         return;
       }
 
+      // Si es sede normal, cargar BranchStock y filtrar productos
       try {
         const stock = await stockService.getBranchStock(branchId);
         setBranchStock(stock);
+        
+        // Filtrar solo productos que tienen stock en esta sede
+        const productIdsWithStock = new Set(
+          stock
+            .filter(s => s.quantity > 0)
+            .map(s => (typeof s.product === 'string' ? s.product : s.product?._id))
+        );
+        const productsWithStock = products.filter(p => productIdsWithStock.has(p._id));
+        setFilteredProducts(productsWithStock);
       } catch (err) {
         console.error("Error cargando stock de sede:", err);
         setBranchStock([]);
+        setFilteredProducts([]);
       }
     },
-    [branches]
+    [branches, products]
   );
 
   // Efecto para cargar stock cuando cambia la sede
@@ -131,8 +152,24 @@ export default function AdminRegisterSale() {
       void loadBranchStock(formData.branchId);
     } else {
       setBranchStock([]);
+      setFilteredProducts([]);
+      setIsWarehouseSelected(false);
     }
   }, [formData.branchId, loadBranchStock]);
+
+  // Efecto para seleccionar bodega por defecto cuando se cargan las sedes
+  useEffect(() => {
+    if (branches.length > 0 && !formData.branchId) {
+      // Buscar la bodega (isWarehouse = true)
+      const warehouse = branches.find(b => b.isWarehouse);
+      if (warehouse) {
+        setFormData(prev => ({ ...prev, branchId: warehouse._id }));
+      } else {
+        // Si no hay bodega, seleccionar la primera sede
+        setFormData(prev => ({ ...prev, branchId: branches[0]._id }));
+      }
+    }
+  }, [branches, formData.branchId]);
 
   useEffect(() => {
     if (!businessId || businessHydrating || businessLoading) return;
@@ -220,19 +257,8 @@ export default function AdminRegisterSale() {
       const { deliveryMethods: methods } = await deliveryMethodService.getAll();
       const activeMethods = methods.filter((m: DeliveryMethod) => m.isActive);
       setDeliveryMethods(activeMethods);
-
-      // Seleccionar el primer método por defecto (usualmente Portería)
-      if (activeMethods.length > 0 && !formData.deliveryMethodId) {
-        const defaultMethod =
-          activeMethods.find((m: DeliveryMethod) => m.code === "porteria") ||
-          activeMethods[0];
-        setFormData(prev => ({
-          ...prev,
-          deliveryMethodId: defaultMethod._id,
-          shippingCost: defaultMethod.defaultCost || 0,
-        }));
-        setSelectedDeliveryMethod(defaultMethod);
-      }
+      // Por defecto NO seleccionar ningún método de entrega
+      // El usuario lo elegirá manualmente si lo necesita
     } catch {
       console.error("No se pudieron cargar los métodos de entrega");
     }
@@ -611,7 +637,7 @@ export default function AdminRegisterSale() {
   const totals = calculateTotals();
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6">
       <div>
         <h1 className="text-4xl font-bold text-white">
           Registrar Pedido Grande (Admin)
@@ -631,27 +657,137 @@ export default function AdminRegisterSale() {
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Formulario para agregar productos */}
-        <div className="space-y-6">
-          <form
-            onSubmit={e => {
-              e.preventDefault();
-              handleAddItem();
-            }}
-            className="space-y-6"
-          >
-            <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-6">
+      {/* SECCIÓN 1: Selección de Sede OBLIGATORIA */}
+      <div className="rounded-xl border-2 border-purple-500 bg-purple-900/20 p-6">
+        <h2 className="mb-4 text-lg font-bold text-purple-300">
+          📍 Paso 1: Seleccionar Sede/Bodega (Obligatorio)
+        </h2>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <label
+              htmlFor="branchId"
+              className="mb-2 block text-sm font-medium text-gray-300"
+            >
+              Sede *
+            </label>
+            <select
+              id="branchId"
+              name="branchId"
+              value={formData.branchId}
+              onChange={handleChange}
+              required
+              className="w-full rounded-lg border-2 border-purple-500 bg-gray-900/50 px-4 py-3 text-white focus:border-transparent focus:outline-none focus:ring-2 focus:ring-purple-500"
+            >
+              <option value="">-- Selecciona una sede --</option>
+              {branches.map(branch => (
+                <option key={branch._id} value={branch._id}>
+                  {branch.name} {branch.isWarehouse ? "(Bodega Principal)" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center">
+            {formData.branchId && (
+              <div className={`rounded-lg p-4 ${isWarehouseSelected ? 'bg-green-900/30 border border-green-500/50' : 'bg-blue-900/30 border border-blue-500/50'}`}>
+                <p className="font-semibold text-white">
+                  {isWarehouseSelected ? '🏭 Bodega Principal' : '🏪 Sede Normal'}
+                </p>
+                <p className="text-sm text-gray-300">
+                  {isWarehouseSelected 
+                    ? 'Stock se descuenta de warehouseStock' 
+                    : 'Stock se descuenta de BranchStock de esta sede'}
+                </p>
+                <p className="mt-1 text-sm font-medium text-green-400">
+                  ✓ {filteredProducts.length} productos disponibles
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* SECCIÓN 2: Contenido principal (solo visible si hay sede seleccionada) */}
+      {!formData.branchId ? (
+        <div className="rounded-xl border border-yellow-500/50 bg-yellow-900/20 p-8 text-center">
+          <p className="text-xl text-yellow-300">⚠️ Selecciona una sede para continuar</p>
+          <p className="mt-2 text-gray-400">Debes elegir desde qué sede/bodega se descontará el stock</p>
+        </div>
+      ) : (
+        <div className="grid gap-6 lg:grid-cols-3">
+          {/* Panel izquierdo: Inventario de la sede */}
+          <div className="lg:col-span-1">
+            <div className="sticky top-4 rounded-xl border border-gray-700 bg-gray-800/50 p-4">
               <h2 className="mb-4 text-lg font-semibold text-white">
-                Agregar Producto
+                📦 Inventario {isWarehouseSelected ? 'Bodega' : 'Sede'}
               </h2>
-              <div className="space-y-4">
-                <div>
-                  <label
-                    htmlFor="productId"
-                    className="mb-2 block text-sm font-medium text-gray-300"
-                  >
-                    Producto *
+              <div className="max-h-[600px] overflow-y-auto space-y-2">
+                {filteredProducts.length === 0 ? (
+                  <p className="text-center text-gray-500 py-4">
+                    No hay productos con stock
+                  </p>
+                ) : (
+                  filteredProducts.map(product => {
+                    const stock = isWarehouseSelected 
+                      ? product.warehouseStock || 0
+                      : branchStock.find(s => {
+                          const pid = typeof s.product === 'string' ? s.product : s.product?._id;
+                          return pid === product._id;
+                        })?.quantity || 0;
+                    const inCart = saleItems.filter(i => i.productId === product._id).reduce((sum, i) => sum + i.quantity, 0);
+                    const remaining = stock - inCart;
+                    
+                    return (
+                      <div
+                        key={product._id}
+                        className={`rounded-lg border p-3 text-sm ${
+                          remaining <= 0 
+                            ? 'border-red-500/50 bg-red-900/20 opacity-60' 
+                            : remaining <= 3 
+                              ? 'border-yellow-500/50 bg-yellow-900/20'
+                              : 'border-gray-600 bg-gray-900/50'
+                        }`}
+                      >
+                        <p className="font-medium text-white truncate" title={product.name}>
+                          {product.name}
+                        </p>
+                        <div className="mt-1 flex justify-between text-xs">
+                          <span className="text-gray-400">Stock:</span>
+                          <span className={remaining <= 0 ? 'text-red-400 font-bold' : remaining <= 3 ? 'text-yellow-400' : 'text-green-400'}>
+                            {remaining} {inCart > 0 && <span className="text-orange-400">(-{inCart} en carrito)</span>}
+                          </span>
+                        </div>
+                        <div className="mt-1 flex justify-between text-xs">
+                          <span className="text-gray-400">P.Venta:</span>
+                          <span className="text-green-400">${(product.clientPrice || 0).toLocaleString()}</span>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Panel central: Formulario para agregar productos */}
+          <div className="lg:col-span-1 space-y-6">
+            <form
+              onSubmit={e => {
+                e.preventDefault();
+                handleAddItem();
+              }}
+              className="space-y-6"
+            >
+              <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-6">
+                <h2 className="mb-4 text-lg font-semibold text-white">
+                  Agregar Producto
+                </h2>
+                <div className="space-y-4">
+                  <div>
+                    <label
+                      htmlFor="productId"
+                      className="mb-2 block text-sm font-medium text-gray-300"
+                    >
+                      Producto *
                   </label>
                   <ProductSelector
                     value={formData.productId}
@@ -661,6 +797,7 @@ export default function AdminRegisterSale() {
                     placeholder="Buscar producto..."
                     showStock={true}
                     excludeProductIds={saleItems.map(item => item.productId)}
+                    products={filteredProducts}
                   />
                 </div>
                 {selectedProduct && (
@@ -899,6 +1036,7 @@ export default function AdminRegisterSale() {
           )}
         </div>
       </div>
+      )}
 
       {/* Información general del pedido */}
       {saleItems.length > 0 && (
@@ -908,31 +1046,6 @@ export default function AdminRegisterSale() {
               Información del Pedido
             </h2>
             <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <label
-                  htmlFor="branchId"
-                  className="mb-2 block text-sm font-medium text-gray-300"
-                >
-                  Sede (opcional)
-                </label>
-                <select
-                  id="branchId"
-                  name="branchId"
-                  value={formData.branchId || ""}
-                  onChange={handleChange}
-                  className="w-full rounded-lg border border-gray-600 bg-gray-900/50 px-4 py-3 text-white focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {branches.map(branch => (
-                    <option key={branch._id} value={branch._id}>
-                      {branch.name}
-                    </option>
-                  ))}
-                </select>
-                <p className="mt-2 text-xs text-gray-400">
-                  Deja sin seleccionar para usar el stock general. Solo se
-                  muestran sedes/bodegas reales.
-                </p>
-              </div>
               <div>
                 <label
                   htmlFor="saleDate"

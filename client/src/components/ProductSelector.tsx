@@ -22,9 +22,11 @@ interface Product {
   name: string;
   category?: { _id: string; name: string } | string;
   totalStock?: number;
+  warehouseStock?: number;
   purchasePrice?: number;
   suggestedPrice?: number;
-  image?: { url: string };
+  clientPrice?: number;
+  image?: { url: string } | null;
 }
 
 type SortOption =
@@ -43,6 +45,7 @@ interface ProductSelectorProps {
   showStock?: boolean;
   className?: string;
   excludeProductIds?: string[]; // IDs de productos a excluir del selector
+  products?: Product[]; // Productos externos (si se proporcionan, se usan en lugar del cache)
 }
 
 export default function ProductSelector({
@@ -53,6 +56,7 @@ export default function ProductSelector({
   showStock = true,
   className = "",
   excludeProductIds = [],
+  products: externalProducts,
 }: ProductSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -62,7 +66,10 @@ export default function ProductSelector({
   const [showFilters, setShowFilters] = useState(false);
 
   // Usar hook de caché para productos y categorías
-  const { products, categories, loading } = useProductCache();
+  const { products: cachedProducts, categories, loading } = useProductCache();
+  
+  // Usar productos externos si se proporcionan, de lo contrario usar el cache
+  const products = externalProducts || cachedProducts;
 
   const containerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
