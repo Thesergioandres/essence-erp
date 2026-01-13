@@ -38,8 +38,8 @@ interface AdditionalCost {
 
 interface FormState {
   productId: string;
-  quantity: number;
-  salePrice: number;
+  quantity: number | "";
+  salePrice: number | "";
   notes: string;
   saleDate: string;
   branchId: string;
@@ -356,7 +356,11 @@ export default function AdminRegisterSale() {
     setFormData(prev => ({
       ...prev,
       [name]:
-        name === "quantity" || name === "salePrice" ? Number(value) : value,
+        name === "quantity" || name === "salePrice"
+          ? value === ""
+            ? ""
+            : Number(value)
+          : value,
     }));
   };
 
@@ -367,7 +371,8 @@ export default function AdminRegisterSale() {
       setError("Selecciona un producto");
       return;
     }
-    if (formData.quantity <= 0) {
+    const qty = Number(formData.quantity);
+    if (!qty || qty <= 0) {
       setError("La cantidad debe ser mayor a 0");
       return;
     }
@@ -375,11 +380,12 @@ export default function AdminRegisterSale() {
       setError("Producto no válido");
       return;
     }
-    if (formData.salePrice <= 0) {
+    const price = Number(formData.salePrice);
+    if (!price || price <= 0) {
       setError("El precio de venta debe ser mayor a 0");
       return;
     }
-    if (formData.salePrice < selectedProduct.purchasePrice) {
+    if (price < selectedProduct.purchasePrice) {
       setError("El precio de venta no puede ser menor al precio de compra");
       return;
     }
@@ -388,8 +394,8 @@ export default function AdminRegisterSale() {
       id: Date.now().toString(),
       productId: formData.productId,
       productName: selectedProduct.name,
-      quantity: formData.quantity,
-      salePrice: formData.salePrice,
+      quantity: qty,
+      salePrice: price,
       purchasePrice: selectedProduct.purchasePrice,
       clientPrice: selectedProduct.clientPrice || 0,
     };

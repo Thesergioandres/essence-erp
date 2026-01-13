@@ -96,6 +96,7 @@ export default function InventoryEntries() {
       product: string;
       productName: string;
       quantity: number;
+      unitCost: number;
       branch: string;
       provider: string;
       notes: string;
@@ -106,6 +107,7 @@ export default function InventoryEntries() {
   const [formData, setFormData] = useState({
     product: "",
     quantity: "",
+    unitCost: "",
     branch: "",
     provider: "",
     notes: "",
@@ -191,6 +193,7 @@ export default function InventoryEntries() {
       product: formData.product,
       productName: productInfo.name,
       quantity: parseInt(formData.quantity),
+      unitCost: formData.unitCost ? parseFloat(formData.unitCost) : productInfo.purchasePrice || 0,
       branch: formData.branch,
       provider: formData.provider,
       notes: formData.notes,
@@ -203,6 +206,7 @@ export default function InventoryEntries() {
       ...formData,
       product: "",
       quantity: "",
+      unitCost: "",
       notes: "",
     });
     setError("");
@@ -236,6 +240,7 @@ export default function InventoryEntries() {
         await inventoryService.addEntry({
           product: item.product,
           quantity: item.quantity,
+          unitCost: item.unitCost || undefined,
           branch: item.branch || undefined,
           provider: item.provider || undefined,
           notes: item.notes || undefined,
@@ -248,6 +253,7 @@ export default function InventoryEntries() {
       setFormData({
         product: "",
         quantity: "",
+        unitCost: "",
         branch: "",
         provider: "",
         notes: "",
@@ -938,6 +944,26 @@ export default function InventoryEntries() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-300">
+                    Precio de Compra (unitario)
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.unitCost}
+                    onChange={e =>
+                      setFormData({ ...formData, unitCost: e.target.value })
+                    }
+                    min="0"
+                    step="1"
+                    placeholder="Ej: 5000 (se usará para promediar costo)"
+                    className="mt-1 w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-2.5 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Si no especificas, se usará el precio de compra actual del producto
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300">
                     Destino
                   </label>
                   <select
@@ -1044,6 +1070,7 @@ export default function InventoryEntries() {
                                 </h4>
                                 <div className="mt-1 space-y-1 text-xs text-gray-400">
                                   <p>Cantidad: {item.quantity}</p>
+                                  <p>Costo unit.: ${item.unitCost.toLocaleString()}</p>
                                   <p>Destino: {branchName}</p>
                                   <p>Proveedor: {providerName}</p>
                                   {item.notes && <p>Notas: {item.notes}</p>}
@@ -1077,6 +1104,12 @@ export default function InventoryEntries() {
                       {cart.reduce((sum, item) => sum + item.quantity, 0)}
                     </span>
                   </p>
+                  <p className="text-sm text-gray-400">
+                    Total inversión:{" "}
+                    <span className="font-semibold text-green-400">
+                      ${cart.reduce((sum, item) => sum + item.quantity * item.unitCost, 0).toLocaleString()}
+                    </span>
+                  </p>
                 </div>
               </div>
             </div>
@@ -1091,6 +1124,7 @@ export default function InventoryEntries() {
                   setFormData({
                     product: "",
                     quantity: "",
+                    unitCost: "",
                     branch: "",
                     provider: "",
                     notes: "",

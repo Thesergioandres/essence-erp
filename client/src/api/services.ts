@@ -2921,6 +2921,7 @@ export const inventoryService = {
   addEntry(payload: {
     product: string;
     quantity: number;
+    unitCost?: number;
     branch?: string;
     provider?: string;
     notes?: string;
