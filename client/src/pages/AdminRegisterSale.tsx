@@ -521,9 +521,9 @@ export default function AdminRegisterSale() {
       // Generar un saleGroupId único para agrupar todas las ventas del carrito
       const saleGroupId = uuidv4();
 
-      // Registrar cada venta con el mismo saleGroupId
+      // Registrar cada venta con el mismo saleGroupId usando el endpoint de ADMIN
       for (const item of saleItems) {
-        await saleService.register({
+        await saleService.registerAdmin({
           productId: item.productId,
           quantity: item.quantity,
           salePrice: item.salePrice,

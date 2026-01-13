@@ -1170,6 +1170,7 @@ export const saleService = {
       amount: number;
     }>;
     discount?: number;
+    saleGroupId?: string;
   }): Promise<{
     message: string;
     sale: Sale;
