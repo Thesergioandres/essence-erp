@@ -151,8 +151,16 @@ export const deleteSale = async (req, res) => {
       adminUser?._id?.toString(),
     ].filter(Boolean);
 
-    // Restaurar stock según el origen de la venta
+    // Verificar si la venta fue de bodega (sede con isWarehouse: true)
+    let isWarehouseSale = false;
     if (sale.branch) {
+      const branch = await Branch.findById(sale.branch);
+      isWarehouseSale = branch?.isWarehouse === true;
+    }
+
+    // Restaurar stock según el origen de la venta
+    if (sale.branch && !isWarehouseSale) {
+      // Sede normal: restaurar al BranchStock
       await BranchStock.findOneAndUpdate(
         { business: sale.business, branch: sale.branch, product: sale.product },
         { $inc: { quantity: restoreQuantity } },
@@ -165,13 +173,14 @@ export const deleteSale = async (req, res) => {
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
     }
+    // Si es venta de bodega (isWarehouseSale), el stock se restaurará en warehouseStock abajo
 
     // Actualizar stock total del producto y totalInventoryValue
     if (restoreQuantity && product) {
       const inc = { totalStock: restoreQuantity };
 
-      // Venta admin sin sede: devolver al almacén general
-      if (!sale.branch && !sale.distributor) {
+      // Venta de bodega o venta admin sin sede: devolver al almacén general
+      if (isWarehouseSale || (!sale.branch && !sale.distributor)) {
         inc.warehouseStock = restoreQuantity;
       }
 
