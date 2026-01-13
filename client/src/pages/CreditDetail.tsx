@@ -388,14 +388,14 @@ export default function CreditDetail() {
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-gray-600">Margen:</span>
                   <span className="text-lg font-bold text-blue-700">
-                    {(profitInfo.profitMarginPercentage || 0).toFixed(1)}%
+                    {Number(profitInfo.profitMarginPercentage || 0).toFixed(1)}%
                   </span>
                 </div>
                 {profitInfo.isDistributorSale && (
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-gray-600">Comisión Distrib.:</span>
                     <span className="text-indigo-600">
-                      {profitInfo.distributorProfitPercentage || 0}%
+                      {Number(profitInfo.distributorProfitPercentage || 0)}%
                     </span>
                   </div>
                 )}
