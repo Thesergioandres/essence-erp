@@ -319,9 +319,13 @@ export default function EditProduct() {
                   </label>
                   <input
                     type="text"
-                    value={product?.averageCost ? `$${product.averageCost.toLocaleString()}` : "No calculado"}
+                    value={
+                      product?.averageCost
+                        ? `$${product.averageCost.toLocaleString()}`
+                        : "No calculado"
+                    }
                     readOnly
-                    className="w-full rounded-lg border border-blue-500/50 bg-blue-900/20 px-4 py-3 text-blue-300 cursor-not-allowed"
+                    className="w-full cursor-not-allowed rounded-lg border border-blue-500/50 bg-blue-900/20 px-4 py-3 text-blue-300"
                   />
                   <p className="mt-1 text-xs text-blue-500">
                     Promedio según entradas de inventario (solo lectura)

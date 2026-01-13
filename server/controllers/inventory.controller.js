@@ -84,9 +84,13 @@ export const createInventoryEntry = async (req, res) => {
 
     // === CÁLCULO DE COSTO PROMEDIO PONDERADO ===
     const previousStock = product.totalStock || 0;
+
+    // Si no hay totalInventoryValue inicializado, calcularlo desde el stock y costo actual
+    const currentCost = product.averageCost || product.purchasePrice || 0;
     const previousValue =
-      product.totalInventoryValue ||
-      previousStock * (product.averageCost || product.purchasePrice || 0);
+      product.totalInventoryValue && product.totalInventoryValue > 0
+        ? product.totalInventoryValue
+        : previousStock * currentCost;
 
     const newTotalStock = previousStock + qty;
     const newTotalValue = previousValue + totalCost;
