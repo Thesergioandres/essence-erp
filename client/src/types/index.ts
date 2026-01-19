@@ -565,18 +565,28 @@ export interface MonthlyProfitData {
     adminProfit: number;
     distributorProfit: number;
     totalProfit: number;
+    netProfit: number;
+    totalAdditionalCosts: number;
+    totalShippingCosts: number;
+    totalDiscounts: number;
     revenue: number;
     cost: number;
     salesCount: number;
+    ordersCount: number;
     unitsCount: number;
   };
   lastMonth: {
     adminProfit: number;
     distributorProfit: number;
     totalProfit: number;
+    netProfit: number;
+    totalAdditionalCosts: number;
+    totalShippingCosts: number;
+    totalDiscounts: number;
     revenue: number;
     cost: number;
     salesCount: number;
+    ordersCount: number;
     unitsCount: number;
   };
   growthPercentage: number;
@@ -773,6 +783,8 @@ export interface ProfitHistoryAdminDistributor {
 export interface ProfitHistoryAdminOverview {
   summary: {
     totalProfit: number;
+    netProfit: number;
+    totalDeductions: number;
     adminProfit: number;
     distributorProfit: number;
     count: number;

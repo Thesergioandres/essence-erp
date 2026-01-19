@@ -22,8 +22,8 @@ const buildColombiaSaleDateFilter = (startDateStr, endDateStr) => {
         5,
         0,
         0,
-        0
-      )
+        0,
+      ),
     );
   }
 
@@ -38,8 +38,8 @@ const buildColombiaSaleDateFilter = (startDateStr, endDateStr) => {
         4,
         59,
         59,
-        999
-      )
+        999,
+      ),
     );
   }
 
@@ -121,7 +121,7 @@ export const getSalesTimeline = async (req, res) => {
     // Solo aplicar filtros de fecha si se proporcionan explícitamente
     const saleDateFilter = buildColombiaSaleDateFilter(
       customStartDate,
-      customEndDate
+      customEndDate,
     );
     const opDateMatch = saleDateFilter
       ? { $match: { opDate: saleDateFilter } }
@@ -135,7 +135,24 @@ export const getSalesTimeline = async (req, res) => {
         $project: {
           opDate: 1,
           revenue: { $multiply: ["$salePrice", "$quantity"] },
-          profit: "$totalProfit",
+          // Usar netProfit si existe, sino totalProfit menos deducciones
+          profit: {
+            $ifNull: [
+              "$netProfit",
+              {
+                $subtract: [
+                  { $ifNull: ["$totalProfit", 0] },
+                  {
+                    $add: [
+                      { $ifNull: ["$totalAdditionalCosts", 0] },
+                      { $ifNull: ["$shippingCost", 0] },
+                      { $ifNull: ["$discount", 0] },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
         },
       },
       {
@@ -163,7 +180,8 @@ export const getSalesTimeline = async (req, res) => {
               $project: {
                 opDate: 1,
                 revenue: { $multiply: ["$specialPrice", "$quantity"] },
-                profit: "$totalProfit",
+                // Ventas especiales no tienen deducciones
+                profit: { $ifNull: ["$totalProfit", 0] },
               },
             },
           ],
@@ -493,7 +511,7 @@ export const getDistributorRankings = async (req, res) => {
 
     const rankingsWithConversion = rankings.map((rank) => {
       const salesData = allSales.find(
-        (s) => s._id && rank._id && s._id.toString() === rank._id.toString()
+        (s) => s._id && rank._id && s._id.toString() === rank._id.toString(),
       );
       const total = salesData ? salesData.confirmado + salesData.pendiente : 0;
       const conversionRate =
@@ -534,7 +552,7 @@ export const getLowStockVisual = async (req, res) => {
       const maxStock = product.lowStockAlert * 2 || 100; // Asumimos que el doble del alert es el máximo
       const percentage = Math.min(
         (product.warehouseStock / maxStock) * 100,
-        100
+        100,
       );
 
       return {
@@ -548,10 +566,10 @@ export const getLowStockVisual = async (req, res) => {
           product.warehouseStock === 0
             ? "critical"
             : product.warehouseStock <= product.lowStockAlert * 0.5
-            ? "critical"
-            : product.warehouseStock <= product.lowStockAlert
-            ? "warning"
-            : "normal",
+              ? "critical"
+              : product.warehouseStock <= product.lowStockAlert
+                ? "warning"
+                : "normal",
       };
     });
 
@@ -677,8 +695,8 @@ export const getFinancialKPIs = async (req, res) => {
         5,
         0,
         0,
-        0
-      )
+        0,
+      ),
     );
     const endOfToday = new Date(
       Date.UTC(
@@ -688,8 +706,8 @@ export const getFinancialKPIs = async (req, res) => {
         4,
         59,
         59,
-        999
-      )
+        999,
+      ),
     );
 
     // Inicio de la semana en Colombia
@@ -706,8 +724,8 @@ export const getFinancialKPIs = async (req, res) => {
         5,
         0,
         0,
-        0
-      )
+        0,
+      ),
     );
 
     const baseMatch = {
@@ -741,7 +759,24 @@ export const getFinancialKPIs = async (req, res) => {
           $project: {
             opDate: 1,
             revenue: { $multiply: ["$salePrice", "$quantity"] },
-            profit: "$totalProfit",
+            // Usar netProfit si existe, sino totalProfit menos deducciones
+            profit: {
+              $ifNull: [
+                "$netProfit",
+                {
+                  $subtract: [
+                    { $ifNull: ["$totalProfit", 0] },
+                    {
+                      $add: [
+                        { $ifNull: ["$totalAdditionalCosts", 0] },
+                        { $ifNull: ["$shippingCost", 0] },
+                        { $ifNull: ["$discount", 0] },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
             sales: 1,
           },
         },
@@ -760,7 +795,8 @@ export const getFinancialKPIs = async (req, res) => {
                 $project: {
                   opDate: 1,
                   revenue: { $multiply: ["$specialPrice", "$quantity"] },
-                  profit: "$totalProfit",
+                  // Ventas especiales no tienen deducciones, usar totalProfit directamente
+                  profit: { $ifNull: ["$totalProfit", 0] },
                   sales: 1,
                 },
               },
@@ -789,17 +825,17 @@ export const getFinancialKPIs = async (req, res) => {
       Sale.aggregate(
         customDateFilter
           ? buildStatsPipeline(customDateFilter.$gte, customDateFilter.$lte)
-          : buildStatsPipeline(startOfToday, endOfToday)
+          : buildStatsPipeline(startOfToday, endOfToday),
       ),
       Sale.aggregate(
         customDateFilter
           ? buildStatsPipeline(customDateFilter.$gte, customDateFilter.$lte)
-          : buildStatsPipeline(startOfThisWeek)
+          : buildStatsPipeline(startOfThisWeek),
       ),
       Sale.aggregate(
         customDateFilter
           ? buildStatsPipeline(customDateFilter.$gte, customDateFilter.$lte)
-          : buildStatsPipeline(startOfThisMonth)
+          : buildStatsPipeline(startOfThisMonth),
       ),
       // Average ticket
       Sale.aggregate([
@@ -902,8 +938,8 @@ export const getComparativeAnalysis = async (req, res) => {
         5,
         0,
         0,
-        0
-      )
+        0,
+      ),
     );
 
     // Mes anterior
@@ -915,7 +951,7 @@ export const getComparativeAnalysis = async (req, res) => {
       colombiaTime.getUTCMonth() === 0 ? 11 : colombiaTime.getUTCMonth() - 1;
 
     const lastMonthStart = new Date(
-      Date.UTC(lastMonthYear, lastMonthNum, 1, 5, 0, 0, 0)
+      Date.UTC(lastMonthYear, lastMonthNum, 1, 5, 0, 0, 0),
     );
     const lastMonthEnd = new Date(thisMonthStart.getTime() - 1); // 1 milisegundo antes del inicio del mes actual
 
@@ -933,7 +969,24 @@ export const getComparativeAnalysis = async (req, res) => {
         $project: {
           saleDate: 1,
           revenue: { $multiply: ["$salePrice", "$quantity"] },
-          profit: "$totalProfit",
+          // Usar netProfit si existe, sino totalProfit menos deducciones
+          profit: {
+            $ifNull: [
+              "$netProfit",
+              {
+                $subtract: [
+                  { $ifNull: ["$totalProfit", 0] },
+                  {
+                    $add: [
+                      { $ifNull: ["$totalAdditionalCosts", 0] },
+                      { $ifNull: ["$shippingCost", 0] },
+                      { $ifNull: ["$discount", 0] },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
         },
       },
       {
@@ -990,13 +1043,13 @@ export const getComparativeAnalysis = async (req, res) => {
         currentMonth: thisMonthData,
         growth: {
           salesGrowth: parseFloat(
-            calculateGrowth(thisMonthData.sales, lastMonthData.sales)
+            calculateGrowth(thisMonthData.sales, lastMonthData.sales),
           ),
           revenueGrowth: parseFloat(
-            calculateGrowth(thisMonthData.revenue, lastMonthData.revenue)
+            calculateGrowth(thisMonthData.revenue, lastMonthData.revenue),
           ),
           profitGrowth: parseFloat(
-            calculateGrowth(thisMonthData.profit, lastMonthData.profit)
+            calculateGrowth(thisMonthData.profit, lastMonthData.profit),
           ),
         },
       },

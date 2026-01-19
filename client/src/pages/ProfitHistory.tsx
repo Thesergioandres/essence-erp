@@ -280,8 +280,12 @@ export default function ProfitHistory() {
           0
         );
         const totalProfit = overview?.summary.totalProfit || 0;
-        const adminProfit = overview?.summary.adminProfit || 0;
-        const netProfit = adminProfit - totalExpenses;
+        // Usar netProfit del backend que ya considera deducciones de venta (garantía, envío, descuentos)
+        const salesNetProfit =
+          overview?.summary.netProfit ?? overview?.summary.adminProfit ?? 0;
+        const totalDeductions = overview?.summary.totalDeductions || 0;
+        // Utilidad neta final = ganancia neta de ventas - gastos operativos
+        const netProfit = salesNetProfit - totalExpenses;
         const expensesByType = expenses.reduce(
           (acc, e) => {
             const type = e.type || "Otros";
@@ -308,14 +312,16 @@ export default function ProfitHistory() {
                 </p>
               </div>
               <div className="rounded-xl border border-gray-800 bg-gray-900/60 p-4 text-white">
-                <p className="text-sm text-gray-300">Ganancia admin</p>
+                <p className="text-sm text-gray-300">Ganancia neta ventas</p>
                 <p className="mt-2 text-xl font-semibold text-emerald-300">
-                  {formatCurrency(adminProfit)}
+                  {formatCurrency(salesNetProfit)}
                 </p>
                 <p className="text-xs text-gray-400">
-                  {distributorsEnabled
-                    ? "Ventas directas + margen"
-                    : "Ventas directas"}
+                  {totalDeductions > 0
+                    ? `Deducciones: -${formatCurrency(totalDeductions)}`
+                    : distributorsEnabled
+                      ? "Ventas directas + margen"
+                      : "Ventas directas"}
                 </p>
               </div>
               {distributorsEnabled && (
@@ -944,10 +950,10 @@ export default function ProfitHistory() {
                         </td>
                       )}
                       <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-emerald-300">
-                        {formatCurrency(entry.adminProfit)}
+                        {formatCurrency(entry.netProfit ?? entry.adminProfit)}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-purple-200">
-                        {formatCurrency(entry.totalProfit)}
+                        {formatCurrency(entry.netProfit ?? entry.totalProfit)}
                       </td>
                     </tr>
                   ))}
@@ -1029,13 +1035,13 @@ export default function ProfitHistory() {
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-gray-400">Ganancia admin</span>
                       <span className="font-semibold text-emerald-300">
-                        {formatCurrency(entry.adminProfit)}
+                        {formatCurrency(entry.netProfit ?? entry.adminProfit)}
                       </span>
                     </div>
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-gray-400">Total</span>
                       <span className="font-semibold text-purple-200">
-                        {formatCurrency(entry.totalProfit)}
+                        {formatCurrency(entry.netProfit ?? entry.totalProfit)}
                       </span>
                     </div>
                   </div>

@@ -233,10 +233,16 @@ export default function Sales() {
           0
         ),
         // Usar netProfit si está disponible, sino adminProfit
-        totalProfit: groupSales.reduce(
-          (sum, s) => sum + (s.netProfit ?? s.adminProfit ?? 0),
-          0
-        ),
+        totalProfit: groupSales.reduce((sum, s) => {
+          // Calcular netProfit si no existe: totalProfit/adminProfit - deducciones
+          const saleNetProfit =
+            s.netProfit ??
+            (s.totalProfit ?? s.adminProfit ?? 0) -
+              (s.totalAdditionalCosts || 0) -
+              (s.shippingCost || 0) -
+              (s.discount || 0);
+          return sum + saleNetProfit;
+        }, 0),
         totalDistributorProfit: groupSales.reduce(
           (sum, s) => sum + (s.distributorProfit || 0),
           0
@@ -257,13 +263,21 @@ export default function Sales() {
 
     // Procesar ventas individuales
     individual.forEach(sale => {
+      // Calcular netProfit si no existe: totalProfit - deducciones
+      const saleNetProfit =
+        sale.netProfit ??
+        (sale.totalProfit ?? sale.adminProfit ?? 0) -
+          (sale.totalAdditionalCosts || 0) -
+          (sale.shippingCost || 0) -
+          (sale.discount || 0);
+
       result.push({
         id: sale._id,
         sales: [sale],
         totalQuantity: sale.quantity,
         totalRevenue: sale.salePrice * sale.quantity,
-        // Usar netProfit si está disponible, sino adminProfit
-        totalProfit: sale.netProfit ?? sale.adminProfit ?? 0,
+        // Usar netProfit calculado o de la BD
+        totalProfit: saleNetProfit,
         totalDistributorProfit: sale.distributorProfit || 0,
         totalAdditionalCosts: sale.totalAdditionalCosts || 0,
         date: sale.saleDate,
@@ -324,10 +338,17 @@ export default function Sales() {
     totalRevenue:
       statsData.totalRevenue ||
       sales.reduce((sum, s) => sum + s.salePrice * s.quantity, 0),
-    // Usar netProfit si está disponible, sino adminProfit
-    totalProfit:
-      statsData.totalProfit ||
-      sales.reduce((sum, s) => sum + (s.netProfit ?? s.adminProfit ?? 0), 0),
+    // Siempre calcular netProfit desde las ventas para considerar deducciones
+    totalProfit: sales.reduce((sum, s) => {
+      // Calcular netProfit si no existe: totalProfit/adminProfit - deducciones
+      const saleNetProfit =
+        s.netProfit ??
+        (s.totalProfit ?? s.adminProfit ?? 0) -
+          (s.totalAdditionalCosts || 0) -
+          (s.shippingCost || 0) -
+          (s.discount || 0);
+      return sum + saleNetProfit;
+    }, 0),
     // Total de costos adicionales
     totalAdditionalCosts: sales.reduce(
       (sum, s) => sum + (s.totalAdditionalCosts || 0),

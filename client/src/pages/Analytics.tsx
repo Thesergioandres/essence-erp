@@ -274,9 +274,13 @@ export default function Analytics() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
         <StatCard
-          title="Ganancia mes"
-          subtitle="Ventas normales + especiales"
-          value={currency(monthly?.currentMonth?.totalProfit || 0)}
+          title="Ganancia neta mes"
+          subtitle="Después de costos y descuentos"
+          value={currency(
+            monthly?.currentMonth?.netProfit ??
+              monthly?.currentMonth?.totalProfit ??
+              0
+          )}
         />
         <StatCard
           title="Ingresos mes"

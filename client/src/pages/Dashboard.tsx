@@ -221,12 +221,15 @@ export default function Dashboard() {
 
           <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             <div>
-              <p className="text-xs text-gray-400 sm:text-sm">Ganancia Total</p>
+              <p className="text-xs text-gray-400 sm:text-sm">Ganancia Neta</p>
               <p className="mt-1 text-lg font-bold text-green-400 sm:mt-2 sm:text-xl md:text-2xl">
                 {new Intl.NumberFormat("es-MX", {
                   style: "currency",
                   currency: "MXN",
-                }).format(monthlyData.currentMonth.totalProfit)}
+                }).format(
+                  monthlyData.currentMonth.netProfit ??
+                    monthlyData.currentMonth.totalProfit
+                )}
               </p>
               <p
                 className={`mt-1 text-[10px] sm:text-xs ${monthlyData.growthPercentage >= 0 ? "text-green-500" : "text-red-500"}`}
@@ -366,21 +369,22 @@ export default function Dashboard() {
               </p>
             </div>
             <div>
-              <p className="text-xs text-gray-400 sm:text-sm">Ganancia Neta</p>
+              <p className="text-xs text-gray-400 sm:text-sm">Utilidad Neta</p>
               <p
-                className={`mt-1 text-lg font-bold sm:mt-2 sm:text-xl ${(monthlyData?.currentMonth.totalProfit || 0) - stats.expensesThisMonth >= 0 ? "text-green-400" : "text-red-400"}`}
+                className={`mt-1 text-lg font-bold sm:mt-2 sm:text-xl ${((monthlyData?.currentMonth.netProfit ?? monthlyData?.currentMonth.totalProfit) || 0) - stats.expensesThisMonth >= 0 ? "text-green-400" : "text-red-400"}`}
               >
                 {new Intl.NumberFormat("es-CO", {
                   style: "currency",
                   currency: "COP",
                   minimumFractionDigits: 0,
                 }).format(
-                  (monthlyData?.currentMonth.totalProfit || 0) -
-                    stats.expensesThisMonth
+                  ((monthlyData?.currentMonth.netProfit ??
+                    monthlyData?.currentMonth.totalProfit) ||
+                    0) - stats.expensesThisMonth
                 )}
               </p>
               <p className="mt-1 text-[10px] text-gray-500">
-                Ganancia - Gastos
+                Ganancia Neta - Gastos
               </p>
             </div>
           </div>
@@ -636,7 +640,7 @@ export default function Dashboard() {
                   <p className="text-lg font-bold text-purple-400">
                     $
                     {new Intl.NumberFormat("es-CO").format(
-                      product.distributorPrice || 0
+                      product.salePrice || product.distributorPrice || 0
                     )}
                   </p>
                   <p className="text-sm text-gray-400">

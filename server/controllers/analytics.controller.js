@@ -42,8 +42,8 @@ const buildColombiaRange = (startStr, endStr) => {
         5,
         0,
         0,
-        0
-      )
+        0,
+      ),
     );
   }
   if (endStr) {
@@ -56,8 +56,8 @@ const buildColombiaRange = (startStr, endStr) => {
         4,
         59,
         59,
-        999
-      )
+        999,
+      ),
     );
   }
 
@@ -169,7 +169,7 @@ export const getMonthlyProfit = async (req, res) => {
         Sale.aggregate(sumPipeline(startOfLastMonth, endOfLastMonth)),
         SpecialSale.aggregate(sumSpecialPipeline(startOfMonth, endOfMonth)),
         SpecialSale.aggregate(
-          sumSpecialPipeline(startOfLastMonth, endOfLastMonth)
+          sumSpecialPipeline(startOfLastMonth, endOfLastMonth),
         ),
       ]);
 
@@ -206,8 +206,8 @@ export const getMonthlyProfit = async (req, res) => {
             lastMonth.netProfit) *
           100
         : currentMonth.netProfit > 0
-        ? 100
-        : 0;
+          ? 100
+          : 0;
 
     res.json({
       currentMonth,
@@ -260,8 +260,8 @@ export const getProfitByProduct = async (req, res) => {
             date.getUTCDate(),
             5,
             0,
-            0
-          )
+            0,
+          ),
         );
       }
       if (endDate) {
@@ -275,8 +275,8 @@ export const getProfitByProduct = async (req, res) => {
             4,
             59,
             59,
-            999
-          )
+            999,
+          ),
         );
       }
     }
@@ -396,7 +396,7 @@ export const getProfitByProduct = async (req, res) => {
           profitMargin:
             totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0,
         };
-      })
+      }),
     );
 
     res.json(profitByProduct.sort((a, b) => b.totalProfit - a.totalProfit));
@@ -519,11 +519,11 @@ export const getProfitByDistributor = async (req, res) => {
           totalProfit: item.totalProfit,
           averageSale: totalSales > 0 ? totalRevenue / totalSales : 0,
         };
-      })
+      }),
     );
 
     res.json(
-      profitByDistributor.sort((a, b) => b.totalRevenue - a.totalRevenue)
+      profitByDistributor.sort((a, b) => b.totalRevenue - a.totalRevenue),
     );
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -560,8 +560,8 @@ export const getAverages = async (req, res) => {
             5,
             0,
             0,
-            0
-          )
+            0,
+          ),
         );
       }
       if (endStr) {
@@ -574,8 +574,8 @@ export const getAverages = async (req, res) => {
             4,
             59,
             59,
-            999
-          )
+            999,
+          ),
         );
       }
 
@@ -589,12 +589,12 @@ export const getAverages = async (req, res) => {
       const sDay = Date.UTC(
         s.getUTCFullYear(),
         s.getUTCMonth(),
-        s.getUTCDate()
+        s.getUTCDate(),
       );
       const eDay = Date.UTC(
         e.getUTCFullYear(),
         e.getUTCMonth(),
-        e.getUTCDate()
+        e.getUTCDate(),
       );
       const diff = Math.floor((eDay - sDay) / 86400000) + 1;
       return Math.max(diff, 1);
@@ -666,7 +666,7 @@ export const getAverages = async (req, res) => {
         acc.totalUnits += sale.quantity;
         return acc;
       },
-      { totalRevenue: 0, totalProfit: 0, totalSales: 0, totalUnits: 0 }
+      { totalRevenue: 0, totalProfit: 0, totalSales: 0, totalUnits: 0 },
     );
 
     // Incluir ventas especiales en promedios
@@ -730,7 +730,7 @@ export const getSalesTimeline = async (req, res) => {
       ...opDateFilter,
     })
       .select(
-        "saleDate salePrice quantity totalProfit purchasePrice paymentStatus"
+        "saleDate salePrice quantity totalProfit netProfit totalAdditionalCosts shippingCost discount purchasePrice paymentStatus",
       )
       .sort({ saleDate: 1 })
       .lean();
@@ -767,7 +767,14 @@ export const getSalesTimeline = async (req, res) => {
       }
       salesByDay[day].sales += 1;
       salesByDay[day].revenue += sale.salePrice * sale.quantity;
-      salesByDay[day].profit += sale.totalProfit;
+      // Usar netProfit si existe, sino calcular: totalProfit - deducciones
+      const saleNetProfit =
+        sale.netProfit ??
+        (sale.totalProfit || 0) -
+          (sale.totalAdditionalCosts || 0) -
+          (sale.shippingCost || 0) -
+          (sale.discount || 0);
+      salesByDay[day].profit += saleNetProfit;
       salesByDay[day].units += sale.quantity;
       salesByDay[day].cost += sale.purchasePrice * sale.quantity;
     });
@@ -822,8 +829,8 @@ export const getFinancialSummary = async (req, res) => {
             date.getUTCDate(),
             5,
             0,
-            0
-          )
+            0,
+          ),
         );
       }
       if (endDate) {
@@ -837,15 +844,15 @@ export const getFinancialSummary = async (req, res) => {
             4,
             59,
             59,
-            999
-          )
+            999,
+          ),
         );
       }
     }
 
     const sales = await Sale.find(filter)
       .select(
-        "salePrice purchasePrice quantity totalProfit adminProfit distributorProfit"
+        "salePrice purchasePrice quantity totalProfit netProfit totalAdditionalCosts shippingCost discount adminProfit distributorProfit",
       )
       .lean();
 
@@ -861,8 +868,8 @@ export const getFinancialSummary = async (req, res) => {
             date.getUTCDate(),
             5,
             0,
-            0
-          )
+            0,
+          ),
         );
       }
       if (endDate) {
@@ -875,8 +882,8 @@ export const getFinancialSummary = async (req, res) => {
             4,
             59,
             59,
-            999
-          )
+            999,
+          ),
         );
       }
     }
@@ -900,7 +907,14 @@ export const getFinancialSummary = async (req, res) => {
         acc.totalRevenue += sale.salePrice * sale.quantity;
         acc.totalAdminProfit += sale.adminProfit;
         acc.totalDistributorProfit += sale.distributorProfit;
-        acc.totalProfit += sale.totalProfit;
+        // Usar netProfit si existe, sino calcular: totalProfit - deducciones
+        const saleNetProfit =
+          sale.netProfit ??
+          (sale.totalProfit || 0) -
+            (sale.totalAdditionalCosts || 0) -
+            (sale.shippingCost || 0) -
+            (sale.discount || 0);
+        acc.totalProfit += saleNetProfit;
         acc.totalSales += 1;
         acc.totalUnits += sale.quantity;
         return acc;
@@ -913,7 +927,7 @@ export const getFinancialSummary = async (req, res) => {
         totalProfit: 0,
         totalSales: 0,
         totalUnits: 0,
-      }
+      },
     );
 
     // Agregar ventas especiales a los totales
@@ -1110,7 +1124,7 @@ export const getAnalyticsDashboard = async (req, res) => {
         acc.totalSales += 1;
         return acc;
       },
-      { totalRevenue: 0, totalProfit: 0, totalSales: 0 }
+      { totalRevenue: 0, totalProfit: 0, totalSales: 0 },
     );
 
     // Agregar ventas especiales a los totales mensuales
@@ -1237,8 +1251,8 @@ export const getCombinedSummary = async (req, res) => {
             date.getUTCDate(),
             5,
             0,
-            0
-          )
+            0,
+          ),
         );
       }
       if (endDate) {
@@ -1251,8 +1265,8 @@ export const getCombinedSummary = async (req, res) => {
             4,
             59,
             59,
-            999
-          )
+            999,
+          ),
         );
       }
     }
@@ -1275,7 +1289,7 @@ export const getCombinedSummary = async (req, res) => {
         acc.count += 1;
         return acc;
       },
-      { revenue: 0, cost: 0, profit: 0, count: 0 }
+      { revenue: 0, cost: 0, profit: 0, count: 0 },
     );
 
     // Obtener ventas especiales
@@ -1288,7 +1302,7 @@ export const getCombinedSummary = async (req, res) => {
         acc.count += 1;
         return acc;
       },
-      { revenue: 0, cost: 0, profit: 0, count: 0 }
+      { revenue: 0, cost: 0, profit: 0, count: 0 },
     );
 
     res.json({
@@ -1422,7 +1436,7 @@ export const getPaymentMethodMetrics = async (req, res) => {
         creditRevenue: 0,
         cashSales: 0,
         cashRevenue: 0,
-      }
+      },
     );
 
     res.json({
@@ -1750,7 +1764,7 @@ export const getDistributorEstimatedProfit = async (req, res) => {
     })
       .populate(
         "product",
-        "name purchasePrice clientPrice distributorPrice image"
+        "name purchasePrice clientPrice distributorPrice image",
       )
       .lean();
 
@@ -1811,7 +1825,7 @@ export const getDistributorEstimatedProfit = async (req, res) => {
   } catch (error) {
     console.error(
       "Error al calcular ganancia estimada del distribuidor:",
-      error
+      error,
     );
     res.status(500).json({
       success: false,

@@ -26,8 +26,8 @@ const buildColombiaDateRange = (startDateStr, endDateStr) => {
         5,
         0,
         0,
-        0
-      )
+        0,
+      ),
     );
   }
 
@@ -41,8 +41,8 @@ const buildColombiaDateRange = (startDateStr, endDateStr) => {
         4,
         59,
         59,
-        999
-      )
+        999,
+      ),
     );
   }
 
@@ -433,7 +433,7 @@ export const backfillProfitHistoryFromSales = async (req, res) => {
 
     const sales = await Sale.find(salesFilter)
       .select(
-        "_id saleId distributor product quantity salePrice saleDate distributorProfit adminProfit distributorProfitPercentage commissionBonus"
+        "_id saleId distributor product quantity salePrice saleDate distributorProfit adminProfit distributorProfitPercentage commissionBonus",
       )
       .sort({ saleDate: 1 })
       .lean();
@@ -547,7 +547,7 @@ export const getComparativeAnalysis = async (req, res) => {
       0,
       23,
       59,
-      59
+      59,
     );
 
     // Mes anterior
@@ -558,7 +558,7 @@ export const getComparativeAnalysis = async (req, res) => {
       0,
       23,
       59,
-      59
+      59,
     );
 
     const matchCurrent = {
@@ -617,8 +617,8 @@ export const getComparativeAnalysis = async (req, res) => {
             previousMonth.totalAmount) *
           100
         : currentMonth.totalAmount > 0
-        ? 100
-        : 0;
+          ? 100
+          : 0;
 
     res.json({
       currentMonth: {
@@ -678,7 +678,7 @@ export const getAdminProfitHistoryOverview = async (req, res) => {
 
     const sales = await Sale.find(saleFilter)
       .select(
-        "saleId saleDate distributor product quantity adminProfit distributorProfit totalProfit paymentStatus"
+        "saleId saleDate distributor product quantity adminProfit distributorProfit totalProfit netProfit totalAdditionalCosts shippingCost discount paymentStatus",
       )
       .populate("product", "name")
       .populate("distributor", "name email role")
@@ -696,7 +696,7 @@ export const getAdminProfitHistoryOverview = async (req, res) => {
 
     const specialSales = await SpecialSale.find(specialSaleFilter)
       .select(
-        "product quantity totalProfit distribution saleDate eventName saleId"
+        "product quantity totalProfit distribution saleDate eventName saleId",
       )
       .sort({ saleDate: -1 })
       .limit(safeLimit)
@@ -711,6 +711,13 @@ export const getAdminProfitHistoryOverview = async (req, res) => {
       const totalProfit =
         sale.totalProfit ?? adminProfit + (distributorProfit ?? 0);
 
+      // Calcular deducciones totales y netProfit
+      const totalDeductions =
+        (sale.totalAdditionalCosts || 0) +
+        (sale.shippingCost || 0) +
+        (sale.discount || 0);
+      const netProfit = sale.netProfit ?? totalProfit - totalDeductions;
+
       return {
         id: sale._id.toString(),
         saleId: sale.saleId,
@@ -724,6 +731,8 @@ export const getAdminProfitHistoryOverview = async (req, res) => {
         adminProfit,
         distributorProfit,
         totalProfit,
+        netProfit,
+        totalDeductions,
         quantity: sale.quantity,
         productName: sale.product?.name || "",
         paymentStatus: sale.paymentStatus,
@@ -738,6 +747,7 @@ export const getAdminProfitHistoryOverview = async (req, res) => {
       sale.distribution.forEach((dist, idx) => {
         const isAdmin = dist.name?.toLowerCase() === "admin";
         if (distributorId === "admin" && !isAdmin) return;
+        const amount = dist.amount || 0;
         entries.push({
           id: `${sale._id.toString()}-${idx}`,
           saleId,
@@ -747,9 +757,11 @@ export const getAdminProfitHistoryOverview = async (req, res) => {
           distributorName: dist.name || "Sin nombre",
           distributorEmail: null,
           type: isAdmin ? "venta_admin" : "venta_distribuidor",
-          adminProfit: isAdmin ? dist.amount || 0 : 0,
-          distributorProfit: !isAdmin ? dist.amount || 0 : 0,
-          totalProfit: dist.amount || 0,
+          adminProfit: isAdmin ? amount : 0,
+          distributorProfit: !isAdmin ? amount : 0,
+          totalProfit: amount,
+          netProfit: amount, // Ventas especiales no tienen deducciones
+          totalDeductions: 0,
           quantity: sale.quantity,
           productName,
           eventName: sale.eventName,
@@ -761,6 +773,8 @@ export const getAdminProfitHistoryOverview = async (req, res) => {
     const summary = entries.reduce(
       (acc, entry) => {
         acc.totalProfit += entry.totalProfit;
+        acc.netProfit += entry.netProfit || entry.totalProfit;
+        acc.totalDeductions += entry.totalDeductions || 0;
         acc.adminProfit += entry.adminProfit;
         acc.distributorProfit += entry.distributorProfit;
         acc.count += 1;
@@ -768,14 +782,16 @@ export const getAdminProfitHistoryOverview = async (req, res) => {
       },
       {
         totalProfit: 0,
+        netProfit: 0,
+        totalDeductions: 0,
         adminProfit: 0,
         distributorProfit: 0,
         count: 0,
-      }
+      },
     );
 
     summary.averageTicket = summary.count
-      ? summary.totalProfit / summary.count
+      ? summary.netProfit / summary.count
       : 0;
 
     const distributorMap = new Map();
@@ -803,7 +819,7 @@ export const getAdminProfitHistoryOverview = async (req, res) => {
     });
 
     const distributors = Array.from(distributorMap.values()).sort(
-      (a, b) => b.totalProfit - a.totalProfit
+      (a, b) => b.totalProfit - a.totalProfit,
     );
 
     res.json({
