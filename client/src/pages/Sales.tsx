@@ -325,14 +325,12 @@ export default function Sales() {
   }, 0);
 
   const stats = {
-    total: statsData.totalSales || sales.length,
-    pendiente:
-      statsData.pendingSales ||
-      sales.filter(s => s.paymentStatus === "pendiente").length,
-    confirmado:
-      statsData.confirmedSales ||
-      sales.filter(s => s.paymentStatus === "confirmado" && !hasActiveCredit(s))
-        .length,
+    // Contar grupos de ventas (ventas reales), no items individuales
+    total: saleGroups.length,
+    pendiente: saleGroups.filter(g => g.paymentStatus === "pendiente").length,
+    confirmado: saleGroups.filter(
+      g => g.paymentStatus === "confirmado" && !hasActiveCredit(g.sales[0])
+    ).length,
     pendingCollection: salesWithActiveCredit.length,
     pendingCollectionAmount: pendingCollectionAmount,
     totalRevenue:
