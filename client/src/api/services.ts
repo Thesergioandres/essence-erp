@@ -1629,6 +1629,7 @@ export const analyticsService = {
       investment: number;
       salesValue: number;
       profitMargin: string;
+      profitability?: number;
       products: Array<{
         productId: string;
         name: string;

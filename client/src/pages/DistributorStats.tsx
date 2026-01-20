@@ -23,6 +23,7 @@ interface DistributorEstimate {
   investment: number;
   salesValue: number;
   profitMargin: string;
+  profitability?: number; // Ganancia / Ventas × 100
   products: EstimatedProfitProduct[];
 }
 
@@ -288,9 +289,29 @@ export default function DistributorStats() {
                 </p>
               </div>
               <div className="rounded-lg border border-gray-700 bg-gray-900/50 p-4">
-                <p className="text-xs text-gray-400">Margen Est.</p>
-                <p className="mt-1 text-xl font-bold text-emerald-300">
+                <p className="text-xs text-gray-400">📈 Rentabilidad</p>
+                <p className="mt-1 text-xl font-bold text-teal-300">
+                  {estimatedProfit.profitability ??
+                    (estimatedProfit.salesValue > 0
+                      ? (
+                          (estimatedProfit.grossProfit /
+                            estimatedProfit.salesValue) *
+                          100
+                        ).toFixed(1)
+                      : 0)}
+                  %
+                </p>
+                <p className="mt-0.5 text-[10px] text-gray-500">
+                  Ganancia / Ventas
+                </p>
+              </div>
+              <div className="rounded-lg border border-gray-700 bg-gray-900/50 p-4">
+                <p className="text-xs text-gray-400">⚡ Multiplicador</p>
+                <p className="mt-1 text-xl font-bold text-amber-300">
                   {estimatedProfit.profitMargin}%
+                </p>
+                <p className="mt-0.5 text-[10px] text-gray-500">
+                  Ganancia / Inversión
                 </p>
               </div>
             </div>

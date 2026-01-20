@@ -77,6 +77,8 @@ interface EstimatedProfitData {
     totalUnits: number;
     investment: number;
     salesValue: number;
+    profitability?: number; // Ganancia / Ventas × 100
+    costMultiplier?: number; // Ganancia / Inversión × 100
   };
 }
 
@@ -461,16 +463,37 @@ export default function ProfitHistory() {
                       </p>
                     </div>
                     <div className="rounded-lg border border-gray-700 bg-gray-900/50 p-3">
-                      <p className="text-xs text-gray-400">Margen Est.</p>
+                      <p className="text-xs text-gray-400">📈 Rentabilidad</p>
                       <p className="mt-1 text-xl font-bold text-teal-300">
-                        {estimatedProfit.consolidated.investment > 0
-                          ? (
-                              (estimatedProfit.consolidated.adminProfit /
-                                estimatedProfit.consolidated.investment) *
-                              100
-                            ).toFixed(1)
-                          : 0}
+                        {estimatedProfit.consolidated.profitability ??
+                          (estimatedProfit.consolidated.salesValue > 0
+                            ? (
+                                (estimatedProfit.consolidated.adminProfit /
+                                  estimatedProfit.consolidated.salesValue) *
+                                100
+                              ).toFixed(1)
+                            : 0)}
                         %
+                      </p>
+                      <p className="mt-0.5 text-[10px] text-gray-500">
+                        Ganancia / Ventas
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-gray-700 bg-gray-900/50 p-3">
+                      <p className="text-xs text-gray-400">⚡ Multiplicador</p>
+                      <p className="mt-1 text-xl font-bold text-amber-300">
+                        {estimatedProfit.consolidated.costMultiplier ??
+                          (estimatedProfit.consolidated.investment > 0
+                            ? (
+                                (estimatedProfit.consolidated.adminProfit /
+                                  estimatedProfit.consolidated.investment) *
+                                100
+                              ).toFixed(1)
+                            : 0)}
+                        %
+                      </p>
+                      <p className="mt-0.5 text-[10px] text-gray-500">
+                        Ganancia / Inversión
                       </p>
                     </div>
                   </div>

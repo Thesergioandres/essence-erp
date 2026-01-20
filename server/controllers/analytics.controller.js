@@ -1700,6 +1700,25 @@ export const getEstimatedProfit = async (req, res) => {
       branchesEstimate.adminProfit +
       distributorsEstimate.adminProfit;
 
+    const totalInvestment =
+      warehouseEstimate.investment +
+      branchesEstimate.investment +
+      distributorsEstimate.investment;
+
+    const totalSalesValue =
+      warehouseEstimate.salesValue +
+      branchesEstimate.salesValue +
+      distributorsEstimate.salesValue;
+
+    // Calcular métricas de rentabilidad
+    // Rentabilidad = Ganancia / Ventas × 100 (margen sobre ventas)
+    const profitability =
+      totalSalesValue > 0 ? (adminProfitTotal / totalSalesValue) * 100 : 0;
+
+    // Multiplicador sobre Costo = Ganancia / Inversión × 100
+    const costMultiplier =
+      totalInvestment > 0 ? (adminProfitTotal / totalInvestment) * 100 : 0;
+
     const consolidated = {
       grossProfit:
         warehouseEstimate.grossProfit +
@@ -1718,14 +1737,11 @@ export const getEstimatedProfit = async (req, res) => {
         warehouseEstimate.totalUnits +
         branchesEstimate.totalUnits +
         distributorsEstimate.totalUnits,
-      investment:
-        warehouseEstimate.investment +
-        branchesEstimate.investment +
-        distributorsEstimate.investment,
-      salesValue:
-        warehouseEstimate.salesValue +
-        branchesEstimate.salesValue +
-        distributorsEstimate.salesValue,
+      investment: totalInvestment,
+      salesValue: totalSalesValue,
+      // Nuevas métricas de rentabilidad
+      profitability: parseFloat(profitability.toFixed(1)), // Ganancia/Ventas × 100
+      costMultiplier: parseFloat(costMultiplier.toFixed(1)), // Ganancia/Inversión × 100
     };
 
     // Determinar el escenario
@@ -1839,9 +1855,19 @@ export const getDistributorEstimatedProfit = async (req, res) => {
     }
 
     estimate.netProfit = estimate.grossProfit;
+
+    // Multiplicador sobre Costo = Ganancia / Inversión × 100
     estimate.profitMargin =
       estimate.investment > 0
-        ? ((estimate.grossProfit / estimate.investment) * 100).toFixed(2)
+        ? ((estimate.grossProfit / estimate.investment) * 100).toFixed(1)
+        : 0;
+
+    // Rentabilidad = Ganancia / Ventas × 100 (margen sobre ventas)
+    estimate.profitability =
+      estimate.salesValue > 0
+        ? parseFloat(
+            ((estimate.grossProfit / estimate.salesValue) * 100).toFixed(1),
+          )
         : 0;
 
     res.json({
