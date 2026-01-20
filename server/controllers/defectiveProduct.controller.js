@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import BranchStock from "../models/BranchStock.js";
 import DefectiveProduct from "../models/DefectiveProduct.js";
 import DistributorStock from "../models/DistributorStock.js";
@@ -571,7 +572,7 @@ export const deleteDefectiveReport = async (req, res) => {
               product: report.product,
             },
             { $inc: { quantity: report.quantity } },
-            { upsert: true, new: true }
+            { upsert: true, new: true },
           );
         } else if (report.distributor) {
           await DistributorStock.findOneAndUpdate(
@@ -581,7 +582,7 @@ export const deleteDefectiveReport = async (req, res) => {
               product: report.product,
             },
             { $inc: { quantity: report.quantity } },
-            { upsert: true, new: true }
+            { upsert: true, new: true },
           );
         }
 
@@ -596,7 +597,7 @@ export const deleteDefectiveReport = async (req, res) => {
           product: report.product,
         },
         { $inc: { quantity: report.quantity } },
-        { upsert: true, new: true }
+        { upsert: true, new: true },
       );
     }
 
@@ -619,8 +620,15 @@ export const getDefectiveStats = async (req, res) => {
   try {
     const businessId = req.businessId;
 
+    // Siempre filtrar por businessId - cada negocio solo ve sus propios datos
+    const matchFilter = {};
+    if (businessId) {
+      // Convertir a ObjectId para que funcione en aggregate
+      matchFilter.business = new mongoose.Types.ObjectId(businessId);
+    }
+
     const stats = await DefectiveProduct.aggregate([
-      { $match: { business: businessId } },
+      { $match: matchFilter },
       {
         $group: {
           _id: null,
@@ -662,6 +670,33 @@ export const getDefectiveStats = async (req, res) => {
         stockRestored: 0,
       },
     });
+  } catch (error) {
+    console.error("getDefectiveStats - Error:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Obtener productos defectuosos por saleGroupId
+// @route   GET /api/defective-products/sale-group/:saleGroupId
+// @access  Private/Admin
+export const getDefectiveBySaleGroup = async (req, res) => {
+  try {
+    const { saleGroupId } = req.params;
+    const businessId = req.businessId;
+
+    if (!saleGroupId) {
+      return res.status(400).json({ message: "saleGroupId es requerido" });
+    }
+
+    const defectiveProducts = await DefectiveProduct.find({
+      business: businessId,
+      saleGroupId,
+    })
+      .populate("product", "name image purchasePrice salePrice")
+      .populate("distributor", "name email")
+      .sort({ createdAt: -1 });
+
+    res.json({ defectiveProducts });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

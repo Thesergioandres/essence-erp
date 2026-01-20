@@ -145,6 +145,34 @@ export default function Sales() {
     }
   };
 
+  // ⭐ Función para eliminar un grupo de ventas completo
+  const handleDeleteSaleGroup = async (
+    saleGroupId: string,
+    salesCount: number
+  ) => {
+    if (
+      !confirm(
+        `¿Seguro que deseas eliminar este grupo de ${salesCount} venta${salesCount > 1 ? "s" : ""}?\n\nEsto restaurará el stock de todos los productos y eliminará las garantías asociadas.`
+      )
+    )
+      return;
+
+    try {
+      setDeletingId(saleGroupId);
+      await saleService.deleteSaleGroup(saleGroupId);
+
+      // Filtrar las ventas que pertenecen al grupo eliminado
+      setSales(prevSales =>
+        prevSales.filter(sale => sale.saleGroupId !== saleGroupId)
+      );
+    } catch (error) {
+      console.error("Error al eliminar el grupo de ventas:", error);
+      alert("Error al eliminar el grupo de ventas");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const handleConfirmPayment = async (saleId: string) => {
     if (!confirm("¿Confirmar que has recibido el pago de esta venta?")) {
       return;
@@ -890,6 +918,23 @@ export default function Sales() {
                                   {deletingId === firstSale._id
                                     ? "Eliminando..."
                                     : "Eliminar"}
+                                </button>
+                              )}
+                              {/* ⭐ Botón eliminar grupo de ventas */}
+                              {group.isGroup && canDeleteSales && (
+                                <button
+                                  onClick={() =>
+                                    handleDeleteSaleGroup(
+                                      group.id,
+                                      group.sales.length
+                                    )
+                                  }
+                                  disabled={deletingId === group.id}
+                                  className="font-medium text-red-400 hover:text-red-300 disabled:opacity-50"
+                                >
+                                  {deletingId === group.id
+                                    ? "Eliminando..."
+                                    : `🗑️ Eliminar grupo (${group.sales.length})`}
                                 </button>
                               )}
                             </div>

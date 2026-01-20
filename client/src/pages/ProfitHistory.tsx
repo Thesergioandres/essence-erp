@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   analyticsService,
   creditService,
+  defectiveProductService,
   expenseService,
   profitHistoryService,
 } from "../api/services";
@@ -14,6 +15,18 @@ import type {
   ProfitHistoryAdminEntry,
   ProfitHistoryAdminOverview,
 } from "../types";
+
+interface DefectiveStats {
+  totalReports: number;
+  totalQuantity: number;
+  totalLoss: number;
+  pendingCount: number;
+  confirmedCount: number;
+  withWarranty: number;
+  warrantyPending: number;
+  warrantyApproved: number;
+  stockRestored: number;
+}
 
 interface EstimatedProfitData {
   success: boolean;
@@ -118,6 +131,9 @@ export default function ProfitHistory() {
   const [creditMetrics, setCreditMetrics] = useState<CreditMetrics | null>(
     null
   );
+  const [defectiveStats, setDefectiveStats] = useState<DefectiveStats | null>(
+    null
+  );
   const [estimatedProfit, setEstimatedProfit] =
     useState<EstimatedProfitData | null>(null);
   const [loadingEstimated, setLoadingEstimated] = useState(false);
@@ -185,8 +201,17 @@ export default function ProfitHistory() {
   const loadEstimatedProfit = async () => {
     try {
       setLoadingEstimated(true);
-      const data = await analyticsService.getEstimatedProfit();
-      setEstimatedProfit(data);
+      const [profitData, defectiveData] = await Promise.all([
+        analyticsService.getEstimatedProfit(),
+        defectiveProductService.getStats().catch(() => ({ stats: null })),
+      ]);
+      setEstimatedProfit(profitData);
+
+      if (defectiveData && defectiveData.stats) {
+        setDefectiveStats(defectiveData.stats);
+      } else {
+        setDefectiveStats(null);
+      }
     } catch (error) {
       console.error("Error cargando ganancia estimada", error);
     } finally {
@@ -401,6 +426,82 @@ export default function ProfitHistory() {
                 </div>
               </div>
             )}
+
+            {/* Pérdidas por Productos Defectuosos */}
+            <div className="rounded-xl border border-orange-900/50 bg-gradient-to-br from-orange-950/40 to-gray-900 p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-medium text-orange-300">
+                  ⚠️ Pérdidas por Productos Defectuosos
+                </h3>
+                <span className="text-xs text-gray-500">
+                  Historial completo
+                </span>
+              </div>
+              {loadingEstimated ? (
+                <div className="py-4 text-center text-gray-400">
+                  Cargando estadísticas...
+                </div>
+              ) : defectiveStats && defectiveStats.totalReports > 0 ? (
+                <>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
+                    <div className="rounded-lg border border-red-700/30 bg-red-900/20 p-3">
+                      <p className="text-xs text-red-300">Total Pérdidas</p>
+                      <p className="mt-1 text-xl font-bold text-red-400">
+                        {formatCurrency(defectiveStats.totalLoss)}
+                      </p>
+                    </div>
+                    <div className="rounded-lg bg-gray-800/50 p-3">
+                      <p className="text-xs text-gray-400">Total Reportes</p>
+                      <p className="mt-1 text-lg font-semibold text-orange-300">
+                        {defectiveStats.totalReports}
+                      </p>
+                    </div>
+                    <div className="rounded-lg bg-gray-800/50 p-3">
+                      <p className="text-xs text-gray-400">
+                        Unidades Afectadas
+                      </p>
+                      <p className="mt-1 text-lg font-semibold text-orange-300">
+                        {defectiveStats.totalQuantity}
+                      </p>
+                    </div>
+                    <div className="rounded-lg bg-gray-800/50 p-3">
+                      <p className="text-xs text-gray-400">Con Garantía</p>
+                      <p className="mt-1 text-lg font-semibold text-amber-300">
+                        {defectiveStats.withWarranty}
+                      </p>
+                      {defectiveStats.warrantyApproved > 0 && (
+                        <p className="text-xs text-green-400">
+                          {defectiveStats.warrantyApproved} aprobadas
+                        </p>
+                      )}
+                    </div>
+                    <div className="rounded-lg bg-gray-800/50 p-3">
+                      <p className="text-xs text-gray-400">Stock Recuperado</p>
+                      <p className="mt-1 text-lg font-semibold text-green-400">
+                        {defectiveStats.stockRestored}
+                      </p>
+                      <p className="text-xs text-gray-500">unidades</p>
+                    </div>
+                  </div>
+                  {defectiveStats.pendingCount > 0 && (
+                    <p className="mt-2 text-xs text-yellow-400">
+                      ⏳ {defectiveStats.pendingCount} reportes pendientes de
+                      revisar
+                    </p>
+                  )}
+                </>
+              ) : (
+                <div className="py-6 text-center">
+                  <p className="text-sm text-gray-400">
+                    ✅ No hay productos defectuosos reportados
+                  </p>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Cuando se reporten productos defectuosos, las estadísticas
+                    aparecerán aquí
+                  </p>
+                </div>
+              )}
+            </div>
 
             {/* Ganancia Estimada Total */}
             <div className="rounded-xl border border-teal-900/50 bg-gradient-to-br from-teal-950/40 to-gray-900 p-4">

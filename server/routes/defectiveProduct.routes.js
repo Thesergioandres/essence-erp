@@ -4,6 +4,7 @@ import {
   confirmDefectiveProduct,
   deleteDefectiveReport,
   getAllDefectiveReports,
+  getDefectiveBySaleGroup,
   getDefectiveStats,
   getDistributorDefectiveReports,
   rejectDefectiveProduct,
@@ -27,7 +28,14 @@ router.use(protect, businessContext, requireFeature("inventory"));
 router.get(
   "/stats",
   requirePermission({ module: "inventory", action: "read" }),
-  getDefectiveStats
+  getDefectiveStats,
+);
+
+// Obtener defectuosos por saleGroupId
+router.get(
+  "/sale-group/:saleGroupId",
+  requirePermission({ module: "inventory", action: "read" }),
+  getDefectiveBySaleGroup,
 );
 
 // Rutas para distribuidores
@@ -38,46 +46,46 @@ router.get("/distributor/:distributorId?", getDistributorDefectiveReports);
 router.post(
   "/admin",
   requirePermission({ module: "inventory", action: "create" }),
-  reportDefectiveProductAdmin
+  reportDefectiveProductAdmin,
 );
 router.post(
   "/branch",
   requirePermission({ module: "inventory", action: "create" }),
-  reportDefectiveProductBranch
+  reportDefectiveProductBranch,
 );
 router.get(
   "/",
   requirePermission({ module: "inventory", action: "read" }),
-  getAllDefectiveReports
+  getAllDefectiveReports,
 );
 router.put(
   "/:id/confirm",
   requirePermission({ module: "inventory", action: "update" }),
-  confirmDefectiveProduct
+  confirmDefectiveProduct,
 );
 router.put(
   "/:id/reject",
   requirePermission({ module: "inventory", action: "update" }),
-  rejectDefectiveProduct
+  rejectDefectiveProduct,
 );
 
 // Rutas de garantía
 router.put(
   "/:id/approve-warranty",
   requirePermission({ module: "inventory", action: "update" }),
-  approveWarranty
+  approveWarranty,
 );
 router.put(
   "/:id/reject-warranty",
   requirePermission({ module: "inventory", action: "update" }),
-  rejectWarranty
+  rejectWarranty,
 );
 
 // Eliminar reporte
 router.delete(
   "/:id",
   requirePermission({ module: "inventory", action: "delete" }),
-  deleteDefectiveReport
+  deleteDefectiveReport,
 );
 
 export default router;

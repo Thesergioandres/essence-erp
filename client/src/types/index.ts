@@ -557,6 +557,9 @@ export interface DefectiveProduct {
   confirmedAt?: string;
   confirmedBy?: User | string;
   adminNotes?: string;
+  // ⭐ Campos para asociación con pedidos
+  saleGroupId?: string;
+  origin?: "direct" | "order"; // direct = reporte manual, order = desde registro de pedido
   createdAt?: string;
   updatedAt?: string;
 }

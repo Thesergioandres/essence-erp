@@ -87,10 +87,22 @@ const defectiveProductSchema = new mongoose.Schema(
       enum: ["warehouse", "branch", "distributor"],
       default: "warehouse",
     },
+    // ⭐ Asociación con pedido de venta (para garantías agregadas desde registro de pedido)
+    saleGroupId: {
+      type: String,
+      trim: true,
+      index: true,
+    },
+    // Origen del reporte
+    origin: {
+      type: String,
+      enum: ["direct", "order"], // direct = reporte manual, order = desde registro de pedido
+      default: "direct",
+    },
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 // Índices para búsquedas frecuentes

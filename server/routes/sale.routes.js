@@ -2,6 +2,7 @@ import express from "express";
 import {
   confirmPayment,
   deleteSale,
+  deleteSaleGroup,
   fixAdminSales,
   getAllSales,
   getDistributorSales,
@@ -36,7 +37,7 @@ router.post(
     action: "create",
     branchResolver: branchFromReq,
   }),
-  registerAdminSale
+  registerAdminSale,
 );
 
 // Fix temporal: actualizar ventas admin pendientes a confirmadas
@@ -46,7 +47,7 @@ router.post(
   businessContext,
   requireFeature("sales"),
   requirePermission({ module: "sales", action: "update" }),
-  fixAdminSales
+  fixAdminSales,
 );
 
 // Rutas para distribuidores
@@ -60,7 +61,7 @@ router.post(
     action: "create",
     branchResolver: branchFromReq,
   }),
-  registerSale
+  registerSale,
 );
 router.get(
   "/distributor/:distributorId?",
@@ -68,7 +69,7 @@ router.get(
   businessContext,
   requireFeature("sales"),
   requirePermission({ module: "sales", action: "read" }),
-  getDistributorSales
+  getDistributorSales,
 );
 
 // Rutas de administrador
@@ -80,7 +81,7 @@ router.get(
   requirePermission({ module: "sales", action: "read" }),
   cacheMiddleware(15, "sales:list"),
   cacheMiddleware(60, "sales"),
-  getAllSales
+  getAllSales,
 );
 router.get(
   "/report/by-product",
@@ -88,7 +89,7 @@ router.get(
   businessContext,
   requireFeature("sales"),
   requirePermission({ module: "sales", action: "read" }),
-  getSalesByProduct
+  getSalesByProduct,
 );
 router.get(
   "/report/by-distributor",
@@ -96,7 +97,7 @@ router.get(
   businessContext,
   requireFeature("sales"),
   requirePermission({ module: "sales", action: "read" }),
-  getSalesByDistributor
+  getSalesByDistributor,
 );
 router.put(
   "/:id/confirm-payment",
@@ -104,17 +105,27 @@ router.put(
   businessContext,
   requireFeature("sales"),
   requirePermission({ module: "sales", action: "update" }),
-  confirmPayment
+  confirmPayment,
 );
 
-// Eliminar venta (admin)
+// ⭐ Eliminar grupo de ventas completo (ANTES de /:id para evitar conflictos)
+router.delete(
+  "/group/:saleGroupId",
+  protect,
+  businessContext,
+  requireFeature("sales"),
+  requirePermission({ module: "sales", action: "delete" }),
+  deleteSaleGroup,
+);
+
+// Eliminar venta individual (admin)
 router.delete(
   "/:id",
   protect,
   businessContext,
   requireFeature("sales"),
   requirePermission({ module: "sales", action: "delete" }),
-  deleteSale
+  deleteSale,
 );
 
 export default router;

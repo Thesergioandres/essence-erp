@@ -4,6 +4,7 @@ import Branch from "../models/Branch.js";
 import BranchStock from "../models/BranchStock.js";
 import Credit from "../models/Credit.js";
 import Customer from "../models/Customer.js";
+import DefectiveProduct from "../models/DefectiveProduct.js";
 import DeliveryMethod from "../models/DeliveryMethod.js";
 import DistributorStock from "../models/DistributorStock.js";
 import PaymentMethod from "../models/PaymentMethod.js";
@@ -238,14 +239,206 @@ export const deleteSale = async (req, res) => {
       });
     }
 
+    // ⭐ Eliminar garantías (DefectiveProduct) asociadas por saleGroupId y restaurar stock
+    let deletedWarranties = 0;
+    const saleGroupId = sale.saleGroupId || sale._id.toString();
+    const warranties = await DefectiveProduct.find({
+      saleGroupId: saleGroupId,
+      origin: "order",
+      business: sale.business || businessId,
+    });
+
+    for (const warranty of warranties) {
+      // Restaurar stock al almacén
+      const warrantyProduct = await Product.findById(warranty.product);
+      if (warrantyProduct) {
+        const avgCost =
+          warrantyProduct.averageCost || warrantyProduct.purchasePrice || 0;
+        const invRestore = warranty.quantity * avgCost;
+
+        await Product.findByIdAndUpdate(warranty.product, {
+          $inc: {
+            warehouseStock: warranty.quantity,
+            totalStock: warranty.quantity,
+            totalInventoryValue: invRestore,
+          },
+        });
+      }
+
+      await warranty.deleteOne();
+      deletedWarranties++;
+    }
+
     // Eliminar la venta
     await sale.deleteOne();
 
     res.json({
       message: "Venta eliminada y stock restaurado",
       creditDeleted: !!deletedCredit,
+      warrantiesDeleted: deletedWarranties,
     });
   } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Eliminar un grupo de ventas por saleGroupId
+// @route   DELETE /api/sales/group/:saleGroupId
+// @access  Private/Admin
+export const deleteSaleGroup = async (req, res) => {
+  try {
+    const businessId = resolveBusinessId(req);
+    const isTest =
+      process.env.NODE_ENV === "test" || process.env.JEST_WORKER_ID;
+    if (!businessId && !isTest) {
+      return res.status(400).json({ message: "Falta x-business-id" });
+    }
+
+    const { saleGroupId } = req.params;
+    if (!saleGroupId) {
+      return res
+        .status(400)
+        .json({ message: "Se requiere el saleGroupId del grupo" });
+    }
+
+    // Buscar todas las ventas del grupo
+    const saleFilter = businessId
+      ? { saleGroupId, business: businessId }
+      : { saleGroupId };
+
+    const salesToDelete = await Sale.find(saleFilter);
+    if (salesToDelete.length === 0) {
+      return res
+        .status(404)
+        .json({ message: "No se encontraron ventas en este grupo" });
+    }
+
+    let deletedSales = 0;
+    let deletedCredits = 0;
+    let deletedWarranties = 0;
+    let stockRestored = 0;
+
+    // Primero eliminar garantías asociadas al grupo
+    const warranties = await DefectiveProduct.find({
+      saleGroupId,
+      origin: "order",
+      ...(businessId ? { business: businessId } : {}),
+    });
+
+    for (const warranty of warranties) {
+      const warrantyProduct = await Product.findById(warranty.product);
+      if (warrantyProduct) {
+        const avgCost =
+          warrantyProduct.averageCost || warrantyProduct.purchasePrice || 0;
+        const invRestore = warranty.quantity * avgCost;
+
+        await Product.findByIdAndUpdate(warranty.product, {
+          $inc: {
+            warehouseStock: warranty.quantity,
+            totalStock: warranty.quantity,
+            totalInventoryValue: invRestore,
+          },
+        });
+        stockRestored += warranty.quantity;
+      }
+      await warranty.deleteOne();
+      deletedWarranties++;
+    }
+
+    // Procesar cada venta del grupo
+    for (const sale of salesToDelete) {
+      const product = await Product.findById(sale.product);
+      const restoreQuantity = sale.quantity ?? 0;
+
+      // Verificar si la venta fue de bodega
+      let isWarehouseSale = false;
+      if (sale.branch) {
+        const branch = await Branch.findById(sale.branch);
+        isWarehouseSale = branch?.isWarehouse === true;
+      }
+
+      // Restaurar stock según origen
+      if (sale.branch && !isWarehouseSale) {
+        await BranchStock.findOneAndUpdate(
+          {
+            business: sale.business,
+            branch: sale.branch,
+            product: sale.product,
+          },
+          { $inc: { quantity: restoreQuantity } },
+          { upsert: true, new: true, setDefaultsOnInsert: true },
+        );
+      } else if (sale.distributor) {
+        await DistributorStock.findOneAndUpdate(
+          { distributor: sale.distributor, product: sale.product },
+          { $inc: { quantity: restoreQuantity } },
+          { upsert: true, new: true, setDefaultsOnInsert: true },
+        );
+      }
+
+      // Actualizar stock total del producto
+      if (restoreQuantity && product) {
+        const inc = { totalStock: restoreQuantity };
+        if (isWarehouseSale || (!sale.branch && !sale.distributor)) {
+          inc.warehouseStock = restoreQuantity;
+        }
+        const costAtSale = sale.averageCostAtSale || sale.purchasePrice;
+        inc.totalInventoryValue = restoreQuantity * costAtSale;
+        await Product.findByIdAndUpdate(sale.product, { $inc: inc });
+        stockRestored += restoreQuantity;
+      }
+
+      // Eliminar historial de ganancias
+      await ProfitHistory.deleteMany({
+        sale: sale._id,
+        ...(businessId ? { business: businessId } : {}),
+      });
+
+      // Ajustar métricas de cliente
+      const saleAmount =
+        Number(sale.salePrice || 0) * Number(sale.quantity || 0);
+      await applyCustomerTotals({
+        customerId: sale.customer,
+        businessId: sale.business || businessId,
+        amount: saleAmount,
+        direction: -1,
+      });
+
+      // Eliminar crédito asociado
+      const deletedCredit = await Credit.findOneAndDelete({
+        sale: sale._id,
+        business: sale.business || businessId,
+      });
+
+      if (deletedCredit) {
+        deletedCredits++;
+        if (deletedCredit.customer) {
+          await Customer.findByIdAndUpdate(deletedCredit.customer, {
+            $inc: { totalDebt: -deletedCredit.remainingAmount },
+          });
+        }
+      }
+
+      await sale.deleteOne();
+      deletedSales++;
+    }
+
+    // Invalidar caché
+    await invalidateCache("cache:analytics:*");
+    await invalidateCache("cache:gamification:*");
+    await invalidateCache("cache:sales:*");
+    await invalidateCache("cache:distributors:*");
+    await invalidateCache("cache:businessAssistant:*");
+
+    res.json({
+      message: `Grupo de ventas eliminado: ${deletedSales} ventas, ${deletedWarranties} garantías`,
+      deletedSales,
+      deletedCredits,
+      deletedWarranties,
+      stockRestored,
+    });
+  } catch (error) {
+    console.error("Error eliminando grupo de ventas:", error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -386,6 +579,7 @@ export const registerAdminSale = async (req, res) => {
       deliveryAddress,
       additionalCosts,
       discount,
+      warranties, // ⭐ Productos en garantía
     } = req.body;
 
     const normalizedSaleDate = toColombiaStartOfDay(saleDate);
@@ -694,7 +888,82 @@ export const registerAdminSale = async (req, res) => {
       }
     }
 
-    console.log(`[${reqId}] Ô£à registerAdminSale SUCCESS`);
+    // ⭐ Procesar garantías (productos defectuosos asociados a este pedido)
+    let createdWarranties = [];
+    if (Array.isArray(warranties) && warranties.length > 0) {
+      console.log(
+        `[${reqId}] 🛡️ Procesando ${warranties.length} productos en garantía...`,
+      );
+
+      for (const warranty of warranties) {
+        const warrantyProduct = await Product.findOne({
+          _id: warranty.productId,
+          business: businessId,
+        });
+
+        if (!warrantyProduct) {
+          console.warn(
+            `[${reqId}] ⚠️ Producto de garantía no encontrado:`,
+            warranty.productId,
+          );
+          continue;
+        }
+
+        // Validar stock disponible en bodega
+        if (warrantyProduct.warehouseStock < warranty.quantity) {
+          console.warn(
+            `[${reqId}] ⚠️ Stock insuficiente para garantía de ${warrantyProduct.name}`,
+          );
+          continue;
+        }
+
+        // Calcular pérdida basada en hasWarranty
+        const purchasePrice = warrantyProduct.purchasePrice || 0;
+        const lossAmount = warranty.hasWarranty
+          ? 0
+          : purchasePrice * warranty.quantity;
+
+        // Crear registro de producto defectuoso
+        const defective = await DefectiveProduct.create({
+          business: businessId,
+          distributor: null, // Venta admin
+          product: warranty.productId,
+          branch: branch?._id || null,
+          quantity: warranty.quantity,
+          reason: warranty.hasWarranty
+            ? "Garantía - Reposición proveedor"
+            : "Garantía - Pérdida sin reposición",
+          hasWarranty: warranty.hasWarranty,
+          warrantyStatus: warranty.hasWarranty ? "pending" : "not_applicable",
+          lossAmount,
+          stockOrigin: "warehouse",
+          saleGroupId: saleData.saleGroupId || sale._id.toString(),
+          origin: "order",
+          status: "confirmado", // Confirmar automáticamente
+          confirmedAt: new Date(),
+          confirmedBy: req.user?.id || req.user?.userId,
+        });
+
+        // Descontar stock de bodega
+        const avgCost = warrantyProduct.averageCost || purchasePrice;
+        const invReduction = warranty.quantity * avgCost;
+
+        await Product.findByIdAndUpdate(warranty.productId, {
+          $inc: {
+            warehouseStock: -warranty.quantity,
+            totalStock: -warranty.quantity,
+            totalInventoryValue: -invReduction,
+          },
+        });
+
+        createdWarranties.push(defective);
+        console.log(
+          `[${reqId}] 🛡️ Garantía creada para ${warrantyProduct.name}: ${defective._id}`,
+        );
+      }
+    }
+
+    console.log(`[${reqId}] ✅ registerAdminSale SUCCESS`);
 
     await AuditService.log({
       user: req.user,
@@ -721,6 +990,16 @@ export const registerAdminSale = async (req, res) => {
       credit: credit
         ? { _id: credit._id, remainingAmount: credit.remainingAmount }
         : null,
+      warranties:
+        createdWarranties.length > 0
+          ? createdWarranties.map((w) => ({
+              _id: w._id,
+              product: w.product,
+              quantity: w.quantity,
+              hasWarranty: w.hasWarranty,
+              lossAmount: w.lossAmount,
+            }))
+          : [],
     });
   } catch (error) {
     console.error(`[${reqId}] ÔØî FATAL ERROR:`, error?.message);

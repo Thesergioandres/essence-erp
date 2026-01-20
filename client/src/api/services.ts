@@ -1171,6 +1171,11 @@ export const saleService = {
     }>;
     discount?: number;
     saleGroupId?: string;
+    warranties?: Array<{
+      productId: string;
+      quantity: number;
+      hasWarranty: boolean;
+    }>;
   }): Promise<{
     message: string;
     sale: Sale;
@@ -1268,6 +1273,18 @@ export const saleService = {
 
   async deleteSale(saleId: string): Promise<{ message: string }> {
     const response = await api.delete(`/sales/${saleId}`);
+    return response.data;
+  },
+
+  // ⭐ Eliminar grupo de ventas completo
+  async deleteSaleGroup(saleGroupId: string): Promise<{
+    message: string;
+    deletedSales: number;
+    deletedCredits: number;
+    deletedWarranties: number;
+    stockRestored: number;
+  }> {
+    const response = await api.delete(`/sales/group/${saleGroupId}`);
     return response.data;
   },
 };
@@ -1384,13 +1401,28 @@ export const defectiveProductService = {
   },
 
   async getStats(): Promise<{
-    totalReports: number;
-    totalQuantity: number;
-    totalLoss: number;
-    byStatus: { status: string; count: number; quantity: number }[];
-    warrantyStats: { status: string; count: number }[];
+    stats: {
+      totalReports: number;
+      totalQuantity: number;
+      totalLoss: number;
+      pendingCount: number;
+      confirmedCount: number;
+      withWarranty: number;
+      warrantyPending: number;
+      warrantyApproved: number;
+      stockRestored: number;
+    };
   }> {
     const response = await api.get("/defective-products/stats");
+    return response.data;
+  },
+
+  async getBySaleGroup(saleGroupId: string): Promise<{
+    defectiveProducts: DefectiveProduct[];
+  }> {
+    const response = await api.get(
+      `/defective-products/sale-group/${saleGroupId}`
+    );
     return response.data;
   },
 

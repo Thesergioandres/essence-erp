@@ -36,6 +36,17 @@ interface AdditionalCost {
   amount: number;
 }
 
+// ⭐ Interfaz para productos en garantía
+interface WarrantyItem {
+  id: string;
+  productId: string;
+  productName: string;
+  quantity: number;
+  purchasePrice: number; // Costo base para calcular pérdida
+  hasWarranty: boolean; // true = reposición proveedor, false = pérdida
+  lossAmount: number; // Calculado: hasWarranty ? 0 : purchasePrice * quantity
+}
+
 interface FormState {
   productId: string;
   quantity: number | "";
@@ -75,6 +86,11 @@ export default function AdminRegisterSale() {
   const [pointsToRedeem, setPointsToRedeem] = useState<number>(0);
   const [saleItems, setSaleItems] = useState<SaleItem[]>([]);
   const [additionalCosts, setAdditionalCosts] = useState<AdditionalCost[]>([]);
+  // ⭐ Estado para productos en garantía
+  const [warrantyItems, setWarrantyItems] = useState<WarrantyItem[]>([]);
+  const [warrantyProductId, setWarrantyProductId] = useState<string>("");
+  const [warrantyQuantity, setWarrantyQuantity] = useState<number>(1);
+  const [warrantyHasWarranty, setWarrantyHasWarranty] = useState<boolean>(true);
   const [formData, setFormData] = useState<FormState>({
     productId: "",
     quantity: 1,
@@ -453,6 +469,60 @@ export default function AdminRegisterSale() {
     );
   };
 
+  // ⭐ Funciones para garantías
+  const handleAddWarranty = () => {
+    if (!warrantyProductId) return;
+
+    const product = products.find(p => p._id === warrantyProductId);
+    if (!product) return;
+
+    // Validar stock disponible (considerando items ya agregados)
+    const alreadyInWarranty = warrantyItems
+      .filter(w => w.productId === warrantyProductId)
+      .reduce((sum, w) => sum + w.quantity, 0);
+    const availableStock = (product.warehouseStock || 0) - alreadyInWarranty;
+
+    if (warrantyQuantity > availableStock) {
+      setError(
+        `Stock insuficiente para garantía. Disponible: ${availableStock}`
+      );
+      return;
+    }
+
+    const purchasePrice = product.purchasePrice || 0;
+    const lossAmount = warrantyHasWarranty
+      ? 0
+      : purchasePrice * warrantyQuantity;
+
+    const newWarranty: WarrantyItem = {
+      id: Date.now().toString(),
+      productId: warrantyProductId,
+      productName: product.name,
+      quantity: warrantyQuantity,
+      purchasePrice,
+      hasWarranty: warrantyHasWarranty,
+      lossAmount,
+    };
+
+    setWarrantyItems(prev => [...prev, newWarranty]);
+
+    // Limpiar formulario de garantía
+    setWarrantyProductId("");
+    setWarrantyQuantity(1);
+    setWarrantyHasWarranty(true);
+    setError("");
+  };
+
+  const handleRemoveWarranty = (id: string) => {
+    setWarrantyItems(prev => prev.filter(w => w.id !== id));
+  };
+
+  // Calcular total de pérdidas por garantías sin cobertura
+  const totalWarrantyLoss = warrantyItems.reduce(
+    (sum, w) => sum + w.lossAmount,
+    0
+  );
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -562,16 +632,26 @@ export default function AdminRegisterSale() {
               }))
             : [],
           discount: isFirstItem ? formData.discount : 0,
+          // ⭐ Garantías solo en el primer item
+          warranties: isFirstItem
+            ? warrantyItems.map(w => ({
+                productId: w.productId,
+                quantity: w.quantity,
+                hasWarranty: w.hasWarranty,
+              }))
+            : [],
         });
       }
 
+      const warrantyCount = warrantyItems.length;
       setSuccess(
-        `¡Pedido con ${saleItems.length} ${saleItems.length === 1 ? "producto registrado" : "productos registrados"} exitosamente!`
+        `¡Pedido con ${saleItems.length} ${saleItems.length === 1 ? "producto registrado" : "productos registrados"} exitosamente!${warrantyCount > 0 ? ` (${warrantyCount} garantía${warrantyCount > 1 ? "s" : ""} procesada${warrantyCount > 1 ? "s" : ""})` : ""}`
       );
 
       // Limpiar todo
       setSaleItems([]);
       setAdditionalCosts([]);
+      setWarrantyItems([]); // ⭐ Limpiar garantías
       // Restaurar el método de pago por defecto
       const defaultMethod =
         paymentMethods.find(m => m.code === "cash") || paymentMethods[0];
@@ -772,7 +852,11 @@ export default function AdminRegisterSale() {
                     const inCart = saleItems
                       .filter(i => i.productId === product._id)
                       .reduce((sum, i) => sum + i.quantity, 0);
-                    const remaining = stock - inCart;
+                    // ⭐ Calcular productos en garantía
+                    const inWarranty = warrantyItems
+                      .filter(w => w.productId === product._id)
+                      .reduce((sum, w) => sum + w.quantity, 0);
+                    const remaining = stock - inCart - inWarranty;
 
                     return (
                       <div
@@ -803,9 +887,16 @@ export default function AdminRegisterSale() {
                             }
                           >
                             {remaining}{" "}
-                            {inCart > 0 && (
+                            {(inCart > 0 || inWarranty > 0) && (
                               <span className="text-orange-400">
-                                (-{inCart} en carrito)
+                                ({inCart > 0 && `-${inCart} carrito`}
+                                {inCart > 0 && inWarranty > 0 && " "}
+                                {inWarranty > 0 && (
+                                  <span className="text-amber-400">
+                                    -{inWarranty} garantía
+                                  </span>
+                                )}
+                                )
                               </span>
                             )}
                           </span>
@@ -1333,6 +1424,133 @@ export default function AdminRegisterSale() {
                       </button>
                     </div>
                   ))}
+                </div>
+              )}
+            </div>
+
+            {/* ⭐ Sección de Garantías - Productos Defectuosos */}
+            <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-900/10 p-4">
+              <h3 className="mb-3 text-sm font-semibold text-amber-400">
+                🛡️ Productos en Garantía
+              </h3>
+              <p className="mb-3 text-xs text-gray-400">
+                Agrega productos defectuosos que serán enviados a garantía o
+                registrados como pérdida.
+              </p>
+
+              {/* Formulario para agregar garantía */}
+              <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div>
+                  <label className="mb-1 block text-xs text-gray-400">
+                    Producto
+                  </label>
+                  <select
+                    value={warrantyProductId}
+                    onChange={e => setWarrantyProductId(e.target.value)}
+                    className="w-full rounded border border-gray-600 bg-gray-900 px-2 py-2 text-sm text-white"
+                  >
+                    <option value="">Seleccionar...</option>
+                    {products
+                      .filter(p => (p.warehouseStock || 0) > 0)
+                      .map(p => (
+                        <option key={p._id} value={p._id}>
+                          {p.name} (Stock: {p.warehouseStock})
+                        </option>
+                      ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-gray-400">
+                    Cantidad
+                  </label>
+                  <input
+                    type="number"
+                    value={warrantyQuantity}
+                    onChange={e =>
+                      setWarrantyQuantity(Math.max(1, Number(e.target.value)))
+                    }
+                    min={1}
+                    className="w-full rounded border border-gray-600 bg-gray-900 px-2 py-2 text-sm text-white"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-gray-400">
+                    Tipo de Garantía
+                  </label>
+                  <select
+                    value={warrantyHasWarranty ? "warranty" : "loss"}
+                    onChange={e =>
+                      setWarrantyHasWarranty(e.target.value === "warranty")
+                    }
+                    className="w-full rounded border border-gray-600 bg-gray-900 px-2 py-2 text-sm text-white"
+                  >
+                    <option value="warranty">⚙️ Reposición proveedor</option>
+                    <option value="loss">💸 Pérdida sin garantía</option>
+                  </select>
+                </div>
+                <div className="flex items-end">
+                  <button
+                    type="button"
+                    onClick={handleAddWarranty}
+                    disabled={!warrantyProductId}
+                    className="w-full rounded bg-amber-600 px-3 py-2 text-sm font-medium text-white hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    ➕ Agregar
+                  </button>
+                </div>
+              </div>
+
+              {/* Lista de garantías agregadas */}
+              {warrantyItems.length === 0 ? (
+                <p className="text-sm text-gray-500">
+                  No hay productos en garantía.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {warrantyItems.map(w => (
+                    <div
+                      key={w.id}
+                      className="flex items-center justify-between rounded-lg border border-amber-500/20 bg-gray-800/50 p-3"
+                    >
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-white">
+                          {w.productName}{" "}
+                          <span className="text-gray-400">
+                            ({w.quantity} unidad{w.quantity > 1 ? "es" : ""})
+                          </span>
+                        </p>
+                        <p className="text-xs text-gray-400">
+                          {w.hasWarranty ? (
+                            <span className="text-green-400">
+                              ⚙️ Reposición del proveedor — Sin pérdida
+                            </span>
+                          ) : (
+                            <span className="text-red-400">
+                              💸 Pérdida: $
+                              {w.lossAmount.toLocaleString("es-CO")}
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveWarranty(w.id)}
+                        className="ml-3 text-red-400 hover:text-red-300"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+
+                  {/* Resumen de pérdidas */}
+                  {totalWarrantyLoss > 0 && (
+                    <div className="mt-2 rounded-lg border border-red-500/30 bg-red-900/20 p-2 text-center">
+                      <span className="text-sm text-red-400">
+                        💸 Total Pérdidas: $
+                        {totalWarrantyLoss.toLocaleString("es-CO")}
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

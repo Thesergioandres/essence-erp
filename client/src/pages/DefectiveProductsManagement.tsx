@@ -541,7 +541,24 @@ export default function DefectiveProductsManagement() {
                       )}
                     </td>
                     <td className="whitespace-nowrap px-6 py-4 text-sm">
-                      {report.status === "pendiente" ? (
+                      {/* ⭐ Si es de un pedido (origin=order), mostrar solo info, no acciones */}
+                      {report.origin === "order" ? (
+                        <div className="flex flex-col gap-1">
+                          <span className="inline-flex items-center rounded-full bg-purple-500/15 px-2 py-0.5 text-xs font-medium text-purple-300">
+                            📦 Desde Pedido
+                          </span>
+                          {report.hasWarranty ? (
+                            <span className="text-xs text-blue-400">
+                              Reposición proveedor
+                            </span>
+                          ) : (
+                            <span className="text-xs text-red-400">
+                              Pérdida: $
+                              {report.lossAmount?.toLocaleString() || 0}
+                            </span>
+                          )}
+                        </div>
+                      ) : report.status === "pendiente" ? (
                         <div className="flex gap-2">
                           <button
                             onClick={() => handleAction(report, "confirm")}
