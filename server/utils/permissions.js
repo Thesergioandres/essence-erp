@@ -24,7 +24,7 @@ export const ROLE_DEFAULT_PERMISSIONS = {
     expenses: { read: false },
     analytics: { read: true },
     config: { read: false },
-    transfers: { read: false },
+    transfers: { read: true, create: true },
   },
   viewer: {
     products: { read: true },
