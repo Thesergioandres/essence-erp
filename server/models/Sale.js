@@ -249,7 +249,7 @@ const saleSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 // Índices para acelerar listados y filtros comunes
@@ -285,7 +285,7 @@ saleSchema.pre("validate", function (next) {
 
       this.saleId = `SALE-${year}${month}${day}-${hours}${minutes}${seconds}-${random}`;
       console.log(
-        `✅ saleId generado automáticamente en pre-validate: ${this.saleId}`
+        `✅ saleId generado automáticamente en pre-validate: ${this.saleId}`,
       );
     } catch (error) {
       console.error("❌ Error generando saleId:", error?.message);
@@ -339,23 +339,11 @@ saleSchema.pre("save", function (next) {
     this.totalProfit = this.distributorProfit + this.adminProfit;
   }
 
-  // Calcular porcentajes de rentabilidad
-  // profitabilityPercentage: qué % de la venta es ganancia
-  // costPercentage: qué % de la venta es costo (lo que pide el cliente)
-  if (this.salePrice > 0) {
-    this.profitabilityPercentage =
-      ((this.salePrice - costBasis) / this.salePrice) * 100;
-    this.costPercentage = (costBasis / this.salePrice) * 100;
-  } else {
-    this.profitabilityPercentage = 0;
-    this.costPercentage = 0;
-  }
-
   // Calcular total de costos adicionales
   if (this.additionalCosts && this.additionalCosts.length > 0) {
     this.totalAdditionalCosts = this.additionalCosts.reduce(
       (sum, cost) => sum + (cost.amount || 0),
-      0
+      0,
     );
   } else {
     this.totalAdditionalCosts = 0;
@@ -367,6 +355,19 @@ saleSchema.pre("save", function (next) {
   // Calcular ganancia neta
   // netProfit = totalProfit - costos adicionales - envío - descuento
   this.netProfit = this.totalProfit - totalExtraCosts - (this.discount || 0);
+
+  // Calcular porcentajes de rentabilidad
+  // profitabilityPercentage: qué % de la venta TOTAL es ganancia NETA
+  // Fórmula correcta financieramente: (Ganancia Neta / Total Venta) * 100
+  // costPercentage: qué % del precio unitario es costo base
+  const totalSaleAmount = this.salePrice * this.quantity;
+  if (totalSaleAmount > 0) {
+    this.profitabilityPercentage = (this.netProfit / totalSaleAmount) * 100;
+    this.costPercentage = (costBasis / this.salePrice) * 100;
+  } else {
+    this.profitabilityPercentage = 0;
+    this.costPercentage = 0;
+  }
 
   next();
 });
