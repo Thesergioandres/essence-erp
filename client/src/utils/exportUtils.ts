@@ -1,15 +1,16 @@
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
-import * as XLSX from "xlsx";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
-export const exportToPDF = (
+export const exportToPDF = async (
   _data: any,
   title: string,
   columns: string[],
   rows: any[][]
 ) => {
+  // Dynamic imports to reduce initial bundle size
+  const jsPDF = (await import("jspdf")).default;
+  const autoTable = (await import("jspdf-autotable")).default;
+
   const doc = new jsPDF();
 
   // Header
@@ -66,16 +67,17 @@ export const exportToPDF = (
   doc.save(`${title.replace(/\s+/g, "_")}_${Date.now()}.pdf`);
 };
 
-export const exportToExcel = (data: any[], filename: string) => {
+export const exportToExcel = async (data: any[], filename: string) => {
+  const XLSX = await import("xlsx");
   const worksheet = XLSX.utils.json_to_sheet(data);
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "Datos");
 
   // Column widths
-  const maxWidths = Object.keys(data[0] || {}).map((key) => {
+  const maxWidths = Object.keys(data[0] || {}).map(key => {
     const maxLength = Math.max(
       key.length,
-      ...data.map((row) => String(row[key] || "").length)
+      ...data.map(row => String(row[key] || "").length)
     );
     return { wch: Math.min(maxLength + 2, 50) };
   });
@@ -87,7 +89,9 @@ export const exportToExcel = (data: any[], filename: string) => {
   );
 };
 
-export const exportKPIsToPDF = (kpis: any) => {
+export const exportKPIsToPDF = async (kpis: any) => {
+  const jsPDF = (await import("jspdf")).default;
+  const autoTable = (await import("jspdf-autotable")).default;
   const doc = new jsPDF();
 
   // Header
@@ -159,8 +163,8 @@ export const exportKPIsToPDF = (kpis: any) => {
   doc.save(`KPIs_Financieros_${Date.now()}.pdf`);
 };
 
-export const exportRankingsToPDF = (rankings: any[]) => {
-  const rows = rankings.map((dist) => [
+export const exportRankingsToPDF = async (rankings: any[]) => {
+  const rows = rankings.map(dist => [
     dist.rank.toString(),
     dist.name,
     dist.totalSales.toString(),
@@ -170,7 +174,7 @@ export const exportRankingsToPDF = (rankings: any[]) => {
     `$${dist.averageOrderValue.toFixed(2)}`,
   ]);
 
-  exportToPDF(
+  await exportToPDF(
     rankings,
     "Ranking de Distribuidores",
     [
@@ -186,8 +190,8 @@ export const exportRankingsToPDF = (rankings: any[]) => {
   );
 };
 
-export const exportRankingsToExcel = (rankings: any[]) => {
-  const data = rankings.map((dist) => ({
+export const exportRankingsToExcel = async (rankings: any[]) => {
+  const data = rankings.map(dist => ({
     Posición: dist.rank,
     Distribuidor: dist.name,
     Email: dist.email,
@@ -198,5 +202,5 @@ export const exportRankingsToExcel = (rankings: any[]) => {
     "Ticket Promedio": dist.averageOrderValue,
   }));
 
-  exportToExcel(data, "Ranking_Distribuidores");
+  await exportToExcel(data, "Ranking_Distribuidores");
 };

@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { FileSpreadsheet, FileText } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { authService, branchService, saleService } from "../api/services";
 import { useFeature } from "../components/FeatureSection";
 import LoadingSpinner from "../components/LoadingSpinner";
 import SaleDetailModal from "../components/SaleDetailModal";
 import type { Branch, Sale } from "../types";
+import { exportToExcel, exportToPDF } from "../utils/exportUtils";
 import {
   buildCacheKey,
   readSessionCache,
@@ -53,6 +55,72 @@ export default function Sales() {
     endDate: "",
   });
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExport = async (type: "excel" | "pdf") => {
+    if (sales.length === 0) return;
+    setIsExporting(true);
+    try {
+      const data = sales.map(sale => {
+        const branchName =
+          (typeof sale.branch === "object" ? sale.branch?.name : "") ||
+          "General";
+        const distributorName =
+          (typeof sale.distributor === "object"
+            ? sale.distributor?.name
+            : "") ||
+          (typeof sale.createdBy === "object" ? sale.createdBy?.name : "Admin");
+        const productName =
+          typeof sale.product === "object" ? sale.product?.name : "N/A";
+        const customerName = sale.customerName || "-";
+
+        return {
+          Fecha: new Date(sale.saleDate).toLocaleDateString(),
+          Sede: branchName,
+          Responsable: distributorName,
+          Cliente: customerName,
+          Producto: productName,
+          Cantidad: sale.quantity,
+          Total: sale.salePrice * sale.quantity,
+          Ganancia: sale.netProfit ?? sale.totalProfit ?? 0,
+          Estado: sale.paymentStatus,
+        };
+      });
+
+      if (type === "excel") {
+        await exportToExcel(data, "Reporte_Ventas");
+      } else {
+        const columns = [
+          "Fecha",
+          "Sede",
+          "Responsable",
+          "Cliente",
+          "Producto",
+          "Cant.",
+          "Total",
+          "Estado",
+        ];
+        const rows = data.map(d => [
+          d.Fecha,
+          d.Sede,
+          d.Responsable,
+          d.Cliente,
+          d.Producto,
+          d.Cantidad.toString(),
+          typeof d.Total === "number"
+            ? "$" + d.Total.toLocaleString()
+            : d.Total,
+          d.Estado,
+        ]);
+        await exportToPDF([], "Reporte de Ventas", columns, rows);
+      }
+    } catch (error) {
+      console.error("Error exportando:", error);
+      alert("Error al exportar");
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const currentUser = authService.getCurrentUser();
   const canDeleteSales =
@@ -339,48 +407,51 @@ export default function Sales() {
     });
   };
 
-  // Calcular ventas con crédito activo
-  const salesWithActiveCredit = sales.filter(s => hasActiveCredit(s));
-  const pendingCollectionAmount = salesWithActiveCredit.reduce((sum, s) => {
-    if (
-      typeof s.credit === "object" &&
-      s.credit !== null &&
-      s.credit.remainingAmount !== undefined
-    ) {
-      return sum + s.credit.remainingAmount;
-    }
-    return sum + s.salePrice * s.quantity;
-  }, 0);
+  // useMemo para evitar recálculos pesados en cada render
+  const stats = useMemo(() => {
+    // Calcular ventas con crédito activo
+    const salesWithActiveCredit = sales.filter(s => hasActiveCredit(s));
+    const pendingCollectionAmount = salesWithActiveCredit.reduce((sum, s) => {
+      if (
+        typeof s.credit === "object" &&
+        s.credit !== null &&
+        s.credit.remainingAmount !== undefined
+      ) {
+        return sum + s.credit.remainingAmount;
+      }
+      return sum + s.salePrice * s.quantity;
+    }, 0);
 
-  const stats = {
-    // Contar grupos de ventas (ventas reales), no items individuales
-    total: saleGroups.length,
-    pendiente: saleGroups.filter(g => g.paymentStatus === "pendiente").length,
-    confirmado: saleGroups.filter(
-      g => g.paymentStatus === "confirmado" && !hasActiveCredit(g.sales[0])
-    ).length,
-    pendingCollection: salesWithActiveCredit.length,
-    pendingCollectionAmount: pendingCollectionAmount,
-    totalRevenue:
-      statsData.totalRevenue ||
-      sales.reduce((sum, s) => sum + s.salePrice * s.quantity, 0),
-    // Siempre calcular netProfit desde las ventas para considerar deducciones
-    totalProfit: sales.reduce((sum, s) => {
-      // Calcular netProfit si no existe: totalProfit/adminProfit - deducciones
-      const saleNetProfit =
-        s.netProfit ??
-        (s.totalProfit ?? s.adminProfit ?? 0) -
-          (s.totalAdditionalCosts || 0) -
-          (s.shippingCost || 0) -
-          (s.discount || 0);
-      return sum + saleNetProfit;
-    }, 0),
-    // Total de costos adicionales
-    totalAdditionalCosts: sales.reduce(
-      (sum, s) => sum + (s.totalAdditionalCosts || 0),
-      0
-    ),
-  };
+    return {
+      // Contar grupos de ventas (ventas reales), no items individuales
+      total: saleGroups.length,
+      pendiente: saleGroups.filter(g => g.paymentStatus === "pendiente").length,
+      confirmado: saleGroups.filter(
+        g => g.paymentStatus === "confirmado" && !hasActiveCredit(g.sales[0])
+      ).length,
+      pendingCollection: salesWithActiveCredit.length,
+      pendingCollectionAmount: pendingCollectionAmount,
+      totalRevenue:
+        statsData.totalRevenue ||
+        sales.reduce((sum, s) => sum + s.salePrice * s.quantity, 0),
+      // Siempre calcular netProfit desde las ventas para considerar deducciones
+      totalProfit: sales.reduce((sum, s) => {
+        // Calcular netProfit si no existe: totalProfit/adminProfit - deducciones
+        const saleNetProfit =
+          s.netProfit ??
+          (s.totalProfit ?? s.adminProfit ?? 0) -
+            (s.totalAdditionalCosts || 0) -
+            (s.shippingCost || 0) -
+            (s.discount || 0);
+        return sum + saleNetProfit;
+      }, 0),
+      // Total de costos adicionales
+      totalAdditionalCosts: sales.reduce(
+        (sum, s) => sum + (s.totalAdditionalCosts || 0),
+        0
+      ),
+    };
+  }, [sales, saleGroups, statsData.totalRevenue]);
 
   const handlePageChange = (newPage: number) => {
     setPagination(prev => ({ ...prev, page: newPage }));
@@ -398,6 +469,32 @@ export default function Sales() {
     <div className="space-y-6 overflow-hidden">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-white">Gestión de Ventas</h1>
+        <div className="flex gap-2">
+          <button
+            onClick={() => handleExport("excel")}
+            disabled={isExporting || loading || sales.length === 0}
+            className="flex items-center gap-2 rounded-lg border border-green-600/50 bg-green-900/20 px-4 py-2 text-sm font-medium text-green-400 transition-colors hover:bg-green-900/40 disabled:opacity-50"
+          >
+            {isExporting ? (
+              <LoadingSpinner size="sm" />
+            ) : (
+              <FileSpreadsheet className="h-4 w-4" />
+            )}
+            <span className="hidden sm:inline">Excel</span>
+          </button>
+          <button
+            onClick={() => handleExport("pdf")}
+            disabled={isExporting || loading || sales.length === 0}
+            className="flex items-center gap-2 rounded-lg border border-red-600/50 bg-red-900/20 px-4 py-2 text-sm font-medium text-red-400 transition-colors hover:bg-red-900/40 disabled:opacity-50"
+          >
+            {isExporting ? (
+              <LoadingSpinner size="sm" />
+            ) : (
+              <FileText className="h-4 w-4" />
+            )}
+            <span className="hidden sm:inline">PDF</span>
+          </button>
+        </div>
       </div>
 
       {/* Estadísticas */}
