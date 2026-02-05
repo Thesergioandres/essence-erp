@@ -2,19 +2,16 @@ import { useEffect, useMemo, useState } from "react";
 import { useFeature } from "../../../components/FeatureSection";
 import { useBusiness } from "../../../context/BusinessContext";
 import { analyticsService } from "../../analytics/services";
-import {
-  expenseService,
-  profitHistoryService,
-} from "../../common/services";
+import { expenseService, profitHistoryService } from "../../common/services";
+import type { Expense } from "../../common/types/common.types";
 import { creditService } from "../../credits/services";
 import { defectiveProductService } from "../../sales/services";
 import type {
   CreditMetrics,
-  Expense,
   ProfitHistoryAdminDistributor,
   ProfitHistoryAdminEntry,
   ProfitHistoryAdminOverview,
-} from "../../../types";
+} from "../types/analytics.types";
 
 interface DefectiveStats {
   totalReports: number;
@@ -184,13 +181,13 @@ export default function ProfitHistory() {
                 startDate: dateRange.startDate || undefined,
                 endDate: dateRange.endDate || undefined,
               })
-              .catch(() => ({ metrics: null }))
-          : Promise.resolve({ metrics: null }),
+              .catch(() => null)
+          : Promise.resolve(null),
       ]);
 
-      setOverview(profitData);
+      setOverview(profitData as ProfitHistoryAdminOverview);
       setExpenses(expenseData.expenses || []);
-      setCreditMetrics(creditData.metrics);
+      setCreditMetrics(creditData);
     } catch (error) {
       console.error("Error cargando overview de ganancias", error);
     } finally {
@@ -205,7 +202,7 @@ export default function ProfitHistory() {
         analyticsService.getEstimatedProfit(),
         defectiveProductService.getStats().catch(() => ({ stats: null })),
       ]);
-      setEstimatedProfit(profitData);
+      setEstimatedProfit(profitData as any);
 
       if (defectiveData && defectiveData.stats) {
         setDefectiveStats(defectiveData.stats);
@@ -234,7 +231,7 @@ export default function ProfitHistory() {
 
   const distributors = useMemo<ProfitHistoryAdminDistributor[]>(() => {
     if (!overview) return [];
-    return overview.distributors;
+    return overview.distributors ?? [];
   }, [overview]);
 
   const distributorOptions = useMemo(() => {
@@ -306,17 +303,16 @@ export default function ProfitHistory() {
           (sum, e) => sum + (e.amount || 0),
           0
         );
-        const totalProfit = overview?.summary.totalProfit || 0;
-        // Usar netProfit del backend que ya considera deducciones de venta (garantía, envío, descuentos)
-        const salesNetProfit =
-          overview?.summary.netProfit ?? overview?.summary.adminProfit ?? 0;
-        const totalDeductions = overview?.summary.totalDeductions || 0;
+        const totalProfit = overview?.totalProfit || 0;
+        // Usar totalProfit del backend
+        const salesNetProfit = totalProfit;
+        const totalDeductions = 0; // No disponible en este endpoint
         // Pérdidas por productos defectuosos
         const defectiveLosses = defectiveStats?.totalLoss || 0;
         // Utilidad neta final = ganancia neta de ventas - gastos operativos - pérdidas defectuosos
         const netProfit = salesNetProfit - totalExpenses - defectiveLosses;
         // Total vendido (revenue)
-        const totalSalesValue = overview?.summary.salesValue || 0;
+        const totalSalesValue = 0; // No disponible en este endpoint
         // Rentabilidad = utilidad neta / total vendido * 100 (fórmula financiera correcta)
         const profitability =
           totalSalesValue > 0 ? (netProfit / totalSalesValue) * 100 : 0;
@@ -366,13 +362,10 @@ export default function ProfitHistory() {
                     Comisiones distribuidores
                   </p>
                   <p className="mt-2 text-xl font-semibold text-cyan-300">
-                    {formatCurrency(overview?.summary.distributorProfit || 0)}
+                    {formatCurrency(overview?.totalDistributorCommissions ?? 0)}
                   </p>
                   <p className="text-xs text-gray-400">
-                    {overview?.summary.ordersCount ??
-                      overview?.summary.count ??
-                      0}{" "}
-                    ventas
+                    {overview?.distributorCommissionEntries ?? 0} entradas
                   </p>
                 </div>
               )}
@@ -975,8 +968,7 @@ export default function ProfitHistory() {
             <div>
               <p className="text-sm text-gray-400">Transacciones recientes</p>
               <p className="text-lg font-semibold text-white">
-                {overview?.summary.ordersCount ?? overview?.summary.count ?? 0}{" "}
-                ventas
+                {overview?.totalEntries ?? 0} entradas
               </p>
             </div>
             <button
@@ -1030,75 +1022,80 @@ export default function ProfitHistory() {
                   </tr>
                 )}
 
-                {!loading && (!overview || overview.entries.length === 0) && (
-                  <tr>
-                    <td
-                      colSpan={distributorsEnabled ? 7 : 5}
-                      className="px-4 py-6 text-center text-gray-400"
-                    >
-                      No hay ventas en el rango seleccionado.
-                    </td>
-                  </tr>
-                )}
+                {!loading &&
+                  (!overview || (overview.entries?.length ?? 0) === 0) && (
+                    <tr>
+                      <td
+                        colSpan={distributorsEnabled ? 7 : 5}
+                        className="px-4 py-6 text-center text-gray-400"
+                      >
+                        No hay ventas en el rango seleccionado.
+                      </td>
+                    </tr>
+                  )}
 
                 {!loading &&
-                  overview?.entries.map((entry: ProfitHistoryAdminEntry) => (
-                    <tr key={entry.id} className="hover:bg-gray-950/40">
-                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-200">
-                        {formatDateTime(entry.date)}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-300">
-                        <div className="flex flex-col">
-                          <span className="font-semibold">
-                            {entry.saleId || entry.id}
-                          </span>
-                          {entry.eventName && (
-                            <span className="text-xs text-purple-300">
-                              {entry.eventName}
-                            </span>
-                          )}
-                          <span className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-gray-800 px-2 py-0.5 text-[11px] font-semibold uppercase text-gray-200">
-                            <span
-                              className={
-                                entry.source === "special"
-                                  ? "text-pink-300"
-                                  : "text-emerald-300"
-                              }
-                            >
-                              ●
-                            </span>
-                            {entry.source === "special" ? "Especial" : "Normal"}
-                          </span>
-                        </div>
-                      </td>
-                      {distributorsEnabled && (
-                        <td className="px-4 py-3 text-sm text-gray-100">
+                  overview?.recentEntries?.map(
+                    (entry: ProfitHistoryAdminEntry) => (
+                      <tr key={entry.id} className="hover:bg-gray-950/40">
+                        <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-200">
+                          {formatDateTime(entry.date)}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-300">
                           <div className="flex flex-col">
                             <span className="font-semibold">
-                              {entry.distributorName}
+                              {entry.saleId || entry.id}
                             </span>
-                            <span className="text-xs text-gray-400">
-                              {entry.distributorEmail || "Admin"}
+                            {entry.eventName && (
+                              <span className="text-xs text-purple-300">
+                                {entry.eventName}
+                              </span>
+                            )}
+                            <span className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-gray-800 px-2 py-0.5 text-[11px] font-semibold uppercase text-gray-200">
+                              <span
+                                className={
+                                  entry.source === "special"
+                                    ? "text-pink-300"
+                                    : "text-emerald-300"
+                                }
+                              >
+                                ●
+                              </span>
+                              {entry.source === "special"
+                                ? "Especial"
+                                : "Normal"}
                             </span>
                           </div>
                         </td>
-                      )}
-                      <td className="px-4 py-3 text-sm text-gray-200">
-                        {entry.productName || "-"}
-                      </td>
-                      {distributorsEnabled && (
-                        <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-cyan-300">
-                          {formatCurrency(entry.distributorProfit)}
+                        {distributorsEnabled && (
+                          <td className="px-4 py-3 text-sm text-gray-100">
+                            <div className="flex flex-col">
+                              <span className="font-semibold">
+                                {entry.distributorName}
+                              </span>
+                              <span className="text-xs text-gray-400">
+                                {entry.distributorEmail || "Admin"}
+                              </span>
+                            </div>
+                          </td>
+                        )}
+                        <td className="px-4 py-3 text-sm text-gray-200">
+                          {entry.productName || "-"}
                         </td>
-                      )}
-                      <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-emerald-300">
-                        {formatCurrency(entry.netProfit ?? entry.adminProfit)}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-purple-200">
-                        {formatCurrency(entry.netProfit ?? entry.totalProfit)}
-                      </td>
-                    </tr>
-                  ))}
+                        {distributorsEnabled && (
+                          <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-cyan-300">
+                            {formatCurrency(entry.distributorProfit)}
+                          </td>
+                        )}
+                        <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-emerald-300">
+                          {formatCurrency(entry.netProfit ?? entry.adminProfit)}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-purple-200">
+                          {formatCurrency(entry.netProfit ?? entry.totalProfit)}
+                        </td>
+                      </tr>
+                    )
+                  )}
               </tbody>
             </table>
           </div>
@@ -1111,14 +1108,15 @@ export default function ProfitHistory() {
               </div>
             )}
 
-            {!loading && (!overview || overview.entries.length === 0) && (
-              <div className="rounded-lg border border-gray-800 bg-gray-900 px-4 py-3 text-center text-gray-300">
-                No hay ventas en el rango seleccionado.
-              </div>
-            )}
+            {!loading &&
+              (!overview || (overview.entries?.length ?? 0) === 0) && (
+                <div className="rounded-lg border border-gray-800 bg-gray-900 px-4 py-3 text-center text-gray-300">
+                  No hay ventas en el rango seleccionado.
+                </div>
+              )}
 
             {!loading &&
-              overview?.entries.map(entry => (
+              overview?.recentEntries?.map(entry => (
                 <div
                   key={entry.id}
                   className="rounded-lg border border-gray-800 bg-gray-900 p-4 shadow-sm"
@@ -1231,7 +1229,7 @@ export default function ProfitHistory() {
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-bold text-cyan-300">
-                        {formatCurrency(dist.distributorProfit)}
+                        {formatCurrency(dist.distributorProfit ?? 0)}
                       </p>
                       <p className="text-xs text-gray-400">Comisión</p>
                     </div>

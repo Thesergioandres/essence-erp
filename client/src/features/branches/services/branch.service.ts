@@ -5,18 +5,28 @@
  */
 
 import api from "../../../api/axios";
-import type { Branch, Product } from "../../../types";
+import type { Branch } from "../../business/types/business.types";
+import type { Product } from "../../inventory/types/product.types";
 
 // ==================== BRANCH SERVICE ====================
 export const branchService = {
   async getAll(): Promise<Branch[]> {
-    const response = await api.get("/branches");
-    return response.data;
+    const response = await api.get<{ success: boolean; data: Branch[] }>(
+      "/branches"
+    );
+    return response.data.data || [];
+  },
+
+  // Alias for getAll (backward compatibility)
+  async list(): Promise<Branch[]> {
+    return this.getAll();
   },
 
   async getById(id: string): Promise<Branch> {
-    const response = await api.get(`/branches/${id}`);
-    return response.data;
+    const response = await api.get<{ success: boolean; data: Branch }>(
+      `/branches/${id}`
+    );
+    return response.data.data;
   },
 
   async create(data: {
@@ -24,6 +34,9 @@ export const branchService = {
     address?: string;
     phone?: string;
     manager?: string;
+    contactName?: string;
+    contactPhone?: string;
+    contactEmail?: string;
     isMain?: boolean;
   }): Promise<{
     message: string;
@@ -40,8 +53,12 @@ export const branchService = {
       address: string;
       phone: string;
       manager: string;
+      contactName: string;
+      contactPhone: string;
+      contactEmail: string;
       isMain: boolean;
       isActive: boolean;
+      active: boolean;
     }>
   ): Promise<{
     message: string;
@@ -56,6 +73,13 @@ export const branchService = {
   }> {
     const response = await api.delete(`/branches/${id}`);
     return response.data;
+  },
+
+  // Alias for delete (backward compatibility)
+  async remove(id: string): Promise<{
+    message: string;
+  }> {
+    return this.delete(id);
   },
 
   async getStock(
@@ -80,6 +104,18 @@ export const branchService = {
   }> {
     const response = await api.get(`/branches/${branchId}/stock`, { params });
     return response.data;
+  },
+
+  // Alias for getStock (backward compatibility)
+  async getBranchStock(
+    branchId: string,
+    params?: {
+      categoryId?: string;
+      lowStock?: boolean;
+      search?: string;
+    }
+  ) {
+    return this.getStock(branchId, params);
   },
 
   async updateStock(

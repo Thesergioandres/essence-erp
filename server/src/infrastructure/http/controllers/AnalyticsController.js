@@ -1,4 +1,5 @@
 import { GetDashboardStatsUseCase } from "../../../application/use-cases/GetDashboardStatsUseCase.js";
+import { AnalyticsRepository } from "../../database/repositories/AnalyticsRepository.js";
 
 /**
  * Get Dashboard Stats
@@ -17,6 +18,49 @@ export const getDashboardStats = async (req, res, next) => {
     res.json({
       success: true,
       data: stats,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get Estimated Profit
+ */
+export const getEstimatedProfit = async (req, res, next) => {
+  try {
+    const businessId = req.headers["x-business-id"] || req.user.business;
+
+    const repository = new AnalyticsRepository();
+    const estimatedProfit = await repository.getEstimatedProfit(businessId);
+
+    res.json({
+      success: true,
+      data: estimatedProfit,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get Distributor Estimated Profit
+ * Calcula la ganancia estimada del distribuidor basándose en sus ventas
+ */
+export const getDistributorEstimatedProfit = async (req, res, next) => {
+  try {
+    const businessId = req.headers["x-business-id"] || req.user.business;
+    const distributorId = req.user.id || req.user._id;
+
+    const repository = new AnalyticsRepository();
+    const estimatedProfit = await repository.getDistributorEstimatedProfit(
+      businessId,
+      distributorId,
+    );
+
+    res.json({
+      success: true,
+      data: estimatedProfit,
     });
   } catch (error) {
     next(error);

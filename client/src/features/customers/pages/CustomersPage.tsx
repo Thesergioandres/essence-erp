@@ -16,25 +16,11 @@ import {
   Users,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import api from "../api/axios";
+import api from "../../../api/axios";
 import CustomerPointsCard from "../../../components/CustomerPointsCard";
 import { authService } from "../../auth/services";
-
-interface Customer {
-  _id: string;
-  name: string;
-  phone?: string;
-  email?: string;
-  address?: string;
-  notes?: string;
-  segment: "new" | "frequent" | "vip" | "inactive";
-  points: number;
-  totalSpend: number;
-  totalDebt: number;
-  purchaseCount: number;
-  lastPurchase?: string;
-  createdAt: string;
-}
+import { customerService } from "../services/customer.service";
+import type { Customer } from "../types/customer.types";
 
 interface CustomerFormData {
   name: string;
@@ -103,6 +89,12 @@ export default function Customers() {
     avgSpend: 0,
   });
 
+  const getSegmentKey = (segment: Customer["segment"]) => {
+    if (!segment) return "";
+    if (typeof segment === "string") return segment;
+    return segment.key || segment.name || "";
+  };
+
   useEffect(() => {
     fetchCustomers();
   }, []);
@@ -110,12 +102,14 @@ export default function Customers() {
   const fetchCustomers = async () => {
     try {
       setLoading(true);
-      const { data } = await api.get<{ customers: Customer[] }>("/customers");
-      const customerList = data.customers || [];
+      const { customers: customerList } = await customerService.getAll();
       setCustomers(customerList);
 
-      // Calcular métricas
-      const totalVip = customerList.filter(c => c.segment === "vip").length;
+      // Calcular métricas - segment ahora puede ser objeto o string
+      const totalVip = customerList.filter(c => {
+        const segmentKey = getSegmentKey(c.segment);
+        return segmentKey.toLowerCase() === "vip";
+      }).length;
       const totalDebt = customerList.reduce(
         (acc, c) => acc + (c.totalDebt || 0),
         0
@@ -149,10 +143,10 @@ export default function Customers() {
 
     try {
       if (editingCustomer) {
-        await api.put(`/customers/${editingCustomer._id}`, formData);
+        await customerService.update(editingCustomer._id, formData);
         console.log("[UI INFO] customer_updated", { id: editingCustomer._id });
       } else {
-        await api.post("/customers", formData);
+        await customerService.create(formData);
         console.log("[UI INFO] customer_created");
       }
       setShowModal(false);
@@ -213,7 +207,7 @@ export default function Customers() {
       c.phone?.includes(searchTerm) ||
       c.email?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesSegment =
-      filterSegment === "all" || c.segment === filterSegment;
+      filterSegment === "all" || getSegmentKey(c.segment) === filterSegment;
     return matchesSearch && matchesSegment;
   });
 
@@ -370,8 +364,8 @@ export default function Customers() {
             </thead>
             <tbody className="divide-y divide-gray-700">
               {filteredCustomers.map(customer => {
-                const segInfo =
-                  segmentConfig[customer.segment] || segmentConfig.new;
+                const segmentKey = getSegmentKey(customer.segment) || "new";
+                const segInfo = segmentConfig[segmentKey] || segmentConfig.new;
                 return (
                   <tr key={customer._id} className="hover:bg-gray-900/30">
                     <td className="px-4 py-3">
@@ -386,7 +380,7 @@ export default function Customers() {
                             {customer.name}
                           </p>
                           <p className="text-sm text-gray-400">
-                            {customer.purchaseCount || 0} compras
+                            {customer.ordersCount || 0} compras
                           </p>
                         </div>
                       </div>
@@ -609,11 +603,21 @@ export default function Customers() {
                   </h3>
                   <span
                     className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ${
-                      segmentConfig[selectedCustomer.segment]?.color
+                      segmentConfig[
+                        getSegmentKey(selectedCustomer.segment) || "new"
+                      ]?.color
                     }`}
                   >
-                    {segmentConfig[selectedCustomer.segment]?.icon}
-                    {segmentConfig[selectedCustomer.segment]?.label}
+                    {
+                      segmentConfig[
+                        getSegmentKey(selectedCustomer.segment) || "new"
+                      ]?.icon
+                    }
+                    {
+                      segmentConfig[
+                        getSegmentKey(selectedCustomer.segment) || "new"
+                      ]?.label
+                    }
                   </span>
                 </div>
               </div>
@@ -640,7 +644,7 @@ export default function Customers() {
                     Compras
                   </p>
                   <p className="text-xl font-bold text-gray-900 dark:text-white">
-                    {selectedCustomer.purchaseCount || 0}
+                    {selectedCustomer.ordersCount || 0}
                   </p>
                 </div>
                 <div className="rounded-lg bg-gray-50 p-3 dark:bg-gray-900/50">
@@ -672,11 +676,11 @@ export default function Customers() {
                     {selectedCustomer.email}
                   </div>
                 )}
-                {selectedCustomer.lastPurchase && (
+                {selectedCustomer.lastPurchaseAt && (
                   <p className="text-gray-500 dark:text-gray-400">
                     Última compra:{" "}
                     {new Date(
-                      selectedCustomer.lastPurchase
+                      selectedCustomer.lastPurchaseAt
                     ).toLocaleDateString()}
                   </p>
                 )}

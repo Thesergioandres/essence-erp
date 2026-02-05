@@ -5,12 +5,14 @@
  */
 
 import api from "../../../api/axios";
-import type { Business, BusinessMembership, User } from "../../../types";
+import type { User } from "../../auth/types/auth.types";
+import type { Business, BusinessMembership } from "../types/business.types";
 
 // ==================== BUSINESS SERVICE ====================
 export const businessService = {
   async create(data: {
     name: string;
+    description?: string;
     type:
       | "retail"
       | "wholesale"
@@ -27,6 +29,12 @@ export const businessService = {
     taxId?: string;
     currency?: string;
     timezone?: string;
+    contactEmail?: string;
+    contactPhone?: string;
+    contactWhatsapp?: string;
+    contactLocation?: string;
+    logoUrl?: string;
+    logoPublicId?: string;
     logo?: {
       url: string;
       thumbnailUrl?: string;
@@ -50,14 +58,21 @@ export const businessService = {
       business: Business;
     };
   }> {
-    const response = await api.get("/business/my-memberships");
-    return response.data;
+    const response = await api.get<{
+      success: boolean;
+      data: {
+        memberships: (BusinessMembership & { business: Business })[];
+        activeMembership?: BusinessMembership & { business: Business };
+      };
+    }>("/business/my-memberships");
+    return response.data.data;
   },
 
   async updateBusiness(
     businessId: string,
     data: Partial<{
       name: string;
+      description: string;
       type: string;
       size: string;
       industry: string;
@@ -68,7 +83,13 @@ export const businessService = {
       taxId: string;
       currency: string;
       timezone: string;
+      contactEmail: string;
+      contactPhone: string;
+      contactWhatsapp: string;
+      contactLocation: string;
       logo: { url: string; thumbnailUrl?: string };
+      logoUrl: string;
+      logoPublicId: string;
     }>
   ): Promise<{
     message: string;
@@ -80,18 +101,7 @@ export const businessService = {
 
   async updateBusinessFeatures(
     businessId: string,
-    features: Partial<{
-      enableBranches: boolean;
-      enableDistributors: boolean;
-      enableCustomers: boolean;
-      enableCredits: boolean;
-      enablePromotions: boolean;
-      enableNotifications: boolean;
-      enableWarranties: boolean;
-      enablePoints: boolean;
-      enableAnalytics: boolean;
-      enableAudit: boolean;
-    }>
+    features: Partial<Record<string, boolean>>
   ): Promise<{
     message: string;
     business: Business;
@@ -119,20 +129,32 @@ export const businessService = {
     }>;
   }> {
     const response = await api.get(`/business/${businessId}/members`);
-    return response.data;
+    // V2 API devuelve { success: true, data: { members, pendingInvites } } O a veces solo data: [members]
+    const apiResponse = response.data;
+
+    const rawData = apiResponse.data || apiResponse;
+
+    if (Array.isArray(rawData)) {
+      return {
+        members: rawData,
+        pendingInvites: [],
+      };
+    }
+
+    return rawData;
   },
 
   async updateMemberBranches(
     businessId: string,
-    userId: string,
+    membershipId: string,
     branches: string[]
   ): Promise<{
     message: string;
     membership: BusinessMembership;
   }> {
     const response = await api.put(
-      `/business/${businessId}/members/${userId}/branches`,
-      { branches }
+      `/business/${businessId}/members/${membershipId}`,
+      { allowedBranches: branches }
     );
     return response.data;
   },
@@ -140,7 +162,8 @@ export const businessService = {
   async addMember(
     businessId: string,
     data: {
-      email: string;
+      email?: string;
+      userId?: string;
       role: "admin" | "manager" | "distributor" | "viewer";
       permissions?: string[];
       branches?: string[];

@@ -1,0 +1,186 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - link "Essence ERP" [ref=e7]:
+          - /url: /
+          - img "Essence ERP" [ref=e8]
+        - button "Toggle menu" [ref=e9]:
+          - img [ref=e10]
+      - generic [ref=e12]:
+        - link "Inicio" [ref=e13]:
+          - /url: /
+        - link "Iniciar sesión" [ref=e14]:
+          - /url: /login
+  - generic [ref=e20]:
+    - generic [ref=e21]:
+      - generic [ref=e22]: ERP modular • Multi-empresa
+      - generic [ref=e23]:
+        - heading "Un ERP que opera por negocios." [level=1] [ref=e24]
+        - paragraph [ref=e25]: Centraliza inventario, catálogos, comisiones y analítica en un mismo panel. Activa módulos por negocio y controla todo sin perder velocidad.
+      - generic [ref=e26]:
+        - button "Ver módulos" [ref=e27]: Ver módulos
+        - button "Entrar al panel" [ref=e29]:
+          - text: Entrar al panel
+          - img [ref=e30]
+      - generic [ref=e32]:
+        - generic [ref=e33]: Multi-empresa
+        - generic [ref=e35]: Roles y permisos
+        - generic [ref=e37]: KPIs en vivo
+    - generic [ref=e40]:
+      - generic [ref=e41]:
+        - generic [ref=e42]:
+          - paragraph [ref=e43]: Operación
+          - paragraph [ref=e44]: Módulos activos
+        - generic [ref=e45]: Uptime 99.9%
+      - generic [ref=e46]:
+        - generic [ref=e47]:
+          - generic [ref=e48]:
+            - paragraph [ref=e49]: Inventario en vivo
+            - generic [ref=e50]: Activo
+          - paragraph [ref=e51]: Controla stock, permisos y reglas por negocio sin romper la operación diaria.
+        - generic [ref=e52]:
+          - generic [ref=e53]:
+            - paragraph [ref=e54]: Catálogo distribuido
+            - generic [ref=e55]: Activo
+          - paragraph [ref=e56]: Controla stock, permisos y reglas por negocio sin romper la operación diaria.
+      - generic [ref=e57]:
+        - generic [ref=e58]:
+          - paragraph [ref=e59]: "24"
+          - paragraph [ref=e60]: Negocios activos
+        - generic [ref=e61]:
+          - paragraph [ref=e62]: "+180"
+          - paragraph [ref=e63]: Jobs diarios
+        - generic [ref=e64]:
+          - paragraph [ref=e65]: 99.9%
+          - paragraph [ref=e66]: Uptime
+  - generic [ref=e67]:
+    - generic [ref=e68]:
+      - generic [ref=e69]:
+        - paragraph [ref=e70]: ERP modular
+        - heading "Un tablero para cada negocio" [level=2] [ref=e71]
+        - paragraph [ref=e72]: Activa solo los módulos que necesitas. Gestiona inventario, catálogos distribuidos, comisiones y analítica en un solo lugar, sin perder control.
+      - generic [ref=e73]: Multi-empresa listo para producción
+    - generic [ref=e74]:
+      - generic [ref=e75]:
+        - generic [ref=e76]:
+          - generic [ref=e77]:
+            - paragraph [ref=e78]: Módulo
+            - heading "Inventario centralizado" [level=3] [ref=e79]
+          - generic [ref=e80]: Actívalo
+        - paragraph [ref=e81]: Stock en vivo por sucursal y canal, con catálogo unificado y alertas de reposición.
+        - generic [ref=e82]:
+          - generic [ref=e83]: Multi-sucursal
+          - generic [ref=e84]: SKUs únicos
+          - generic [ref=e85]: Alertas automáticas
+      - generic [ref=e86]:
+        - generic [ref=e87]:
+          - generic [ref=e88]:
+            - paragraph [ref=e89]: Módulo
+            - heading "Ventas omnicanal" [level=3] [ref=e90]
+          - generic [ref=e91]: Actívalo
+        - paragraph [ref=e92]: Opera tiendas, mayoristas y reparto con reglas distintas y conciliación en un solo tablero.
+        - generic [ref=e93]:
+          - generic [ref=e94]: Canales B2B/B2C
+          - generic [ref=e95]: Listas de precio
+          - generic [ref=e96]: Checkout flexible
+      - generic [ref=e97]:
+        - generic [ref=e98]:
+          - generic [ref=e99]:
+            - paragraph [ref=e100]: Módulo
+            - heading "Catálogo distribuido" [level=3] [ref=e101]
+          - generic [ref=e102]: Actívalo
+        - paragraph [ref=e103]: Comparte catálogos, controla comisiones y permisos por negocio o distribuidor.
+        - generic [ref=e104]:
+          - generic [ref=e105]: Roles y scopes
+          - generic [ref=e106]: Comisiones
+          - generic [ref=e107]: Visibilidad controlada
+      - generic [ref=e108]:
+        - generic [ref=e109]:
+          - generic [ref=e110]:
+            - paragraph [ref=e111]: Módulo
+            - heading "Finanzas y comisiones" [level=3] [ref=e112]
+          - generic [ref=e113]: Actívalo
+        - paragraph [ref=e114]: "Cierra el mes con flujos claros: pagos, comisiones y costos en un solo lugar."
+        - generic [ref=e115]:
+          - generic [ref=e116]: Cortes automáticos
+          - generic [ref=e117]: Margen por SKU
+          - generic [ref=e118]: Pagos conciliados
+      - generic [ref=e119]:
+        - generic [ref=e120]:
+          - generic [ref=e121]:
+            - paragraph [ref=e122]: Módulo
+            - heading "Analítica en tiempo real" [level=3] [ref=e123]
+          - generic [ref=e124]: Actívalo
+        - paragraph [ref=e125]: Ranking de ventas, cohorts y proyección de demanda por unidad de negocio.
+        - generic [ref=e126]:
+          - generic [ref=e127]: KPIs vivos
+          - generic [ref=e128]: Alertas
+          - generic [ref=e129]: Exportables
+      - generic [ref=e130]:
+        - generic [ref=e131]:
+          - generic [ref=e132]:
+            - paragraph [ref=e133]: Módulo
+            - heading "Automatizaciones" [level=3] [ref=e134]
+          - generic [ref=e135]: Actívalo
+        - paragraph [ref=e136]: Jobs programados para precios, stock y catálogos sin depender del equipo.
+        - generic [ref=e137]:
+          - generic [ref=e138]: Tareas nocturnas
+          - generic [ref=e139]: Reglas por canal
+          - generic [ref=e140]: APIs abiertas
+  - generic [ref=e142]:
+    - generic [ref=e143]:
+      - generic [ref=e144]:
+        - paragraph [ref=e145]: Operación
+        - heading "Diseñado para multi-negocio" [level=2] [ref=e146]
+        - paragraph [ref=e147]: "Control granular sin perder velocidad: permisos, auditoría y despliegues listos para equipos que crecen."
+      - generic [ref=e148]: Secure by default
+    - generic [ref=e149]:
+      - generic [ref=e150]:
+        - heading "Multi-empresa sin fricción" [level=3] [ref=e151]
+        - paragraph [ref=e152]: "Define módulos por negocio: habilita solo lo que cada operación necesita sin duplicar datos."
+      - generic [ref=e153]:
+        - heading "Gobernanza y control" [level=3] [ref=e154]
+        - paragraph [ref=e155]: Roles, permisos y bitácora por acción. Audita cambios en precios, stock y comisiones.
+      - generic [ref=e156]:
+        - heading "Infra lista para producción" [level=3] [ref=e157]
+        - paragraph [ref=e158]: CORS, workers y jobs ya corriendo; despliegues con Docker y Nixpacks listos para cloud.
+  - generic [ref=e160]:
+    - generic [ref=e161]:
+      - paragraph [ref=e162]: Experiencia Essence
+      - heading "Entrega rápida, cambios seguros" [level=3] [ref=e163]
+      - paragraph [ref=e164]: Jobs nocturnos, controles de CORS y despliegues con Docker listos. Ajusta módulos por negocio sin romper producción.
+    - generic [ref=e165]:
+      - generic [ref=e166]: Configura módulos
+      - generic [ref=e167]: Comparte catálogo
+      - generic [ref=e168]: Escala operaciones
+  - contentinfo [ref=e169]:
+    - generic [ref=e170]:
+      - generic [ref=e171]:
+        - generic [ref=e172]:
+          - img "Essence ERP" [ref=e173]
+          - paragraph [ref=e174]: ERP modular para operar múltiples negocios con inventario, catálogos, comisiones y analítica en un solo panel.
+        - generic [ref=e175]:
+          - heading "Enlaces" [level=3] [ref=e176]
+          - list [ref=e177]:
+            - listitem [ref=e178]:
+              - link "Inicio" [ref=e179]:
+                - /url: /
+            - listitem [ref=e180]:
+              - link "Módulos" [ref=e181]:
+                - /url: /#modulos
+            - listitem [ref=e182]:
+              - link "Iniciar sesión" [ref=e183]:
+                - /url: /login
+        - generic [ref=e184]:
+          - heading "Contacto" [level=3] [ref=e185]
+          - list [ref=e186]:
+            - listitem [ref=e187]:
+              - img [ref=e188]
+              - link "Serguito2003@gmail.com" [ref=e190]:
+                - /url: mailto:Serguito2003@gmail.com
+      - paragraph [ref=e192]: © 2026 Essence. Todos los derechos reservados.
+```

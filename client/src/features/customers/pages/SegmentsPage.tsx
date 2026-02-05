@@ -39,7 +39,7 @@ export default function Segments() {
     try {
       setLoading(true);
       const data = await segmentService.getAll();
-      setSegments(data.segments);
+      setSegments(data.segments as unknown as Segment[]);
     } catch (err) {
       console.error("Error al cargar segmentos:", err);
       setError("Error al cargar los segmentos");
@@ -59,7 +59,6 @@ export default function Segments() {
       } else {
         await segmentService.create({
           name: formData.name,
-          key: formData.key,
           description: formData.description,
         });
       }

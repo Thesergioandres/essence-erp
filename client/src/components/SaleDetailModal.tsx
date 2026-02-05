@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
+import type { DefectiveProduct } from "../features/common/types/common.types";
 import { defectiveProductService } from "../features/sales/services";
-import type { DefectiveProduct, Sale } from "../types";
+import type { Sale } from "../features/sales/types/sales.types";
 
 interface SaleDetailModalProps {
   sale: Sale | null;

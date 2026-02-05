@@ -5,7 +5,7 @@
  */
 
 import api from "../../../api/axios";
-import type { Credit, CreditPayment } from "../../../types";
+import type { Credit, CreditPayment } from "../types/credit.types";
 
 export const creditService = {
   async getAll(params?: {
@@ -34,15 +34,57 @@ export const creditService = {
     };
   }> {
     const response = await api.get("/credits", { params });
-    return response.data;
+    // Handle V2 response format: { success, data: credits[], pagination }
+    const rawData = response.data;
+    return {
+      credits: rawData?.data || rawData?.credits || [],
+      pagination: rawData?.pagination,
+      stats: rawData?.stats,
+    };
   },
 
   async getById(id: string): Promise<{
     credit: Credit;
     payments: CreditPayment[];
+    profitInfo: {
+      // Información básica del crédito
+      originalAmount: number;
+      paidAmount: number;
+      remainingAmount: number;
+      isPaidCompletely: boolean;
+      // Información de la venta asociada
+      saleId?: string;
+      productName?: string;
+      quantity: number;
+      unitPrice: number;
+      totalSaleAmount: number;
+      // Costos
+      unitCost: number;
+      totalCost: number;
+      // Ganancias
+      adminProfit: number;
+      distributorProfit: number;
+      totalProfit: number;
+      distributorProfitPercentage: number;
+      profitMarginPercentage: number;
+      // Información del distribuidor
+      isDistributorSale: boolean;
+      distributorName?: string | null;
+      distributorEmail?: string | null;
+      // Estado de realización de la ganancia
+      profitRealized: boolean;
+      realizedProfit: number;
+      pendingProfit: number;
+    } | null;
   }> {
     const response = await api.get(`/credits/${id}`);
-    return response.data;
+    // Handle V2 response format: { success, data: { credit, payments, profitInfo } }
+    const rawData = response.data?.data || response.data;
+    return {
+      credit: rawData.credit,
+      payments: rawData.payments || [],
+      profitInfo: rawData.profitInfo || null,
+    };
   },
 
   async create(data: {
@@ -52,12 +94,10 @@ export const creditService = {
     dueDate: string;
     notes?: string;
     initialPayment?: number;
-  }): Promise<{
-    message: string;
-    credit: Credit;
-  }> {
+  }): Promise<Credit> {
     const response = await api.post("/credits", data);
-    return response.data;
+    // Handle V2 response format: { success, data: credit }
+    return response.data?.data || response.data;
   },
 
   async registerPayment(
@@ -70,13 +110,14 @@ export const creditService = {
       paymentProofMimeType?: string;
     }
   ): Promise<{
-    message: string;
+    message?: string;
     credit: Credit;
     payment: CreditPayment;
     remainingBalance: number;
   }> {
     const response = await api.post(`/credits/${creditId}/payments`, data);
-    return response.data;
+    // Handle V2 response format: { success, data: { credit, payment, remainingBalance } }
+    return response.data?.data || response.data;
   },
 
   async registerDistributorPayment(
@@ -86,7 +127,7 @@ export const creditService = {
       notes?: string;
     }
   ): Promise<{
-    message: string;
+    message?: string;
     credit: Credit;
     payment: CreditPayment;
     remainingBalance: number;
@@ -95,7 +136,8 @@ export const creditService = {
       `/credits/${creditId}/distributor-payments`,
       data
     );
-    return response.data;
+    // Handle V2 response format: { success, data: { credit, payment, remainingBalance } }
+    return response.data?.data || response.data;
   },
 
   async getDistributorCredits(params?: {
@@ -118,22 +160,24 @@ export const creditService = {
     };
   }> {
     const response = await api.get("/credits/distributor", { params });
-    return response.data;
+    // Handle V2 response format: { success, data: credits[], pagination, stats }
+    const rawData = response.data;
+    return {
+      credits: rawData?.data || rawData?.credits || [],
+      pagination: rawData?.pagination,
+      stats: rawData?.stats,
+    };
   },
 
-  async cancel(creditId: string): Promise<{
-    message: string;
-    credit: Credit;
-  }> {
+  async cancel(creditId: string): Promise<Credit> {
     const response = await api.put(`/credits/${creditId}/cancel`);
-    return response.data;
+    // Handle V2 response format: { success, data: credit }
+    return response.data?.data || response.data;
   },
 
-  async delete(creditId: string): Promise<{
-    message: string;
-  }> {
-    const response = await api.delete(`/credits/${creditId}`);
-    return response.data;
+  async delete(creditId: string): Promise<void> {
+    await api.delete(`/credits/${creditId}`);
+    // No return needed - just confirm deletion
   },
 
   async getMetrics(params?: {
@@ -141,15 +185,24 @@ export const creditService = {
     endDate?: string;
     groupBy?: "day" | "week" | "month";
   }): Promise<{
-    metrics: {
+    total: {
       totalCredits: number;
-      totalAmount: number;
-      totalPaid: number;
-      totalPending: number;
+      totalRemainingAmount: number;
+      totalPaidAmount: number;
+      overdueCount: number;
       overdueAmount: number;
-      averagePaymentTime: number;
-      collectionRate: number;
     };
+    overdue: {
+      count: number;
+      amount: number;
+    };
+    recoveryRate: number;
+    topDebtors?: Array<{
+      customerId: string;
+      customerName: string;
+      totalDebt: number;
+      creditsCount: number;
+    }>;
     timeline?: Array<{
       date: string;
       created: number;
@@ -158,7 +211,44 @@ export const creditService = {
     }>;
   }> {
     const response = await api.get("/credits/metrics", { params });
-    return response.data;
+    // Handle V2 response format: { success, data: { pending, paid, overdue, totalOutstanding } }
+    const rawData = response.data?.data || response.data;
+
+    // Transform backend structure to frontend expected structure
+    const pending = rawData?.pending || {
+      count: 0,
+      totalAmount: 0,
+      totalPaid: 0,
+    };
+    const paid = rawData?.paid || { count: 0, totalAmount: 0, totalPaid: 0 };
+    const overdue = rawData?.overdue || {
+      count: 0,
+      totalAmount: 0,
+      totalPaid: 0,
+    };
+
+    const totalPaid = pending.totalPaid + paid.totalPaid + overdue.totalPaid;
+    const totalAmount =
+      pending.totalAmount + paid.totalAmount + overdue.totalAmount;
+    const recoveryRate =
+      totalAmount > 0 ? Math.round((totalPaid / totalAmount) * 100) : 0;
+
+    return {
+      total: {
+        totalCredits: pending.count + paid.count + overdue.count,
+        totalRemainingAmount: rawData?.totalOutstanding || 0,
+        totalPaidAmount: totalPaid,
+        overdueCount: overdue.count,
+        overdueAmount: overdue.totalAmount - overdue.totalPaid,
+      },
+      overdue: {
+        count: overdue.count,
+        amount: overdue.totalAmount - overdue.totalPaid,
+      },
+      recoveryRate,
+      topDebtors: rawData?.topDebtors || [],
+      timeline: rawData?.timeline,
+    };
   },
 
   async getCustomerCredits(
@@ -179,6 +269,11 @@ export const creditService = {
     const response = await api.get(`/customers/${customerId}/credits`, {
       params,
     });
-    return response.data;
+    // Handle V2 response format: { success, data: { credits, stats } }
+    const rawData = response.data?.data || response.data;
+    return {
+      credits: rawData?.credits || [],
+      stats: rawData?.stats || { totalCredits: 0, totalDebt: 0, totalPaid: 0 },
+    };
   },
 };

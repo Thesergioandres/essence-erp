@@ -16,7 +16,8 @@ import React, {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { useDebounce, useProductCache } from "../hooks";
+import { useDebounce } from "../hooks";
+import { useProductCache } from "../hooks/useProductCache";
 
 interface Product {
   _id: string;

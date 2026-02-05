@@ -8,38 +8,87 @@ import api from "../../../api/axios";
 
 // ==================== ANALYTICS SERVICE ====================
 export const analyticsService = {
-  async getMonthlyProfit(filters?: { year?: number; month?: number }): Promise<{
-    profit: {
-      totalSales: number;
-      totalCost: number;
+  /**
+   * Get monthly profit data using V2 financial-kpis endpoint
+   * Maps backend response to frontend expected format
+   */
+  async getMonthlyProfit(filters?: {
+    year?: number;
+    month?: number;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<{
+    currentMonth: {
+      revenue: number;
+      totalProfit: number;
+      totalOPEX: number;
+      netOperationProfit: number;
+      salesCount: number;
+    };
+    lastMonth: {
+      revenue: number;
       totalProfit: number;
       salesCount: number;
-      averageSaleValue: number;
-      averageProfit: number;
     };
-    byProduct: Array<{
-      productId: string;
-      productName: string;
-      quantity: number;
-      revenue: number;
-      cost: number;
-      profit: number;
-    }>;
-    byDistributor: Array<{
-      distributorId: string;
-      distributorName: string;
-      salesCount: number;
-      revenue: number;
-      adminProfit: number;
-      distributorProfit: number;
-    }>;
+    growthPercentage: number;
+    averageTicket: number;
+    accountsReceivable?: number;
   }> {
-    const response = await api.get("/analytics/profit/monthly", {
-      params: filters,
-    });
-    return response.data;
+    try {
+      // Use V2 financial-kpis endpoint
+      const response = await api.get("/advanced-analytics/financial-kpis", {
+        params: {
+          startDate: filters?.startDate,
+          endDate: filters?.endDate,
+        },
+      });
+
+      const data = response.data.data || response.data;
+      const range = data?.range || {};
+      const monthly = data?.monthly || {};
+      const kpis = data?.kpis || {};
+
+      // Map to frontend expected format
+      return {
+        currentMonth: {
+          revenue: range.revenue || monthly.revenue || 0,
+          totalProfit: range.grossProfit || monthly.profit || 0,
+          totalOPEX: range.totalExpenses || kpis.totalExpenses || 0,
+          netOperationProfit:
+            range.netProfit ||
+            (range.grossProfit || 0) - (range.totalExpenses || 0),
+          salesCount: range.sales || monthly.sales || kpis.monthSales || 0,
+        },
+        lastMonth: {
+          revenue: 0, // Would need separate call for previous period
+          totalProfit: 0,
+          salesCount: 0,
+        },
+        growthPercentage: 0,
+        averageTicket: range.avgTicket || 0,
+        accountsReceivable: 0, // Would need credits endpoint
+      };
+    } catch (error) {
+      console.error("[getMonthlyProfit] Error:", error);
+      // Return empty data on error
+      return {
+        currentMonth: {
+          revenue: 0,
+          totalProfit: 0,
+          totalOPEX: 0,
+          netOperationProfit: 0,
+          salesCount: 0,
+        },
+        lastMonth: { revenue: 0, totalProfit: 0, salesCount: 0 },
+        growthPercentage: 0,
+        averageTicket: 0,
+      };
+    }
   },
 
+  /**
+   * Get profit by product using V2 top-products endpoint
+   */
   async getProfitByProduct(filters?: {
     startDate?: string;
     endDate?: string;
@@ -55,6 +104,7 @@ export const analyticsService = {
       totalProfit: number;
       averageProfit: number;
       salesCount: number;
+      totalSales?: number;
     }>;
     totals: {
       revenue: number;
@@ -63,12 +113,52 @@ export const analyticsService = {
       quantity: number;
     };
   }> {
-    const response = await api.get("/analytics/profit/by-product", {
-      params: filters,
-    });
-    return response.data;
+    try {
+      const response = await api.get("/advanced-analytics/top-products", {
+        params: { ...filters, limit: 50 },
+      });
+      const rawData = response.data.data || response.data || [];
+      const data = Array.isArray(rawData) ? rawData : [];
+
+      const products = data.map((item: any) => ({
+        productId: item._id || item.productId,
+        productName: item.product?.name || item.name || "Sin nombre",
+        productImage: item.product?.image,
+        totalQuantity: item.totalQuantity || 0,
+        totalRevenue: item.totalRevenue || 0,
+        totalCost: 0, // Not provided by backend
+        totalProfit: item.totalProfit || 0,
+        averageProfit:
+          item.totalQuantity > 0
+            ? (item.totalProfit || 0) / item.totalQuantity
+            : 0,
+        salesCount: item.salesCount || item.totalQuantity || 0,
+        totalSales: item.salesCount || item.totalQuantity || 0,
+      }));
+
+      const totals = products.reduce(
+        (acc: any, p: any) => ({
+          revenue: acc.revenue + p.totalRevenue,
+          cost: acc.cost + p.totalCost,
+          profit: acc.profit + p.totalProfit,
+          quantity: acc.quantity + p.totalQuantity,
+        }),
+        { revenue: 0, cost: 0, profit: 0, quantity: 0 }
+      );
+
+      return { products, totals };
+    } catch (error) {
+      console.error("[getProfitByProduct] Error:", error);
+      return {
+        products: [],
+        totals: { revenue: 0, cost: 0, profit: 0, quantity: 0 },
+      };
+    }
   },
 
+  /**
+   * Get profit by distributor using V2 distributor-performance endpoint
+   */
   async getProfitByDistributor(filters?: {
     startDate?: string;
     endDate?: string;
@@ -90,12 +180,47 @@ export const analyticsService = {
       profit: number;
     };
   }> {
-    const response = await api.get("/analytics/profit/by-distributor", {
-      params: filters,
-    });
-    return response.data;
+    try {
+      const response = await api.get(
+        "/advanced-analytics/distributor-performance",
+        {
+          params: filters,
+        }
+      );
+      const rawData = response.data.data || response.data || [];
+      const data = Array.isArray(rawData) ? rawData : [];
+
+      const distributors = data.map((item: any) => ({
+        distributorId: item._id || item.distributorId,
+        distributorName:
+          item.distributor?.name || item.distributorName || "Sin nombre",
+        totalSales: item.totalSales || 0,
+        totalRevenue: item.totalRevenue || 0,
+        totalCost: 0,
+        totalProfit: item.totalProfit || 0,
+        adminProfit: item.totalProfit - (item.distributorProfit || 0),
+        distributorProfit: item.distributorProfit || 0,
+      }));
+
+      const totals = distributors.reduce(
+        (acc: any, d: any) => ({
+          revenue: acc.revenue + d.totalRevenue,
+          cost: acc.cost + d.totalCost,
+          profit: acc.profit + d.totalProfit,
+        }),
+        { revenue: 0, cost: 0, profit: 0 }
+      );
+
+      return { distributors, totals };
+    } catch (error) {
+      console.error("[getProfitByDistributor] Error:", error);
+      return { distributors: [], totals: { revenue: 0, cost: 0, profit: 0 } };
+    }
   },
 
+  /**
+   * Get averages using V2 financial-kpis endpoint
+   */
   async getAverages(): Promise<{
     averages: {
       dailySales: number;
@@ -113,8 +238,48 @@ export const analyticsService = {
       vsLastMonth: number;
     };
   }> {
-    const response = await api.get("/analytics/averages");
-    return response.data;
+    try {
+      const response = await api.get("/advanced-analytics/financial-kpis");
+      const data = response.data.data || response.data;
+      const kpis = data?.kpis || {};
+      const daily = data?.daily || {};
+      const weekly = data?.weekly || {};
+      const monthly = data?.monthly || {};
+
+      return {
+        averages: {
+          dailySales: daily.sales || kpis.todaySales || 0,
+          dailyRevenue: daily.revenue || kpis.todayRevenue || 0,
+          dailyProfit: daily.profit || kpis.todayProfit || 0,
+          weeklySales: weekly.sales || kpis.weekSales || 0,
+          weeklyRevenue: weekly.revenue || kpis.weekRevenue || 0,
+          weeklyProfit: weekly.profit || kpis.weekProfit || 0,
+          monthlySales: monthly.sales || kpis.monthSales || 0,
+          monthlyRevenue: monthly.revenue || kpis.monthRevenue || 0,
+          monthlyProfit: monthly.profit || kpis.monthProfit || 0,
+        },
+        comparisons: {
+          vsLastWeek: 0,
+          vsLastMonth: 0,
+        },
+      };
+    } catch (error) {
+      console.error("[getAverages] Error:", error);
+      return {
+        averages: {
+          dailySales: 0,
+          dailyRevenue: 0,
+          dailyProfit: 0,
+          weeklySales: 0,
+          weeklyRevenue: 0,
+          weeklyProfit: 0,
+          monthlySales: 0,
+          monthlyRevenue: 0,
+          monthlyProfit: 0,
+        },
+        comparisons: { vsLastWeek: 0, vsLastMonth: 0 },
+      };
+    }
   },
 
   async getSalesTimeline(filters?: {
@@ -129,6 +294,7 @@ export const analyticsService = {
       profit: number;
       quantity: number;
     }>;
+
     summary: {
       totalSales: number;
       totalRevenue: number;
@@ -137,10 +303,26 @@ export const analyticsService = {
       peakSales: number;
     };
   }> {
-    const response = await api.get("/analytics/timeline", { params: filters });
-    return response.data;
+    // Use V2 advanced-analytics endpoint
+    const response = await api.get("/advanced-analytics/sales-timeline", {
+      params: filters,
+    });
+    const data = response.data.data || response.data;
+    return {
+      timeline: data?.timeline || [],
+      summary: data?.summary || {
+        totalSales: 0,
+        totalRevenue: 0,
+        totalProfit: 0,
+        peakDate: "",
+        peakSales: 0,
+      },
+    };
   },
 
+  /**
+   * Get financial summary using V2 financial-kpis + sales-summary
+   */
   async getFinancialSummary(filters?: {
     startDate?: string;
     endDate?: string;
@@ -165,12 +347,68 @@ export const analyticsService = {
       }>;
     };
   }> {
-    const response = await api.get("/analytics/financial-summary", {
-      params: filters,
-    });
-    return response.data;
+    try {
+      // Use V2 financial-kpis + sales-by-category endpoints
+      const [kpisRes, categoryRes, expensesRes] = await Promise.all([
+        api.get("/advanced-analytics/financial-kpis", { params: filters }),
+        api.get("/advanced-analytics/sales-by-category", { params: filters }),
+        api.get("/advanced-analytics/expenses-summary", { params: filters }),
+      ]);
+
+      const kpis = kpisRes.data.data || kpisRes.data;
+      const range = kpis?.range || {};
+      const categories = categoryRes.data.data || categoryRes.data || [];
+      const expenses = expensesRes.data.data || expensesRes.data || {};
+
+      const totalExpenses = expenses.totalAmount || range.totalExpenses || 0;
+      const grossProfit = range.grossProfit || 0;
+      const netProfit = grossProfit - totalExpenses;
+
+      return {
+        summary: {
+          totalRevenue: range.revenue || 0,
+          totalCost: 0, // Not directly available
+          grossProfit,
+          adminProfit: grossProfit, // Simplified
+          distributorProfit: 0,
+          expenses: totalExpenses,
+          netProfit,
+          profitMargin:
+            range.revenue > 0 ? (netProfit / range.revenue) * 100 : 0,
+        },
+        breakdown: {
+          byPaymentMethod: [], // Would need separate endpoint
+          byCategory: Array.isArray(categories)
+            ? categories.map((c: any) => ({
+                category: c.category || c.categoryName || "Sin categoría",
+                revenue: c.revenue || c.totalRevenue || 0,
+                profit: c.profit || c.totalProfit || 0,
+                quantity: c.quantity || c.totalQuantity || 0,
+              }))
+            : [],
+        },
+      };
+    } catch (error) {
+      console.error("[getFinancialSummary] Error:", error);
+      return {
+        summary: {
+          totalRevenue: 0,
+          totalCost: 0,
+          grossProfit: 0,
+          adminProfit: 0,
+          distributorProfit: 0,
+          expenses: 0,
+          netProfit: 0,
+          profitMargin: 0,
+        },
+        breakdown: { byPaymentMethod: [], byCategory: [] },
+      };
+    }
   },
 
+  /**
+   * Get analytics dashboard using V2 endpoint
+   */
   async getAnalyticsDashboard(): Promise<{
     today: {
       sales: number;
@@ -208,11 +446,42 @@ export const analyticsService = {
       message: string;
     }>;
   }> {
-    const response = await api.get("/analytics/dashboard");
-    return response.data;
+    try {
+      const response = await api.get("/analytics/dashboard");
+      const data = response.data.data || response.data;
+
+      return {
+        today: data?.today || {
+          sales: 0,
+          revenue: 0,
+          profit: 0,
+          newCustomers: 0,
+        },
+        week: data?.week || { sales: 0, revenue: 0, profit: 0, trend: 0 },
+        month: data?.month || { sales: 0, revenue: 0, profit: 0, trend: 0 },
+        topProducts: data?.topProducts || [],
+        topDistributors: data?.topDistributors || [],
+        alerts: data?.alerts || [],
+      };
+    } catch (error) {
+      console.error("[getAnalyticsDashboard] Error:", error);
+      return {
+        today: { sales: 0, revenue: 0, profit: 0, newCustomers: 0 },
+        week: { sales: 0, revenue: 0, profit: 0, trend: 0 },
+        month: { sales: 0, revenue: 0, profit: 0, trend: 0 },
+        topProducts: [],
+        topDistributors: [],
+        alerts: [],
+      };
+    }
   },
 
-  async getPaymentMethodMetrics(filters?: {
+  /**
+   * Get payment method metrics
+   * NOTE: This endpoint doesn't exist in V2 - returning empty data
+   * TODO: Create backend endpoint or remove from frontend
+   */
+  async getPaymentMethodMetrics(_filters?: {
     startDate?: string;
     endDate?: string;
   }): Promise<{
@@ -229,10 +498,12 @@ export const analyticsService = {
       amount: number;
     };
   }> {
-    const response = await api.get("/analytics/payment-methods", {
-      params: filters,
-    });
-    return response.data;
+    void _filters;
+    console.warn("[getPaymentMethodMetrics] Endpoint not implemented in V2");
+    return {
+      metrics: [],
+      totals: { count: 0, amount: 0 },
+    };
   },
 
   async getEstimatedProfit(params?: {
@@ -253,7 +524,12 @@ export const analyticsService = {
     };
   }> {
     const response = await api.get("/analytics/estimated-profit", { params });
-    return response.data;
+    // Handle V2 response format: { success, data: {...} }
+    const rawData = response.data?.data || response.data;
+    return {
+      estimatedProfit: rawData?.estimatedProfit || rawData || {},
+      ...rawData,
+    };
   },
 
   async getDistributorEstimatedProfit(params?: {
@@ -261,26 +537,259 @@ export const analyticsService = {
     endDate?: string;
   }): Promise<{
     estimatedProfit: {
-      total: number;
-      confirmed: number;
-      pending: number;
-      byProduct: Array<{
+      grossProfit: number;
+      netProfit: number;
+      totalProducts: number;
+      totalUnits: number;
+      investment: number;
+      salesValue: number;
+      profitMargin: string;
+      profitability: number;
+      products: Array<{
         productId: string;
-        productName: string;
+        name: string;
+        image?: { url: string; publicId: string };
         quantity: number;
-        profit: number;
+        distributorPrice: number;
+        clientPrice: number;
+        investment: number;
+        salesValue: number;
+        estimatedProfit: number;
+        profitPercentage: string;
       }>;
     };
   }> {
     const response = await api.get("/analytics/distributor/estimated-profit", {
       params,
     });
-    return response.data;
+    // V2 response: { success: true, data: { grossProfit, products, ... } }
+    const data = response.data?.data || response.data;
+    return {
+      estimatedProfit: data,
+    };
+  },
+
+  /**
+   * Export full business data as JSON backup
+   * Returns all collections related to the business
+   */
+  async getFullDataExport(): Promise<any> {
+    const response = await api.get("/business/export-full-data");
+    // V2 API returns { success: true, data: {...} }
+    return response.data.data || response.data;
   },
 };
 
 // ==================== ADVANCED ANALYTICS SERVICE ====================
 export const advancedAnalyticsService = {
+  // ===== Sales & Revenue Analytics =====
+  async getSalesTimeline(params?: {
+    startDate?: string;
+    endDate?: string;
+    groupBy?: "hour" | "day" | "week" | "month";
+  }): Promise<{
+    timeline: Array<{
+      date: string;
+      salesCount: number;
+      revenue: number;
+      profit: number;
+      quantity: number;
+    }>;
+    summary: {
+      totalSales: number;
+      totalRevenue: number;
+      totalProfit: number;
+      peakDate: string;
+      peakSales: number;
+    };
+  }> {
+    const response = await api.get("/advanced-analytics/sales-timeline", {
+      params,
+    });
+    // El backend retorna {success: true, data: {timeline: [...], summary: {...}}}
+    const data = response.data.data || response.data;
+    return {
+      timeline: data?.timeline || [],
+      summary: data?.summary || {
+        totalSales: 0,
+        totalRevenue: 0,
+        totalProfit: 0,
+        peakDate: "",
+        peakSales: 0,
+      },
+    };
+  },
+
+  async getSalesByCategory(params?: {
+    startDate?: string;
+    endDate?: string;
+  }): Promise<{
+    categories: Array<{
+      category: string;
+      sales: number;
+      revenue: number;
+      profit: number;
+      quantity: number;
+    }>;
+  }> {
+    const response = await api.get("/advanced-analytics/sales-by-category", {
+      params,
+    });
+    // El backend retorna {success: true, data: [...]}
+    // Cada item tiene: {category, sales, revenue, profit, quantity}
+    console.log("[getSalesByCategory] response.data:", response.data);
+    const rawData = response.data.data || response.data || [];
+    console.log("[getSalesByCategory] rawData:", rawData);
+    const data = Array.isArray(rawData) ? rawData : [];
+
+    // Transformar para que coincida con lo que espera el componente
+    const categories = data.map((item: any) => {
+      const transformed = {
+        name: item.category || "Sin categoría",
+        category: item.category || "Sin categoría",
+        totalSales: item.sales || 0,
+        sales: item.sales || 0,
+        totalRevenue: item.revenue || 0,
+        revenue: item.revenue || 0,
+        profit: item.profit || 0,
+        quantity: item.quantity || 0,
+      };
+      console.log(
+        "[getSalesByCategory] item:",
+        item,
+        "-> transformed:",
+        transformed
+      );
+      return transformed;
+    });
+
+    console.log("[getSalesByCategory] categories after transform:", categories);
+    return { categories };
+  },
+
+  async getSalesFunnel(params?: {
+    startDate?: string;
+    endDate?: string;
+  }): Promise<{
+    funnel: Array<{
+      stage: string;
+      count: number;
+      value: number;
+      conversionRate: number;
+    }>;
+    summary: {
+      totalLeads: number;
+      totalConversions: number;
+      overallConversionRate: number;
+    };
+  }> {
+    const response = await api.get("/advanced-analytics/sales-funnel", {
+      params,
+    });
+    return response.data.data;
+  },
+
+  // ===== Product Analytics =====
+  async getTopProducts(params?: {
+    startDate?: string;
+    endDate?: string;
+    limit?: number;
+    sortBy?: "revenue" | "quantity" | "profit";
+  }): Promise<{
+    topProducts: Array<{
+      productId: string;
+      name: string;
+      category: string;
+      quantity: number;
+      revenue: number;
+      profit: number;
+      rank: number;
+    }>;
+  }> {
+    const response = await api.get("/advanced-analytics/top-products", {
+      params,
+    });
+    // El backend retorna {success: true, data: [...]}
+    // Cada item tiene: {_id, totalQuantity, totalRevenue, totalProfit, product: {...}}
+    console.log("[getTopProducts] response.data:", response.data);
+    const rawData = response.data.data || response.data || [];
+    console.log("[getTopProducts] rawData:", rawData);
+    const data = Array.isArray(rawData) ? rawData : [];
+    console.log("[getTopProducts] data after isArray check:", data);
+
+    // Transformar para que coincida con lo que espera el componente
+    const topProducts = data.map((item: any, index: number) => {
+      const transformed = {
+        productId: item._id || item.productId,
+        name: item.product?.name || item.name || "Sin nombre",
+        category:
+          item.product?.category?.name ||
+          item.product?.category ||
+          item.category ||
+          "Sin categoría",
+        quantity: item.totalQuantity || 0,
+        revenue: item.totalRevenue || 0,
+        rank: index + 1,
+        profit: item.totalProfit || 0,
+      };
+      console.log(
+        "[getTopProducts] item:",
+        item,
+        "-> transformed:",
+        transformed
+      );
+      return transformed;
+    });
+
+    console.log("[getTopProducts] topProducts after transform:", topProducts);
+    return { topProducts };
+  },
+
+  async getProductRotation(params?: {
+    startDate?: string;
+    endDate?: string;
+    categoryId?: string;
+    days?: number;
+  }): Promise<{
+    productRotation: Array<{
+      _id: string;
+      name: string;
+      totalSold: number;
+      frequency: number;
+      currentStock: number;
+      rotationRate: number;
+    }>;
+  }> {
+    const response = await api.get("/advanced-analytics/product-rotation", {
+      params,
+    });
+    // El backend retorna {success: true, data: [...]}
+    console.log("[getProductRotation] response.data:", response.data);
+    const rawData = response.data.data || response.data || [];
+    console.log("[getProductRotation] rawData:", rawData);
+    const data = Array.isArray(rawData) ? rawData : [];
+
+    // Transformar para que coincida con lo que espera el componente
+    const productRotation = data.map((item: any) => ({
+      _id: item.productId || item._id,
+      name: item.productName || item.name || "Sin nombre",
+      totalSold: item.totalQuantity || 0,
+      frequency: item.salesCount || 0,
+      currentStock: 0, // El backend no devuelve esto, necesitamos agregarlo
+      rotationRate: item.rotationRate || 0,
+    }));
+
+    console.log(
+      "[getProductRotation] productRotation after transform:",
+      productRotation
+    );
+    return { productRotation };
+  },
+
+  /**
+   * Get product performance
+   * NOTE: This specific endpoint doesn't exist in V2 - using top-products instead
+   */
   async getProductPerformance(params?: {
     startDate?: string;
     endDate?: string;
@@ -306,10 +815,35 @@ export const advancedAnalyticsService = {
       message: string;
     }>;
   }> {
-    const response = await api.get("/analytics/advanced/product-performance", {
-      params,
-    });
-    return response.data;
+    try {
+      const response = await api.get("/advanced-analytics/top-products", {
+        params: { ...params, limit: params?.limit || 20 },
+      });
+      const rawData = response.data.data || response.data || [];
+      const data = Array.isArray(rawData) ? rawData : [];
+
+      const products = data.map((item: any) => ({
+        productId: item._id || item.productId,
+        name: item.product?.name || item.name || "Sin nombre",
+        category: item.product?.category?.name || "Sin categoría",
+        salesCount: item.totalQuantity || 0,
+        revenue: item.totalRevenue || 0,
+        profit: item.totalProfit || 0,
+        growthRate: 0, // Not available
+        stockTurnover: 0,
+        averageDaysToSell: 0,
+        profitMargin:
+          item.totalRevenue > 0
+            ? ((item.totalProfit || 0) / item.totalRevenue) * 100
+            : 0,
+        trend: "stable" as const,
+      }));
+
+      return { products, insights: [] };
+    } catch (error) {
+      console.error("[getProductPerformance] Error:", error);
+      return { products: [], insights: [] };
+    }
   },
 
   async getDistributorPerformance(params?: {
@@ -336,7 +870,7 @@ export const advancedAnalyticsService = {
     };
   }> {
     const response = await api.get(
-      "/analytics/advanced/distributor-performance",
+      "/advanced-analytics/distributor-performance",
       { params }
     );
     return response.data;
@@ -373,10 +907,20 @@ export const advancedAnalyticsService = {
       averageFrequency: number;
     };
   }> {
-    const response = await api.get("/analytics/advanced/customer-insights", {
-      params,
-    });
-    return response.data;
+    void params;
+    console.warn("[getCustomerInsights] Endpoint not implemented in V2");
+    return {
+      overview: {
+        totalCustomers: 0,
+        activeCustomers: 0,
+        newCustomers: 0,
+        churnRate: 0,
+        averageLifetimeValue: 0,
+      },
+      segments: [],
+      topCustomers: [],
+      purchasePatterns: { peakDays: [], peakHours: [], averageFrequency: 0 },
+    };
   },
 
   async getForecast(params?: { months?: number }): Promise<{
@@ -393,8 +937,9 @@ export const advancedAnalyticsService = {
       weight: number;
     }>;
   }> {
-    const response = await api.get("/analytics/advanced/forecast", { params });
-    return response.data;
+    void params;
+    console.warn("[getForecast] Endpoint not implemented in V2");
+    return { forecast: [], factors: [] };
   },
 
   async getCashFlow(params?: {
@@ -420,10 +965,23 @@ export const advancedAnalyticsService = {
       payables: number;
     };
   }> {
-    const response = await api.get("/analytics/advanced/cash-flow", { params });
-    return response.data;
+    void params;
+    console.warn("[getCashFlow] Endpoint not implemented in V2");
+    return {
+      cashFlow: [],
+      summary: {
+        totalIncome: 0,
+        totalExpenses: 0,
+        netCashFlow: 0,
+        averageDaily: 0,
+      },
+      pending: { receivables: 0, payables: 0 },
+    };
   },
 
+  /**
+   * Get inventory analysis using V2 inventory-status endpoint
+   */
   async getInventoryAnalysis(): Promise<{
     overview: {
       totalProducts: number;
@@ -455,7 +1013,146 @@ export const advancedAnalyticsService = {
       priority: "high" | "medium" | "low";
     }>;
   }> {
-    const response = await api.get("/analytics/advanced/inventory");
+    try {
+      const response = await api.get("/advanced-analytics/inventory-status");
+      const data = response.data.data || response.data;
+      return {
+        overview: {
+          totalProducts: data.totalProducts || 0,
+          totalValue: data.totalInventoryValue || 0,
+          lowStockCount: data.lowStockProducts || 0,
+          outOfStockCount: 0,
+          overstockCount: 0,
+        },
+        turnover: { average: 0, byCategory: [] },
+        recommendations: [],
+        alerts: [],
+      };
+    } catch (error) {
+      console.error("[getInventoryAnalysis] Error:", error);
+      return {
+        overview: {
+          totalProducts: 0,
+          totalValue: 0,
+          lowStockCount: 0,
+          outOfStockCount: 0,
+          overstockCount: 0,
+        },
+        turnover: { average: 0, byCategory: [] },
+        recommendations: [],
+        alerts: [],
+      };
+    }
+  },
+
+  // ===== Financial & KPI Analytics =====
+  async getFinancialKPIs(params?: {
+    startDate?: string;
+    endDate?: string;
+  }): Promise<{
+    kpis: {
+      revenue: number;
+      profit: number;
+      profitMargin: number;
+      averageOrderValue: number;
+      ordersCount: number;
+      customersCount: number;
+      returnRate: number;
+    };
+    trends: {
+      revenueTrend: number;
+      profitTrend: number;
+      ordersTrend: number;
+    };
+    comparison: {
+      vsPreviousPeriod: {
+        revenue: number;
+        profit: number;
+        orders: number;
+      };
+    };
+  }> {
+    const response = await api.get("/advanced-analytics/financial-kpis", {
+      params,
+    });
+    return response.data.data;
+  },
+
+  async getComparativeAnalysis(): Promise<{
+    periods: Array<{
+      period: string;
+      revenue: number;
+      profit: number;
+      orders: number;
+      customers: number;
+    }>;
+    comparisons: {
+      weekOverWeek: {
+        revenue: number;
+        profit: number;
+        orders: number;
+      };
+      monthOverMonth: {
+        revenue: number;
+        profit: number;
+        orders: number;
+      };
+      yearOverYear: {
+        revenue: number;
+        profit: number;
+        orders: number;
+      };
+    };
+  }> {
+    const response = await api.get("/advanced-analytics/comparative");
+    return response.data.data;
+  },
+
+  // ===== Distributor Analytics =====
+  async getDistributorRankings(params?: {
+    startDate?: string;
+    endDate?: string;
+    limit?: number;
+    sortBy?: "revenue" | "profit" | "sales";
+  }): Promise<{
+    rankings: Array<{
+      rank: number;
+      distributorId: string;
+      distributorName: string;
+      salesCount: number;
+      revenue: number;
+      profit: number;
+      averageOrderValue: number;
+      change: number;
+    }>;
+    period: {
+      startDate: string;
+      endDate: string;
+    };
+  }> {
+    const response = await api.get("/advanced-analytics/distributor-rankings", {
+      params,
+    });
+    return response.data;
+  },
+
+  // ===== Inventory Visual Analytics =====
+  async getLowStockVisual(): Promise<{
+    alerts: Array<{
+      productId: string;
+      productName: string;
+      currentStock: number;
+      minStock: number;
+      daysUntilStockout: number;
+      priority: "critical" | "high" | "medium" | "low";
+    }>;
+    summary: {
+      criticalCount: number;
+      warningCount: number;
+      totalAlerts: number;
+    };
+  }> {
+    const response = await api.get("/advanced-analytics/low-stock-visual");
     return response.data;
   },
 };

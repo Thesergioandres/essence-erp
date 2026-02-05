@@ -7,7 +7,8 @@ export class RegisterUserUseCase {
   }
 
   async execute(userData) {
-    const { name, email, password, role, businessId } = userData;
+    const { name, email, password, role, businessId, phone, address } =
+      userData;
 
     if (!name || !email || !password) {
       throw new Error("Missing required fields: name, email, password");
@@ -28,8 +29,11 @@ export class RegisterUserUseCase {
       name,
       email,
       password: hashedPassword, // Store hash!
-      role: role || "user",
+      role: role || "super_admin", // Default role for new registrations
+      status: "pending", // Usuarios nuevos requieren activación manual
       business: businessId,
+      phone: phone || undefined,
+      address: address || undefined,
       // Other defaults handled by Mongoose Schema or added here
     });
 

@@ -20,18 +20,35 @@ export class GetDashboardStatsUseCase {
     }
 
     // 2. Fetch Data (Parallel)
-    const [kpi, timeline] = await Promise.all([
+    const [kpi, timeline, topProducts] = await Promise.all([
       this.repository.getDashboardKPIs(businessId, start, end),
       this.repository.getSalesTimeline(businessId, start, end),
+      this.repository.getTopProducts
+        ? this.repository.getTopProducts(businessId, start, end)
+        : [],
     ]);
 
-    // 3. Format Data
-    const charts = AnalyticsService.formatChartData(timeline);
+    // 3. Format timeline for frontend
+    const salesTimeline = timeline.map((day) => ({
+      date: day._id,
+      revenue: day.revenue || 0,
+      profit: day.profit || 0,
+    }));
 
+    // 4. Calculate average ticket
+    const averageTicket =
+      kpi.totalSales > 0
+        ? Math.round((kpi.totalRevenue / kpi.totalSales) * 100) / 100
+        : 0;
+
+    // 5. Return in frontend expected format
     return {
-      period: { start, end },
-      kpi,
-      charts,
+      totalRevenue: kpi.totalRevenue || 0,
+      totalNetProfit: kpi.totalProfit || 0,
+      totalSalesCount: kpi.totalSales || 0,
+      averageTicket,
+      salesTimeline,
+      topProducts: topProducts || [],
     };
   }
 }

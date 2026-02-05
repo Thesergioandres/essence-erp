@@ -5,7 +5,8 @@
  */
 
 import api from "../../../api/axios";
-import type { Customer, Sale } from "../../../types";
+import type { Sale } from "../../sales/types/sales.types";
+import type { Customer } from "../types/customer.types";
 
 export const customerService = {
   async getAll(params?: {
@@ -30,12 +31,22 @@ export const customerService = {
     };
   }> {
     const response = await api.get("/customers", { params });
+    // Backend V2 retorna { success: true, data: customers[], pagination }
+    // Normalizar al formato esperado por el frontend
+    if (response.data.success && response.data.data) {
+      return {
+        customers: response.data.data,
+        pagination: response.data.pagination,
+      };
+    }
+    // Fallback para compatibilidad con respuesta antigua
     return response.data;
   },
 
   async getById(id: string): Promise<Customer> {
     const response = await api.get(`/customers/${id}`);
-    return response.data;
+    // Backend V2 retorna { success: true, data: customer }
+    return response.data.data || response.data;
   },
 
   async create(data: {
@@ -53,7 +64,12 @@ export const customerService = {
     customer: Customer;
   }> {
     const response = await api.post("/customers", data);
-    return response.data;
+    // Backend V2 returns { success: true, data: customer }
+    // Frontend expects { message: string, customer: Customer }
+    return {
+      message: "Cliente creado correctamente",
+      customer: response.data.data || response.data,
+    };
   },
 
   async update(
@@ -74,7 +90,11 @@ export const customerService = {
     customer: Customer;
   }> {
     const response = await api.put(`/customers/${id}`, data);
-    return response.data;
+    // Backend V2 retorna { success: true, data: customer }
+    return {
+      message: "Cliente actualizado correctamente",
+      customer: response.data.data || response.data,
+    };
   },
 
   async delete(id: string): Promise<{
@@ -147,6 +167,17 @@ export const segmentService = {
     segment: { _id: string; name: string; description?: string };
   }> {
     const response = await api.post("/customers/segments", data);
+    return response.data;
+  },
+
+  async update(
+    id: string,
+    data: { name?: string; description?: string }
+  ): Promise<{
+    message: string;
+    segment: { _id: string; name: string; description?: string };
+  }> {
+    const response = await api.put(`/customers/segments/${id}`, data);
     return response.data;
   },
 

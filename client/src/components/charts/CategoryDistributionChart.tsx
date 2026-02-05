@@ -42,12 +42,23 @@ export const CategoryDistributionChart: React.FC<
           endDate,
         });
         console.log("Category Distribution Response:", response);
-        const validatedData = (response.categoryDistribution || []).map(
-          (item: any) => ({
-            ...item,
-            totalSales: Number(item.totalSales) || 0,
-            totalRevenue: Number(item.totalRevenue) || 0,
-          })
+        const categoryData =
+          (response as any).categoryDistribution ||
+          (response as any).categories ||
+          [];
+        console.log("[CategoryDistributionChart] categoryData:", categoryData);
+        const validatedData = categoryData.map((item: any) => ({
+          ...item,
+          totalSales: Number(item.totalSales) || 0,
+          totalRevenue: Number(item.totalRevenue) || 0,
+        }));
+        console.log(
+          "[CategoryDistributionChart] validatedData:",
+          validatedData
+        );
+        console.log(
+          "[CategoryDistributionChart] validatedData.length:",
+          validatedData.length
         );
         setData(validatedData);
       } catch (error) {
@@ -138,6 +149,10 @@ export const CategoryDistributionChart: React.FC<
     );
   };
 
+  console.log(
+    "[CategoryDistributionChart] Rendering chart with data:",
+    JSON.stringify(data, null, 2)
+  );
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}

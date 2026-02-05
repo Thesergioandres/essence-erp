@@ -108,6 +108,33 @@ class ProfitHistoryController {
   }
 
   /**
+   * GET /api/v2/profit-history/admin/overview
+   * Get admin profit overview
+   */
+  async getAdminOverview(req, res) {
+    try {
+      const businessId = req.businessId;
+      const { startDate, endDate, limit } = req.query;
+
+      const overview = await ProfitHistoryRepository.getAdminOverview(
+        businessId,
+        { startDate, endDate, limit: parseInt(limit) || 150 },
+      );
+
+      res.json({
+        success: true,
+        data: overview,
+      });
+    } catch (error) {
+      console.error("Error getting admin profit overview:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error al obtener overview de ganancias",
+      });
+    }
+  }
+
+  /**
    * POST /api/v2/profit-history
    * Create profit entry (admin only)
    */

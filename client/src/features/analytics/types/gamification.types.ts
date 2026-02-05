@@ -1,0 +1,148 @@
+/**
+ * Gamification Types
+ * Feature-Based Architecture
+ */
+
+export interface SalesTarget {
+  level: string;
+  minAmount: number;
+  bonus: number;
+  badge: string;
+}
+
+export interface ProductBonus {
+  product: string;
+  bonusPerUnit: number;
+  minQuantity?: number;
+}
+
+export interface GamificationConfig {
+  _id: string;
+  evaluationPeriod: "daily" | "weekly" | "biweekly" | "monthly" | "custom";
+  customPeriodDays?: number;
+  topPerformerBonus: number;
+  secondPlaceBonus: number;
+  thirdPlaceBonus: number;
+  top1CommissionBonus?: number;
+  top2CommissionBonus?: number;
+  top3CommissionBonus?: number;
+  minAdminProfitForRanking?: number;
+  currentPeriodStart?: string;
+  salesTargets: SalesTarget[];
+  productBonuses: ProductBonus[];
+  pointsPerSale: number;
+  pointsPerPeso: number;
+  active: boolean;
+  nextEvaluationDate?: string;
+  lastEvaluationDate?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TopPerformer {
+  distributor: string;
+  position: number;
+  totalRevenue: number;
+  salesCount: number;
+  bonus: number;
+}
+
+export interface PeriodWinner {
+  _id: string;
+  periodType: string;
+  startDate: string;
+  endDate: string;
+  winner: unknown | string;
+  winnerName: string;
+  winnerEmail: string;
+  totalSales: number;
+  totalRevenue: number;
+  totalProfit: number;
+  salesCount: number;
+  bonusAmount: number;
+  bonusPaid: boolean;
+  bonusPaidAt?: string;
+  topPerformers: TopPerformer[];
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Achievement {
+  type: string;
+  name: string;
+  description: string;
+  badge: string;
+  earnedAt: string;
+  value?: number;
+}
+
+export interface DistributorStats {
+  _id: string;
+  distributor: unknown | string;
+  totalPoints: number;
+  currentMonthPoints: number;
+  totalSales: number;
+  totalRevenue: number;
+  totalProfit: number;
+  totalBonusEarned: number;
+  pendingBonuses: number;
+  paidBonuses: number;
+  lastBonusDate?: string;
+  achievements: Achievement[];
+  currentLevel: string;
+  currentStreak: number;
+  longestStreak: number;
+  periodWins: number;
+  topThreeFinishes: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RankingEntry {
+  distributorId: string;
+  distributorName: string;
+  distributorEmail: string;
+  totalSales: number;
+  totalRevenue: number;
+  totalProfit: number;
+  totalUnits: number;
+  position: number;
+  totalPoints: number;
+  currentLevel: string;
+  periodWins: number;
+  profitPercentage?: number;
+}
+
+export interface RankingResponse {
+  period: {
+    startDate: string;
+    endDate: string;
+    type: string;
+  };
+  rankings: RankingEntry[];
+  config: {
+    topPerformerBonus: number;
+    secondPlaceBonus: number;
+    thirdPlaceBonus: number;
+    top1CommissionBonus?: number;
+    top2CommissionBonus?: number;
+    top3CommissionBonus?: number;
+    evaluationPeriod?: string;
+    customPeriodDays?: number;
+    currentPeriodStart?: string;
+  };
+}
+
+export interface WinnersResponse {
+  winners: PeriodWinner[];
+  currentPage: number;
+  totalPages: number;
+  total: number;
+}
+
+export interface DistributorStatsResponse {
+  stats: DistributorStats;
+  currentRankingPosition: number;
+  totalDistributors: number;
+}

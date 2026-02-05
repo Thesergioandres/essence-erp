@@ -3,6 +3,7 @@
  * Handles super admin operations (metrics, user management)
  */
 
+import AnalysisLog from "../../../../models/AnalysisLog.js";
 import AuditLog from "../../../../models/AuditLog.js";
 import Branch from "../../../../models/Branch.js";
 import BranchStock from "../../../../models/BranchStock.js";
@@ -14,6 +15,7 @@ import Credit from "../../../../models/Credit.js";
 import CreditPayment from "../../../../models/CreditPayment.js";
 import Customer from "../../../../models/Customer.js";
 import DefectiveProduct from "../../../../models/DefectiveProduct.js";
+import DeliveryMethod from "../../../../models/DeliveryMethod.js";
 import DistributorStats from "../../../../models/DistributorStats.js";
 import DistributorStock from "../../../../models/DistributorStock.js";
 import Expense from "../../../../models/Expense.js";
@@ -22,11 +24,15 @@ import InventoryEntry from "../../../../models/InventoryEntry.js";
 import IssueReport from "../../../../models/IssueReport.js";
 import Membership from "../../../../models/Membership.js";
 import Notification from "../../../../models/Notification.js";
+import PaymentMethod from "../../../../models/PaymentMethod.js";
 import PeriodWinner from "../../../../models/PeriodWinner.js";
+import PointsHistory from "../../../../models/PointsHistory.js";
 import Product from "../../../../models/Product.js";
 import ProfitHistory from "../../../../models/ProfitHistory.js";
 import Promotion from "../../../../models/Promotion.js";
 import Provider from "../../../../models/Provider.js";
+import PushSubscription from "../../../../models/PushSubscription.js";
+import RefreshToken from "../../../../models/RefreshToken.js";
 import Sale from "../../../../models/Sale.js";
 import Segment from "../../../../models/Segment.js";
 import SpecialSale from "../../../../models/SpecialSale.js";
@@ -73,6 +79,10 @@ class GodRepository {
       Product.countDocuments(),
       Sale.countDocuments(),
       Sale.aggregate([
+        {
+          // 💰 CASH FLOW: Solo ventas confirmadas para revenue/profit globales
+          $match: { paymentStatus: "confirmado" },
+        },
         {
           $group: {
             _id: null,
@@ -296,7 +306,12 @@ class GodRepository {
   }
 
   /**
-   * Delete user and all associated data
+   * Delete user and all associated data (HARD DELETE - CASCADE)
+   * Eliminates:
+   * - The User document
+   * - All Business where user is owner (admin)
+   * - All Distributors linked to those businesses and their user accounts
+   * - All operational data: Products, Categories, Sales, Customers, Credits, Inventories, etc.
    */
   async deleteUser(userId, godUserId) {
     const user = await User.findById(userId);
@@ -307,51 +322,163 @@ class GodRepository {
       throw new Error("No puedes eliminarte a ti mismo");
     }
 
-    // Get all business IDs for the user
-    const memberships = await Membership.find({ user: userId }).select(
-      "business",
-    );
-    const businessIds = memberships.map((m) => m.business);
-
-    // Delete all business-related data
-    if (businessIds.length > 0) {
-      await Promise.all([
-        Business.deleteMany({ _id: { $in: businessIds } }),
-        Membership.deleteMany({ business: { $in: businessIds } }),
-        Product.deleteMany({ business: { $in: businessIds } }),
-        Sale.deleteMany({ business: { $in: businessIds } }),
-        Credit.deleteMany({ business: { $in: businessIds } }),
-        CreditPayment.deleteMany({ business: { $in: businessIds } }),
-        Expense.deleteMany({ business: { $in: businessIds } }),
-        Customer.deleteMany({ business: { $in: businessIds } }),
-        Provider.deleteMany({ business: { $in: businessIds } }),
-        Category.deleteMany({ business: { $in: businessIds } }),
-        Stock.deleteMany({ business: { $in: businessIds } }),
-        StockTransfer.deleteMany({ business: { $in: businessIds } }),
-        Branch.deleteMany({ business: { $in: businessIds } }),
-        BranchStock.deleteMany({ business: { $in: businessIds } }),
-        BranchTransfer.deleteMany({ business: { $in: businessIds } }),
-        DistributorStock.deleteMany({ business: { $in: businessIds } }),
-        DistributorStats.deleteMany({ business: { $in: businessIds } }),
-        InventoryEntry.deleteMany({ business: { $in: businessIds } }),
-        DefectiveProduct.deleteMany({ business: { $in: businessIds } }),
-        SpecialSale.deleteMany({ business: { $in: businessIds } }),
-        ProfitHistory.deleteMany({ business: { $in: businessIds } }),
-        Promotion.deleteMany({ business: { $in: businessIds } }),
-        Segment.deleteMany({ business: { $in: businessIds } }),
-        Notification.deleteMany({ business: { $in: businessIds } }),
-        IssueReport.deleteMany({ business: { $in: businessIds } }),
-        AuditLog.deleteMany({ business: { $in: businessIds } }),
-        GamificationConfig.deleteMany({ business: { $in: businessIds } }),
-        PeriodWinner.deleteMany({ business: { $in: businessIds } }),
-        BusinessAssistantConfig.deleteMany({ business: { $in: businessIds } }),
-      ]);
+    // Prevent deleting god users
+    if (user.role === "god") {
+      throw new Error("No se puede eliminar un usuario god");
     }
 
-    // Delete user
+    // 1. Find all businesses where this user is OWNER (admin role in membership)
+    const ownerMemberships = await Membership.find({
+      user: userId,
+      role: "admin",
+    }).select("business");
+    const ownedBusinessIds = ownerMemberships.map((m) => m.business);
+
+    // 2. Find ALL memberships in those businesses (includes distributors)
+    const allMembershipsInBusiness = await Membership.find({
+      business: { $in: ownedBusinessIds },
+    }).select("user");
+
+    // Get unique distributor user IDs (excluding the main user being deleted)
+    const distributorUserIds = [
+      ...new Set(
+        allMembershipsInBusiness
+          .map((m) => m.user.toString())
+          .filter((id) => id !== userId),
+      ),
+    ];
+
+    // 3. Delete all business-related operational data
+    const deletionStats = {
+      businesses: 0,
+      distributorUsers: 0,
+      products: 0,
+      sales: 0,
+      customers: 0,
+      credits: 0,
+      categories: 0,
+      inventoryEntries: 0,
+      otherDocuments: 0,
+    };
+
+    if (ownedBusinessIds.length > 0) {
+      // Delete all operational data for owned businesses
+      const results = await Promise.all([
+        // Core business data
+        Business.deleteMany({ _id: { $in: ownedBusinessIds } }),
+        Membership.deleteMany({ business: { $in: ownedBusinessIds } }),
+
+        // Products & Categories
+        Product.deleteMany({ business: { $in: ownedBusinessIds } }),
+        Category.deleteMany({ business: { $in: ownedBusinessIds } }),
+
+        // Sales & Financial
+        Sale.deleteMany({ business: { $in: ownedBusinessIds } }),
+        Credit.deleteMany({ business: { $in: ownedBusinessIds } }),
+        CreditPayment.deleteMany({ business: { $in: ownedBusinessIds } }),
+        Expense.deleteMany({ business: { $in: ownedBusinessIds } }),
+        SpecialSale.deleteMany({ business: { $in: ownedBusinessIds } }),
+        ProfitHistory.deleteMany({ business: { $in: ownedBusinessIds } }),
+
+        // Customers & Providers
+        Customer.deleteMany({ business: { $in: ownedBusinessIds } }),
+        Provider.deleteMany({ business: { $in: ownedBusinessIds } }),
+        Segment.deleteMany({ business: { $in: ownedBusinessIds } }),
+
+        // Inventory & Stock
+        Stock.deleteMany({ business: { $in: ownedBusinessIds } }),
+        StockTransfer.deleteMany({ business: { $in: ownedBusinessIds } }),
+        InventoryEntry.deleteMany({ business: { $in: ownedBusinessIds } }),
+        DefectiveProduct.deleteMany({ business: { $in: ownedBusinessIds } }),
+
+        // Branches
+        Branch.deleteMany({ business: { $in: ownedBusinessIds } }),
+        BranchStock.deleteMany({ business: { $in: ownedBusinessIds } }),
+        BranchTransfer.deleteMany({ business: { $in: ownedBusinessIds } }),
+
+        // Distributors
+        DistributorStock.deleteMany({ business: { $in: ownedBusinessIds } }),
+        DistributorStats.deleteMany({ business: { $in: ownedBusinessIds } }),
+
+        // Promotions & Gamification
+        Promotion.deleteMany({ business: { $in: ownedBusinessIds } }),
+        GamificationConfig.deleteMany({ business: { $in: ownedBusinessIds } }),
+        PeriodWinner.deleteMany({ business: { $in: ownedBusinessIds } }),
+        PointsHistory.deleteMany({ business: { $in: ownedBusinessIds } }),
+
+        // Configuration & Settings
+        BusinessAssistantConfig.deleteMany({
+          business: { $in: ownedBusinessIds },
+        }),
+        PaymentMethod.deleteMany({ business: { $in: ownedBusinessIds } }),
+        DeliveryMethod.deleteMany({ business: { $in: ownedBusinessIds } }),
+
+        // Notifications & Logs
+        Notification.deleteMany({ business: { $in: ownedBusinessIds } }),
+        IssueReport.deleteMany({ business: { $in: ownedBusinessIds } }),
+        AuditLog.deleteMany({ business: { $in: ownedBusinessIds } }),
+        AnalysisLog.deleteMany({ business: { $in: ownedBusinessIds } }),
+      ]);
+
+      // Collect deletion stats
+      deletionStats.businesses = results[0].deletedCount;
+      deletionStats.products = results[2].deletedCount;
+      deletionStats.categories = results[3].deletedCount;
+      deletionStats.sales = results[4].deletedCount;
+      deletionStats.credits = results[5].deletedCount;
+      deletionStats.customers = results[10].deletedCount;
+      deletionStats.inventoryEntries = results[15].deletedCount;
+    }
+
+    // 4. Delete distributor user accounts (only those who don't own other businesses)
+    for (const distributorUserId of distributorUserIds) {
+      // Check if this distributor owns any OTHER business
+      const otherOwnedBusinesses = await Membership.countDocuments({
+        user: distributorUserId,
+        role: "admin",
+        business: { $nin: ownedBusinessIds },
+      });
+
+      if (otherOwnedBusinesses === 0) {
+        // Safe to delete - they don't own other businesses
+        // Delete their memberships in other businesses first
+        await Membership.deleteMany({ user: distributorUserId });
+
+        // Delete user-specific data
+        await Promise.all([
+          RefreshToken.deleteMany({ user: distributorUserId }),
+          PushSubscription.deleteMany({ user: distributorUserId }),
+          Notification.deleteMany({ user: distributorUserId }),
+        ]);
+
+        // Delete the user account
+        await User.findByIdAndDelete(distributorUserId);
+        deletionStats.distributorUsers++;
+      }
+    }
+
+    // 5. Delete the main user's remaining data
+    await Promise.all([
+      // Delete any remaining memberships (where user is not owner)
+      Membership.deleteMany({ user: userId }),
+      RefreshToken.deleteMany({ user: userId }),
+      PushSubscription.deleteMany({ user: userId }),
+      Notification.deleteMany({ user: userId }),
+    ]);
+
+    // 6. Delete the main user
     await user.deleteOne();
 
-    return { deletedBusinesses: businessIds.length };
+    return {
+      deletedBusinesses: ownedBusinessIds.length,
+      deletedDistributorUsers: deletionStats.distributorUsers,
+      deletedProducts: deletionStats.products,
+      deletedSales: deletionStats.sales,
+      deletedCustomers: deletionStats.customers,
+      deletedCredits: deletionStats.credits,
+      deletedCategories: deletionStats.categories,
+      deletedInventoryEntries: deletionStats.inventoryEntries,
+    };
   }
 
   /**

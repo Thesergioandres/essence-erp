@@ -1,14 +1,19 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ProductSelector from "../../../components/ProductSelector";
-import {
-  branchService,
-  branchTransferService,
-} from "../../branches/services";
-import { distributorService } from "../../distributors/services";
-import { productService, stockService } from "../../inventory/services";
 import { Button, LoadingSpinner } from "../../../shared/components/ui";
-import type { Branch, DistributorStock, Product, User } from "../../../types";
+import type { User } from "../../auth/types/auth.types";
+import { branchService, branchTransferService } from "../../branches/services";
+import type { Branch } from "../../business/types/business.types";
+import { distributorService } from "../../distributors/services";
+import {
+  productService,
+  stockService,
+} from "../../inventory/services/inventory.service";
+import type {
+  DistributorStock,
+  Product,
+} from "../../inventory/types/product.types";
 
 type OperationType = "assign" | "withdraw";
 type Mode = "distributor" | "branch";
@@ -101,7 +106,10 @@ const StockManagement = () => {
 
       if (productsDataResult.status === "fulfilled") {
         const productsData = productsDataResult.value;
-        setProducts(productsData.data || productsData);
+        const productsList = Array.isArray(productsData)
+          ? productsData
+          : productsData.data || [];
+        setProducts(productsList);
       } else {
         console.error("Error al cargar productos:", productsDataResult.reason);
         setProducts([]);
@@ -175,7 +183,9 @@ const StockManagement = () => {
           limit: 1000,
           excludePromotions: true,
         });
-        const productsList = response.data || response;
+        const productsList = Array.isArray(response)
+          ? response
+          : response.data || [];
         console.log("[DEBUG] Total productos:", productsList.length);
         const warehouseStock = productsList
           .filter((p: Product) => (p.warehouseStock || 0) > 0)
@@ -192,9 +202,10 @@ const StockManagement = () => {
         setOriginBranchStock(warehouseStock);
       } else {
         // Para sedes, usar BranchStock
-        const stock = await stockService.getBranchStock(branchId);
-        console.log("[DEBUG] Branch stock:", stock);
-        const mappedStock = (stock || []).map(s => ({
+        const stockData = await stockService.getBranchStock(branchId);
+        const stockList = Array.isArray(stockData) ? stockData : [];
+        console.log("[DEBUG] Branch stock:", stockList);
+        const mappedStock = stockList.map(s => ({
           _id: s._id,
           product:
             typeof s.product === "object"
@@ -391,14 +402,13 @@ const StockManagement = () => {
     try {
       setBranchLoading(true);
       await branchTransferService.create({
-        originBranchId,
         targetBranchId,
         items: branchItems.map(item => ({
           product: item.productId,
           quantity: item.quantity,
         })),
         notes: branchNotes || undefined,
-      });
+      } as any);
 
       setSuccess(
         `Transferencia creada entre sedes (${branchItems.length} producto(s))`
@@ -549,16 +559,19 @@ const StockManagement = () => {
                       </div>
                     );
                   } else {
+                    const distributorStock = alert as DistributorStock;
                     const product =
-                      typeof alert.product === "object" ? alert.product : null;
+                      typeof distributorStock.product === "object"
+                        ? (distributorStock.product as { name?: string })
+                        : null;
                     const distributor =
-                      typeof alert.distributor === "object"
-                        ? alert.distributor
+                      typeof distributorStock.distributor === "object"
+                        ? (distributorStock.distributor as { name?: string })
                         : null;
                     return (
                       <div key={index} className="text-sm text-yellow-300">
                         <strong>{product?.name}</strong> - Distribuidor:{" "}
-                        {distributor?.name} - Stock: {alert.quantity}
+                        {distributor?.name} - Stock: {distributorStock.quantity}
                       </div>
                     );
                   }

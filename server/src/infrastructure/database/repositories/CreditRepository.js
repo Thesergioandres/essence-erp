@@ -120,16 +120,27 @@ class CreditRepository {
     const credit = await Credit.findById(creditId);
     if (!credit) throw new Error("Crédito no encontrado");
 
+    const amountNumber = Number(amount);
+    if (!Number.isFinite(amountNumber) || amountNumber <= 0) {
+      throw new Error("El monto del abono es inválido");
+    }
+
+    const balanceBefore = credit.remainingAmount || 0;
+    const balanceAfter = Math.max(0, balanceBefore - amountNumber);
+
     const payment = await CreditPayment.create({
       credit: creditId,
-      amount,
+      amount: amountNumber,
       notes,
       registeredBy: userId,
       business: credit.business,
+      balanceBefore,
+      balanceAfter,
+      paymentDate: new Date(),
     });
 
-    credit.paidAmount += amount;
-    credit.remainingAmount -= amount;
+    credit.paidAmount += amountNumber;
+    credit.remainingAmount = balanceAfter;
     if (credit.remainingAmount <= 0) {
       credit.status = "paid";
       credit.paidAt = new Date();
@@ -137,17 +148,32 @@ class CreditRepository {
       credit.status = "partial";
     }
 
-    credit.paymentHistory.push({
-      amount,
-      paidAt: new Date(),
-      registeredBy: userId,
-      notes,
-    });
+    if (Array.isArray(credit.paymentHistory)) {
+      credit.paymentHistory.push({
+        amount: amountNumber,
+        paidAt: new Date(),
+        registeredBy: userId,
+        notes,
+      });
+    }
 
     await credit.save();
 
+    // 💰 FINANCIAL LOGIC FIX:
+    // If credit is fully paid, mark the original sale as CONFIRMED so it counts for profit.
+    if (credit.status === "paid" && credit.sale) {
+      await Sale.findByIdAndUpdate(credit.sale, {
+        paymentStatus: "confirmado",
+        paymentConfirmedAt: new Date(),
+        paymentConfirmedBy: userId,
+      });
+      console.log(
+        `✅ Credit Paid! Linked Sale ${credit.sale} marked as confirmed.`,
+      );
+    }
+
     await Customer.findByIdAndUpdate(credit.customer, {
-      $inc: { totalDebt: -amount },
+      $inc: { totalDebt: -amountNumber },
     });
 
     return { payment, credit };

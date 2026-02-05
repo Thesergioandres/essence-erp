@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "../api/axios";
 import { authService } from "../features/auth/services";
-import type { Membership, User } from "../types";
+import type { Membership, User } from "../features/auth/types/auth.types";
 
 interface SessionState {
   user: User | null;

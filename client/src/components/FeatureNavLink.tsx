@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { NavLink, type NavLinkProps } from "react-router-dom";
 import { useBusiness } from "../context/BusinessContext";
-import type { BusinessFeatures } from "../types";
+import type { BusinessFeatures } from "../features/business/types/business.types";
 
 interface FeatureNavLinkProps extends Omit<NavLinkProps, "className"> {
   feature?: keyof BusinessFeatures;

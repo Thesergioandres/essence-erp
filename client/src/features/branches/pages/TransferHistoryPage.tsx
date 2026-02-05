@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
+import type { User } from "../../auth/types/auth.types";
 import { distributorService } from "../../distributors/services";
-import { productService, stockService } from "../../inventory/services";
-import type { Product, User } from "../../../types";
+import {
+  productService,
+  stockService,
+} from "../../inventory/services/inventory.service";
+import type { Product } from "../../inventory/types/product.types";
 
 interface StockTransfer {
   _id: string;

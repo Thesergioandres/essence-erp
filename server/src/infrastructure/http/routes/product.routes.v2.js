@@ -1,4 +1,5 @@
 import express from "express";
+import { upload } from "../../../../config/cloudinary.js";
 import { protect } from "../../../../middleware/auth.middleware.js";
 import {
   businessContext,
@@ -7,8 +8,10 @@ import {
 } from "../../../../middleware/business.middleware.js";
 import {
   createProduct,
+  deleteProduct,
   getAllProducts,
   getProductById,
+  updateProduct,
   updateStock,
 } from "../controllers/ProductController.js";
 
@@ -27,7 +30,19 @@ router.post(
   businessContext,
   requireFeature("inventory"),
   requirePermission({ module: "inventory", action: "create" }),
+  upload.single("image"),
   createProduct,
+);
+
+// Update Product
+router.put(
+  "/:id",
+  protect,
+  businessContext,
+  requireFeature("inventory"),
+  requirePermission({ module: "inventory", action: "update" }),
+  upload.single("image"),
+  updateProduct,
 );
 
 // Update Stock (Dedicated endpoint)
@@ -38,6 +53,16 @@ router.patch(
   requireFeature("inventory"),
   requirePermission({ module: "inventory", action: "update" }),
   updateStock,
+);
+
+// Delete Product
+router.delete(
+  "/:id",
+  protect,
+  businessContext,
+  requireFeature("inventory"),
+  requirePermission({ module: "inventory", action: "delete" }),
+  deleteProduct,
 );
 
 export default router;

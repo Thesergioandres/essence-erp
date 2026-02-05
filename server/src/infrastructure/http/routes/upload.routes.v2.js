@@ -15,9 +15,18 @@ const router = express.Router();
  * @desc    Upload image (Base64)
  * @access  Private
  */
-router.post("/", protect, upload.single("image"), (req, res) =>
-  UploadController.uploadImage(req, res),
-);
+router.post("/", protect, (req, res, next) => {
+  upload.single("image")(req, res, (err) => {
+    if (err) {
+      console.error("❌ Multer error:", err);
+      return res.status(500).json({
+        success: false,
+        message: err.message || "Error al procesar la imagen",
+      });
+    }
+    UploadController.uploadImage(req, res);
+  });
+});
 
 /**
  * @route   DELETE /api/v2/upload/:publicId

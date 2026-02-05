@@ -51,7 +51,7 @@ export class CustomerRepository {
       totalPurchased: 0,
     });
 
-    await this._recordAudit(customer, "create", userInfo);
+    await this._recordAudit(customer, "customer_created", userInfo);
     return customer;
   }
 
@@ -131,7 +131,7 @@ export class CustomerRepository {
       .populate("segment", "name color")
       .lean();
 
-    await this._recordAudit(updated, "update", userInfo, oldCustomer);
+    await this._recordAudit(updated, "customer_updated", userInfo, oldCustomer);
     return updated;
   }
 
@@ -146,7 +146,7 @@ export class CustomerRepository {
       throw err;
     }
 
-    await this._recordAudit(customer, "delete", userInfo);
+    await this._recordAudit(customer, "customer_deleted", userInfo);
     return customer;
   }
 
@@ -185,7 +185,7 @@ export class CustomerRepository {
         userName: userInfo?.name,
         userRole: userInfo?.role,
         action,
-        module: "customers",
+        module: "clients",
         description: `${action} ${entity.name}`,
         entityType: "Customer",
         entityId: entity._id,

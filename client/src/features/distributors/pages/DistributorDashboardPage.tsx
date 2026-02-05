@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { gamificationService } from "../../common/services";
 import { creditService } from "../../credits/services";
-import { stockService } from "../../inventory/services";
+import type { Credit } from "../../credits/types/credit.types";
+import { stockService } from "../../inventory/services/inventory.service";
+import type { DistributorStock } from "../../inventory/types/product.types";
 import { saleService } from "../../sales/services";
-import type { Credit, DistributorStock, Sale } from "../../../types";
+import type { Sale } from "../../sales/types/sales.types";
 
 interface DashboardStats {
   totalSales: number;
@@ -64,8 +66,10 @@ export default function DistributorDashboard() {
       const userId = localStorage.getItem("userId");
       const [salesData, stockData, commissionData, creditsData] =
         await Promise.all([
-          saleService.getDistributorSales(undefined, { limit: 50 }),
-          stockService.getDistributorStock("me"),
+          saleService
+            .getDistributorSales(undefined, { limit: 50 })
+            .catch(() => ({ sales: [] })),
+          stockService.getDistributorStock("me").catch(() => []),
           userId
             ? gamificationService
                 .getAdjustedCommission(userId)
@@ -77,25 +81,26 @@ export default function DistributorDashboard() {
         ]);
 
       // Filter out promotions from stock data
-      const filteredStockData = stockData.filter(item => {
+      const filteredStockData = (stockData || []).filter(item => {
         const product = typeof item.product === "object" ? item.product : null;
         return product && !product.isPromotion;
       });
 
       // Filtrar créditos pendientes y vencidos
-      const myPendingCredits = creditsData.credits || [];
+      const myPendingCredits = creditsData?.credits || [];
       const now = new Date();
       const overdueCredits = myPendingCredits.filter(
         (c: Credit) => c.dueDate && new Date(c.dueDate) < now
       );
 
       // Calcular estadísticas
-      const totalSales = salesData.sales.length;
-      const totalRevenue = salesData.sales.reduce(
+      const salesList = salesData?.sales || [];
+      const totalSales = salesList.length;
+      const totalRevenue = salesList.reduce(
         (sum, sale) => sum + sale.salePrice * sale.quantity,
         0
       );
-      const totalProfit = salesData.sales.reduce(
+      const totalProfit = salesList.reduce(
         (sum, sale) => sum + sale.distributorProfit,
         0
       );
@@ -127,7 +132,7 @@ export default function DistributorDashboard() {
         overdueCreditsCount: overdueCredits.length,
       });
 
-      setRecentSales(salesData.sales.slice(0, 5));
+      setRecentSales(salesList.slice(0, 5));
       setPendingCredits(myPendingCredits.slice(0, 5));
       setMyStock(filteredStockData.slice(0, 6));
 

@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 import ProductSelector from "../../../components/ProductSelector";
-import { stockService } from "../../inventory/services";
+import { stockService } from "../../inventory/services/inventory.service";
+import type {
+  DefectiveProduct,
+  DistributorStock,
+} from "../../inventory/types/product.types";
 import { defectiveProductService } from "../../sales/services";
-import type { DefectiveProduct, DistributorStock } from "../../../types";
 
 export default function DefectiveReports() {
   const [reports, setReports] = useState<DefectiveProduct[]>([]);
@@ -29,13 +32,15 @@ export default function DefectiveReports() {
     try {
       setLoading(true);
       const [reportsData, stockData] = await Promise.all([
-        defectiveProductService.getDistributorReports(),
-        stockService.getDistributorStock("me"),
+        defectiveProductService.getDistributorReports().catch(() => []),
+        stockService.getDistributorStock("me").catch(() => []),
       ]);
-      setReports(reportsData);
-      setStock(stockData);
+      setReports(reportsData || []);
+      setStock(stockData || []);
     } catch (error) {
       console.error("Error al cargar datos:", error);
+      setReports([]);
+      setStock([]);
     } finally {
       setLoading(false);
     }
@@ -81,6 +86,17 @@ export default function DefectiveReports() {
     return product?._id === formData.productId;
   });
   const maxQuantity = selectedStock?.quantity || 0;
+
+  const distributorProducts = stock
+    .map(item => {
+      const product = typeof item.product === "object" ? item.product : null;
+      if (!product) return null;
+      return {
+        ...product,
+        totalStock: item.quantity,
+      };
+    })
+    .filter(Boolean);
 
   if (loading) {
     return (
@@ -290,6 +306,7 @@ export default function DefectiveReports() {
                   }}
                   placeholder="Buscar y seleccionar producto..."
                   showStock={true}
+                  products={distributorProducts as any}
                 />
               </div>
 

@@ -1,0 +1,223 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - generic [ref=e7]:
+          - img "PRUEBA" [ref=e8]
+          - generic [ref=e9]:
+            - heading "PRUEBA" [level=1] [ref=e10]
+            - paragraph [ref=e11]: Panel Admin
+        - generic [ref=e12]:
+          - generic [ref=e14]: Negocio
+          - combobox [ref=e15]:
+            - option "PRUEBA" [selected]
+      - navigation [ref=e16]:
+        - paragraph [ref=e17]: Ventas
+        - link "Registrar Venta" [ref=e18] [cursor=pointer]:
+          - /url: /admin/register-sale
+          - img [ref=e19]
+          - text: Registrar Venta
+        - link "Ventas" [ref=e21] [cursor=pointer]:
+          - /url: /admin/sales
+          - img [ref=e22]
+          - text: Ventas
+        - link "Ventas Especiales" [ref=e24] [cursor=pointer]:
+          - /url: /admin/special-sales
+          - img [ref=e25]
+          - text: Ventas Especiales
+        - link "Métodos de Pago" [ref=e27] [cursor=pointer]:
+          - /url: /admin/payment-methods
+          - img [ref=e28]
+          - text: Métodos de Pago
+        - link "Métodos de Entrega" [ref=e30] [cursor=pointer]:
+          - /url: /admin/delivery-methods
+          - img [ref=e31]
+          - text: Métodos de Entrega
+        - link "Gastos" [ref=e33] [cursor=pointer]:
+          - /url: /admin/expenses
+          - img [ref=e34]
+          - text: Gastos
+        - paragraph [ref=e36]: General
+        - link "Business Assistant" [ref=e37] [cursor=pointer]:
+          - /url: /admin/business-assistant
+          - img [ref=e38]
+          - text: Business Assistant
+        - link "Inventario Global" [ref=e40] [cursor=pointer]:
+          - /url: /admin/global-inventory
+          - img [ref=e41]
+          - text: Inventario Global
+        - paragraph [ref=e43]: Productos
+        - link "Productos" [ref=e44] [cursor=pointer]:
+          - /url: /admin/products
+          - img [ref=e45]
+          - text: Productos
+        - link "Agregar Producto" [ref=e47] [cursor=pointer]:
+          - /url: /admin/add-product
+          - img [ref=e48]
+          - text: Agregar Producto
+        - link "Categorías" [ref=e50] [cursor=pointer]:
+          - /url: /admin/categories
+          - img [ref=e51]
+          - text: Categorías
+        - link "Proveedores" [ref=e53] [cursor=pointer]:
+          - /url: /admin/providers
+          - img [ref=e54]
+          - text: Proveedores
+        - link "Clientes" [ref=e56] [cursor=pointer]:
+          - /url: /admin/customers
+          - img [ref=e57]
+          - text: Clientes
+        - link "Fiados / Créditos" [ref=e59] [cursor=pointer]:
+          - /url: /admin/credits
+          - img [ref=e60]
+          - text: Fiados / Créditos
+        - link "Catálogo Completo" [ref=e62] [cursor=pointer]:
+          - /url: /catalog
+          - img [ref=e63]
+          - text: Catálogo Completo
+        - link "Sedes" [ref=e65] [cursor=pointer]:
+          - /url: /admin/branches
+          - img [ref=e66]
+          - text: Sedes
+        - link "Recepción de Mercancía" [ref=e68] [cursor=pointer]:
+          - /url: /admin/inventory-entries
+          - img [ref=e69]
+          - text: Recepción de Mercancía
+        - link "Gestión de Stock" [ref=e71] [cursor=pointer]:
+          - /url: /admin/stock-management
+          - img [ref=e72]
+          - text: Gestión de Stock
+        - link "Historial de Transferencias" [ref=e74] [cursor=pointer]:
+          - /url: /admin/transfer-history
+          - img [ref=e75]
+          - text: Historial de Transferencias
+        - link "Productos Defectuosos" [ref=e77] [cursor=pointer]:
+          - /url: /admin/defective-products
+          - img [ref=e78]
+          - text: Productos Defectuosos
+        - paragraph [ref=e80]: Reportes
+        - link "Análisis" [ref=e81] [cursor=pointer]:
+          - /url: /admin/analytics
+          - img [ref=e82]
+          - text: Análisis
+        - paragraph [ref=e84]: Marketing
+        - link "Promociones" [ref=e85] [cursor=pointer]:
+          - /url: /admin/promotions
+          - img [ref=e86]
+          - text: Promociones
+        - paragraph [ref=e88]: Configuración
+        - link "Equipo y Permisos" [ref=e89] [cursor=pointer]:
+          - /url: /admin/team
+          - img [ref=e90]
+          - text: Equipo y Permisos
+        - link "Configurar negocio" [ref=e92] [cursor=pointer]:
+          - /url: /admin/business-settings
+          - img [ref=e93]
+          - text: Configurar negocio
+        - link "Crear nuevo negocio" [ref=e96] [cursor=pointer]:
+          - /url: /admin/create-business
+          - img [ref=e97]
+          - text: Crear nuevo negocio
+      - generic [ref=e99]:
+        - generic [ref=e100]:
+          - generic [ref=e102]: p
+          - generic [ref=e103]:
+            - paragraph [ref=e104]: prueb
+            - paragraph [ref=e105]: super_admin
+        - button "Cerrar Sesión" [ref=e106]:
+          - img [ref=e107]
+          - generic [ref=e109]: Cerrar Sesión
+  - generic [ref=e111]:
+    - generic [ref=e112]:
+      - button "Open menu" [ref=e113]:
+        - img [ref=e114]
+      - generic [ref=e116]:
+        - img "PRUEBA" [ref=e117]
+        - generic [ref=e118]:
+          - paragraph [ref=e119]: Identidad
+          - paragraph [ref=e120]: PRUEBA
+    - button "Menú" [ref=e122]
+  - main [ref=e123]:
+    - generic [ref=e125]:
+      - generic [ref=e126]:
+        - heading "Gestión de Ventas" [level=1] [ref=e127]
+        - generic [ref=e128]:
+          - button [disabled] [ref=e129]:
+            - img [ref=e130]
+          - button [disabled] [ref=e133]:
+            - img [ref=e134]
+          - button "📊 Todo" [ref=e137]:
+            - generic [ref=e138]: 📊
+            - generic [ref=e139]: Todo
+      - generic [ref=e140]:
+        - generic [ref=e141]:
+          - paragraph [ref=e142]: Total Ventas
+          - paragraph [ref=e143]: "0"
+        - generic [ref=e144]:
+          - paragraph [ref=e145]: Pendientes
+          - paragraph [ref=e146]: "0"
+        - generic [ref=e147]:
+          - paragraph [ref=e148]: Confirmadas
+          - paragraph [ref=e149]: "0"
+        - generic [ref=e150]:
+          - paragraph [ref=e151]: 💳 Por Cobrar
+          - paragraph [ref=e152]: "0"
+          - paragraph [ref=e153]: $0
+        - generic [ref=e154]:
+          - paragraph [ref=e155]: Ingresos
+          - paragraph [ref=e156]: $0
+        - generic [ref=e157]:
+          - paragraph [ref=e158]: Ganancia
+          - paragraph [ref=e159]: $0
+      - generic [ref=e160]:
+        - generic [ref=e161]:
+          - paragraph [ref=e162]: "Sede / Bodega:"
+          - combobox [ref=e165]:
+            - option "Todas las sedes (stock general)" [selected]
+            - option "Bodega"
+        - generic [ref=e166]:
+          - paragraph [ref=e167]: "Filtrar por fecha:"
+          - generic [ref=e168]:
+            - generic [ref=e169]:
+              - generic [ref=e170]: Fecha inicio
+              - textbox "Fecha inicio" [ref=e171]
+            - generic [ref=e172]:
+              - generic [ref=e173]: Fecha fin
+              - textbox "Fecha fin" [ref=e174]
+        - generic [ref=e175]:
+          - paragraph [ref=e176]: "Filtrar por estado:"
+          - generic [ref=e177]:
+            - button "Todas (0)" [ref=e178]
+            - button "Pendientes (0)" [ref=e179]
+            - button "Confirmadas (0)" [ref=e180]
+        - generic [ref=e181]:
+          - generic [ref=e182]: "Ordenar por:"
+          - combobox "Ordenar por:" [ref=e183]:
+            - option "Fecha (Más reciente primero)" [selected]
+            - option "Fecha (Más antigua primero)"
+            - option "Responsable (A-Z)"
+      - generic [ref=e185]:
+        - table [ref=e186]:
+          - rowgroup [ref=e187]:
+            - row "Fecha Sede Responsable Rango Comisión Producto Cliente Crédito Cantidad Total Venta Ganancia Admin A Entregar Estado Acciones" [ref=e188]:
+              - columnheader "Fecha" [ref=e189]
+              - columnheader "Sede" [ref=e190]
+              - columnheader "Responsable" [ref=e191]
+              - columnheader "Rango" [ref=e192]
+              - columnheader "Comisión" [ref=e193]
+              - columnheader "Producto" [ref=e194]
+              - columnheader "Cliente" [ref=e195]
+              - columnheader "Crédito" [ref=e196]
+              - columnheader "Cantidad" [ref=e197]
+              - columnheader "Total Venta" [ref=e198]
+              - columnheader "Ganancia Admin" [ref=e199]
+              - columnheader "A Entregar" [ref=e200]
+              - columnheader "Estado" [ref=e201]
+              - columnheader "Acciones" [ref=e202]
+          - rowgroup
+        - paragraph [ref=e204]: No hay ventas que mostrar
+  - button "Reportar un problema" [ref=e205]: Reportar problema
+```

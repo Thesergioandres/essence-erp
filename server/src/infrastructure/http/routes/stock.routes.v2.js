@@ -20,6 +20,16 @@ router.post(
   requirePermission({ module: "inventory", action: "update" }),
   StockController.withdrawFromDistributor.bind(StockController),
 );
+router.post(
+  "/transfer",
+  requirePermission({ module: "inventory", action: "update" }),
+  StockController.transferBetweenDistributors.bind(StockController),
+);
+router.post(
+  "/transfer-to-branch",
+  requirePermission({ module: "inventory", action: "update" }),
+  StockController.transferToBranch.bind(StockController),
+);
 router.get(
   "/distributor/:distributorId",
   requirePermission({ module: "inventory", action: "read" }),
@@ -31,9 +41,24 @@ router.get(
   StockController.getBranchStock.bind(StockController),
 );
 router.get(
+  "/my-allowed-branches",
+  requirePermission({ module: "inventory", action: "read" }),
+  StockController.getMyAllowedBranches.bind(StockController),
+);
+router.get(
   "/alerts",
   requirePermission({ module: "inventory", action: "read" }),
   StockController.getAlerts.bind(StockController),
+);
+router.get(
+  "/global",
+  requirePermission({ module: "inventory", action: "read" }),
+  StockController.getGlobalStock.bind(StockController),
+);
+router.post(
+  "/reconcile",
+  requirePermission({ module: "inventory", action: "update" }),
+  StockController.reconcileStock.bind(StockController),
 );
 
 export default router;

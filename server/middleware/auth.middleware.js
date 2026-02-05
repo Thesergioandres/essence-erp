@@ -136,7 +136,12 @@ export const protect = async (req, res, next) => {
           req.user.status = "expired";
         }
 
-        if (user.status !== "active") {
+        // Permitir usuarios pending solo para rutas públicas y account-hold
+        if (user.status === "pending") {
+          // Usuarios pending solo tienen acceso limitado - deben ir a account-hold
+          req.user.status = "pending";
+          // Continuar con la autenticación - el ProtectedRoute manejará el redirect
+        } else if (user.status !== "active") {
           logAuthError({
             message: "Acceso restringido por estado de cuenta",
             module: "auth",

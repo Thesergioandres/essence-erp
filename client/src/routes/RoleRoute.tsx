@@ -21,7 +21,7 @@ export function RoleRoute({ children, role }: RoleRouteProps) {
       return <Navigate to="/distributor/dashboard" replace />;
     }
     if (user.role === "admin") {
-      return <Navigate to="/admin/dashboard" replace />;
+      return <Navigate to="/admin/analytics" replace />;
     }
     return <Navigate to="/" replace />;
   }

@@ -5,14 +5,16 @@
  */
 
 import api from "../../../api/axios";
+import type { ProfitHistoryAdminOverview } from "../../analytics/types/analytics.types";
 import type {
   Achievement,
-  Expense,
   GamificationConfig,
   PeriodWinner,
-  ProductImage,
-  User,
-} from "../../../types";
+  RankingResponse,
+} from "../../analytics/types/gamification.types";
+import type { User } from "../../auth/types/auth.types";
+import type { ProductImage } from "../../inventory/types/product.types";
+import type { Expense } from "../types/common.types";
 
 // Types for services
 interface DurationPayload {
@@ -55,24 +57,6 @@ interface IssueReport {
   status: "open" | "reviewing" | "closed";
   createdAt: Date;
   updatedAt: Date;
-}
-
-interface RankingResponse {
-  success: boolean;
-  ranking: Array<{
-    distributorId: string;
-    distributorName: string;
-    totalSales: number;
-    totalRevenue: number;
-    salesCount: number;
-    position: number;
-    previousPosition?: number;
-    trend?: "up" | "down" | "same";
-  }>;
-  period: {
-    start: string;
-    end: string;
-  };
 }
 
 interface WinnersResponse {
@@ -173,14 +157,14 @@ export const issueService = {
 export const userAccessService = {
   async list(): Promise<User[]> {
     const response = await api.get<{ success: boolean; data: User[] }>(
-      "/v2/god/users"
+      "/god/users"
     );
     return response.data.data || [];
   },
 
   async activate(id: string, duration?: DurationPayload): Promise<User> {
     const response = await api.post<{ success: boolean; user: User }>(
-      `/v2/god/users/${id}/activate`,
+      `/god/users/${id}/activate`,
       duration || {}
     );
     return response.data.user;
@@ -188,18 +172,41 @@ export const userAccessService = {
 
   async suspend(id: string): Promise<User> {
     const response = await api.post<{ success: boolean; user: User }>(
-      `/v2/god/users/${id}/suspend`
+      `/god/users/${id}/suspend`
     );
     return response.data.user;
   },
 
-  async remove(id: string): Promise<void> {
-    await api.delete(`/v2/god/users/${id}`);
+  async remove(id: string): Promise<{
+    deletedBusinesses: number;
+    deletedDistributorUsers: number;
+    deletedProducts: number;
+    deletedSales: number;
+    deletedCustomers: number;
+    deletedCredits: number;
+    deletedCategories: number;
+    deletedInventoryEntries: number;
+  }> {
+    const response = await api.delete<{
+      success: boolean;
+      data: {
+        deletedBusinesses: number;
+        deletedDistributorUsers: number;
+        deletedProducts: number;
+        deletedSales: number;
+        deletedCustomers: number;
+        deletedCredits: number;
+        deletedCategories: number;
+        deletedInventoryEntries: number;
+      };
+      message: string;
+    }>(`/god/users/${id}`);
+    return response.data.data;
   },
 
   async extend(id: string, duration?: DurationPayload): Promise<User> {
     const response = await api.post<{ success: boolean; user: User }>(
-      `/v2/god/users/${id}/extend`,
+      `/god/users/${id}/extend`,
       duration || {}
     );
     return response.data.user;
@@ -207,27 +214,26 @@ export const userAccessService = {
 
   async pause(id: string): Promise<User> {
     const response = await api.post<{ success: boolean; user: User }>(
-      `/v2/god/users/${id}/pause`
+      `/god/users/${id}/pause`
     );
     return response.data.user;
   },
 
   async resume(id: string): Promise<User> {
     const response = await api.post<{ success: boolean; user: User }>(
-      `/v2/god/users/${id}/resume`
+      `/god/users/${id}/resume`
     );
     return response.data.user;
   },
 
   async getGlobalMetrics(): Promise<GodMetricsResponse> {
-    const response = await api.get<GodMetricsResponse>("/v2/god/metrics");
+    const response = await api.get<GodMetricsResponse>("/god/metrics");
     return response.data;
   },
 
   async getSubscriptionsSummary(): Promise<SubscriptionsSummaryResponse> {
-    const response = await api.get<SubscriptionsSummaryResponse>(
-      "/v2/god/subscriptions"
-    );
+    const response =
+      await api.get<SubscriptionsSummaryResponse>("/god/subscriptions");
     return response.data;
   },
 };
@@ -335,8 +341,12 @@ export const expenseService = {
     startDate?: string;
     endDate?: string;
     type?: string;
-  }): Promise<{ expenses: Expense[] }> {
+  }): Promise<{ expenses: Expense[]; total?: number }> {
     const response = await api.get("/expenses", { params });
+    // Handle wrapped response { success: true, data: { expenses, total } }
+    if (response.data?.data?.expenses) {
+      return response.data.data;
+    }
     if (response.data?.expenses) return response.data;
     return { expenses: Array.isArray(response.data) ? response.data : [] };
   },
@@ -348,12 +358,16 @@ export const expenseService = {
     expenseDate?: string;
   }): Promise<{ expense: Expense }> {
     const response = await api.post("/expenses", payload);
-    return response.data;
+    const raw = response.data;
+    const expense = raw?.data ?? raw?.expense ?? raw;
+    return { expense };
   },
 
   async getById(id: string): Promise<{ expense: Expense }> {
     const response = await api.get(`/expenses/${id}`);
-    return response.data;
+    const raw = response.data;
+    const expense = raw?.data ?? raw?.expense ?? raw;
+    return { expense };
   },
 
   async update(
@@ -366,7 +380,9 @@ export const expenseService = {
     }>
   ): Promise<{ expense: Expense }> {
     const response = await api.put(`/expenses/${id}`, payload);
-    return response.data;
+    const raw = response.data;
+    const expense = raw?.data ?? raw?.expense ?? raw;
+    return { expense };
   },
 
   async delete(id: string): Promise<{ message: string }> {
@@ -429,15 +445,7 @@ interface ComparativeAnalysis {
   growth: number;
 }
 
-interface ProfitHistoryAdminOverview {
-  totalDistributed: number;
-  pendingPayouts: number;
-  topEarners: Array<{
-    userId: string;
-    userName: string;
-    totalEarned: number;
-  }>;
-}
+// ProfitHistoryAdminOverview se importa desde analytics.types.ts
 
 // ==================== PROFIT HISTORY SERVICE ====================
 export const profitHistoryService = {
@@ -454,12 +462,14 @@ export const profitHistoryService = {
     const response = await api.get(`/profit-history/user/${userId}`, {
       params,
     });
-    return response.data;
+    // El backend retorna {success: true, data: {...}}
+    return response.data.data || response.data;
   },
 
   async getUserBalance(userId: string): Promise<UserBalance> {
     const response = await api.get(`/profit-history/balance/${userId}`);
-    return response.data;
+    // El backend retorna {success: true, data: {...}}
+    return response.data.data || response.data;
   },
 
   async getProfitSummary(params?: {
@@ -469,14 +479,16 @@ export const profitHistoryService = {
     groupBy?: "day" | "week" | "month";
   }): Promise<ProfitSummary> {
     const response = await api.get("/profit-history/summary", { params });
-    return response.data;
+    // El backend retorna {success: true, data: {...}}
+    return response.data.data || response.data;
   },
 
   async getComparativeAnalysis(params?: {
     userId?: string;
   }): Promise<ComparativeAnalysis> {
     const response = await api.get("/profit-history/comparative", { params });
-    return response.data;
+    // El backend retorna {success: true, data: {...}}
+    return response.data.data || response.data;
   },
 
   async getAdminOverview(params?: {
@@ -488,7 +500,8 @@ export const profitHistoryService = {
     const response = await api.get("/profit-history/admin/overview", {
       params,
     });
-    return response.data;
+    // El backend retorna {success: true, data: {...overview}}
+    return response.data.data || response.data;
   },
 
   async createEntry(data: {

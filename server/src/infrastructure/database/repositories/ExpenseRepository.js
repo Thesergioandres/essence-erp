@@ -1,5 +1,6 @@
 import DefectiveProduct from "../../../../models/DefectiveProduct.js";
 import Expense from "../../../../models/Expense.js";
+import ProfitHistory from "../../../../models/ProfitHistory.js";
 import Sale from "../../../../models/Sale.js";
 
 class ExpenseRepository {
@@ -26,6 +27,19 @@ class ExpenseRepository {
       business: businessId,
     });
 
+    await ProfitHistory.create({
+      business: businessId,
+      user: userId,
+      type: "ajuste",
+      amount: -Math.abs(parsedAmount),
+      description: `Gasto: ${resolvedType.trim()}`,
+      date: expense.expenseDate || new Date(),
+      metadata: {
+        expenseId: expense._id,
+        expenseType: resolvedType.trim(),
+      },
+    });
+
     return Expense.findById(expense._id)
       .populate("createdBy", "name email")
       .lean();
@@ -35,7 +49,9 @@ class ExpenseRepository {
     const { startDate, endDate, type, category } = filters;
     const filter = businessId ? { business: businessId } : {};
     const saleFilter = businessId ? { business: businessId } : {};
-    const defectiveFilter = businessId ? { business: businessId } : {};
+    const defectiveFilter = businessId
+      ? { business: businessId, status: "confirmado" }
+      : { status: "confirmado" };
 
     const resolvedType =
       (typeof type === "string" && type.trim()) ||
@@ -143,20 +159,195 @@ class ExpenseRepository {
   }
 
   async update(expenseId, businessId, updates) {
-    return Expense.findOneAndUpdate(
+    const updated = await Expense.findOneAndUpdate(
       { _id: expenseId, business: businessId },
       updates,
       { new: true },
     )
       .populate("createdBy", "name email")
       .lean();
+
+    if (updated) {
+      const resolvedType =
+        (typeof updated.type === "string" && updated.type.trim()) ||
+        (typeof updated.category === "string" && updated.category.trim()) ||
+        (typeof updated.description === "string" &&
+          updated.description.trim()) ||
+        "Gasto";
+
+      const amountValue = Number(updated.amount) || 0;
+      const dateStart = updated.expenseDate
+        ? new Date(updated.expenseDate)
+        : null;
+      const dateEnd = updated.expenseDate
+        ? new Date(updated.expenseDate)
+        : null;
+
+      if (dateStart && dateEnd) {
+        dateStart.setHours(0, 0, 0, 0);
+        dateEnd.setHours(23, 59, 59, 999);
+      }
+
+      const fallbackFilter = {
+        business: businessId,
+        type: "ajuste",
+        amount: -Math.abs(amountValue),
+        description: `Gasto: ${resolvedType}`,
+        ...(updated.createdBy
+          ? {
+              user:
+                typeof updated.createdBy === "object"
+                  ? updated.createdBy._id
+                  : updated.createdBy,
+            }
+          : {}),
+        ...(dateStart && dateEnd
+          ? { date: { $gte: dateStart, $lte: dateEnd } }
+          : {}),
+      };
+
+      const entry = await ProfitHistory.findOne({
+        business: businessId,
+        $or: [
+          { "metadata.expenseId": updated._id },
+          { "metadata.expenseId": String(updated._id) },
+          fallbackFilter,
+        ],
+      });
+
+      if (entry) {
+        entry.amount = -Math.abs(amountValue);
+        entry.description = `Gasto: ${resolvedType}`;
+        entry.date = updated.expenseDate || entry.date;
+        entry.metadata = {
+          ...(entry.metadata || {}),
+          expenseId: updated._id,
+          expenseType: resolvedType,
+        };
+        await entry.save();
+      } else if (updated.createdBy) {
+        await ProfitHistory.create({
+          business: businessId,
+          user:
+            typeof updated.createdBy === "object"
+              ? updated.createdBy._id
+              : updated.createdBy,
+          type: "ajuste",
+          amount: -Math.abs(amountValue),
+          description: `Gasto: ${resolvedType}`,
+          date: updated.expenseDate || new Date(),
+          metadata: {
+            expenseId: updated._id,
+            expenseType: resolvedType,
+          },
+        });
+      }
+    }
+
+    return updated;
   }
 
   async delete(expenseId, businessId) {
-    return Expense.findOneAndDelete({
+    const deleted = await Expense.findOneAndDelete({
       _id: expenseId,
       business: businessId,
     }).lean();
+
+    if (deleted) {
+      const resolvedType =
+        (typeof deleted.type === "string" && deleted.type.trim()) ||
+        (typeof deleted.category === "string" && deleted.category.trim()) ||
+        (typeof deleted.description === "string" &&
+          deleted.description.trim()) ||
+        "Gasto";
+      const amountValue = Number(deleted.amount) || 0;
+      const dateStart = deleted.expenseDate
+        ? new Date(deleted.expenseDate)
+        : null;
+      const dateEnd = deleted.expenseDate
+        ? new Date(deleted.expenseDate)
+        : null;
+
+      if (dateStart && dateEnd) {
+        dateStart.setHours(0, 0, 0, 0);
+        dateEnd.setHours(23, 59, 59, 999);
+      }
+
+      await ProfitHistory.deleteMany({
+        business: businessId,
+        $or: [
+          { "metadata.expenseId": deleted._id },
+          { "metadata.expenseId": String(deleted._id) },
+          {
+            type: "ajuste",
+            amount: -Math.abs(amountValue),
+            description: `Gasto: ${resolvedType}`,
+            ...(deleted.createdBy ? { user: deleted.createdBy } : {}),
+            ...(dateStart && dateEnd
+              ? { date: { $gte: dateStart, $lte: dateEnd } }
+              : {}),
+          },
+        ],
+      });
+    }
+
+    return deleted;
+  }
+
+  async cleanupOrphanProfitHistory(businessId) {
+    const expenses = await Expense.find({ business: businessId })
+      .select("type category description amount expenseDate")
+      .lean();
+
+    const normalizeType = (value) =>
+      typeof value === "string" ? value.trim() : "";
+
+    const expenseKeySet = new Set(
+      expenses.map((exp) => {
+        const expType =
+          normalizeType(exp.type) ||
+          normalizeType(exp.category) ||
+          normalizeType(exp.description) ||
+          "";
+        const expAmount = Math.abs(Number(exp.amount) || 0);
+        const expDate = exp.expenseDate
+          ? new Date(exp.expenseDate).toISOString().slice(0, 10)
+          : "";
+        return `${expType}|${expAmount}|${expDate}`;
+      }),
+    );
+
+    const candidates = await ProfitHistory.find({
+      business: businessId,
+      type: "ajuste",
+      description: { $regex: /^Gasto:/ },
+      "metadata.expenseId": { $exists: false },
+    })
+      .select("_id description amount date")
+      .lean();
+
+    const toDelete = candidates
+      .filter((entry) => {
+        const rawType =
+          typeof entry.description === "string"
+            ? entry.description.replace(/^Gasto:\s*/i, "")
+            : "";
+        const entryType = normalizeType(rawType);
+        const entryAmount = Math.abs(Number(entry.amount) || 0);
+        const entryDate = entry.date
+          ? new Date(entry.date).toISOString().slice(0, 10)
+          : "";
+        const key = `${entryType}|${entryAmount}|${entryDate}`;
+        return !expenseKeySet.has(key);
+      })
+      .map((entry) => entry._id);
+
+    if (toDelete.length === 0) {
+      return { deletedCount: 0 };
+    }
+
+    const result = await ProfitHistory.deleteMany({ _id: { $in: toDelete } });
+    return { deletedCount: result?.deletedCount || 0 };
   }
 }
 

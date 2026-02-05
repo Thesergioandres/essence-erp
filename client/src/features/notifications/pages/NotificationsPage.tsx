@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { notificationService } from "../../notifications/services";
-import type { Notification, NotificationType } from "../../../types";
 import { logUI } from "../../../utils/logger";
+import { notificationService } from "../../notifications/services";
+import type {
+  Notification,
+  NotificationType,
+} from "../types/notification.types";
 
 const typeIcons: Record<NotificationType, string> = {
   sale: "💰",
@@ -56,7 +59,7 @@ export default function Notifications({
   const loadNotifications = useCallback(async () => {
     try {
       const res = await notificationService.getAll({
-        read: filter === "unread" ? false : undefined,
+        unreadOnly: filter === "unread" ? true : undefined,
         limit: asDropdown ? 10 : 50,
       });
       setNotifications(res.notifications);

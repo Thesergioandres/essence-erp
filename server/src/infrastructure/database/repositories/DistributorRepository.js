@@ -113,6 +113,8 @@ export class DistributorRepository {
           $match: {
             business: businessObjectId,
             distributor: { $in: objectIds },
+            // 💰 CASH FLOW: Solo ventas confirmadas para profit
+            paymentStatus: "confirmado",
           },
         },
         {
@@ -196,17 +198,27 @@ export class DistributorRepository {
 
     const businessObjectId = new mongoose.Types.ObjectId(businessId);
 
+    console.log(
+      `[DistributorRepository] findById called for id: ${id}, business: ${businessObjectId}`,
+    );
+
     const stock = await DistributorStock.find({
       distributor: distributor._id,
       business: businessObjectId,
     }).populate("product", "name image");
 
+    console.log(`[DistributorRepository] Stock found: ${stock?.length}`);
+
     const activePromotions = await Promotion.find({
       business: businessObjectId,
-      active: true,
+      status: "active", // Fixed: 'active' boolean -> 'status' enum
       startDate: { $lte: new Date() },
       endDate: { $gte: new Date() },
     }).lean();
+
+    console.log(
+      `[DistributorRepository] Active promotions found: ${activePromotions?.length}`,
+    );
 
     return {
       ...distributor.toObject(),
@@ -300,5 +312,76 @@ export class DistributorRepository {
     ).select("name email assignedProducts");
 
     return distributor;
+  }
+
+  async getProducts(distributorId, businessId, filters = {}) {
+    const page = parseInt(filters.page) || 1;
+    const limit = parseInt(filters.limit) || 50;
+    const skip = (page - 1) * limit;
+
+    const query = {
+      distributor: distributorId,
+      business: businessId,
+      quantity: { $gt: 0 },
+    };
+
+    console.log(
+      `[DistributorRepository] getProducts. DistId: ${distributorId}, BusId: ${businessId}`,
+    );
+    console.log(`[DistributorRepository] Query:`, JSON.stringify(query));
+
+    if (filters.search) {
+      // Need complex lookup to filter by product name, skip for now or do aggregate
+    }
+
+    // Use aggregate to filter by product name if needed in future
+    // For now simple find
+    const [stocks, total] = await Promise.all([
+      DistributorStock.find(query)
+        .populate("product") // Populate full product to return same shape as expected
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      DistributorStock.countDocuments(query),
+    ]);
+
+    console.log(
+      `[DistributorRepository] Found ${stocks.length} items for distributor.`,
+    );
+    if (stocks.length > 0) {
+      console.log(
+        `[DistributorRepository] Sample item:`,
+        JSON.stringify(stocks[0]),
+      );
+    } else {
+      console.log(
+        `[DistributorRepository] NO STOCK FOUND. Checking without quantity filter...`,
+      );
+      const allStock = await DistributorStock.find({
+        distributor: distributorId,
+        business: businessId,
+      })
+        .limit(1)
+        .lean();
+      console.log(
+        `[DistributorRepository] Unfiltered check result: ${allStock.length} items (First: ${JSON.stringify(allStock[0])})`,
+      );
+    }
+
+    // Format matches what FE expects?
+    // FE expects: { products: [ { product: {...}, quantity: 5 } ] }
+    // Stock returns: { product: {...}, quantity: 5, ... }
+    // It matches well enough.
+
+    return {
+      products: stocks,
+      total,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+      },
+    };
   }
 }

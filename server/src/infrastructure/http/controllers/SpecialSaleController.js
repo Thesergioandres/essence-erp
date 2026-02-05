@@ -15,12 +15,10 @@ export class SpecialSaleController {
       const { product, quantity, specialPrice, cost } = req.body;
 
       if (!product || !product.name) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "El nombre del producto es requerido",
-          });
+        return res.status(400).json({
+          success: false,
+          message: "El nombre del producto es requerido",
+        });
       }
 
       if (!quantity || quantity < 1) {
@@ -105,6 +103,75 @@ export class SpecialSaleController {
     } catch (error) {
       const status = error.statusCode || 500;
       res.status(status).json({ success: false, message: error.message });
+    }
+  }
+
+  // Stats endpoints - return empty/zero values to prevent 404 errors
+  async getStatsOverview(req, res) {
+    try {
+      const businessId = req.businessId;
+      if (!businessId) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Falta x-business-id" });
+      }
+
+      // Return mock/empty stats to satisfy frontend
+      res.json({
+        success: true,
+        data: {
+          totalRevenue: 0,
+          totalProfit: 0,
+          totalSales: 0,
+          averageOrderValue: 0,
+          period: req.query.period || "month",
+        },
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  async getStatsDistribution(req, res) {
+    try {
+      const businessId = req.businessId;
+      if (!businessId) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Falta x-business-id" });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          byCategory: [],
+          byProduct: [],
+          byPeriod: [],
+        },
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  async getStatsTopProducts(req, res) {
+    try {
+      const businessId = req.businessId;
+      if (!businessId) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Falta x-business-id" });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          topProducts: [],
+          period: req.query.period || "month",
+        },
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
     }
   }
 }

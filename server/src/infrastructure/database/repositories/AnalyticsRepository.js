@@ -19,7 +19,10 @@
 // I will check if Sale.js was moved.
 
 import mongoose from "mongoose";
-import SaleModel from "../models/Sale.js"; // Expecting it to be in src/infrastructure/database/models/Sale.js
+import DistributorStock from "../../../../models/DistributorStock.js";
+import Membership from "../../../../models/Membership.js";
+import Product from "../models/Product.js";
+import SaleModel from "../models/Sale.js";
 
 export class AnalyticsRepository {
   /**
@@ -34,15 +37,41 @@ export class AnalyticsRepository {
         $match: {
           business: new mongoose.Types.ObjectId(businessId),
           saleDate: { $gte: startDate, $lte: endDate },
-          // Note: Sale model uses paymentStatus not status. Remove cancelled filter for now.
-          // If you need to filter cancelled sales, add a 'cancelled' field to the schema.
         },
       },
       {
         $group: {
           _id: null,
-          totalRevenue: { $sum: "$salePrice" },
-          totalProfit: { $sum: { $ifNull: ["$netProfit", "$totalProfit"] } }, // Fallback to totalProfit if netProfit is missing
+          // 💰 CASH FLOW: Revenue/Profit solo de ventas confirmadas (pagadas)
+          totalRevenue: {
+            $sum: {
+              $cond: [
+                { $eq: ["$paymentStatus", "confirmado"] },
+                "$salePrice",
+                0,
+              ],
+            },
+          },
+          totalProfit: {
+            $sum: {
+              $cond: [
+                { $eq: ["$paymentStatus", "confirmado"] },
+                {
+                  $ifNull: [
+                    "$totalProfit",
+                    {
+                      $ifNull: [
+                        "$netProfit",
+                        { $add: ["$adminProfit", "$distributorProfit"] },
+                      ],
+                    },
+                  ],
+                },
+                0,
+              ],
+            },
+          },
+          // 📊 COUNT: Todas las ventas (pendientes + confirmadas)
           totalSales: { $sum: 1 },
           productsSold: { $sum: "$quantity" },
         },
@@ -74,13 +103,363 @@ export class AnalyticsRepository {
       {
         $group: {
           _id: { $dateToString: { format: "%Y-%m-%d", date: "$saleDate" } },
-          revenue: { $sum: "$salePrice" },
-          profit: { $sum: { $ifNull: ["$netProfit", "$totalProfit"] } },
+          // 💰 CASH FLOW: Solo ventas confirmadas en revenue/profit
+          revenue: {
+            $sum: {
+              $cond: [
+                { $eq: ["$paymentStatus", "confirmado"] },
+                "$salePrice",
+                0,
+              ],
+            },
+          },
+          profit: {
+            $sum: {
+              $cond: [
+                { $eq: ["$paymentStatus", "confirmado"] },
+                {
+                  $ifNull: [
+                    "$totalProfit",
+                    {
+                      $ifNull: [
+                        "$netProfit",
+                        { $add: ["$adminProfit", "$distributorProfit"] },
+                      ],
+                    },
+                  ],
+                },
+                0,
+              ],
+            },
+          },
         },
       },
       { $sort: { _id: 1 } },
     ];
 
     return SaleModel.aggregate(pipeline);
+  }
+
+  /**
+   * Get Top Products by Revenue
+   */
+  async getTopProducts(businessId, startDate, endDate, limit = 10) {
+    const pipeline = [
+      {
+        $match: {
+          business: new mongoose.Types.ObjectId(businessId),
+          saleDate: { $gte: startDate, $lte: endDate },
+        },
+      },
+      {
+        $lookup: {
+          from: "products",
+          localField: "product",
+          foreignField: "_id",
+          as: "productData",
+        },
+      },
+      {
+        $unwind: { path: "$productData", preserveNullAndEmptyArrays: true },
+      },
+      {
+        $group: {
+          _id: "$product",
+          name: {
+            $first: { $ifNull: ["$productData.name", "Producto Eliminado"] },
+          },
+          quantity: { $sum: "$quantity" },
+          revenue: { $sum: "$salePrice" },
+        },
+      },
+      { $sort: { revenue: -1 } },
+      { $limit: limit },
+      {
+        $project: {
+          _id: 0,
+          name: 1,
+          quantity: 1,
+          revenue: 1,
+        },
+      },
+    ];
+
+    return SaleModel.aggregate(pipeline);
+  }
+
+  /**
+   * Get Estimated Profit (Admin Dashboard)
+   * Calculates estimated profit based on INVENTORY (warehouse + distributors)
+   * Returns the profit that would be made if all inventory was sold at clientPrice
+   */
+  async getEstimatedProfit(businessId) {
+    const businessObjectId = new mongoose.Types.ObjectId(businessId);
+
+    // Get warehouse products (products with warehouseStock > 0)
+    const warehouseProducts = await Product.find({
+      business: businessObjectId,
+      warehouseStock: { $gt: 0 },
+    })
+      .select(
+        "name warehouseStock purchasePrice averageCost distributorPrice clientPrice",
+      )
+      .lean();
+
+    // Get distributor stocks with user info
+    const distributorStocks = await DistributorStock.find({
+      business: businessObjectId,
+      quantity: { $gt: 0 },
+    })
+      .populate("product", "name purchasePrice averageCost clientPrice")
+      .populate("distributor", "name email")
+      .lean();
+
+    // Check if business has distributors
+    const distributorMemberships = await Membership.find({
+      business: businessObjectId,
+      role: "distribuidor",
+      status: "active",
+    })
+      .select("user")
+      .lean();
+    const hasDistributors = distributorMemberships.length > 0;
+
+    // For now, we don't have branches feature
+    const hasBranches = false;
+
+    // Calculate warehouse metrics
+    let warehouseGrossProfit = 0;
+    let warehouseInvestment = 0;
+    let warehouseSalesValue = 0;
+    let warehouseTotalUnits = 0;
+
+    for (const product of warehouseProducts) {
+      const qty = product.warehouseStock || 0;
+      const costPrice = product.averageCost || product.purchasePrice || 0;
+      const sellPrice = product.clientPrice || product.distributorPrice || 0;
+
+      warehouseInvestment += costPrice * qty;
+      warehouseSalesValue += sellPrice * qty;
+      warehouseTotalUnits += qty;
+    }
+    warehouseGrossProfit = warehouseSalesValue - warehouseInvestment;
+
+    // Calculate distributor metrics (aggregated and per-distributor)
+    let distributorsGrossProfit = 0;
+    let distributorsInvestment = 0;
+    let distributorsSalesValue = 0;
+    let distributorsTotalUnits = 0;
+    const distributorMap = new Map();
+
+    for (const stock of distributorStocks) {
+      if (!stock.product || !stock.distributor) continue;
+
+      const qty = stock.quantity || 0;
+      const product = stock.product;
+      const distributor = stock.distributor;
+
+      // Admin's perspective: investment is at averageCost/purchasePrice
+      // Sales value is at clientPrice
+      const costPrice = product.averageCost || product.purchasePrice || 0;
+      const sellPrice = product.clientPrice || 0;
+
+      const investment = costPrice * qty;
+      const salesValue = sellPrice * qty;
+      const profit = salesValue - investment;
+
+      distributorsInvestment += investment;
+      distributorsSalesValue += salesValue;
+      distributorsTotalUnits += qty;
+
+      // Per-distributor breakdown
+      const distId = distributor._id.toString();
+      if (!distributorMap.has(distId)) {
+        distributorMap.set(distId, {
+          id: distId,
+          name: distributor.name || "Distribuidor",
+          email: distributor.email || "",
+          grossProfit: 0,
+          adminProfit: 0,
+          investment: 0,
+          salesValue: 0,
+          totalProducts: 0,
+          totalUnits: 0,
+        });
+      }
+      const d = distributorMap.get(distId);
+      d.grossProfit += profit;
+      d.adminProfit += profit; // For admin, the profit is the margin
+      d.investment += investment;
+      d.salesValue += salesValue;
+      d.totalUnits += qty;
+      d.totalProducts += 1;
+    }
+    distributorsGrossProfit = distributorsSalesValue - distributorsInvestment;
+
+    // Consolidated totals
+    const totalGrossProfit = warehouseGrossProfit + distributorsGrossProfit;
+    const totalInvestment = warehouseInvestment + distributorsInvestment;
+    const totalSalesValue = warehouseSalesValue + distributorsSalesValue;
+    const totalUnits = warehouseTotalUnits + distributorsTotalUnits;
+    const totalProducts =
+      warehouseProducts.length +
+      new Set(distributorStocks.map((s) => s.product?._id?.toString())).size;
+
+    // Determine scenario
+    let scenario = "A"; // Default: only warehouse
+    if (hasDistributors && !hasBranches) scenario = "B";
+    else if (!hasDistributors && hasBranches) scenario = "C";
+    else if (hasDistributors && hasBranches) scenario = "D";
+
+    const scenarioMessages = {
+      A: "Ganancia estimada basada en inventario de almacén",
+      B: "Ganancia estimada: almacén + inventario de distribuidores",
+      C: "Ganancia estimada: almacén + sucursales",
+      D: "Ganancia estimada: almacén + sucursales + distribuidores",
+    };
+
+    return {
+      success: true,
+      scenario,
+      message: scenarioMessages[scenario],
+      hasBranches,
+      hasDistributors,
+      warehouse: {
+        grossProfit: warehouseGrossProfit,
+        adminProfit: warehouseGrossProfit, // Admin keeps full margin
+        netProfit: warehouseGrossProfit,
+        totalProducts: warehouseProducts.length,
+        totalUnits: warehouseTotalUnits,
+        investment: warehouseInvestment,
+        salesValue: warehouseSalesValue,
+      },
+      branches: {
+        grossProfit: 0,
+        adminProfit: 0,
+        netProfit: 0,
+        totalProducts: 0,
+        totalUnits: 0,
+        investment: 0,
+        salesValue: 0,
+        branches: [],
+      },
+      distributors: {
+        grossProfit: distributorsGrossProfit,
+        adminProfit: distributorsGrossProfit,
+        netProfit: distributorsGrossProfit,
+        totalProducts: distributorMap.size,
+        totalUnits: distributorsTotalUnits,
+        investment: distributorsInvestment,
+        salesValue: distributorsSalesValue,
+        distributors: Array.from(distributorMap.values()),
+      },
+      consolidated: {
+        grossProfit: totalGrossProfit,
+        adminProfit: totalGrossProfit,
+        netProfit: totalGrossProfit,
+        totalProducts,
+        totalUnits,
+        investment: totalInvestment,
+        salesValue: totalSalesValue,
+        profitability:
+          totalInvestment > 0
+            ? Math.round((totalGrossProfit / totalInvestment) * 100)
+            : 0,
+        costMultiplier:
+          totalInvestment > 0
+            ? Math.round((totalSalesValue / totalInvestment) * 100)
+            : 0,
+      },
+    };
+  }
+
+  /**
+   * Get Distributor Estimated Profit
+   * Calcula la ganancia estimada del distribuidor basándose en su INVENTARIO ACTUAL
+   * (cuánto ganaría si vendiera todo su stock disponible)
+   */
+  async getDistributorEstimatedProfit(businessId, distributorId) {
+    // Get distributor's current stock with product details
+    const stock = await DistributorStock.find({
+      business: new mongoose.Types.ObjectId(businessId),
+      distributor: new mongoose.Types.ObjectId(distributorId),
+      quantity: { $gt: 0 }, // Only products with stock > 0
+    })
+      .populate("product", "name image distributorPrice clientPrice")
+      .lean();
+
+    if (!stock || stock.length === 0) {
+      return {
+        // Format expected by frontend (DistributorEstimate interface)
+        grossProfit: 0,
+        netProfit: 0,
+        totalProducts: 0,
+        totalUnits: 0,
+        investment: 0,
+        salesValue: 0,
+        profitMargin: "0",
+        profitability: 0,
+        products: [],
+      };
+    }
+
+    let totalInvestment = 0;
+    let totalSalesValue = 0;
+    let totalUnits = 0;
+    const products = [];
+
+    for (const item of stock) {
+      if (!item.product) continue;
+
+      const product = item.product;
+      const quantity = item.quantity;
+      const distributorPrice = product.distributorPrice || 0;
+      const clientPrice = product.clientPrice || 0;
+
+      const investment = distributorPrice * quantity;
+      const salesValue = clientPrice * quantity;
+      const estimatedProfit = salesValue - investment;
+      const profitPercentage =
+        investment > 0
+          ? ((estimatedProfit / investment) * 100).toFixed(1)
+          : "0";
+
+      totalInvestment += investment;
+      totalSalesValue += salesValue;
+      totalUnits += quantity;
+
+      products.push({
+        productId: product._id.toString(),
+        name: product.name,
+        image: product.image,
+        quantity,
+        distributorPrice,
+        clientPrice,
+        investment,
+        salesValue,
+        estimatedProfit,
+        profitPercentage,
+      });
+    }
+
+    const grossProfit = totalSalesValue - totalInvestment;
+    const profitMargin =
+      totalSalesValue > 0
+        ? ((grossProfit / totalSalesValue) * 100).toFixed(1)
+        : "0";
+    const profitability =
+      totalInvestment > 0 ? (grossProfit / totalInvestment) * 100 : 0;
+
+    return {
+      grossProfit,
+      netProfit: grossProfit, // For now, net = gross (no deductions)
+      totalProducts: products.length,
+      totalUnits,
+      investment: totalInvestment,
+      salesValue: totalSalesValue,
+      profitMargin,
+      profitability,
+      products,
+    };
   }
 }

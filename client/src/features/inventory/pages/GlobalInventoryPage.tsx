@@ -11,8 +11,8 @@ import {
   Warehouse,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { Product } from "../../../types";
-import { stockService } from "../services";
+import { stockService } from "../services/inventory.service";
+import type { Product } from "../types/product.types";
 
 interface StockDetail {
   name: string;
@@ -300,7 +300,9 @@ export default function GlobalInventoryPage() {
                           {item.product.name}
                         </p>
                         <p className="text-xs text-gray-500">
-                          {item.product.category?.name || "Sin categoría"}
+                          {(typeof item.product.category === "object"
+                            ? item.product.category?.name
+                            : item.product.category) || "Sin categoría"}
                         </p>
                       </div>
                     </div>

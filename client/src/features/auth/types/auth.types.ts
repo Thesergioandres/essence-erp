@@ -20,13 +20,21 @@ export interface Membership {
     _id: string;
     name: string;
     description?: string;
-    config?: Record<string, unknown>;
-    status?: string;
+    config?: import("../../business/types/business.types").BusinessConfig;
+    status?: import("../../business/types/business.types").Business["status"];
     logoUrl?: string;
   };
-  user: string;
+  user:
+    | {
+        _id: string;
+        name: string;
+        email: string;
+      }
+    | string
+    | null;
   role: string;
   status: string;
+  permissions?: Record<string, Record<string, boolean>>;
 }
 
 export interface AuthResponse {

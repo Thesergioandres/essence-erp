@@ -35,6 +35,7 @@ export default defineConfig({
       },
       workbox: {
         cleanupOutdatedCaches: true,
+        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff,woff2}"],
         runtimeCaching: [
           {
@@ -102,21 +103,25 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: id => {
-          // Separar vendors grandes
-          if (id.includes("node_modules")) {
-            if (
-              id.includes("recharts") ||
-              id.includes("jspdf") ||
-              id.includes("xlsx")
-            ) {
-              return "charts-vendor";
-            }
-            if (id.includes("framer-motion")) {
-              return "animation-vendor";
-            }
-            // Mantener React en el bundle principal para evitar problemas de contexto
-            return "vendor";
+          if (!id.includes("node_modules")) return;
+
+          if (
+            id.includes("react") ||
+            id.includes("react-dom") ||
+            id.includes("react-router-dom")
+          ) {
+            return "react-vendor";
           }
+          if (id.includes("recharts")) {
+            return "recharts";
+          }
+          if (id.includes("lucide-react")) {
+            return "icons";
+          }
+          if (id.includes("axios")) {
+            return "utils";
+          }
+          return "vendor";
         },
       },
     },
@@ -128,7 +133,6 @@ export default defineConfig({
     hmr: {
       protocol: "ws",
       host: "localhost",
-      port: 3000,
     },
     proxy: {
       "/api": {

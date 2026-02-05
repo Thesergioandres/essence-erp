@@ -1,11 +1,12 @@
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
-import { deliveryMethodService, type DeliveryMethod } from "../api/services.ts";
 import {
   buildCacheKey,
   readSessionCache,
   writeSessionCache,
 } from "../../../utils/requestCache";
+import { deliveryMethodService } from "../services";
+import type { DeliveryMethod } from "../types/settings.types";
 
 const DELIVERY_METHODS_CACHE_TTL_MS = 5 * 60 * 1000;
 const DELIVERY_METHODS_CACHE_KEY = buildCacheKey("delivery-methods:list");
@@ -73,7 +74,9 @@ export default function DeliveryMethods() {
     try {
       if (!opts?.silent) setLoading(true);
       const data = await deliveryMethodService.getAll();
-      const methods = data?.deliveryMethods || [];
+      const methods = Array.isArray(data)
+        ? data
+        : (data as any)?.deliveryMethods || [];
       setDeliveryMethods(methods);
       writeSessionCache(DELIVERY_METHODS_CACHE_KEY, methods);
     } catch (err) {
@@ -91,9 +94,9 @@ export default function DeliveryMethods() {
       setFormData({
         name: method.name,
         description: method.description || "",
-        defaultCost: method.defaultCost || 0,
-        hasVariableCost: method.hasVariableCost,
-        requiresAddress: method.requiresAddress,
+        defaultCost: method.defaultCost ?? 0,
+        hasVariableCost: method.hasVariableCost ?? false,
+        requiresAddress: method.requiresAddress ?? false,
         estimatedTime: method.estimatedTime || "",
         icon: method.icon || "truck",
         color: method.color || "#3b82f6",
@@ -184,7 +187,7 @@ export default function DeliveryMethods() {
 
   const getIconEmoji = (iconValue: string) => {
     const icon = AVAILABLE_ICONS.find(i => i.value === iconValue);
-    return icon?.label.split(" ")[0] || "🚚";
+    return icon?.label?.split(" ")[0] || "🚚";
   };
 
   const formatCurrency = (value: number) => {
@@ -277,9 +280,9 @@ export default function DeliveryMethods() {
                 )}
 
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {method.defaultCost > 0 && (
+                  {(method.defaultCost ?? 0) > 0 && (
                     <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-xs text-amber-400">
-                      Costo: {formatCurrency(method.defaultCost)}
+                      Costo: {formatCurrency(method.defaultCost ?? 0)}
                     </span>
                   )}
                   {method.hasVariableCost && (

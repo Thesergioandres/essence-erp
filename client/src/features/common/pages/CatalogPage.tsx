@@ -3,14 +3,14 @@ import { useSearchParams } from "react-router-dom";
 import {
   categoryService,
   productService,
-} from "../../inventory/services";
+} from "../../inventory/services/inventory.service";
 // Footer y Navbar ocultos para vista pública del catálogo
 import Footer from "../../../components/Footer";
 import Navbar from "../../../components/Navbar";
 import ProductCard from "../../../components/ProductCard";
-import { useDebounce } from "../hooks";
+import { useDebounce } from "../../../hooks";
 import { LoadingSpinner } from "../../../shared/components/ui";
-import type { Category, Product } from "../../../types";
+import type { Category, Product } from "../../inventory/types/product.types";
 
 export default function Catalog() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -147,7 +147,11 @@ export default function Catalog() {
 
     // Filter by category
     if (selectedCategory !== "all") {
-      filtered = filtered.filter(p => p.category._id === selectedCategory);
+      filtered = filtered.filter(p => {
+        const categoryId =
+          typeof p.category === "object" ? p.category?._id : p.category;
+        return categoryId === selectedCategory;
+      });
     }
 
     if (inStockOnly) {

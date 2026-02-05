@@ -1,19 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { useBusiness } from "../../context/BusinessContext";
 import { analyticsService } from "../../features/analytics/services";
+import type {
+  ProfitHistoryAdminDistributor,
+  ProfitHistoryAdminEntry,
+  ProfitHistoryAdminOverview,
+} from "../../features/analytics/types/analytics.types";
 import {
   expenseService,
   profitHistoryService,
 } from "../../features/common/services";
+import type { Expense } from "../../features/common/types/common.types";
 import { creditService } from "../../features/credits/services";
+import type { CreditMetrics } from "../../features/credits/types/credit.types";
 import { defectiveProductService } from "../../features/sales/services";
-import type {
-  CreditMetrics,
-  Expense,
-  ProfitHistoryAdminDistributor,
-  ProfitHistoryAdminEntry,
-  ProfitHistoryAdminOverview,
-} from "../../types";
 import { useFeature } from "../FeatureSection";
 
 interface DefectiveStats {
@@ -178,13 +178,13 @@ export default function ProfitHistoryView({
                 startDate: dateRange.startDate || undefined,
                 endDate: dateRange.endDate || undefined,
               })
-              .catch(() => ({ metrics: null }))
-          : Promise.resolve({ metrics: null }),
+              .catch(() => null)
+          : Promise.resolve(null),
       ]);
 
       setOverview(profitData);
       setExpenses(expenseData.expenses || []);
-      setCreditMetrics(creditData.metrics);
+      setCreditMetrics(creditData);
     } catch (error) {
       console.error("Error cargando overview de ganancias", error);
     } finally {
@@ -199,7 +199,7 @@ export default function ProfitHistoryView({
         analyticsService.getEstimatedProfit(),
         defectiveProductService.getStats().catch(() => ({ stats: null })),
       ]);
-      setEstimatedProfit(profitData);
+      setEstimatedProfit(profitData as any);
 
       if (defectiveData && defectiveData.stats) {
         setDefectiveStats(defectiveData.stats);
@@ -230,11 +230,12 @@ export default function ProfitHistoryView({
   ]);
 
   const distributors = useMemo<ProfitHistoryAdminDistributor[]>(() => {
-    if (!overview) return [];
+    if (!overview || !overview.distributors) return [];
     return overview.distributors;
   }, [overview]);
 
   const distributorOptions = useMemo(() => {
+    if (!distributors || !Array.isArray(distributors)) return [];
     const seen = new Set<string>();
     return distributors.filter(dist => {
       const allow = dist.id === "admin" || isValidObjectId(dist.id);
@@ -261,6 +262,11 @@ export default function ProfitHistoryView({
 
       {/* Cálculos de gastos y utilidad neta */}
       {(() => {
+        // Validar que overview exista
+        if (!overview) {
+          return null;
+        }
+
         // Filtrar gastos de defectuosos para evitar doble conteo
         // (ya se cuentan vía defectiveStats.totalLoss)
         // Filtrar gastos de defectuosos para evitar doble conteo.
@@ -271,38 +277,67 @@ export default function ProfitHistoryView({
           const c = (e.category || "").toLowerCase();
           return !t.includes("defectuoso") && !c.includes("defectuoso");
         });
-        const totalExpenses = nonDefectiveExpenses.reduce(
+        const nonDefectiveTotal = nonDefectiveExpenses.reduce(
           (sum, e) => sum + (e.amount || 0),
           0
         );
-        // const totalProfit = overview?.summary.totalProfit || 0;
+        // const totalProfit = overview.totalProfit || 0;
+
+        const entryTotals = (overview.recentEntries || []).map(entry => {
+          const total = entry.totalProfit ?? entry.netProfit ?? 0;
+          return Number.isFinite(total) ? total : 0;
+        });
+        const fallbackGross = entryTotals
+          .filter(value => value > 0)
+          .reduce((sum, value) => sum + value, 0);
+        const fallbackExpenses = entryTotals
+          .filter(value => value < 0)
+          .reduce((sum, value) => sum + value, 0);
 
         // 1. Gross Profit (Ganancia Bruta): Should be Revenue - Cost - Shipping (No Commissions)
+        // Note: Backend returns data directly in overview, not in overview.summary
+        const rawGrossProfit =
+          overview.grossProfit ?? overview.totalProfit ?? 0;
         const grossProfit =
-          overview?.summary.grossProfit ?? overview?.summary.salesValue ?? 0;
+          rawGrossProfit === 0 && fallbackGross !== 0
+            ? fallbackGross
+            : rawGrossProfit;
 
-        // 2. Commissions
-        const commissions =
-          overview?.summary.distributorCommissions ??
-          overview?.summary.distributorProfit ??
-          0;
+        // 2. Commissions (from backend overview)
+        const commissions = overview.totalDistributorCommissions || 0;
 
-        const defectiveLosses = defectiveStats?.totalLoss || 0;
+        const historyTotalExpensesRaw = overview.totalExpenses ?? 0;
+        const historyTotalExpenses = Math.abs(historyTotalExpensesRaw);
+        const fallbackTotalExpenses = Math.abs(fallbackExpenses);
+        const totalExpenses =
+          historyTotalExpenses > 0
+            ? historyTotalExpenses
+            : fallbackTotalExpenses > 0
+              ? fallbackTotalExpenses
+              : nonDefectiveTotal;
+        const defectiveLosses =
+          historyTotalExpenses > 0 || fallbackTotalExpenses > 0
+            ? 0
+            : defectiveStats?.totalLoss || 0;
 
-        const additionalSalesCosts =
-          overview?.summary.totalAdditionalSalesCosts || 0;
+        const additionalSalesCosts = 0;
 
         // 3. Net Profit (Ganancia Neta): Gross - Commissions - Expenses - Defects - Additional Costs
-        const netProfit =
+        const computedNet =
           grossProfit -
           commissions -
           totalExpenses -
           defectiveLosses -
           additionalSalesCosts;
+        const backendNet = overview.netProfit;
+        const backendTotal = overview.totalProfit;
+        const netProfit =
+          typeof backendNet === "number" && backendNet !== 0
+            ? backendNet
+            : typeof backendTotal === "number" && backendTotal !== 0
+              ? backendTotal
+              : computedNet;
 
-        const totalSalesValue = overview?.summary.salesValue || 0;
-        const profitability =
-          totalSalesValue > 0 ? (netProfit / totalSalesValue) * 100 : 0;
         // Usar gastos filtrados (sin defectuosos) para evitar doble conteo
         const expensesByType = nonDefectiveExpenses.reduce(
           (acc, e) => {
@@ -353,10 +388,7 @@ export default function ProfitHistoryView({
                     {formatCurrency(commissions)}
                   </p>
                   <p className="text-xs text-gray-400">
-                    {overview?.summary.ordersCount ??
-                      overview?.summary.count ??
-                      0}{" "}
-                    ventas
+                    {overview?.totalEntries ?? 0} entradas
                   </p>
                 </div>
               )}
@@ -372,23 +404,14 @@ export default function ProfitHistoryView({
                     : ""}
                 </p>
               </div>
-              <div
-                className={`rounded-xl border p-4 text-white shadow-lg ${
-                  profitability >= 0
-                    ? "bg-linear-to-br border-blue-800/50 from-blue-900/40 to-gray-900"
-                    : "bg-linear-to-br border-red-800/50 from-red-900/40 to-gray-900"
-                }`}
-              >
+              {/* Rentabilidad deshabilitada - no tenemos datos de ventas totales */}
+              {/* <div className="rounded-xl border p-4 text-white shadow-lg">
                 <p className="text-sm text-gray-200">📈 Rentabilidad</p>
-                <p
-                  className={`mt-2 text-2xl font-bold ${profitability >= 0 ? "text-blue-400" : "text-red-400"}`}
-                >
-                  {profitability.toFixed(1)}%
-                </p>
+                <p className="mt-2 text-2xl font-bold">N/A</p>
                 <p className="text-xs text-gray-400">
                   Utilidad neta / Total vendido
                 </p>
-              </div>
+              </div> */}
             </div>
 
             {/* Desglose de gastos por tipo */}
@@ -522,14 +545,14 @@ export default function ProfitHistoryView({
 
               {loadingEstimated ? (
                 <div className="text-center text-gray-400">Calculando...</div>
-              ) : estimatedProfit ? (
+              ) : estimatedProfit && estimatedProfit.consolidated ? (
                 <>
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
                     <div className="rounded-lg border border-gray-700 bg-gray-900/50 p-3">
                       <p className="text-xs text-gray-400">Tu Ganancia Admin</p>
                       <p className="mt-1 text-xl font-bold text-emerald-400">
                         {formatCurrency(
-                          estimatedProfit.consolidated.adminProfit
+                          estimatedProfit.consolidated.adminProfit || 0
                         )}
                       </p>
                     </div>
@@ -537,7 +560,7 @@ export default function ProfitHistoryView({
                       <p className="text-xs text-gray-400">Inversión Total</p>
                       <p className="mt-1 text-xl font-bold text-amber-300">
                         {formatCurrency(
-                          estimatedProfit.consolidated.investment
+                          estimatedProfit.consolidated.investment || 0
                         )}
                       </p>
                     </div>
@@ -545,7 +568,7 @@ export default function ProfitHistoryView({
                       <p className="text-xs text-gray-400">Valor en Ventas</p>
                       <p className="mt-1 text-xl font-bold text-green-300">
                         {formatCurrency(
-                          estimatedProfit.consolidated.salesValue
+                          estimatedProfit.consolidated.salesValue || 0
                         )}
                       </p>
                     </div>
@@ -959,8 +982,7 @@ export default function ProfitHistoryView({
             <div>
               <p className="text-sm text-gray-400">Transacciones recientes</p>
               <p className="text-lg font-semibold text-white">
-                {overview?.summary.ordersCount ?? overview?.summary.count ?? 0}{" "}
-                ventas
+                {overview?.totalEntries ?? 0} entradas
               </p>
             </div>
             <button
@@ -1014,75 +1036,82 @@ export default function ProfitHistoryView({
                   </tr>
                 )}
 
-                {!loading && (!overview || overview.entries.length === 0) && (
-                  <tr>
-                    <td
-                      colSpan={distributorsEnabled ? 7 : 5}
-                      className="px-4 py-6 text-center text-gray-400"
-                    >
-                      No hay ventas en el rango seleccionado.
-                    </td>
-                  </tr>
-                )}
+                {!loading &&
+                  (!overview ||
+                    !overview.recentEntries ||
+                    overview.recentEntries.length === 0) && (
+                    <tr>
+                      <td
+                        colSpan={distributorsEnabled ? 7 : 5}
+                        className="px-4 py-6 text-center text-gray-400"
+                      >
+                        No hay entradas en el rango seleccionado.
+                      </td>
+                    </tr>
+                  )}
 
                 {!loading &&
-                  overview?.entries.map((entry: ProfitHistoryAdminEntry) => (
-                    <tr key={entry.id} className="hover:bg-gray-950/40">
-                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-200">
-                        {formatDateTime(entry.date)}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-300">
-                        <div className="flex flex-col">
-                          <span className="font-semibold">
-                            {entry.saleId || entry.id}
-                          </span>
-                          {entry.eventName && (
-                            <span className="text-xs text-purple-300">
-                              {entry.eventName}
-                            </span>
-                          )}
-                          <span className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-gray-800 px-2 py-0.5 text-[11px] font-semibold uppercase text-gray-200">
-                            <span
-                              className={
-                                entry.source === "special"
-                                  ? "text-pink-300"
-                                  : "text-emerald-300"
-                              }
-                            >
-                              ●
-                            </span>
-                            {entry.source === "special" ? "Especial" : "Normal"}
-                          </span>
-                        </div>
-                      </td>
-                      {distributorsEnabled && (
-                        <td className="px-4 py-3 text-sm text-gray-100">
+                  overview?.recentEntries?.map(
+                    (entry: ProfitHistoryAdminEntry) => (
+                      <tr key={entry.id} className="hover:bg-gray-950/40">
+                        <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-200">
+                          {formatDateTime(entry.date)}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-300">
                           <div className="flex flex-col">
                             <span className="font-semibold">
-                              {entry.distributorName}
+                              {entry.saleId || entry.id}
                             </span>
-                            <span className="text-xs text-gray-400">
-                              {entry.distributorEmail || "Admin"}
+                            {entry.eventName && (
+                              <span className="text-xs text-purple-300">
+                                {entry.eventName}
+                              </span>
+                            )}
+                            <span className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-gray-800 px-2 py-0.5 text-[11px] font-semibold uppercase text-gray-200">
+                              <span
+                                className={
+                                  entry.source === "special"
+                                    ? "text-pink-300"
+                                    : "text-emerald-300"
+                                }
+                              >
+                                ●
+                              </span>
+                              {entry.source === "special"
+                                ? "Especial"
+                                : "Normal"}
                             </span>
                           </div>
                         </td>
-                      )}
-                      <td className="px-4 py-3 text-sm text-gray-200">
-                        {entry.productName || "-"}
-                      </td>
-                      {distributorsEnabled && (
-                        <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-cyan-300">
-                          {formatCurrency(entry.distributorProfit)}
+                        {distributorsEnabled && (
+                          <td className="px-4 py-3 text-sm text-gray-100">
+                            <div className="flex flex-col">
+                              <span className="font-semibold">
+                                {entry.distributorName}
+                              </span>
+                              <span className="text-xs text-gray-400">
+                                {entry.distributorEmail || "Admin"}
+                              </span>
+                            </div>
+                          </td>
+                        )}
+                        <td className="px-4 py-3 text-sm text-gray-200">
+                          {entry.productName || "-"}
                         </td>
-                      )}
-                      <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-emerald-300">
-                        {formatCurrency(entry.netProfit ?? entry.adminProfit)}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-purple-200">
-                        {formatCurrency(entry.netProfit ?? entry.totalProfit)}
-                      </td>
-                    </tr>
-                  ))}
+                        {distributorsEnabled && (
+                          <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-cyan-300">
+                            {formatCurrency(entry.distributorProfit)}
+                          </td>
+                        )}
+                        <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-emerald-300">
+                          {formatCurrency(entry.netProfit ?? entry.adminProfit)}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-purple-200">
+                          {formatCurrency(entry.netProfit ?? entry.totalProfit)}
+                        </td>
+                      </tr>
+                    )
+                  )}
               </tbody>
             </table>
           </div>
@@ -1095,14 +1124,17 @@ export default function ProfitHistoryView({
               </div>
             )}
 
-            {!loading && (!overview || overview.entries.length === 0) && (
-              <div className="rounded-lg border border-gray-800 bg-gray-900 px-4 py-3 text-center text-gray-300">
-                No hay ventas en el rango seleccionado.
-              </div>
-            )}
+            {!loading &&
+              (!overview ||
+                !overview.recentEntries ||
+                overview.recentEntries.length === 0) && (
+                <div className="rounded-lg border border-gray-800 bg-gray-900 px-4 py-3 text-center text-gray-300">
+                  No hay entradas en el rango seleccionado.
+                </div>
+              )}
 
             {!loading &&
-              overview?.entries.map(entry => (
+              overview?.recentEntries?.map(entry => (
                 <div
                   key={entry.id}
                   className="rounded-lg border border-gray-800 bg-gray-900 p-4 shadow-sm"

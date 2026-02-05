@@ -10,7 +10,12 @@ class UploadController {
    */
   async uploadImage(req, res) {
     try {
+      console.log("📤 Upload request received");
+      console.log("📂 File object:", req.file ? "exists" : "missing");
+      console.log("👤 User:", req.user?.id);
+
       if (!req.file) {
+        console.log("❌ No file in request");
         return res.status(400).json({
           success: false,
           message: "No se proporcionó ninguna imagen",
@@ -19,6 +24,7 @@ class UploadController {
 
       // Verify image size (max 5MB for Base64)
       if (req.file.size > 5 * 1024 * 1024) {
+        console.log("❌ File too large:", req.file.size);
         return res.status(400).json({
           success: false,
           message: "La imagen es muy grande. Máximo 5MB.",
@@ -31,6 +37,7 @@ class UploadController {
         req.file.mimetype
       };base64,${req.file.buffer.toString("base64")}`;
 
+      console.log("✅ Image processed successfully");
       res.json({
         success: true,
         data: {
@@ -39,10 +46,12 @@ class UploadController {
         },
       });
     } catch (error) {
-      console.error("Error uploading image:", error);
+      console.error("❌ Error uploading image:", error);
+      console.error("Stack:", error.stack);
       res.status(500).json({
         success: false,
         message: "Error al subir la imagen",
+        error: error.message,
       });
     }
   }

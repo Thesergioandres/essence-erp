@@ -112,7 +112,11 @@ export const FinancialKPICards: React.FC<{
           id: "avgTicket",
           label: "Ticket promedio",
           value: formatMoney(
-            range.averageTicket ?? summary.averageTicket ?? kpis?.avgTicket
+            range.avgTicket ??
+              range.averageTicket ??
+              summary.averageTicket ??
+              kpis?.avgTicket ??
+              0
           ),
           icon: <Target className="h-8 w-8" />,
           color: "bg-orange-500",

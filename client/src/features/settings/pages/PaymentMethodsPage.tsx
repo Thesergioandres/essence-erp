@@ -1,11 +1,12 @@
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
-import { paymentMethodService, type PaymentMethod } from "../api/services.ts";
 import {
   buildCacheKey,
   readSessionCache,
   writeSessionCache,
 } from "../../../utils/requestCache";
+import { paymentMethodService } from "../services";
+import type { PaymentMethod } from "../types/settings.types";
 
 const PAYMENT_METHODS_CACHE_TTL_MS = 5 * 60 * 1000;
 const PAYMENT_METHODS_CACHE_KEY = buildCacheKey("payment-methods:list");
@@ -71,7 +72,9 @@ export default function PaymentMethods() {
     try {
       if (!opts?.silent) setLoading(true);
       const data = await paymentMethodService.getAll();
-      const methods = data?.paymentMethods || [];
+      const methods = Array.isArray(data)
+        ? data
+        : (data as any)?.paymentMethods || [];
       setPaymentMethods(methods);
       writeSessionCache(PAYMENT_METHODS_CACHE_KEY, methods);
     } catch (err) {
@@ -89,9 +92,9 @@ export default function PaymentMethods() {
       setFormData({
         name: method.name,
         description: method.description || "",
-        isCredit: method.isCredit,
-        requiresConfirmation: method.requiresConfirmation,
-        requiresProof: method.requiresProof,
+        isCredit: method.isCredit ?? false,
+        requiresConfirmation: method.requiresConfirmation ?? false,
+        requiresProof: method.requiresProof ?? false,
         icon: method.icon || "cash",
         color: method.color || "#22c55e",
       });
@@ -179,7 +182,7 @@ export default function PaymentMethods() {
 
   const getIconEmoji = (iconValue: string) => {
     const icon = AVAILABLE_ICONS.find(i => i.value === iconValue);
-    return icon?.label.split(" ")[0] || "💵";
+    return icon?.label?.split(" ")[0] || "💵";
   };
 
   if (loading) {

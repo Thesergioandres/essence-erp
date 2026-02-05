@@ -5,7 +5,7 @@
  */
 
 import api from "../../../api/axios";
-import type { Notification } from "../../../types";
+import type { Notification } from "../types/notification.types";
 
 // ==================== NOTIFICATION SERVICE ====================
 export const notificationService = {
@@ -30,9 +30,14 @@ export const notificationService = {
 
   async getUnreadCount(): Promise<{
     count: number;
+    unreadCount: number;
   }> {
     const response = await api.get("/notifications/unread-count");
-    return response.data;
+    // Ensure both properties are available
+    return {
+      count: response.data.count ?? response.data.unreadCount ?? 0,
+      unreadCount: response.data.unreadCount ?? response.data.count ?? 0,
+    };
   },
 
   async markAsRead(notificationId: string): Promise<{

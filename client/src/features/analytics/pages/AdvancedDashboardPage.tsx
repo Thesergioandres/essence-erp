@@ -9,7 +9,6 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import api from "../api/axios";
 import { useFeature } from "../../../components/FeatureSection";
 import ProfitHistoryView from "../../../components/analytics/ProfitHistoryView";
 import {
@@ -21,16 +20,20 @@ import {
   SalesTimelineChart,
   TopProductsChart,
 } from "../../../components/charts";
-import { advancedAnalyticsService } from "../../analytics/services";
-import { expenseService } from "../../common/services";
-import { creditService } from "../../credits/services";
-import type { CreditMetrics, Expense } from "../../../types";
-import { formatCurrency } from "../utils";
+import { formatCurrency } from "../../../utils";
 import {
   exportKPIsToPDF,
   exportRankingsToExcel,
   exportRankingsToPDF,
 } from "../../../utils/exportUtils";
+import {
+  advancedAnalyticsService,
+  analyticsService,
+} from "../../analytics/services";
+import { expenseService } from "../../common/services";
+import type { Expense } from "../../common/types/common.types";
+import { creditService } from "../../credits/services";
+import type { CreditMetrics } from "../../credits/types/credit.types";
 
 export default function AdvancedDashboard() {
   // Feature flags
@@ -169,7 +172,7 @@ export default function AdvancedDashboard() {
           startDate: overviewRange.startDate || undefined,
           endDate: overviewRange.endDate || undefined,
         });
-        setSalesFunnel(response.funnel);
+        setSalesFunnel(response.funnel as any);
       } catch (error) {
         console.error("Error al cargar funnel:", error);
         setSalesFunnel(null);
@@ -189,8 +192,12 @@ export default function AdvancedDashboard() {
         setRotationLoading(true);
         const response = await advancedAnalyticsService.getProductRotation({
           days: rotationDays,
-        });
-        setProductRotation((response.productRotation || []) as any);
+        } as any);
+        setProductRotation(
+          ((response as any).productRotation ||
+            (response as any).products ||
+            []) as any
+        );
       } catch (error) {
         console.error("Error al cargar rotación de productos:", error);
         setProductRotation([]);
@@ -209,7 +216,7 @@ export default function AdvancedDashboard() {
       try {
         setCreditLoading(true);
         const response = await creditService.getMetrics();
-        setCreditMetrics(response.metrics);
+        setCreditMetrics(response);
       } catch (error) {
         console.error("Error al cargar métricas de créditos:", error);
         setCreditMetrics(null);
@@ -334,49 +341,33 @@ export default function AdvancedDashboard() {
     }
   };
 
-  const handleDownloadFullReport = async () => {
-    try {
-      const response = await api.get("/analytics/export/full", {
-        responseType: "blob",
-      });
+  // State for export loading
+  const [isExporting, setIsExporting] = useState(false);
 
-      const blob = new Blob([response.data], {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  /**
+   * Export full business data as JSON backup
+   */
+  const handleExportFullData = async () => {
+    try {
+      setIsExporting(true);
+      const data = await analyticsService.getFullDataExport();
+
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: "application/json",
       });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `Reporte_Gerencial_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      link.download = `backup_empresa_${new Date().toISOString().slice(0, 10)}.json`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
     } catch (error) {
-      console.error("Error al descargar reporte gerencial:", error);
-      alert("Error al descargar el reporte. Por favor intente de nuevo.");
-    }
-  };
-
-  const handleDownloadAuditReport = async () => {
-    try {
-      const response = await api.get("/analytics/export/audit", {
-        responseType: "blob",
-      });
-
-      const blob = new Blob([response.data], {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `Auditoria_Economica_${new Date().toISOString().slice(0, 10)}.xlsx`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error("Error al descargar reporte de auditoría:", error);
-      alert("Error al descargar el reporte. Por favor intente de nuevo.");
+      console.error("Error al exportar datos:", error);
+      alert("Error al exportar los datos. Por favor intente de nuevo.");
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -398,18 +389,14 @@ export default function AdvancedDashboard() {
             Actualizar
           </button>
           <button
-            onClick={handleDownloadFullReport}
-            className="flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-white transition hover:bg-purple-700"
+            onClick={handleExportFullData}
+            disabled={isExporting}
+            className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-white transition hover:bg-emerald-700 disabled:opacity-50"
           >
             <Download className="h-4 w-4" />
-            Reporte Gerencial
-          </button>
-          <button
-            onClick={handleDownloadAuditReport}
-            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white transition hover:bg-blue-700"
-          >
-            <FileText className="h-4 w-4" />
-            Auditoría
+            {isExporting
+              ? "Exportando..."
+              : "📥 Exportar Backup Completo (JSON)"}
           </button>
         </div>
       </div>

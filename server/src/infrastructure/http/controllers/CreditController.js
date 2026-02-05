@@ -73,16 +73,49 @@ class CreditController {
       let profitInfo = null;
       if (credit.sale) {
         const sale = credit.sale;
-        const totalSaleAmount = (sale.salePrice || 0) * (sale.quantity || 1);
-        const totalCost =
-          (sale.averageCostAtSale || sale.purchasePrice || 0) *
-          (sale.quantity || 1);
+        const quantity = sale.quantity || 1;
+        const unitPrice = sale.salePrice || 0;
+        const totalSaleAmount = unitPrice * quantity;
+        const unitCost = sale.averageCostAtSale || sale.purchasePrice || 0;
+        const totalCost = unitCost * quantity;
+        const adminProfit = sale.adminProfit || 0;
+        const distributorProfit = sale.distributorProfit || 0;
+        const totalProfit = sale.totalProfit || adminProfit + distributorProfit;
+        const isDistributorSale = !!sale.distributor;
+        const profitMarginPercentage =
+          totalSaleAmount > 0 ? (totalProfit / totalSaleAmount) * 100 : 0;
+        const distributorProfitPercentage =
+          totalProfit > 0 ? (distributorProfit / totalProfit) * 100 : 0;
+
         profitInfo = {
+          // Información básica del crédito
           originalAmount: credit.originalAmount,
           paidAmount: credit.paidAmount,
           remainingAmount: credit.remainingAmount,
-          totalProfit: sale.totalProfit || 0,
+          isPaidCompletely: credit.status === "paid",
+          // Información de la venta asociada
+          saleId: sale._id?.toString(),
+          productName: sale.productName || sale.product?.name || "Producto",
+          quantity,
+          unitPrice,
+          totalSaleAmount,
+          // Costos
+          unitCost,
+          totalCost,
+          // Ganancias
+          adminProfit,
+          distributorProfit,
+          totalProfit,
+          distributorProfitPercentage,
+          profitMarginPercentage,
+          // Información del distribuidor
+          isDistributorSale,
+          distributorName: sale.distributor?.name || null,
+          distributorEmail: sale.distributor?.email || null,
+          // Estado de realización de la ganancia
           profitRealized: credit.status === "paid",
+          realizedProfit: credit.status === "paid" ? totalProfit : 0,
+          pendingProfit: credit.status !== "paid" ? totalProfit : 0,
         };
       }
 

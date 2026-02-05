@@ -85,7 +85,7 @@ export default function CustomerSelector({
       customerService
         .getById(value)
         .then(response => {
-          setSelectedCustomer(response.customer);
+          setSelectedCustomer((response as any).customer || response);
         })
         .catch(() => {
           // Customer not found

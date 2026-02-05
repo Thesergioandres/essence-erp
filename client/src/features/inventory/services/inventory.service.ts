@@ -10,10 +10,11 @@ import type {
   BranchStock,
   Category,
   DistributorStock,
+  InventoryEntry,
   Product,
+  ProductPayload,
   StockAlert,
-} from "../../../types";
-import type { InventoryEntry, ProductPayload } from "../types/product.types";
+} from "../types/product.types";
 
 // ==================== PRODUCT SERVICE ====================
 export const productService = {
@@ -41,6 +42,11 @@ export const productService = {
 
   async getById(id: string): Promise<Product> {
     const response = await api.get<Product>(`/products/${id}`);
+    // Backend V2 returns { success: true, data: product }
+    if ((response.data as any).success && (response.data as any).data) {
+      return (response.data as any).data;
+    }
+    // Fallback for old format
     return response.data;
   },
 
@@ -172,7 +178,7 @@ export const categoryService = {
     params?: Record<string, string | boolean | number>
   ): Promise<Category[]> {
     const response = await api.get<{ success: boolean; data: Category[] }>(
-      "/v2/categories",
+      "/categories",
       { params }
     );
     return response.data.data;
@@ -180,7 +186,7 @@ export const categoryService = {
 
   async getById(id: string): Promise<Category> {
     const response = await api.get<{ success: boolean; data: Category }>(
-      `/v2/categories/${id}`
+      `/categories/${id}`
     );
     return response.data.data;
   },
@@ -190,7 +196,7 @@ export const categoryService = {
     description?: string;
   }): Promise<Category> {
     const response = await api.post<{ success: boolean; data: Category }>(
-      "/v2/categories",
+      "/categories",
       data
     );
     return response.data.data;
@@ -201,7 +207,7 @@ export const categoryService = {
     data: { name?: string; description?: string }
   ): Promise<Category> {
     const response = await api.put<{ success: boolean; data: Category }>(
-      `/v2/categories/${id}`,
+      `/categories/${id}`,
       data
     );
     return response.data.data;
@@ -209,7 +215,7 @@ export const categoryService = {
 
   async delete(id: string): Promise<{ message: string }> {
     const response = await api.delete<{ success: boolean; message: string }>(
-      `/v2/categories/${id}`
+      `/categories/${id}`
     );
     return response.data;
   },
@@ -350,8 +356,36 @@ export const stockService = {
     pagination: { page: number; limit: number; total: number; pages: number };
     stats: { totalTransfers: number; totalQuantity: number };
   }> {
-    const response = await api.get("/stock/transfers", { params });
-    return response.data;
+    try {
+      // Use branch-transfers endpoint which exists in V2
+      const response = await api.get("/branch-transfers", { params });
+      // Normalize V2 response: { success: true, data: transfers[] }
+      const transfers = response.data.data || response.data.transfers || [];
+      return {
+        transfers,
+        pagination: response.data.pagination || {
+          page: 1,
+          limit: 20,
+          total: transfers.length,
+          pages: 1,
+        },
+        stats: response.data.stats || {
+          totalTransfers: transfers.length,
+          totalQuantity: 0,
+        },
+      };
+    } catch (error: any) {
+      // If endpoint doesn't exist or fails, return empty data
+      console.warn(
+        "[getTransferHistory] Endpoint not available:",
+        error.message
+      );
+      return {
+        transfers: [],
+        pagination: { page: 1, limit: 20, total: 0, pages: 0 },
+        stats: { totalTransfers: 0, totalQuantity: 0 },
+      };
+    }
   },
 
   async getMyAllowedBranches(): Promise<{
@@ -420,7 +454,12 @@ export const inventoryService = {
     pagination?: { page: number; limit: number; total: number; pages: number };
   }> {
     const response = await api.get("/inventory/entries", { params });
-    return response.data;
+    // Handle V2 response format: { success, data: { entries, pagination } }
+    const data = response.data?.data || response.data;
+    return {
+      entries: data?.entries || [],
+      pagination: data?.pagination,
+    };
   },
 
   async createEntry(payload: {

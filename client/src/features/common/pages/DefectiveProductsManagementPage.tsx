@@ -1,8 +1,16 @@
 import { useEffect, useState } from "react";
 import { branchService } from "../../branches/services";
-import { productService, stockService } from "../../inventory/services";
+import {
+  productService,
+  stockService,
+} from "../../inventory/services/inventory.service";
+import type {
+  Branch,
+  BranchStock,
+  DefectiveProduct,
+  Product,
+} from "../../inventory/types/product.types";
 import { defectiveProductService } from "../../sales/services";
-import type { Branch, BranchStock, DefectiveProduct, Product } from "../../../types";
 
 export default function DefectiveProductsManagement() {
   const [data, setData] = useState<{
@@ -66,8 +74,52 @@ export default function DefectiveProductsManagement() {
   const loadReports = async () => {
     try {
       setLoading(true);
-      const response = await defectiveProductService.getAllReports();
-      setData(response);
+      const [response, statsResponse] = await Promise.all([
+        defectiveProductService.getAllReports(),
+        defectiveProductService.getStats().catch(() => ({ stats: null })),
+      ]);
+      const reports = response?.reports || [];
+      const statsFromApi = statsResponse?.stats || null;
+
+      const derivedStats = reports.reduce(
+        (acc, report) => {
+          acc.totalReports += 1;
+          acc.totalQuantity += report.quantity || 0;
+          if (report.status === "pendiente") acc.pendingCount += 1;
+          if (report.status === "confirmado") acc.confirmedCount += 1;
+          if (report.status === "rechazado") acc.rejectedCount += 1;
+          if (report.hasWarranty) acc.withWarranty += 1;
+          if (report.warrantyStatus === "pending") acc.warrantyPending += 1;
+          if (report.warrantyStatus === "approved") acc.warrantyApproved += 1;
+          if (report.stockRestored) acc.stockRestored += report.quantity || 0;
+          acc.totalLoss += report.lossAmount || 0;
+          return acc;
+        },
+        {
+          totalReports: 0,
+          totalQuantity: 0,
+          totalLoss: 0,
+          pendingCount: 0,
+          confirmedCount: 0,
+          rejectedCount: 0,
+          withWarranty: 0,
+          warrantyPending: 0,
+          warrantyApproved: 0,
+          stockRestored: 0,
+        }
+      );
+
+      const stats = statsFromApi || derivedStats;
+      setData({
+        reports,
+        stats: {
+          total: stats.totalReports || derivedStats.totalReports,
+          pendiente: stats.pendingCount || derivedStats.pendingCount,
+          confirmado: stats.confirmedCount || derivedStats.confirmedCount,
+          rechazado: stats.rejectedCount || derivedStats.rejectedCount,
+          totalQuantity: stats.totalQuantity || derivedStats.totalQuantity,
+        },
+      });
     } catch (error) {
       console.error("Error al cargar reportes:", error);
     } finally {
@@ -78,8 +130,10 @@ export default function DefectiveProductsManagement() {
   const loadProducts = async () => {
     try {
       const response = await productService.getAll();
-      const products = response.data || response;
-      setProducts(products.filter((p: Product) => p.warehouseStock > 0));
+      const productsList = Array.isArray(response)
+        ? response
+        : response.data || [];
+      setProducts(productsList.filter((p: Product) => p.warehouseStock > 0));
     } catch (error) {
       console.error("Error al cargar productos:", error);
     }
@@ -251,7 +305,7 @@ export default function DefectiveProductsManagement() {
     }
   };
 
-  const filteredReports = data.reports.filter(report => {
+  const filteredReports = (data.reports || []).filter(report => {
     if (filter === "all") return true;
     return report.status === filter;
   });
@@ -661,84 +715,128 @@ export default function DefectiveProductsManagement() {
       {/* Modal de notas */}
       {showNotesModal && selectedReport && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-md rounded-lg border border-gray-800 bg-gray-900 p-6">
-            <h2 className="mb-4 text-2xl font-bold text-white">
-              {actionType === "confirm"
-                ? "Confirmar Recepción"
-                : actionType === "reject"
-                  ? "Rechazar Reporte"
-                  : actionType === "approveWarranty"
-                    ? "✓ Aprobar Garantía"
-                    : "✗ Rechazar Garantía"}
-            </h2>
+          <div className="w-full max-w-md rounded-2xl border border-gray-800 bg-gray-900 p-6 shadow-xl shadow-black/30">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-bold text-white">
+                  {actionType === "confirm"
+                    ? "Confirmar Recepción"
+                    : actionType === "reject"
+                      ? "Rechazar Reporte"
+                      : actionType === "approveWarranty"
+                        ? "✓ Aprobar Garantía"
+                        : "✗ Rechazar Garantía"}
+                </h2>
+                <p className="mt-1 text-sm text-gray-400">
+                  Revisa los detalles antes de continuar.
+                </p>
+              </div>
+              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-gray-200">
+                #{selectedReport._id?.toString().slice(-6) || "Reporte"}
+              </span>
+            </div>
 
-            <div className="mb-4">
-              <p className="text-sm text-gray-300">
-                <strong>Producto:</strong>{" "}
-                {typeof selectedReport.product === "object"
-                  ? selectedReport.product.name
-                  : "N/A"}
-              </p>
-              <p className="text-sm text-gray-300">
-                <strong>Cantidad:</strong> {selectedReport.quantity}
-              </p>
-              <p className="mt-2 text-sm text-gray-300">
-                <strong>Razón:</strong> {selectedReport.reason}
-              </p>
+            <div className="space-y-4">
+              <div className="grid gap-3 rounded-xl border border-gray-800 bg-gray-950/60 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-gray-500">
+                      Producto
+                    </p>
+                    <p className="text-base font-semibold text-white">
+                      {typeof selectedReport.product === "object"
+                        ? selectedReport.product.name
+                        : "N/A"}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm font-semibold text-white">
+                    x{selectedReport.quantity}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-gray-500">
+                    Razón
+                  </p>
+                  <p className="text-sm text-gray-300">
+                    {selectedReport.reason}
+                  </p>
+                </div>
+              </div>
+
               {actionType === "approveWarranty" && (
-                <div className="mt-3 rounded-lg border border-green-500/20 bg-green-500/10 p-3">
-                  <p className="text-sm text-green-200">
+                <div className="rounded-xl border border-green-500/20 bg-green-500/10 p-4">
+                  <p className="text-sm font-medium text-green-200">
                     ✓ Se repondrán {selectedReport.quantity} unidades al stock
                     de bodega.
                   </p>
                 </div>
               )}
               {actionType === "rejectWarranty" && (
-                <div className="mt-3 rounded-lg border border-red-500/20 bg-red-500/10 p-3">
-                  <p className="text-sm text-red-200">
+                <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4">
+                  <p className="text-sm font-medium text-red-200">
                     ✗ Se registrará como pérdida definitiva.
                   </p>
                 </div>
               )}
-            </div>
 
-            {actionType === "confirm" && (
-              <div className="mb-4">
-                <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-gray-700 bg-gray-800 p-4 transition hover:border-purple-500">
-                  <input
-                    type="checkbox"
-                    checked={hasWarrantyOnConfirm}
-                    onChange={e => setHasWarrantyOnConfirm(e.target.checked)}
-                    className="h-5 w-5 rounded border-gray-600 bg-gray-700 text-purple-600 focus:ring-2 focus:ring-purple-500 focus:ring-offset-0"
-                  />
-                  <div className="flex-1">
-                    <p className="font-medium text-white">
-                      ✓ Tiene garantía de proveedor
-                    </p>
-                    <p className="text-sm text-gray-400">
-                      {hasWarrantyOnConfirm
-                        ? "Se marcará pendiente de reposición por garantía"
-                        : "Se registrará como pérdida definitiva"}
-                    </p>
+              {actionType === "confirm" && (
+                <div className="rounded-xl border border-gray-800 bg-gray-950/60 p-4">
+                  <p className="mb-3 text-sm font-semibold text-gray-200">
+                    ¿Cómo se registrará este reporte?
+                  </p>
+                  <div className="space-y-3">
+                    <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-gray-800 bg-gray-900/60 p-3 transition hover:border-red-500/40">
+                      <input
+                        type="checkbox"
+                        checked={!hasWarrantyOnConfirm}
+                        onChange={() => setHasWarrantyOnConfirm(false)}
+                        className="mt-0.5 h-5 w-5 rounded border-gray-600 bg-gray-800 text-red-500 focus:ring-2 focus:ring-red-500 focus:ring-offset-0"
+                      />
+                      <div className="flex-1">
+                        <p className="font-medium text-white">
+                          Se toma como pérdida definitiva
+                        </p>
+                        <p className="text-sm text-gray-400">
+                          Se descuenta del stock y queda como gasto.
+                        </p>
+                      </div>
+                    </label>
+
+                    <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-gray-800 bg-gray-900/60 p-3 transition hover:border-green-500/40">
+                      <input
+                        type="checkbox"
+                        checked={hasWarrantyOnConfirm}
+                        onChange={() => setHasWarrantyOnConfirm(true)}
+                        className="mt-0.5 h-5 w-5 rounded border-gray-600 bg-gray-800 text-green-500 focus:ring-2 focus:ring-green-500 focus:ring-offset-0"
+                      />
+                      <div className="flex-1">
+                        <p className="font-medium text-white">
+                          No se toma como pérdida (garantía)
+                        </p>
+                        <p className="text-sm text-gray-400">
+                          Se marca para reposición y ajusta el stock total.
+                        </p>
+                      </div>
+                    </label>
                   </div>
-                </label>
-              </div>
-            )}
+                </div>
+              )}
 
-            <div className="mb-4">
-              <label className="mb-2 block text-sm font-medium text-gray-300">
-                Notas (opcional)
-              </label>
-              <textarea
-                value={adminNotes}
-                onChange={e => setAdminNotes(e.target.value)}
-                rows={3}
-                placeholder="Agregar notas adicionales..."
-                className="w-full resize-none rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-white focus:border-transparent focus:ring-2 focus:ring-purple-500"
-              />
+              <div className="rounded-xl border border-gray-800 bg-gray-950/60 p-4">
+                <label className="mb-2 block text-sm font-medium text-gray-300">
+                  Notas (opcional)
+                </label>
+                <textarea
+                  value={adminNotes}
+                  onChange={e => setAdminNotes(e.target.value)}
+                  rows={3}
+                  placeholder="Agregar notas adicionales..."
+                  className="w-full resize-none rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-white focus:border-transparent focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
             </div>
 
-            <div className="flex gap-3">
+            <div className="mt-5 flex gap-3">
               <button
                 type="button"
                 onClick={() => {
@@ -746,7 +844,7 @@ export default function DefectiveProductsManagement() {
                   setSelectedReport(null);
                   setAdminNotes("");
                 }}
-                className="flex-1 rounded-lg border border-gray-700 px-4 py-2 text-gray-200 transition hover:bg-white/5"
+                className="flex-1 rounded-lg border border-gray-700 px-4 py-2 text-gray-200 transition hover:border-gray-500 hover:bg-white/5"
                 disabled={processingId !== null}
               >
                 Cancelar
@@ -960,8 +1058,8 @@ export default function DefectiveProductsManagement() {
                       Este producto tiene garantía del proveedor
                     </p>
                     <p className="text-xs text-blue-300/80">
-                      Si el proveedor acepta la garantía, se repondrá el stock
-                      automáticamente
+                      Si el proveedor acepta la garantía, se restara del stock
+                      pero no afectara metricas de finanzas.
                     </p>
                   </div>
                 </label>

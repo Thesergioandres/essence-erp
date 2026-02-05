@@ -99,4 +99,31 @@ export class DistributorController {
       res.status(status).json({ success: false, message: error.message });
     }
   }
+
+  async getProducts(req, res) {
+    try {
+      const businessId = req.businessId;
+      // Determine distributor ID: if param exists use it (admin view), otherwise use logged in user (distributor view)
+      const distributorId = req.params.id || req.user.id;
+
+      const result = await repository.getProducts(
+        distributorId,
+        businessId,
+        req.query,
+      );
+
+      // V2 API: devolver objeto completo con products, pagination, total
+      res.json({
+        success: true,
+        data: {
+          products: result.products,
+          pagination: result.pagination,
+          total: result.total,
+        },
+      });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      res.status(status).json({ success: false, message: error.message });
+    }
+  }
 }

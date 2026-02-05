@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { branchService } from "../../branches/services";
-import { productService, stockService } from "../../inventory/services";
 import { Button } from "../../../shared/components/ui";
-import type { Branch, BranchStock, Product } from "../../../types";
+import { branchService } from "../../branches/services";
+import type { Branch, BranchStock } from "../../business/types/business.types";
+import {
+  productService,
+  stockService,
+} from "../../inventory/services/inventory.service";
+import type { Product } from "../../inventory/types/product.types";
 
 interface FormState {
   name: string;
@@ -78,14 +82,14 @@ export default function Branches() {
     }
     try {
       setSaving(true);
-      const branch = await branchService.create({
+      const response = await branchService.create({
         name: trimmedName,
         address: form.address.trim() || undefined,
         contactName: form.contactName.trim() || undefined,
         contactPhone: form.contactPhone.trim() || undefined,
         contactEmail: form.contactEmail.trim() || undefined,
-        timezone: form.timezone,
       });
+      const branch = (response as any).branch || response;
       setBranches(prev => [branch, ...prev]);
       setForm(DEFAULT_FORM);
       setSuccess("Sede creada correctamente");
@@ -102,9 +106,10 @@ export default function Branches() {
     setSuccess("");
     setUpdatingId(branch._id);
     try {
-      const updated = await branchService.update(branch._id, {
+      const updateRes = await branchService.update(branch._id, {
         active: branch.active === false ? true : false,
       });
+      const updated = (updateRes as any).branch || updateRes;
       setBranches(prev => prev.map(b => (b._id === branch._id ? updated : b)));
       setSuccess(
         `Sede ${updated.active === false ? "desactivada" : "activada"}`
@@ -153,7 +158,9 @@ export default function Branches() {
       if (branch.isWarehouse) {
         // Para bodega, cargar desde warehouseStock de los productos
         const productsData = await productService.getAll();
-        const productsList = productsData.data || productsData;
+        const productsList = Array.isArray(productsData)
+          ? productsData
+          : productsData.data || [];
         const warehouseStock: BranchStock[] = productsList
           .filter((p: Product) => (p.warehouseStock || 0) > 0)
           .map((p: Product) => ({
@@ -167,10 +174,11 @@ export default function Branches() {
         setBranchStock(warehouseStock);
       } else {
         // Para sedes normales, cargar desde BranchStock
-        const stock = await stockService.getBranchStock(branch._id);
-        console.log(`[DEBUG] Stock recibido:`, stock);
-        console.log(`[DEBUG] Cantidad de items: ${stock?.length || 0}`);
-        setBranchStock(stock || []);
+        const stockData = await stockService.getBranchStock(branch._id);
+        const stockList = Array.isArray(stockData) ? stockData : [];
+        console.log(`[DEBUG] Stock recibido:`, stockList);
+        console.log(`[DEBUG] Cantidad de items: ${stockList.length || 0}`);
+        setBranchStock(stockList);
       }
     } catch (err) {
       console.error("Error al cargar inventario:", err);

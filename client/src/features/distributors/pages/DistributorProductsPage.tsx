@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { stockService } from "../../inventory/services";
-import type { DistributorStock } from "../../../types";
+import { stockService } from "../../inventory/services/inventory.service";
+import type { DistributorStock } from "../../inventory/types/product.types";
 
 export default function DistributorProducts() {
   const [stock, setStock] = useState<DistributorStock[]>([]);

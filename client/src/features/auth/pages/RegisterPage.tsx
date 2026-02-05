@@ -77,14 +77,21 @@ export default function RegisterPage() {
 
       await authService.register(payload);
 
-      setSuccess("Registro exitoso, continuemos configurando tu negocio...");
-      navigate("/onboarding", { replace: true });
+      setSuccess("✅ Registro completado. Tu cuenta está en revisión...");
+      setLoading(false);
+
+      // Redirigir después de 2 segundos para que el usuario vea el mensaje
+      setTimeout(() => {
+        navigate("/account-hold", {
+          replace: true,
+          state: { reason: "pending" },
+        });
+      }, 2000);
     } catch (err) {
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data
           ?.message || "No se pudo completar el registro";
       setError(message);
-    } finally {
       setLoading(false);
     }
   };
@@ -154,8 +161,14 @@ export default function RegisterPage() {
           )}
 
           {success && (
-            <div className="mb-4 rounded-lg border border-green-500/50 bg-green-500/10 p-3 text-sm text-green-200">
-              {success}
+            <div className="mb-4 rounded-lg border border-green-500/50 bg-green-500/10 p-4">
+              <p className="text-sm font-semibold text-green-200">{success}</p>
+              <div className="mt-3 flex items-center justify-center gap-2">
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-green-500 border-t-transparent"></div>
+                <span className="text-xs text-green-300">
+                  Preparando tu cuenta...
+                </span>
+              </div>
             </div>
           )}
 

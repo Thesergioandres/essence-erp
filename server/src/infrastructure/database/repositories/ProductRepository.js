@@ -18,32 +18,26 @@ export class ProductRepository {
    */
   async findAll(businessId, filter = {}) {
     return Product.find({ business: businessId, ...filter })
+      .populate("category", "name color icon")
       .sort({ createdAt: -1 })
       .lean();
   }
 
   /**
    * Update stock atomically.
-   * STRICTLY requires a session.
+   * Optional session support for both standalone and replica set MongoDB.
+   *
+   * ⚠️ NOTE: This updates totalStock (global counter) only.
+   * For warehouse-specific updates, use updateWarehouseStock().
+   *
    * @param {string} productId
    * @param {number} quantityChange - Negative to reduce, Positive to add
-   * @param {mongoose.ClientSession} session - Mandatory
+   * @param {mongoose.ClientSession} session - Optional (required for replica sets)
    * @returns {Promise<Object>} Updated document
    */
   async updateStock(productId, quantityChange, session) {
-    if (!session) {
-      throw new Error(
-        "CRITICAL: Transaction Session is required for Stock Update.",
-      );
-    }
-
-    // Atomic update of stock and inventory value
-    // We assume cost calculation happens in domain service or we pull it first.
-    // Ideally, we should pull the product to get averageCost if we need to update totalInventoryValue.
-    // For this simple method, we just update quantity first.
-    // BUT, maintaining totalInventoryValue is critical.
-
-    const product = await Product.findById(productId).session(session);
+    const query = Product.findById(productId);
+    const product = session ? await query.session(session) : await query;
     if (!product) throw new Error("Product not found");
 
     const cost = product.averageCost || product.purchasePrice || 0;
@@ -53,17 +47,79 @@ export class ProductRepository {
     product.totalInventoryValue =
       (product.totalInventoryValue || 0) + valueChange;
 
-    await product.save({ session });
+    // ℹ️ averageCost intentionally remains unchanged during sales.
+    // It only updates when NEW inventory is received at a different price.
+
+    await product.save(session ? { session } : {});
+    return product.toObject();
+  }
+
+  /**
+   * Update warehouse stock specifically (for admin sales).
+   * 🎯 FIX TASK 1: Deduct from warehouse when admin makes direct sales.
+   *
+   * @param {string} productId
+   * @param {number} quantityChange - Negative to reduce, Positive to add
+   * @param {mongoose.ClientSession} session - Optional (required for replica sets)
+   * @returns {Promise<Object>} Updated document
+   */
+  async updateWarehouseStock(productId, quantityChange, session) {
+    const query = Product.findById(productId);
+    const product = session ? await query.session(session) : await query;
+    if (!product) throw new Error("Product not found");
+
+    product.warehouseStock = (product.warehouseStock || 0) + quantityChange;
+
+    if (product.warehouseStock < 0) {
+      throw new Error(
+        `Insufficient warehouse stock for ${product.name}. Available: ${product.warehouseStock + Math.abs(quantityChange)}, Requested: ${Math.abs(quantityChange)}`,
+      );
+    }
+
+    await product.save(session ? { session } : {});
     return product.toObject();
   }
 
   /**
    * Create a new product
    * @param {Object} data
-   * @param {mongoose.ClientSession} session
+   * @param {mongoose.ClientSession} session - Optional
    */
   async create(data, session) {
-    const [product] = await Product.create([data], { session });
+    const [product] = session
+      ? await Product.create([data], { session })
+      : await Product.create([data]);
+    return product;
+  }
+
+  /**
+   * Update a product by ID
+   * @param {string} id
+   * @param {string} businessId
+   * @param {Object} updateData
+   * @returns {Promise<Object>}
+   */
+  async update(id, businessId, updateData) {
+    const product = await Product.findOneAndUpdate(
+      { _id: id, business: businessId },
+      { $set: updateData },
+      { new: true, runValidators: true },
+    );
+    return product;
+  }
+
+  /**
+   * Delete a product by ID
+   * @param {string} id
+   * @param {string} businessId
+   * @returns {Promise<Object>}
+   */
+  async delete(id, businessId) {
+    const product = await Product.findOne({ _id: id, business: businessId });
+    if (!product) {
+      throw new Error("Producto no encontrado");
+    }
+    await Product.deleteOne({ _id: id, business: businessId });
     return product;
   }
 }

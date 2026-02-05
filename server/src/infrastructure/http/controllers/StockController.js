@@ -63,6 +63,80 @@ class StockController {
     }
   }
 
+  async transferBetweenDistributors(req, res) {
+    try {
+      const businessId = req.businessId || req.headers["x-business-id"];
+      if (!businessId)
+        return res.status(400).json({ message: "Falta x-business-id" });
+
+      const fromDistributorId =
+        req.user?._id || req.user?.id || req.user?.userId;
+      const { toDistributorId, productId, quantity } = req.body;
+
+      if (!fromDistributorId || !toDistributorId || !productId || !quantity) {
+        return res.status(400).json({ message: "Datos incompletos" });
+      }
+
+      const result = await StockRepository.transferBetweenDistributors(
+        businessId,
+        fromDistributorId,
+        toDistributorId,
+        productId,
+        Number(quantity),
+      );
+
+      res.json({
+        success: true,
+        message: "Transferencia realizada correctamente",
+        transfer: {
+          from: {
+            distributorId: fromDistributorId,
+            remainingStock: result.fromStock.quantity,
+          },
+          to: {
+            distributorId: toDistributorId,
+            newStock: result.toStock.quantity,
+          },
+          product: { id: productId },
+          quantity: Number(quantity),
+        },
+      });
+    } catch (error) {
+      res.status(400).json({ success: false, message: error.message });
+    }
+  }
+
+  async transferToBranch(req, res) {
+    try {
+      const businessId = req.businessId || req.headers["x-business-id"];
+      if (!businessId)
+        return res.status(400).json({ message: "Falta x-business-id" });
+
+      const fromDistributorId =
+        req.user?._id || req.user?.id || req.user?.userId;
+      const { toBranchId, productId, quantity } = req.body;
+
+      if (!fromDistributorId || !toBranchId || !productId || !quantity) {
+        return res.status(400).json({ message: "Datos incompletos" });
+      }
+
+      await StockRepository.transferToBranchFromDistributor(
+        businessId,
+        fromDistributorId,
+        toBranchId,
+        productId,
+        Number(quantity),
+      );
+
+      res.json({
+        success: true,
+        message: "Transferencia a sede realizada correctamente",
+      });
+    } catch (error) {
+      res.status(400).json({ success: false, message: error.message });
+    }
+  }
+
   async getDistributorStock(req, res) {
     try {
       const businessId = req.businessId || req.headers["x-business-id"];
@@ -85,6 +159,8 @@ class StockController {
       );
       res.json({ success: true, data: stock });
     } catch (error) {
+      console.error("❌ Error in getDistributorStock:", error);
+      console.error("Stack:", error.stack);
       res.status(500).json({ success: false, message: error.message });
     }
   }
@@ -114,6 +190,67 @@ class StockController {
       const alerts = await StockRepository.getAlerts(businessId);
       res.json({ success: true, data: alerts });
     } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  async getMyAllowedBranches(req, res) {
+    try {
+      const businessId = req.businessId || req.headers["x-business-id"];
+      if (!businessId)
+        return res.status(400).json({ message: "Falta x-business-id" });
+
+      const allowedBranches = Array.isArray(req.membership?.allowedBranches)
+        ? req.membership.allowedBranches
+        : [];
+
+      const branches = await StockRepository.getAllowedBranches(
+        businessId,
+        allowedBranches,
+      );
+
+      res.json({ success: true, branches });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  async getGlobalStock(req, res) {
+    try {
+      const businessId = req.businessId || req.headers["x-business-id"];
+      if (!businessId)
+        return res.status(400).json({ message: "Falta x-business-id" });
+
+      // Usar el método dedicado para inventario global (Agregado)
+      const stock = await StockRepository.getGlobalInventory(businessId);
+      res.json({ success: true, inventory: stock });
+    } catch (error) {
+      console.error("Error in getGlobalStock:", error);
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  async reconcileStock(req, res) {
+    try {
+      const businessId = req.businessId || req.headers["x-business-id"];
+      if (!businessId)
+        return res.status(400).json({ message: "Falta x-business-id" });
+
+      const { productId } = req.body;
+      if (!productId)
+        return res.status(400).json({ message: "productId requerido" });
+
+      const result = await StockRepository.reconcileStock(
+        businessId,
+        productId,
+      );
+      res.json({
+        success: true,
+        message: "Stock reconciliado correctamente",
+        data: result,
+      });
+    } catch (error) {
+      console.error("Error in reconcileStock:", error);
       res.status(500).json({ success: false, message: error.message });
     }
   }

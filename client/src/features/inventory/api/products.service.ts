@@ -7,18 +7,24 @@ import type {
 
 export const productsService = {
   getProducts: async () => {
-    const response = await httpClient.get<{ products: Product[] }>(
-      "/v2/products"
+    const response = await httpClient.get<{
+      success: boolean;
+      data: Product[];
+    }>("/products");
+    // El backend V2 retorna {success: true, data: [...], pagination: {...}}
+    const data = response.data.data || [];
+    return Array.isArray(data) ? data : [];
+  },
+
+  getProductById: async (id: string): Promise<Product> => {
+    const response = await httpClient.get<{ success: boolean; data: Product }>(
+      `/products/${id}`
     );
-    return response.data.products || [];
+    // El backend V2 retorna {success: true, data: product}
+    return response.data.data;
   },
 
-  getProductById: async (id: string) => {
-    const response = await httpClient.get<Product>(`/v2/products/${id}`);
-    return response.data;
-  },
-
-  createProduct: async (data: ProductFormData) => {
+  createProduct: async (data: ProductFormData): Promise<Product> => {
     const formData = new FormData();
     formData.append("name", data.name);
     if (data.description) formData.append("description", data.description);
@@ -30,17 +36,26 @@ export const productsService = {
     formData.append("category", data.categoryId);
     if (data.image) formData.append("image", data.image);
 
-    const response = await httpClient.post<Product>("/v2/products", formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
-    return response.data;
+    const response = await httpClient.post<{ success: boolean; data: Product }>(
+      "/products",
+      formData,
+      {
+        headers: { "Content-Type": "multipart/form-data" },
+      }
+    );
+    // El backend V2 retorna {success: true, data: product}
+    return response.data.data;
   },
 
-  updateStock: async (id: string, payload: StockUpdatePayload) => {
-    const response = await httpClient.patch<Product>(
-      `/v2/products/${id}/stock`,
-      payload
-    );
-    return response.data;
+  updateStock: async (
+    id: string,
+    payload: StockUpdatePayload
+  ): Promise<Product> => {
+    const response = await httpClient.patch<{
+      success: boolean;
+      data: Product;
+    }>(`/products/${id}/stock`, payload);
+    // Normalizar respuesta
+    return response.data.data || (response.data as unknown as Product);
   },
 };

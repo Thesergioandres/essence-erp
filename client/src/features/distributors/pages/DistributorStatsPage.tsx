@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { analyticsService } from "../../analytics/services";
 import { saleService } from "../../sales/services";
-import type { Sale } from "../../../types";
+import type { Sale } from "../../sales/types/sales.types";
 
 interface EstimatedProfitProduct {
   productId: string;
@@ -56,7 +56,7 @@ export default function DistributorStats() {
         limit: 200,
       });
 
-      setSales(response.sales);
+      setSales(response?.sales || []);
     } catch (error) {
       console.error("Error al cargar estadísticas:", error);
     } finally {
@@ -67,9 +67,8 @@ export default function DistributorStats() {
   const loadEstimatedProfit = React.useCallback(async () => {
     try {
       setLoadingEstimated(true);
-      const response =
-        await analyticsService.getDistributorEstimatedProfit("me");
-      setEstimatedProfit(response.estimate);
+      const response = await analyticsService.getDistributorEstimatedProfit();
+      setEstimatedProfit(response.estimatedProfit as any);
     } catch (error) {
       console.error("Error al cargar ganancia estimada:", error);
     } finally {

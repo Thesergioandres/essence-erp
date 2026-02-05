@@ -15,7 +15,9 @@ export const ComparativeAnalysisView: React.FC<{ reloadKey?: number }> = ({
         setLoading(true);
         const response =
           await advancedAnalyticsService.getComparativeAnalysis();
-        setComparison(response.comparison);
+        setComparison(
+          (response as any).comparison || (response as any).comparisons
+        );
       } catch (error) {
         console.error("Error al cargar análisis comparativo:", error);
       } finally {

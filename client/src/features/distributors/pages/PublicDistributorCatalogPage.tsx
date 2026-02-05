@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import api from "../api/axios";
+import api from "../../../api/axios";
 import { LoadingSpinner } from "../../../shared/components/ui";
-import type { Product } from "../../../types";
+import type { Product } from "../../inventory/types/product.types";
 
 interface DistributorInfo {
   name: string;

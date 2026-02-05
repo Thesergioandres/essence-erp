@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { saleService } from "../../sales/services";
-import type { Sale } from "../../../types";
+import type { Sale } from "../../sales/types/sales.types";
 
 export default function DistributorSales() {
   const [sales, setSales] = useState<Sale[]>([]);
@@ -33,12 +33,14 @@ export default function DistributorSales() {
           undefined,
           filterParams
         );
-        setSales(response.sales);
-        setStats({
-          totalSales: response.stats.totalSales,
-          totalRevenue: response.stats.totalRevenue,
-          totalProfit: response.stats.totalDistributorProfit,
-        });
+        setSales(response?.sales || []);
+        if (response?.stats) {
+          setStats({
+            totalSales: response.stats.totalSales || 0,
+            totalRevenue: response.stats.totalRevenue || 0,
+            totalProfit: response.stats.totalDistributorProfit || 0,
+          });
+        }
       } catch (error) {
         console.error("Error al cargar ventas:", error);
       } finally {

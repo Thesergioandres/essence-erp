@@ -1,9 +1,13 @@
 import { v4 as uuidv4 } from "uuid";
+import DistributorStock from "../../../models/DistributorStock.js";
+import Membership from "../../../models/Membership.js";
+import PaymentMethod from "../../../models/PaymentMethod.js";
 import { FinanceService } from "../../domain/services/FinanceService.js";
 import { InventoryService } from "../../domain/services/InventoryService.js";
+import CreditRepository from "../../infrastructure/database/repositories/CreditRepository.js";
 import { ProductRepository } from "../../infrastructure/database/repositories/ProductRepository.js";
+import ProfitHistoryRepository from "../../infrastructure/database/repositories/ProfitHistoryRepository.js";
 import { SaleRepository } from "../../infrastructure/database/repositories/SaleRepository.js";
-
 export class RegisterSaleUseCase {
   constructor() {
     this.saleRepository = new SaleRepository();
@@ -12,6 +16,17 @@ export class RegisterSaleUseCase {
 
   /**
    * Orchestrates the BULK sale registration process.
+   *
+   * ⚠️ INVENTORY SYMMETRY NOTE:
+   * This V2 implementation deducts stock from Product.totalStock (global warehouse).
+   * If you need to support sales from Branches or Distributor Stock, you must:
+   * 1. Add branchId parameter to identify source
+   * 2. Call BranchStock.findOneAndUpdate() or DistributorStock.findOneAndUpdate()
+   * 3. Ensure DeleteSaleController mirrors this logic when restoring stock
+   *
+   * Currently, DeleteSaleController checks sale.branch/sale.distributor fields,
+   * but this UseCase does NOT set those fields from actual stock sources.
+   *
    * @param {Object} input - DTO containing sale details
    * @param {Array} input.items - Array of { productId, quantity, salePrice }
    * @param {Object} input.user - User performing the action
@@ -25,6 +40,10 @@ export class RegisterSaleUseCase {
       distributorId,
       notes,
       paymentMethodId,
+      customerId,
+      creditDueDate,
+      initialPayment,
+      saleDate,
       deliveryMethodId,
       shippingCost,
       distributorProfitPercentage = 20,
@@ -35,25 +54,62 @@ export class RegisterSaleUseCase {
       throw new Error("No items provided for sale.");
     }
 
-    const saleGroupId = uuidv4(); // Unique ID for this batch
-    const results = [];
-    let totalTransactionAmount = 0;
-    let netTransactionProfit = 0;
+    // 1.1 Resolve PaymentMethod
+    // If paymentMethodId is a string code like "cash", "credit", find the actual ObjectId
+    let resolvedPaymentMethodId = paymentMethodId;
+    let paymentMethodCode = null;
 
-    // 2. Loop Items
+    if (paymentMethodId && typeof paymentMethodId === "string") {
+      // Check if it's a valid ObjectId format (24 hex chars)
+      const isObjectId = /^[0-9a-fA-F]{24}$/.test(paymentMethodId);
+
+      if (!isObjectId) {
+        // It's a code like "cash", "credit", need to lookup
+        const paymentMethod = await PaymentMethod.findOne({
+          business: businessId,
+          code: paymentMethodId,
+        });
+
+        if (paymentMethod) {
+          resolvedPaymentMethodId = paymentMethod._id;
+          paymentMethodCode = paymentMethod.code;
+        } else {
+          // If not found in business-specific methods, try system-wide defaults
+          // For backwards compatibility or system codes
+          console.warn(
+            `PaymentMethod with code "${paymentMethodId}" not found for business ${businessId}. Using code directly.`,
+          );
+          // Keep the code, but don't set ObjectId
+          resolvedPaymentMethodId = null;
+          paymentMethodCode = paymentMethodId;
+        }
+      }
+    }
+
+    if (!paymentMethodCode && resolvedPaymentMethodId) {
+      const paymentMethod = await PaymentMethod.findOne({
+        _id: resolvedPaymentMethodId,
+        business: businessId,
+      });
+      if (paymentMethod) {
+        paymentMethodCode = paymentMethod.code;
+      }
+    }
+
+    const saleGroupId = uuidv4(); // Unique ID for this batch
+
+    // 2. PHASE 1: Validate ALL items BEFORE making any changes
+    const validatedItems = [];
     for (const item of items) {
       const { productId, quantity, salePrice } = item;
 
       if (quantity <= 0)
         throw new Error(`Invalid quantity for product ${productId}`);
 
-      // A. Load Product (Atomic read within session recommended if locking needed, but findById is fast)
-      // Using session here ensures we see the latest state if modified in this transaction
       const product = await this.productRepository.findById(productId);
-
       if (!product) throw new Error(`Product not found: ${productId}`);
 
-      // B. Check Stock (Pure Domain Logic)
+      // Check stock availability
       const hasStock = InventoryService.hasSufficientStock(
         product.totalStock,
         quantity,
@@ -64,37 +120,89 @@ export class RegisterSaleUseCase {
         );
       }
 
-      // C. Financial Calculations
-      const costBasis = product.averageCost || product.purchasePrice || 0;
+      // If distributor sale, check distributor stock
+      if (distributorId) {
+        const distStock = await DistributorStock.findOne({
+          business: businessId,
+          distributor: distributorId,
+          product: productId,
+        });
 
-      const distributorPrice = FinanceService.calculateDistributorPrice(
-        salePrice,
-        distributorProfitPercentage,
-      );
-      const distributorProfit = FinanceService.calculateDistributorProfit(
-        salePrice,
-        distributorPrice,
-        quantity,
-      );
+        if (!distStock || distStock.quantity < quantity) {
+          throw new Error(
+            `Insufficient distributor stock for ${product.name}. Requested: ${quantity}, Available: ${distStock?.quantity || 0}`,
+          );
+        }
+      }
+
+      // Calculate financials
+      const costBasis = product.averageCost || product.purchasePrice || 0;
+      const isDistributorSale = Boolean(distributorId);
+      const effectiveDistributorProfitPercentage = isDistributorSale
+        ? distributorProfitPercentage
+        : 0;
+      const distributorPrice = isDistributorSale
+        ? FinanceService.calculateDistributorPrice(
+            salePrice,
+            effectiveDistributorProfitPercentage,
+          )
+        : salePrice;
+      const distributorProfit = isDistributorSale
+        ? FinanceService.calculateDistributorProfit(
+            salePrice,
+            distributorPrice,
+            quantity,
+          )
+        : 0;
       const adminProfit = FinanceService.calculateAdminProfit(
         salePrice,
         costBasis,
         distributorProfit,
         quantity,
       );
+      const totalProfit = distributorProfit + adminProfit;
 
-      const totalProfit = distributorProfit + adminProfit; // Simplified per item
+      validatedItems.push({
+        productId,
+        product,
+        quantity,
+        salePrice,
+        costBasis,
+        distributorPrice,
+        distributorProfit,
+        adminProfit,
+        totalProfit,
+        distributorProfitPercentage: effectiveDistributorProfitPercentage,
+      });
+    }
 
-      // Note: Net Profit is usually calculated on the Total, deducting shipping ONCE.
-      // Here we store item-level stats.
+    // 3. PHASE 2: All validations passed, now make the changes
+    const results = [];
+    const creditItems = [];
+    let totalTransactionAmount = 0;
+    let netTransactionProfit = 0;
 
-      // D. Deduct Stock (Infra)
-      await this.productRepository.updateStock(productId, -quantity, session);
+    for (const item of validatedItems) {
+      const {
+        productId,
+        product,
+        quantity,
+        salePrice,
+        costBasis,
+        distributorPrice,
+        distributorProfit,
+        adminProfit,
+        totalProfit,
+        distributorProfitPercentage,
+      } = item;
 
-      // E. Create Sale Record (Infra)
+      // E. Create Sale Record FIRST (Infra)
+      const requiresAdminConfirmation = Boolean(distributorId);
+      const isCreditSale = paymentMethodCode === "credit";
+      const shouldConfirmNow = !requiresAdminConfirmation && !isCreditSale;
+
       const saleData = {
         business: businessId,
-        distributor: distributorId || user.id,
         product: productId,
         productName: product.name,
         quantity,
@@ -110,20 +218,160 @@ export class RegisterSaleUseCase {
         notes,
         saleDate: input.saleDate || new Date(),
         saleGroupId, // Link them!
-        paymentMethod: paymentMethodId,
+        paymentMethod: resolvedPaymentMethodId, // Use resolved ObjectId
+        paymentMethodCode: paymentMethodCode, // Store the code for quick lookups
         deliveryMethod: deliveryMethodId,
-        shippingCost: 0, // We handle shipping once on the group usually, or legacy stores it on every item?
-        // Legacy often stored full shipping on first item or divided?
-        // We'll leave it 0 here and maybe handle it in a separate logic if needed,
-        // or better, just attribute it to the context of the sale.
-        // For now, let's keep it simple.
+        shippingCost: 0,
+        createdBy: user.id, // Track who created the sale
+        // 💰 FINANCIAL LOGIC FIX:
+        // Cash sales (non-credit) must be CONFIRMED immediately to count towards profit.
+        // Credit sales remain PENDING until fully paid.
+        paymentStatus: shouldConfirmNow ? "confirmado" : "pendiente",
+        paymentConfirmedAt: shouldConfirmNow ? new Date() : null,
       };
+
+      // Only set distributor field if this is actually a distributor sale
+      if (distributorId) {
+        saleData.distributor = distributorId;
+      }
 
       const createdSale = await this.saleRepository.create(saleData, session);
       results.push(createdSale);
 
+      creditItems.push({
+        product: productId,
+        productName: product.name,
+        quantity,
+        unitPrice: salePrice,
+        subtotal: salePrice * quantity,
+        cost: costBasis * quantity,
+        image: product.image?.url || product.image || "",
+      });
+
+      // F. Deduct Stock ONLY AFTER sale is confirmed (Infra) - LOCATION-AWARE
+      // This ensures stock is only deducted if the sale was successfully created
+      if (distributorId) {
+        // Distributor Sale → Deduct from DistributorStock
+        const distStock = await DistributorStock.findOneAndUpdate(
+          {
+            business: businessId,
+            distributor: distributorId,
+            product: productId,
+          },
+          { $inc: { quantity: -quantity } },
+          session ? { session, new: true } : { new: true },
+        );
+
+        if (!distStock) {
+          throw new Error(
+            `Distributor stock not found for product ${productId}. Ensure stock is assigned first.`,
+          );
+        }
+
+        console.log(
+          `📦 Deducted ${quantity} from DistributorStock (distributor: ${distributorId})`,
+        );
+      } else {
+        // Admin Sale → Deduct from Warehouse
+        await this.productRepository.updateWarehouseStock(
+          productId,
+          -quantity,
+          session,
+        );
+        console.log(`📦 Deducted ${quantity} from Warehouse (admin sale)`);
+      }
+
+      // Always update global totalStock counter for statistics
+      await this.productRepository.updateStock(productId, -quantity, session);
+
+      // G. Create ProfitHistory entries for tracking
+      // Only create entries for CONFIRMED sales
+      if (saleData.paymentStatus === "confirmado") {
+        const saleDate = input.saleDate || new Date();
+
+        // If distributor sale, create entry for distributor's profit
+        if (distributorId && distributorProfit > 0) {
+          await ProfitHistoryRepository.create({
+            business: businessId,
+            user: distributorId,
+            type: "venta_normal",
+            amount: distributorProfit,
+            sale: createdSale._id,
+            product: productId,
+            description: `Comisión por venta ${createdSale.saleId}`,
+            date: saleDate,
+            metadata: {
+              quantity,
+              salePrice,
+              saleId: createdSale.saleId,
+              commission: distributorProfitPercentage,
+            },
+          });
+        }
+
+        // Create entry for admin's profit
+        if (adminProfit > 0) {
+          // Find admin user for this business via Membership
+          const adminMembership = await Membership.findOne({
+            business: businessId,
+            role: "admin",
+            status: "active",
+          })
+            .select("user")
+            .lean();
+
+          if (adminMembership) {
+            await ProfitHistoryRepository.create({
+              business: businessId,
+              user: adminMembership.user,
+              type: "venta_normal",
+              amount: adminProfit,
+              sale: createdSale._id,
+              product: productId,
+              description: distributorId
+                ? `Ganancia de venta ${createdSale.saleId} (distribuidor)`
+                : `Venta directa ${createdSale.saleId}`,
+              date: saleDate,
+              metadata: {
+                quantity,
+                salePrice,
+                saleId: createdSale.saleId,
+              },
+            });
+          }
+        }
+      }
+
       totalTransactionAmount += salePrice * quantity;
       netTransactionProfit += totalProfit;
+    }
+
+    if (paymentMethodCode === "credit") {
+      if (!customerId) {
+        throw new Error("El cliente es obligatorio para ventas a crédito.");
+      }
+
+      const credit = await CreditRepository.create(
+        businessId,
+        {
+          customerId,
+          amount: totalTransactionAmount,
+          dueDate: creditDueDate,
+          description: notes,
+          items: creditItems,
+          saleId: results[0]?._id || null,
+        },
+        user.id,
+      );
+
+      if (initialPayment && Number(initialPayment) > 0) {
+        await CreditRepository.registerPayment(
+          credit._id,
+          Number(initialPayment),
+          "Pago inicial",
+          user.id,
+        );
+      }
     }
 
     // Adjust Net Profit with Shipping (Once)

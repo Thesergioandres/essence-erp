@@ -45,7 +45,9 @@ export const useAuth = () => {
       window.dispatchEvent(new Event("auth-changed"));
 
       // Redirect Logic
-      if (response.role === "distribuidor") {
+      if (response.status === "pending") {
+        navigate("/account-hold");
+      } else if (response.role === "distribuidor") {
         navigate("/distributor/dashboard");
       } else if (["admin", "super_admin", "god"].includes(response.role)) {
         navigate("/admin/dashboard");

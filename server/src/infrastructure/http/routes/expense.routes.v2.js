@@ -31,4 +31,10 @@ router.delete(
   ExpenseController.delete.bind(ExpenseController),
 );
 
+router.post(
+  "/cleanup-orphans",
+  requirePermission({ module: "expenses", action: "delete" }),
+  ExpenseController.cleanupOrphans.bind(ExpenseController),
+);
+
 export default router;

@@ -9,7 +9,7 @@ export const authService = {
   login: async (credentials: LoginCredentials): Promise<AuthResponse> => {
     // V2 Endpoint
     const response = await httpClient.post<AuthResponse>(
-      "/v2/auth/login",
+      "/auth/login",
       credentials
     );
     return response.data;
@@ -18,7 +18,7 @@ export const authService = {
   register: async (credentials: RegisterCredentials): Promise<AuthResponse> => {
     // V2 Endpoint
     const response = await httpClient.post<AuthResponse>(
-      "/v2/auth/register",
+      "/auth/register",
       credentials
     );
     return response.data;

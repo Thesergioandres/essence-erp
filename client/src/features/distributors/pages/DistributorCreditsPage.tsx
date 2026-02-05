@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
 import { creditService } from "../../credits/services";
-import type { Credit, Customer } from "../../../types";
+import type { Credit } from "../../credits/types/credit.types";
+import type { Customer } from "../../customers/types/customer.types";
 
 export default function DistributorCredits() {
   const [credits, setCredits] = useState<Credit[]>([]);
-  const [stats, setStats] = useState({
-    totalCredits: 0,
-    pendingCount: 0,
-    totalPending: 0,
-    totalCollected: 0,
-  });
+  const [stats, setStats] = useState<{
+    totalCredits: number;
+    totalDebt?: number;
+    overdue?: number;
+    pendingCount?: number;
+    totalPending?: number;
+    totalCollected?: number;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<"all" | "pending" | "paid">(
     "all"
@@ -37,10 +40,11 @@ export default function DistributorCredits() {
     try {
       setLoading(true);
       const response = await creditService.getDistributorCredits();
-      setCredits(response.credits);
-      setStats(response.stats);
+      setCredits(response?.credits || []);
+      setStats(response?.stats ?? null);
     } catch (error) {
       console.error("Error al cargar créditos:", error);
+      setCredits([]);
     } finally {
       setLoading(false);
     }
@@ -90,10 +94,7 @@ export default function DistributorCredits() {
         selectedCredit._id,
         {
           amount: parseFloat(paymentAmount),
-          paymentMethod,
           notes: paymentNotes,
-          paymentProof: paymentProof || undefined,
-          paymentProofMimeType: paymentProof ? "image/jpeg" : undefined,
         }
       );
 
@@ -224,25 +225,25 @@ export default function DistributorCredits() {
         <div className="rounded-xl border border-gray-700 bg-gradient-to-br from-blue-900/50 to-gray-800/50 p-5">
           <p className="text-sm text-gray-400">Total Créditos</p>
           <p className="mt-2 text-3xl font-bold text-white">
-            {stats.totalCredits}
+            {stats?.totalCredits ?? 0}
           </p>
         </div>
         <div className="rounded-xl border border-orange-700/50 bg-gradient-to-br from-orange-900/30 to-gray-800/50 p-5">
           <p className="text-sm text-orange-300">Pendientes</p>
           <p className="mt-2 text-3xl font-bold text-orange-400">
-            {stats.pendingCount}
+            {stats?.pendingCount ?? 0}
           </p>
         </div>
         <div className="rounded-xl border border-red-700/50 bg-gradient-to-br from-red-900/30 to-gray-800/50 p-5">
           <p className="text-sm text-red-300">Por Cobrar</p>
           <p className="mt-2 text-2xl font-bold text-red-400">
-            {formatCurrency(stats.totalPending)}
+            {formatCurrency(stats?.totalPending ?? 0)}
           </p>
         </div>
         <div className="rounded-xl border border-green-700/50 bg-gradient-to-br from-green-900/30 to-gray-800/50 p-5">
           <p className="text-sm text-green-300">Cobrado</p>
           <p className="mt-2 text-2xl font-bold text-green-400">
-            {formatCurrency(stats.totalCollected)}
+            {formatCurrency(stats?.totalCollected ?? 0)}
           </p>
         </div>
       </div>
@@ -267,7 +268,7 @@ export default function DistributorCredits() {
               : "border border-gray-700 text-gray-300 hover:bg-gray-800"
           }`}
         >
-          Pendientes ({stats.pendingCount})
+          Pendientes ({stats?.pendingCount ?? 0})
         </button>
         <button
           onClick={() => setFilterStatus("paid")}

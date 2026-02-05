@@ -26,6 +26,17 @@ export default function ProtectedRoute({
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
+  // Si el usuario está pending, solo permitir acceso a account-hold
+  if (user.status === "pending") {
+    return (
+      <Navigate
+        to="/account-hold"
+        replace
+        state={{ from: location, reason: "pending" }}
+      />
+    );
+  }
+
   const isExpired =
     user.subscriptionExpiresAt &&
     new Date(user.subscriptionExpiresAt) < new Date();
@@ -45,9 +56,9 @@ export default function ProtectedRoute({
         user.role === "distribuidor"
           ? "/distributor/dashboard"
           : user.role === "admin" || user.role === "super_admin"
-            ? "/admin/dashboard"
+            ? "/admin/analytics"
             : user.role === "god"
-              ? "/admin/dashboard"
+              ? "/admin/analytics"
               : "/";
 
       // Avoid redirect loop - only redirect if not already on target path

@@ -1,10 +1,10 @@
 import { Shield, Trash2, UserPlus, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useBusiness } from "../../../context/BusinessContext";
-import { userService } from "../../auth/services";
-import { businessService } from "../../business/services";
 import { Button, LoadingSpinner } from "../../../shared/components/ui";
-import type { Membership, User } from "../../../types";
+import { userService } from "../../auth/services";
+import type { Membership, User } from "../../auth/types/auth.types";
+import { businessService } from "../../business/services";
 
 interface ModulePermissions {
   read?: boolean;
@@ -48,7 +48,7 @@ const ACTIONS = [
 
 export default function TeamManagement() {
   const { business } = useBusiness();
-  const [members, setMembers] = useState<Membership[]>([]);
+  const [members, setMembers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showPermissionsModal, setShowPermissionsModal] = useState(false);
@@ -58,8 +58,8 @@ export default function TeamManagement() {
 
   // Add member form
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<"admin" | "distribuidor" | "viewer">(
-    "distribuidor"
+  const [role, setRole] = useState<"admin" | "distributor" | "viewer">(
+    "distributor"
   );
   const [searchingUser, setSearchingUser] = useState(false);
   const [foundUser, setFoundUser] = useState<User | null>(null);
@@ -77,7 +77,7 @@ export default function TeamManagement() {
     try {
       setLoading(true);
       const response = await businessService.listMembers(business._id);
-      setMembers(response);
+      setMembers(response.members || []);
     } catch (err) {
       console.error("Error al cargar miembros:", err);
       setError("Error al cargar el equipo");
@@ -371,7 +371,7 @@ export default function TeamManagement() {
                     value={role}
                     onChange={e =>
                       setRole(
-                        e.target.value as "admin" | "distribuidor" | "viewer"
+                        e.target.value as "admin" | "distributor" | "viewer"
                       )
                     }
                     className="w-full rounded-lg border border-white/10 bg-black/40 px-4 py-2 text-white focus:border-purple-500 focus:outline-none"
@@ -416,7 +416,7 @@ export default function TeamManagement() {
           <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-lg border border-white/10 bg-gray-900 p-6">
             <h2 className="mb-4 text-xl font-bold text-white">
               Configurar Permisos -{" "}
-              {typeof selectedMember.user === "object"
+              {selectedMember.user && typeof selectedMember.user === "object"
                 ? selectedMember.user.name
                 : "Usuario"}
             </h2>

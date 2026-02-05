@@ -1,0 +1,186 @@
+/**
+ * Order Summary Component
+ * Live metrics calculation and order totals
+ */
+
+import { Calculator, CheckCircle, TrendingUp } from "lucide-react";
+import type { OrderState } from "../../types/admin-order.types";
+
+interface OrderSummaryProps {
+  order: OrderState;
+  isSubmitting?: boolean;
+  onConfirm: () => void;
+}
+
+export function OrderSummary({
+  order,
+  isSubmitting,
+  onConfirm,
+}: OrderSummaryProps) {
+  const {
+    items,
+    warranties,
+    subtotal,
+    shippingCost,
+    discount,
+    discountPercent,
+    additionalCosts,
+    grossProfit,
+    netProfit,
+    totalPayable,
+    paymentMethod,
+    deliveryMethod,
+  } = order;
+
+  const totalItems = items.reduce((sum, i) => sum + i.quantity, 0);
+  const totalWarrantyItems = warranties.reduce((sum, w) => sum + w.quantity, 0);
+  const totalAdditionalCosts = additionalCosts.reduce(
+    (sum, c) => sum + c.amount,
+    0
+  );
+  const effectiveDiscount =
+    discount > 0 ? discount : (subtotal * discountPercent) / 100;
+
+  const canSubmit = items.length > 0 && !isSubmitting;
+
+  return (
+    <div className="bg-linear-to-br rounded-xl border border-gray-700 from-gray-800/50 to-gray-900/50 p-5">
+      <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-white">
+        <Calculator className="h-5 w-5 text-purple-400" />
+        Resumen del Pedido
+      </h3>
+
+      {/* Items Summary */}
+      <div className="mb-4 space-y-2 text-sm">
+        <div className="flex justify-between text-gray-400">
+          <span>Productos ({totalItems} items)</span>
+          <span className="text-white">${subtotal.toLocaleString()}</span>
+        </div>
+
+        {deliveryMethod === "delivery" && shippingCost > 0 && (
+          <div className="flex justify-between text-gray-400">
+            <span>Envío</span>
+            <span className="text-white">
+              +${shippingCost.toLocaleString()}
+            </span>
+          </div>
+        )}
+
+        {effectiveDiscount > 0 && (
+          <div className="flex justify-between text-green-400">
+            <span>
+              Descuento {discountPercent > 0 ? `(${discountPercent}%)` : ""}
+            </span>
+            <span>-${effectiveDiscount.toLocaleString()}</span>
+          </div>
+        )}
+
+        {totalAdditionalCosts > 0 && (
+          <div className="flex justify-between text-orange-400">
+            <span>Costos Adicionales</span>
+            <span>-${totalAdditionalCosts.toLocaleString()}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Total Payable */}
+      <div className="mb-4 border-t border-gray-700 pt-4">
+        <div className="flex items-end justify-between">
+          <span className="text-gray-400">Total a Pagar</span>
+          <span className="text-3xl font-bold text-white">
+            ${totalPayable.toLocaleString()}
+          </span>
+        </div>
+      </div>
+
+      {/* Profit Metrics */}
+      <div className="mb-4 rounded-lg bg-gray-900/50 p-3">
+        <h4 className="mb-2 flex items-center gap-2 text-sm font-medium text-gray-400">
+          <TrendingUp className="h-4 w-4" />
+          Métricas de Ganancia
+        </h4>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <p className="text-xs text-gray-500">Ganancia Bruta</p>
+            <p
+              className={`text-lg font-bold ${
+                grossProfit >= 0 ? "text-green-400" : "text-red-400"
+              }`}
+            >
+              ${grossProfit.toLocaleString()}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500">Ganancia Neta</p>
+            <p
+              className={`text-lg font-bold ${
+                netProfit >= 0 ? "text-green-400" : "text-red-400"
+              }`}
+            >
+              ${netProfit.toLocaleString()}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Payment Info Badge */}
+      <div className="mb-4 flex flex-wrap gap-2">
+        <span
+          className={`rounded-full px-3 py-1 text-xs font-medium ${
+            paymentMethod === "cash"
+              ? "bg-green-500/20 text-green-400"
+              : paymentMethod === "transfer"
+                ? "bg-blue-500/20 text-blue-400"
+                : "bg-yellow-500/20 text-yellow-400"
+          }`}
+        >
+          {paymentMethod === "cash"
+            ? "💵 Efectivo"
+            : paymentMethod === "transfer"
+              ? "💳 Transferencia"
+              : "📅 Crédito/Fiado"}
+        </span>
+        <span
+          className={`rounded-full px-3 py-1 text-xs font-medium ${
+            deliveryMethod === "pickup"
+              ? "bg-gray-500/20 text-gray-400"
+              : "bg-purple-500/20 text-purple-400"
+          }`}
+        >
+          {deliveryMethod === "pickup" ? "🏪 Retiro" : "🚚 Envío"}
+        </span>
+        {totalWarrantyItems > 0 && (
+          <span className="rounded-full bg-orange-500/20 px-3 py-1 text-xs font-medium text-orange-400">
+            🛡️ {totalWarrantyItems} garantías
+          </span>
+        )}
+      </div>
+
+      {/* Submit Button */}
+      <button
+        type="button"
+        onClick={onConfirm}
+        disabled={!canSubmit}
+        className="bg-linear-to-r flex w-full items-center justify-center gap-2 rounded-xl from-purple-600 to-pink-600 py-4 font-bold text-white shadow-lg shadow-purple-900/20 transition hover:from-purple-700 hover:to-pink-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {isSubmitting ? (
+          <>
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+            Procesando...
+          </>
+        ) : (
+          <>
+            <CheckCircle className="h-5 w-5" />
+            Confirmar Pedido (${totalPayable.toLocaleString()})
+          </>
+        )}
+      </button>
+
+      {!canSubmit && items.length === 0 && (
+        <p className="mt-2 text-center text-xs text-gray-500">
+          Agrega productos al carrito para continuar
+        </p>
+      )}
+    </div>
+  );
+}

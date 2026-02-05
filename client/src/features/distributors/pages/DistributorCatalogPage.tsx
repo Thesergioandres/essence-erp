@@ -3,10 +3,10 @@ import { useSearchParams } from "react-router-dom";
 import Footer from "../../../components/Footer";
 import Navbar from "../../../components/Navbar";
 import ProductCard from "../../../components/ProductCard";
-import { productService } from "../../inventory/services";
-import { useDebounce } from "../hooks";
+import { useDebounce } from "../../../hooks";
 import { LoadingSpinner } from "../../../shared/components/ui";
-import type { Product } from "../../../types";
+import { productService } from "../../inventory/services/inventory.service";
+import type { Product } from "../../inventory/types/product.types";
 
 interface ProductWithStock extends Product {
   distributorStock?: number;
@@ -43,10 +43,12 @@ export default function DistributorCatalog() {
   useEffect(() => {
     const loadProducts = async () => {
       try {
-        const response = await productService.getDistributorProducts();
+        const response = await productService
+          .getDistributorProducts()
+          .catch(() => []);
         const productsList = Array.isArray(response)
           ? response
-          : response.data || [];
+          : response?.data || [];
 
         setProducts(productsList);
 

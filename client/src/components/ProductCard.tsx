@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import type { Product } from "../types";
+import type { Product } from "../features/inventory/types/product.types";
 
 interface ProductCardProps {
   product: Product;
@@ -113,7 +113,8 @@ export default function ProductCard({
                 <p className="mb-0.5 text-xs text-gray-400 line-through">
                   $
                   {product.clientPrice?.toFixed(2) ||
-                    (product.salePrice ? product.salePrice.toFixed(2) : "0.00")}
+                    product.suggestedPrice?.toFixed(2) ||
+                    "0.00"}
                 </p>
                 <p className="text-3xl font-bold text-green-400">
                   ${product.distributorPrice?.toFixed(2) || "0.00"}

@@ -6,7 +6,7 @@ import Navbar from "../../../components/Navbar";
 import { useBusiness } from "../../../context/BusinessContext";
 import { businessService } from "../../business/services";
 import { uploadService } from "../../common/services";
-import type { BusinessFeatures } from "../../../types";
+import type { BusinessFeatures } from "../types/business.types";
 
 const defaultFeatures: BusinessFeatures = {
   products: true,
@@ -18,6 +18,7 @@ const defaultFeatures: BusinessFeatures = {
   assistant: false,
   reports: true,
   transfers: true,
+  credits: true,
 };
 
 export default function Onboarding() {
@@ -42,7 +43,7 @@ export default function Onboarding() {
       // Si ya tiene negocio, llévalo directo al dashboard
       const role = memberships[0]?.role;
       navigate(
-        role === "admin" ? "/admin/dashboard" : "/distributor/dashboard",
+        role === "admin" ? "/admin/analytics" : "/distributor/dashboard",
         { replace: true }
       );
     }
@@ -71,6 +72,9 @@ export default function Onboarding() {
     e.preventDefault();
     setLoading(true);
     setError(null);
+
+    let createdBusiness: any = null;
+
     try {
       // Primero subir logo si existe
       let logoUrl: string | undefined;
@@ -86,22 +90,55 @@ export default function Onboarding() {
         }
       }
 
-      const { business } = await businessService.create({
+      // Crear el negocio
+      const result = await businessService.create({
         ...form,
         logoUrl,
         logoPublicId,
-      });
-      localStorage.setItem("businessId", business._id);
-      await refresh();
-      navigate("/distributor/dashboard", { replace: true });
+      } as any);
+
+      createdBusiness = result.business;
+      console.log(
+        "[Onboarding] Business created successfully:",
+        createdBusiness._id
+      );
+
+      // Guardar el businessId inmediatamente
+      localStorage.setItem("businessId", createdBusiness._id);
     } catch (err) {
+      console.error("[Onboarding] Error creating business:", err);
       const msg =
         (err as { response?: { data?: { message?: string } } })?.response?.data
           ?.message || "No se pudo crear el negocio";
       setError(msg);
-    } finally {
       setLoading(false);
+      return; // Salir si falla la creación
     }
+
+    // Si llegamos aquí, el negocio se creó exitosamente
+    // Ahora intentamos refrescar los memberships (pero no bloqueamos si falla)
+    try {
+      await refresh();
+      console.log("[Onboarding] Memberships refreshed successfully");
+    } catch (refreshErr) {
+      console.warn(
+        "[Onboarding] Refresh failed, but business was created:",
+        refreshErr
+      );
+      // No mostramos error - el negocio se creó correctamente
+    }
+
+    // Redirigir según el rol del usuario
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    const redirectPath =
+      user.role === "distribuidor"
+        ? "/distributor/dashboard"
+        : "/admin/analytics";
+
+    console.log("[Onboarding] Redirecting to:", redirectPath);
+
+    // Forzar recarga completa de la página para actualizar todos los datos
+    window.location.href = redirectPath;
   };
 
   return (

@@ -6,8 +6,8 @@ import BusinessSelector from "../../../components/BusinessSelector";
 import FeatureNavLink from "../../../components/FeatureNavLink";
 import ReportIssueButton from "../../../components/ReportIssueButton";
 import { useBusiness } from "../../../context/BusinessContext";
-import { authService } from "../../auth/services";
 import { useBrandLogo } from "../../../hooks/useBrandLogo";
+import { authService } from "../../auth/services";
 
 const navLinkClasses = (isActive: boolean): string =>
   [
@@ -90,56 +90,6 @@ export default function DashboardLayout() {
               WebkitOverflowScrolling: "touch",
             }}
           >
-            <SectionTitle label="General" />
-            <NavLink
-              to="/admin/dashboard"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
-                />
-              </svg>
-              Dashboard
-            </NavLink>
-            <NavLink
-              to="/admin/business-assistant"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9.663 17h4.673M12 3a7 7 0 00-4 12.742V17a2 2 0 002 2h4a2 2 0 002-2v-1.258A7 7 0 0012 3z"
-                />
-              </svg>
-              Business Assistant
-            </NavLink>
-            <FeatureNavLink
-              to="/admin/global-inventory"
-              feature="inventory"
-              className={(isActive: boolean): string =>
-                navLinkClasses(isActive)
-              }
-            >
-              <BarChart3 className="h-5 w-5" />
-              Inventario Global
-            </FeatureNavLink>
-
             <SectionTitle label="Ventas" />
             <NavLink
               to="/admin/register-sale"
@@ -266,6 +216,37 @@ export default function DashboardLayout() {
                 />
               </svg>
               Gastos
+            </FeatureNavLink>
+
+            <SectionTitle label="General" />
+            <NavLink
+              to="/admin/business-assistant"
+              className={({ isActive }): string => navLinkClasses(isActive)}
+            >
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9.663 17h4.673M12 3a7 7 0 00-4 12.742V17a2 2 0 002 2h4a2 2 0 002-2v-1.258A7 7 0 0012 3z"
+                />
+              </svg>
+              Business Assistant
+            </NavLink>
+            <FeatureNavLink
+              to="/admin/global-inventory"
+              feature="inventory"
+              className={(isActive: boolean): string =>
+                navLinkClasses(isActive)
+              }
+            >
+              <BarChart3 className="h-5 w-5" />
+              Inventario Global
             </FeatureNavLink>
 
             <SectionTitle label="Productos" />

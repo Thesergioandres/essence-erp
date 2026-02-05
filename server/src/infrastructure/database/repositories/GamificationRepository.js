@@ -66,6 +66,8 @@ export class GamificationRepository {
           saleDate: { $gte: startDate, $lte: endDate },
           paymentStatus: "confirmado",
           business: businessObjectId,
+          // CRITICAL: Only include sales WITH a distributor (exclude admin sales)
+          distributor: { $ne: null },
           ...(allowedDistributors.length
             ? { distributor: { $in: allowedDistributors } }
             : {}),
@@ -219,13 +221,18 @@ export class GamificationRepository {
     const config = await GamificationConfig.findOne();
 
     let startDate, endDate;
+    const now = new Date();
+    const startOfMonth = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      1,
+      0,
+      0,
+      0,
+      0,
+    );
 
     if (period === "current") {
-      const now = new Date();
-      const persistedStart = config?.currentPeriodStart
-        ? new Date(config.currentPeriodStart)
-        : null;
-
       const evalPeriod = config?.evaluationPeriod || "biweekly";
       let periodDays = 15;
       if (evalPeriod === "monthly") periodDays = 30;
@@ -233,21 +240,52 @@ export class GamificationRepository {
       else if (evalPeriod === "custom")
         periodDays = config?.customPeriodDays || 15;
 
+      // Use persisted start if exists and is within reasonable range
+      const persistedStart = config?.currentPeriodStart
+        ? new Date(config.currentPeriodStart)
+        : null;
+
+      // If persisted start is in the future or too recent with no sales,
+      // fall back to periodDays ago
       startDate =
-        persistedStart ||
-        new Date(now.getTime() - periodDays * 24 * 60 * 60 * 1000);
+        persistedStart && persistedStart <= now ? persistedStart : startOfMonth;
+      endDate = now;
+    } else if (period === "all") {
+      // Show all-time ranking
+      startDate = new Date(0);
+      endDate = now;
+    } else {
+      // Default to last 30 days if period is unrecognized
+      startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
       endDate = now;
     }
 
-    const ranking = await Sale.aggregate([
+    // Build the distributor filter - only filter by allowedDistributors if it has entries
+    // Otherwise, just ensure distributor is not null
+    const normalizedAllowedDistributors = allowedDistributors.flatMap((id) => {
+      if (id instanceof mongoose.Types.ObjectId) return [id, id.toString()];
+      if (typeof id === "string" && mongoose.isValidObjectId(id)) {
+        return [new mongoose.Types.ObjectId(id), id];
+      }
+      return [id];
+    });
+    const distributorFilter =
+      normalizedAllowedDistributors.length > 0
+        ? {
+            distributor: {
+              $in: normalizedAllowedDistributors,
+            },
+          }
+        : { distributor: { $ne: null } };
+
+    let ranking = await Sale.aggregate([
       {
         $match: {
           saleDate: { $gte: startDate, $lte: endDate },
+          // 💰 CASH FLOW: Solo ventas confirmadas para ranking
           paymentStatus: "confirmado",
           business: businessObjectId,
-          ...(allowedDistributors.length
-            ? { distributor: { $in: allowedDistributors } }
-            : {}),
+          ...distributorFilter,
         },
       },
       {
@@ -270,6 +308,81 @@ export class GamificationRepository {
       { $sort: { totalRevenue: -1 } },
     ]);
 
+    // Fallback 1: If no results in current period, try start of month
+    let usedFallback = false;
+    if (ranking.length === 0 && period === "current") {
+      const fallbackStart = startOfMonth;
+      ranking = await Sale.aggregate([
+        {
+          $match: {
+            saleDate: { $gte: fallbackStart, $lte: now },
+            paymentStatus: "confirmado",
+            business: businessObjectId,
+            ...distributorFilter,
+          },
+        },
+        {
+          $group: {
+            _id: "$distributor",
+            totalSales: { $sum: 1 },
+            totalRevenue: { $sum: { $multiply: ["$salePrice", "$quantity"] } },
+            totalProfit: { $sum: "$totalProfit" },
+          },
+        },
+        {
+          $lookup: {
+            from: "users",
+            localField: "_id",
+            foreignField: "_id",
+            as: "distributor",
+          },
+        },
+        { $unwind: "$distributor" },
+        { $sort: { totalRevenue: -1 } },
+      ]);
+      if (ranking.length > 0) {
+        startDate = fallbackStart;
+        usedFallback = true;
+      }
+    }
+
+    // Fallback 2: If still empty, try last 90 days
+    if (ranking.length === 0 && period === "current") {
+      const fallbackStart = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+      ranking = await Sale.aggregate([
+        {
+          $match: {
+            saleDate: { $gte: fallbackStart, $lte: now },
+            paymentStatus: "confirmado",
+            business: businessObjectId,
+            ...distributorFilter,
+          },
+        },
+        {
+          $group: {
+            _id: "$distributor",
+            totalSales: { $sum: 1 },
+            totalRevenue: { $sum: { $multiply: ["$salePrice", "$quantity"] } },
+            totalProfit: { $sum: "$totalProfit" },
+          },
+        },
+        {
+          $lookup: {
+            from: "users",
+            localField: "_id",
+            foreignField: "_id",
+            as: "distributor",
+          },
+        },
+        { $unwind: "$distributor" },
+        { $sort: { totalRevenue: -1 } },
+      ]);
+      if (ranking.length > 0) {
+        startDate = fallbackStart;
+        usedFallback = true;
+      }
+    }
+
     return {
       ranking: ranking.map((r, index) => ({
         position: index + 1,
@@ -280,6 +393,7 @@ export class GamificationRepository {
       })),
       periodStart: startDate,
       periodEnd: endDate,
+      usedFallback,
     };
   }
 

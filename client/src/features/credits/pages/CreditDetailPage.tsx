@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import type { User } from "../../auth/types/auth.types";
 import { creditService } from "../../credits/services";
+import type { Customer } from "../../customers/types/customer.types";
+import type { Sale } from "../../sales/types/sales.types";
 import type {
   Credit,
   CreditPayment,
   CreditProfitInfo,
-  Customer,
-  Sale,
-  User,
-} from "../../../types";
+} from "../types/credit.types";
 
 export default function CreditDetail() {
   const { id } = useParams<{ id: string }>();

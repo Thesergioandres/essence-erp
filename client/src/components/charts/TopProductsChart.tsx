@@ -52,12 +52,20 @@ export const TopProductsChart: React.FC<TopProductsChartProps> = ({
           endDate,
         });
         console.log("Top Products Response:", response);
-        const validatedData = (response.topProducts || []).map((item: any) => ({
+        const productsData =
+          (response as any).topProducts || (response as any).products || [];
+        console.log("[TopProductsChart] productsData:", productsData);
+        const validatedData = productsData.map((item: any) => ({
           ...item,
           totalQuantity: Number(item.totalQuantity) || 0,
           totalRevenue: Number(item.totalRevenue) || 0,
           salesCount: Number(item.salesCount) || 0,
         }));
+        console.log("[TopProductsChart] validatedData:", validatedData);
+        console.log(
+          "[TopProductsChart] validatedData.length:",
+          validatedData.length
+        );
         setData(validatedData);
       } catch (error) {
         console.error("Error al cargar productos top:", error);
@@ -112,6 +120,10 @@ export const TopProductsChart: React.FC<TopProductsChartProps> = ({
     );
   }
 
+  console.log(
+    "[TopProductsChart] Rendering chart with data:",
+    JSON.stringify(data, null, 2)
+  );
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}

@@ -21,9 +21,9 @@ import {
   categoryService,
   inventoryService,
   productService,
-} from "../../inventory/services";
+} from "../../inventory/services/inventory.service";
 import { providerService } from "../../settings/services";
-import type { Product } from "../../../types";
+import type { Product } from "../types/product.types";
 
 interface InventoryEntry {
   _id: string;
@@ -158,15 +158,21 @@ export default function InventoryEntries() {
         categoryService.getAll(),
       ]);
 
-      setEntries(entriesRes.entries);
+      setEntries(entriesRes.entries as any);
       setTotalPages(entriesRes.pagination?.pages || 1);
-      setProducts(productsRes.data);
-      setProviders(providersRes.providers);
-      setBranches(branchesRes);
-      setCategories(categoriesRes);
+      setProducts(productsRes.data || []);
+      setProviders(providersRes.providers || []);
+      setBranches(branchesRes || []);
+      setCategories(categoriesRes || []);
     } catch (err) {
       console.error("Error al cargar datos:", err);
       setError("Error al cargar el historial de entradas");
+      // Establecer arrays vacíos para evitar errores de .map
+      setEntries([]);
+      setProducts([]);
+      setProviders([]);
+      setBranches([]);
+      setCategories([]);
     } finally {
       setLoading(false);
     }
@@ -420,7 +426,7 @@ export default function InventoryEntries() {
     }
   };
 
-  const filteredEntries = entries.filter(
+  const filteredEntries = (entries || []).filter(
     entry =>
       entry.product?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       entry.provider?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||

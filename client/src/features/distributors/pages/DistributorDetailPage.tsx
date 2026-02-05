@@ -1,19 +1,16 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useBusiness } from "../../../context/BusinessContext";
+import { Button, LoadingSpinner } from "../../../shared/components/ui";
+import type { Membership, User } from "../../auth/types/auth.types";
 import { branchService } from "../../branches/services";
 import { businessService } from "../../business/services";
+import type { Branch } from "../../business/types/business.types";
 import { distributorService } from "../../distributors/services";
-import { stockService } from "../../inventory/services";
+import { stockService } from "../../inventory/services/inventory.service";
+import type { DistributorStock } from "../../inventory/types/product.types";
 import { saleService } from "../../sales/services";
-import { Button, LoadingSpinner } from "../../../shared/components/ui";
-import type {
-  Branch,
-  DistributorStock,
-  Membership,
-  Sale,
-  User,
-} from "../../../types";
+import type { Sale } from "../../sales/types/sales.types";
 
 interface DistributorStats {
   totalSales: number;
@@ -107,18 +104,22 @@ const DistributorDetail = () => {
         setBranches(branchesResponse);
 
         // Cargar memberships del negocio para encontrar el del distribuidor
-        const members = await businessService.listMembers(selectedBusiness._id);
-        const distributorMembership = members.find(
-          m =>
+        const membersResponse = await businessService.listMembers(
+          selectedBusiness._id
+        );
+        const distributorMembership = membersResponse.members.find(
+          (m: { user: any }) =>
             (typeof m.user === "object" && m.user?._id === id) || m.user === id
         );
 
         if (distributorMembership) {
-          setMembership(distributorMembership);
+          setMembership(distributorMembership as any);
           // Inicializar bodegas seleccionadas
-          const branchIds = (distributorMembership.allowedBranches || []).map(
-            (b: any) => (typeof b === "object" ? b._id : b)
-          );
+          const branchIds = (
+            (distributorMembership as any).allowedBranches ||
+            distributorMembership.branches ||
+            []
+          ).map((b: any) => (typeof b === "object" ? b._id : b));
           setSelectedBranches(branchIds);
         }
       } catch (err: any) {

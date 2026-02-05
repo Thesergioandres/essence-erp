@@ -1,14 +1,33 @@
 import { Router } from "express";
 import { protect } from "../../../../middleware/auth.middleware.js";
-import { businessContext } from "../../../../middleware/business.middleware.js";
-import { requireFeature } from "../../../../middleware/business.middleware.js";
-import { requirePermission } from "../../../../middleware/business.middleware.js";
+import {
+  businessContext,
+  requireFeature,
+  requirePermission,
+} from "../../../../middleware/business.middleware.js";
 import { SpecialSaleController } from "../controllers/SpecialSaleController.js";
 
 const router = Router();
 const controller = new SpecialSaleController();
 
 router.use(protect, businessContext, requireFeature("specialSales"));
+
+// Stats routes - MUST be before /:id to avoid matching "stats" as an ID
+router.get(
+  "/stats/overview",
+  requirePermission("readSpecialSale"),
+  (req, res) => controller.getStatsOverview(req, res),
+);
+router.get(
+  "/stats/distribution",
+  requirePermission("readSpecialSale"),
+  (req, res) => controller.getStatsDistribution(req, res),
+);
+router.get(
+  "/stats/top-products",
+  requirePermission("readSpecialSale"),
+  (req, res) => controller.getStatsTopProducts(req, res),
+);
 
 router.post("/", requirePermission("createSpecialSale"), (req, res) =>
   controller.create(req, res),

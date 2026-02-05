@@ -67,16 +67,13 @@ const profitHistorySchema = new mongoose.Schema(
 
     // Metadata adicional
     metadata: {
-      quantity: Number,
-      salePrice: Number,
-      commission: Number,
-      eventName: String,
-      saleId: String,
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
     },
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 // Índice compuesto para consultas eficientes

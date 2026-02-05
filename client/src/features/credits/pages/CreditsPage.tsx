@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import CustomerSelector from "../../../components/CustomerSelector";
-import { creditService } from "../../credits/services";
-import type { Credit, CreditMetrics, Customer } from "../../../types";
 import { logUI } from "../../../utils/logger";
+import { creditService } from "../../credits/services";
+import type { Customer } from "../../customers/types/customer.types";
+import type { Credit, CreditMetrics } from "../types/credit.types";
 
 type CreditStatus = "pending" | "partial" | "paid" | "overdue" | "cancelled";
 
@@ -27,7 +28,9 @@ export default function Credits() {
   const [credits, setCredits] = useState<Credit[]>([]);
   const [metrics, setMetrics] = useState<CreditMetrics | null>(null);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [statusFilter, setStatusFilter] = useState<
+    "pending" | "partial" | "paid" | "overdue" | "cancelled" | ""
+  >("");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedCredit, setSelectedCredit] = useState<Credit | null>(null);
@@ -57,11 +60,11 @@ export default function Credits() {
         creditService.getAll({ status: statusFilter || undefined }),
         creditService.getMetrics(),
       ]);
-      setCredits(creditsRes.credits);
-      setMetrics(metricsRes.metrics);
+      setCredits(creditsRes?.credits || []);
+      setMetrics(metricsRes || null);
       logUI.info("debt_loaded", {
         module: "credits",
-        count: creditsRes.credits.length,
+        count: creditsRes?.credits?.length || 0,
       });
     } catch (err) {
       logUI.error("debt_load_failed", {
@@ -83,8 +86,8 @@ export default function Credits() {
       await creditService.create({
         customerId: newCredit.customerId,
         amount: parseFloat(newCredit.amount),
-        description: newCredit.description,
-        dueDate: newCredit.dueDate || undefined,
+        notes: newCredit.description,
+        dueDate: newCredit.dueDate || new Date().toISOString(),
       });
       logUI.info("Fiado creado", {
         module: "credits",
@@ -110,7 +113,7 @@ export default function Credits() {
     try {
       await creditService.registerPayment(selectedCredit._id, {
         amount: parseFloat(paymentAmount),
-        paymentMethod,
+        paymentMethodId: paymentMethod,
         notes: paymentNotes,
         paymentProof: paymentProof || undefined,
         paymentProofMimeType: paymentProof ? "image/jpeg" : undefined,
@@ -247,9 +250,9 @@ export default function Credits() {
           </div>
 
           <div className="rounded-xl border border-gray-700/50 bg-gray-800/50 p-5 shadow-lg backdrop-blur-sm">
-            <p className="text-sm text-gray-400">Original Total</p>
+            <p className="text-sm text-gray-400">Deuda Pendiente</p>
             <p className="mt-1 text-2xl font-bold text-white">
-              {formatCurrency(metrics.total.totalOriginalAmount)}
+              {formatCurrency(metrics.total.totalRemainingAmount)}
             </p>
           </div>
         </div>
@@ -259,7 +262,7 @@ export default function Credits() {
       <div className="flex gap-4">
         <select
           value={statusFilter}
-          onChange={e => setStatusFilter(e.target.value)}
+          onChange={e => setStatusFilter(e.target.value as any)}
           className="rounded-lg border border-gray-600 bg-gray-900/50 px-4 py-2 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
         >
           <option value="">Todos los estados</option>
@@ -376,13 +379,13 @@ export default function Credits() {
       </div>
 
       {/* Top Debtors */}
-      {metrics && metrics.topDebtors.length > 0 && (
+      {metrics && metrics.topDebtors && metrics.topDebtors.length > 0 && (
         <div className="rounded-xl border border-gray-700/50 bg-gray-800/50 p-6 shadow-lg backdrop-blur-sm">
           <h3 className="mb-4 text-lg font-semibold text-white">
             Principales Deudores
           </h3>
           <div className="space-y-3">
-            {metrics.topDebtors.slice(0, 5).map((debtor, index) => (
+            {metrics.topDebtors?.slice(0, 5).map((debtor, index) => (
               <div
                 key={debtor.customerId}
                 className="flex items-center justify-between border-b border-gray-700 py-2 last:border-0"

@@ -64,9 +64,6 @@ const InventoryEntries = lazy(
 );
 
 // Analytics pages
-const Dashboard = lazy(
-  () => import("./features/analytics/pages/DashboardPage")
-);
 const AdvancedDashboard = lazy(
   () => import("./features/analytics/pages/AdvancedDashboardPage")
 );
@@ -198,9 +195,6 @@ const Providers = lazy(() => import("./features/settings/pages/ProvidersPage"));
 const Promotions = lazy(
   () => import("./features/settings/pages/PromotionsPage")
 );
-const Branches = lazy(() => import("./pages/Branches"));
-const TransferStock = lazy(() => import("./pages/TransferStock"));
-const TransferHistory = lazy(() => import("./pages/TransferHistory"));
 
 export default function App() {
   return (
@@ -257,14 +251,8 @@ export default function App() {
             </ProtectedRoute>
           }
         >
-          <Route
-            path="dashboard"
-            element={
-              <BusinessGate>
-                <Dashboard />
-              </BusinessGate>
-            }
-          />
+          {/* Redirect /admin to /admin/analytics */}
+          <Route index element={<Navigate to="/admin/analytics" replace />} />
           <Route
             path="products"
             element={
@@ -386,12 +374,17 @@ export default function App() {
             path="profit-history"
             element={
               <BusinessGate requiredFeature="reports">
-                <AdvancedDashboard />
+                <ProfitHistory />
               </BusinessGate>
             }
           />
           <Route
             path="advanced-analytics"
+            element={<Navigate to="/admin/analytics" replace />}
+          />
+          {/* Legacy redirect for old dashboard URL */}
+          <Route
+            path="dashboard"
             element={<Navigate to="/admin/analytics" replace />}
           />
           <Route
@@ -497,6 +490,14 @@ export default function App() {
             element={
               <BusinessGate>
                 <Customers />
+              </BusinessGate>
+            }
+          />
+          <Route
+            path="segments"
+            element={
+              <BusinessGate>
+                <Segments />
               </BusinessGate>
             }
           />

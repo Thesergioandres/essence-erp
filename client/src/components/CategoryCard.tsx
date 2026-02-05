@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import type { Category } from "../types";
+import type { Category } from "../features/inventory/types/product.types";
 
 interface CategoryCardProps {
   category: Category;
@@ -15,27 +15,27 @@ export default function CategoryCard({
   return (
     <div
       onClick={() => navigate(`/categoria/${category.slug}`)}
-      className="group cursor-pointer overflow-hidden rounded-xl border border-gray-700 bg-linear-to-br from-purple-900/30 to-gray-800/50 p-5 sm:p-6 backdrop-blur-lg transition hover:border-purple-500 hover:shadow-lg hover:shadow-purple-500/20 active:scale-[0.98] min-h-[100px] sm:min-h-[120px]"
+      className="bg-linear-to-br group min-h-[100px] cursor-pointer overflow-hidden rounded-xl border border-gray-700 from-purple-900/30 to-gray-800/50 p-5 backdrop-blur-lg transition hover:border-purple-500 hover:shadow-lg hover:shadow-purple-500/20 active:scale-[0.98] sm:min-h-[120px] sm:p-6"
     >
       <div className="flex items-center justify-between gap-4">
-        <div className="flex-1 min-w-0">
-          <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white group-hover:text-purple-400 truncate mb-1">
+        <div className="min-w-0 flex-1">
+          <h3 className="mb-1 truncate text-lg font-bold text-white group-hover:text-purple-400 sm:text-xl md:text-2xl">
             {category.name}
           </h3>
           {category.description && (
-            <p className="mt-1.5 sm:mt-2 line-clamp-2 text-sm sm:text-base text-gray-400 leading-relaxed">
+            <p className="mt-1.5 line-clamp-2 text-sm leading-relaxed text-gray-400 sm:mt-2 sm:text-base">
               {category.description}
             </p>
           )}
           {productCount !== undefined && (
-            <p className="mt-2 sm:mt-3 text-xs sm:text-sm text-gray-500 font-medium">
+            <p className="mt-2 text-xs font-medium text-gray-500 sm:mt-3 sm:text-sm">
               {productCount} {productCount === 1 ? "producto" : "productos"}
             </p>
           )}
         </div>
         <div className="shrink-0">
           <svg
-            className="h-7 w-7 sm:h-8 sm:w-8 text-purple-400 transition group-hover:translate-x-1"
+            className="h-7 w-7 text-purple-400 transition group-hover:translate-x-1 sm:h-8 sm:w-8"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"

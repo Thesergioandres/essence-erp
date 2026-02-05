@@ -90,6 +90,11 @@ export class BusinessController {
 
   async updateMember(req, res) {
     try {
+      console.log(
+        `[BusinessController] updateMember calling for business: ${req.businessId}, member: ${req.params.membershipId}`,
+      );
+      console.log(`[BusinessController] Payload:`, JSON.stringify(req.body));
+
       const membership = await repository.updateMember(
         req.businessId,
         req.params.membershipId,
@@ -97,6 +102,7 @@ export class BusinessController {
       );
       res.json({ success: true, data: membership });
     } catch (error) {
+      console.error(`[BusinessController] Error updating member:`, error);
       const status = error.statusCode || 500;
       res.status(status).json({ success: false, message: error.message });
     }
@@ -116,6 +122,15 @@ export class BusinessController {
     try {
       const members = await repository.getMembers(req.businessId);
       res.json({ success: true, data: members });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  async getMyMemberships(req, res) {
+    try {
+      const memberships = await repository.getUserMemberships(req.user.id);
+      res.json({ success: true, data: { memberships } });
     } catch (error) {
       res.status(500).json({ success: false, message: error.message });
     }

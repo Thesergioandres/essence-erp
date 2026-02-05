@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import api from "../api/axios";
+import api from "../../../api/axios";
 import { useBusiness } from "../../../context/BusinessContext";
 
 export default function TestOptimization() {

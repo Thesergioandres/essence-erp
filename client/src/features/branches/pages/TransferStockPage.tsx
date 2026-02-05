@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { distributorService } from "../../distributors/services";
-import { stockService } from "../../inventory/services";
 import { LoadingSpinner } from "../../../shared/components/ui";
-import type { Branch, DistributorStock, User } from "../../../types";
+import type { User } from "../../auth/types/auth.types";
+import type { Branch } from "../../business/types/business.types";
+import { distributorService } from "../../distributors/services";
+import { stockService } from "../../inventory/services/inventory.service";
+import type { DistributorStock } from "../../inventory/types/product.types";
 
 export default function TransferStock() {
   const [distributors, setDistributors] = useState<User[]>([]);
@@ -41,15 +43,15 @@ export default function TransferStock() {
 
       const [distributorsData, stockData, allowedBranchesData] =
         await Promise.all([
-          distributorService.getAll({ active: true }),
-          stockService.getDistributorStock(user._id),
-          stockService.getMyAllowedBranches(),
+          distributorService.getAll({ active: true }).catch(() => []),
+          stockService.getDistributorStock(user._id).catch(() => []),
+          stockService.getMyAllowedBranches().catch(() => ({ branches: [] })),
         ]);
 
       // Filtrar el distribuidor actual de la lista
       const allDistributors = Array.isArray(distributorsData)
         ? distributorsData
-        : distributorsData.data || [];
+        : distributorsData?.data || [];
 
       const filteredDistributors = allDistributors.filter(
         (d: User) => d._id !== user._id && d.active
@@ -57,8 +59,8 @@ export default function TransferStock() {
 
       setDistributors(filteredDistributors);
       // Solo mostrar las sedes a las que tiene acceso
-      setBranches(allowedBranchesData.branches || []);
-      setMyStock(stockData);
+      setBranches(allowedBranchesData?.branches || []);
+      setMyStock(stockData || []);
     } catch (error) {
       console.error("Error al cargar datos:", error);
       setMessage({ type: "error", text: "Error al cargar los datos" });

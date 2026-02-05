@@ -13,6 +13,19 @@ export const businessContext = async (req, res, next) => {
     const isTest = process.env.NODE_ENV === "test";
     let businessId = req.headers["x-business-id"] || req.query.businessId;
 
+    // Array para logs de debug
+    const debugLogs = [];
+    const addDebugLog = (msg) => {
+      console.log(msg);
+      debugLogs.push(msg.replace(/\[businessContext\]\s*/, ""));
+    };
+
+    addDebugLog(
+      `[businessContext] Initial businessId from header/query: ${businessId}`,
+    );
+    addDebugLog(`[businessContext] User ID: ${req.user?._id || req.user?.id}`);
+    addDebugLog(`[businessContext] User role: ${req.user?.role}`);
+
     // Fallback: Si no hay ID explícito, intentar resolver por el usuario logueado (Auto-Select Default Business)
     if (!businessId && req.user) {
       const defaultMembership = await Membership.findOne({
@@ -20,9 +33,15 @@ export const businessContext = async (req, res, next) => {
         status: "active",
       }).sort({ createdAt: 1 }); // Preferir el más antiguo/principal
 
+      addDebugLog(
+        `[businessContext] Auto-resolved membership: ${defaultMembership ? `Found (business: ${defaultMembership.business}, role: ${defaultMembership.role})` : "NOT FOUND"}`,
+      );
+
       if (defaultMembership) {
         businessId = defaultMembership.business.toString();
-        // console.log(`ℹ️ Auto-resolving business context to: ${businessId}`);
+        addDebugLog(
+          `[businessContext] ℹ️ Auto-resolving business context to: ${businessId}`,
+        );
       }
     }
 
@@ -34,19 +53,36 @@ export const businessContext = async (req, res, next) => {
     }
     // Incluso super_admin debe indicar el negocio explícitamente (o resolverse automáticamente arriba)
     if (!businessId) {
-      return res
-        .status(400)
-        .json({ message: "Falta el identificador de negocio (x-business-id)" });
+      addDebugLog(`[businessContext] ❌ ERROR: No businessId found`);
+      return res.status(400).json({
+        message: "Falta el identificador de negocio (x-business-id)",
+        debug: debugLogs,
+      });
     }
 
     const business = await Business.findById(businessId);
     if (!business) {
-      return res.status(404).json({ message: "Negocio no encontrado" });
+      addDebugLog(
+        `[businessContext] ❌ Business NOT found for ID: ${businessId}`,
+      );
+      return res.status(404).json({
+        message: "Negocio no encontrado",
+        debug: debugLogs,
+      });
     }
+
+    addDebugLog(
+      `[businessContext] ✅ Business found: ${business.name} (${business._id})`,
+    );
 
     const isSuperAdmin = req.user?.role === "super_admin";
     const isGod = req.user?.role === "god";
     let membership = null;
+
+    addDebugLog(
+      `[businessContext] isSuperAdmin: ${isSuperAdmin}, isGod: ${isGod}`,
+    );
+
     if (!isSuperAdmin && !isGod) {
       membership = await Membership.findOne({
         business: businessId,
@@ -54,9 +90,15 @@ export const businessContext = async (req, res, next) => {
         status: "active",
       });
 
+      addDebugLog(
+        `[businessContext] Membership lookup result: ${membership ? `Found (role: ${membership.role}, status: ${membership.status})` : "NOT FOUND"}`,
+      );
+
       if (!membership) {
         const isOwner =
           business.createdBy?.toString() === req.user?.id?.toString();
+        addDebugLog(`[businessContext] Is business owner: ${isOwner}`);
+
         // Permitir al creador del negocio actuar como admin aunque no exista membership explícita
         if (isOwner) {
           membership = new Membership({
@@ -65,7 +107,13 @@ export const businessContext = async (req, res, next) => {
             role: "admin",
             status: "active",
           });
+          addDebugLog(
+            `[businessContext] Created virtual admin membership for owner`,
+          );
         } else {
+          addDebugLog(
+            `[businessContext] ❌ ERROR: User has no membership and is not owner`,
+          );
           logAuthError({
             message: "No tienes acceso a este negocio",
             module: "businessContext",
@@ -73,15 +121,18 @@ export const businessContext = async (req, res, next) => {
             userId: req.user?.id,
             businessId,
           });
-          return res
-            .status(403)
-            .json({ message: "No tienes acceso a este negocio" });
+          return res.status(403).json({
+            message: "No tienes acceso a este negocio",
+            debug: debugLogs,
+          });
         }
       }
     }
 
     // Si el creador (super admin) perdió acceso, bloquear a los distribuidores del negocio
     if (membership?.role === "distribuidor" && !isGod) {
+      addDebugLog(`[businessContext] Checking distribuidor's owner status...`);
+
       // Resolver owner/admin principal: membership admin más antiguo o creador
       const primaryAdminMembership = await Membership.findOne({
         business: businessId,
@@ -103,7 +154,12 @@ export const businessContext = async (req, res, next) => {
       const ownerInactive =
         !owner || !owner.active || owner.status !== "active" || ownerExpired;
 
+      addDebugLog(`[businessContext] Owner inactive: ${ownerInactive}`);
+
       if (ownerInactive) {
+        addDebugLog(
+          `[businessContext] ❌ ERROR: Owner is inactive, blocking distribuidor`,
+        );
         logAuthError({
           message: "Acceso deshabilitado: owner_inactive",
           module: "businessContext",
@@ -117,15 +173,18 @@ export const businessContext = async (req, res, next) => {
             "Acceso deshabilitado: el administrador del negocio no tiene acceso activo",
           code: "owner_inactive",
           subscriptionExpiresAt: owner?.subscriptionExpiresAt || null,
+          debug: debugLogs,
         });
       }
     }
 
+    addDebugLog(`[businessContext] ✅ SUCCESS: Business context resolved`);
     req.business = business;
     req.businessId = businessId;
     req.membership = membership;
     next();
   } catch (error) {
+    console.log(`[businessContext] ❌ EXCEPTION:`, error.message);
     logAuthError({
       message: "Error resolviendo negocio",
       module: "businessContext",
@@ -133,9 +192,11 @@ export const businessContext = async (req, res, next) => {
       userId: req.user?.id,
       stack: error.stack,
     });
-    res
-      .status(500)
-      .json({ message: "Error resolviendo negocio", error: error.message });
+    res.status(500).json({
+      message: "Error resolviendo negocio",
+      error: error.message,
+      debug: error.stack,
+    });
   }
 };
 
@@ -169,11 +230,35 @@ export const requireRole = (roles = [], options = {}) => {
 // Permisos granulares por módulo/acción con soporte de sede
 export const requirePermission = ({ module, action, branchResolver } = {}) => {
   return (req, res, next) => {
+    const debugLogs = [];
+    const addDebugLog = (msg) => {
+      console.log(msg);
+      debugLogs.push(msg.replace(/\[requirePermission\]\s*/, ""));
+    };
+
+    addDebugLog(
+      `[requirePermission] Checking permission for module: ${module}, action: ${action}`,
+    );
+    addDebugLog(`[requirePermission] req.user exists: ${!!req.user}`);
+    addDebugLog(`[requirePermission] req.user.role: ${req.user?.role}`);
+    addDebugLog(`[requirePermission] req.user._id: ${req.user?._id}`);
+    addDebugLog(
+      `[requirePermission] req.membership exists: ${!!req.membership}`,
+    );
+    addDebugLog(
+      `[requirePermission] req.membership.role: ${req.membership?.role}`,
+    );
+
     const isSuperAdmin = req.user?.role === "super_admin";
     const isGod = req.user?.role === "god";
 
+    addDebugLog(
+      `[requirePermission] isSuperAdmin: ${isSuperAdmin}, isGod: ${isGod}`,
+    );
+
     // Super admin y god pueden pasar, pero si hay branchScope configurado lo respetamos
     if (isSuperAdmin || isGod) {
+      addDebugLog(`[requirePermission] ✅ Allowing super_admin/god`);
       return next();
     }
 
@@ -184,7 +269,12 @@ export const requirePermission = ({ module, action, branchResolver } = {}) => {
         ? { role: req.user.role, permissions: {}, allowedBranches: [] }
         : null);
 
+    addDebugLog(
+      `[requirePermission] Effective membership role: ${membership?.role}`,
+    );
+
     if (!membership) {
+      addDebugLog(`[requirePermission] ❌ No membership found`);
       logAuthError({
         message: "Acceso denegado (sin membership)",
         module: "requirePermission",
@@ -192,13 +282,24 @@ export const requirePermission = ({ module, action, branchResolver } = {}) => {
         userId: req.user?.id,
         businessId: req.businessId,
       });
-      return res.status(403).json({ message: "Acceso denegado" });
+      return res.status(403).json({
+        message: "Acceso denegado",
+        debug: debugLogs,
+      });
     }
 
     const effective = buildEffectivePermissions(membership);
     const allowed = isActionAllowed(effective, module, action);
 
+    addDebugLog(`[requirePermission] Permission allowed: ${allowed}`);
+    addDebugLog(
+      `[requirePermission] Effective permissions: ${JSON.stringify(effective)}`,
+    );
+
     if (!allowed) {
+      addDebugLog(
+        `[requirePermission] ❌ Permission denied for ${module}.${action}`,
+      );
       logAuthError({
         message: "Permiso denegado",
         module: "requirePermission",
@@ -211,6 +312,7 @@ export const requirePermission = ({ module, action, branchResolver } = {}) => {
         message: "Permiso denegado",
         module,
         action,
+        debug: debugLogs,
       });
     }
 
@@ -254,17 +356,51 @@ export const requirePermission = ({ module, action, branchResolver } = {}) => {
 // Verifica que la feature esté activa para el negocio seleccionado
 export const requireFeature = (featureKey) => {
   return (req, res, next) => {
+    const debugLogs = [];
+    const addDebugLog = (msg) => {
+      console.log(msg);
+      debugLogs.push(msg.replace(/\[requireFeature\]\s*/, ""));
+    };
+
+    addDebugLog(`[requireFeature] Checking feature: ${featureKey}`);
+    addDebugLog(`[requireFeature] req.business exists: ${!!req.business}`);
+    addDebugLog(`[requireFeature] req.businessId: ${req.businessId}`);
+    addDebugLog(`[requireFeature] User role: ${req.user?.role}`);
+
     if (process.env.NODE_ENV === "test" && !req.business) return next();
     const isSuperAdmin = req.user?.role === "super_admin";
     const isGod = req.user?.role === "god";
-    if (!req.business && (isSuperAdmin || isGod)) return next();
 
-    if (isSuperAdmin || isGod) return next();
+    addDebugLog(
+      `[requireFeature] isSuperAdmin: ${isSuperAdmin}, isGod: ${isGod}`,
+    );
+
+    if (!req.business && (isSuperAdmin || isGod)) {
+      addDebugLog(
+        `[requireFeature] ✅ Allowing super_admin/god without business`,
+      );
+      return next();
+    }
+
+    if (isSuperAdmin || isGod) {
+      addDebugLog(`[requireFeature] ✅ Allowing super_admin/god`);
+      return next();
+    }
 
     const isEnabled = req.business?.config?.features?.[featureKey];
-    // Si no está definido, asumir habilitado para no bloquear rutas por config incompleta
-    if (isEnabled !== false) return next();
+    addDebugLog(
+      `[requireFeature] Feature '${featureKey}' enabled: ${isEnabled}`,
+    );
 
+    // Si no está definido, asumir habilitado para no bloquear rutas por config incompleta
+    if (isEnabled !== false) {
+      addDebugLog(
+        `[requireFeature] ✅ Feature not explicitly disabled, allowing`,
+      );
+      return next();
+    }
+
+    addDebugLog(`[requireFeature] ❌ Feature disabled for this business`);
     logAuthError({
       message: "Funcionalidad desactivada para este negocio",
       module: "requireFeature",
@@ -273,8 +409,9 @@ export const requireFeature = (featureKey) => {
       businessId: req.businessId,
       extra: { featureKey },
     });
-    return res
-      .status(403)
-      .json({ message: "Funcionalidad desactivada para este negocio" });
+    return res.status(403).json({
+      message: "Funcionalidad desactivada para este negocio",
+      debug: debugLogs,
+    });
   };
 };

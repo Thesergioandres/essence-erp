@@ -1,13 +1,15 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import PushNotificationSettings from "../../../components/PushNotificationSettings";
 import { useBusiness } from "../../../context/BusinessContext";
-import { businessService } from "../../business/services";
+import {
+  AuditLogsPage as AuditLogs,
+  RankingsPage as Rankings,
+} from "../../analytics/pages";
 import { uploadService } from "../../common/services";
-import type { BusinessFeatures } from "../../../types";
-import AuditLogs from "./AuditLogs";
-import Distributors from "./Distributors";
-import GamificationConfig from "./GamificationConfig";
-import Rankings from "./Rankings";
+import { DistributorsPage as Distributors } from "../../distributors/pages";
+import { businessService } from "../services";
+import type { BusinessFeatures } from "../types/business.types";
+import { GamificationConfigPage as GamificationConfig } from "./";
 
 interface FormState {
   name: string;
@@ -150,7 +152,10 @@ export default function BusinessSettings() {
         logoUrl: form.logoUrl,
         logoPublicId: form.logoPublicId ?? undefined,
       });
-      await businessService.updateBusinessFeatures(businessId, form.features);
+      await businessService.updateBusinessFeatures(
+        businessId,
+        form.features as any
+      );
       setMessage("Datos del negocio actualizados");
       await refresh();
     } catch (err) {

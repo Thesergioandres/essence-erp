@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import AnalyticsCharts from "../../../components/analytics/AnalyticsCharts";
 import ProfitHistoryTable from "../../../components/analytics/ProfitHistoryTable";
 import { analyticsService } from "../../analytics/services";
-import type { MonthlyProfitData } from "../../../types";
+import type { MonthlyProfitData } from "../types/analytics.types";
 
 const toISO = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -40,8 +40,10 @@ export default function Analytics() {
       setLoading(true);
       setError(null);
       // Solo cargamos la data mensual para las tarjetas superiores
-      const monthlyRes = await analyticsService.getMonthlyProfit(filters);
-      setMonthly(monthlyRes);
+      const monthlyRes = await analyticsService.getMonthlyProfit(
+        filters as any
+      );
+      setMonthly(monthlyRes as any);
     } catch (err: any) {
       console.error("Error cargando analytics", err);
       setError(err?.message || "No se pudo cargar analytics");

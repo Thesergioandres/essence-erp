@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import Notifications from "../features/notifications/pages/NotificationsPage";
 import { notificationService } from "../features/notifications/services";
-import Notifications from "../pages/Notifications";
 import { logUI } from "../utils/logger";
 
 export default function NotificationBell() {

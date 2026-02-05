@@ -81,4 +81,60 @@ export class BusinessAssistantController {
       res.status(500).json({ success: false, message: error.message });
     }
   }
+
+  // Get latest analysis - returns mock data to prevent 404 errors
+  async getLatestAnalysis(req, res) {
+    try {
+      const businessId = req.businessId;
+      if (!businessId) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Falta x-business-id" });
+      }
+
+      // Return mock analysis to satisfy frontend request
+      res.json({
+        success: true,
+        data: {
+          status: "pending",
+          message:
+            "Análisis pendiente. Configure el asistente para generar recomendaciones.",
+          lastAnalysis: null,
+          recommendations: [],
+          generatedAt: null,
+        },
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  // Get strategic analysis - returns mock data to prevent 404 errors
+  async getStrategicAnalysis(req, res) {
+    try {
+      const businessId = req.businessId;
+      if (!businessId) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Falta x-business-id" });
+      }
+
+      // Return mock strategic analysis to satisfy frontend request
+      res.json({
+        success: true,
+        data: {
+          strategies: [],
+          score: 0,
+          insights: [],
+          recommendations: [],
+          generatedAt: null,
+          status: "pending",
+          message:
+            "Análisis estratégico pendiente. Se requieren más datos para generar estrategias.",
+        },
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
 }

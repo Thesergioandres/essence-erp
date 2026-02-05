@@ -1,3 +1,4 @@
+import Branch from "../../../../models/Branch.js";
 import BranchStock from "../../../../models/BranchStock.js";
 import DistributorStock from "../../../../models/DistributorStock.js";
 import Product from "../../../../models/Product.js";
@@ -80,6 +81,122 @@ class StockRepository {
     return { stockUpdate, product };
   }
 
+  async transferBetweenDistributors(
+    businessId,
+    fromDistributorId,
+    toDistributorId,
+    productId,
+    quantity,
+  ) {
+    if (fromDistributorId === toDistributorId) {
+      throw new Error("No puedes transferir al mismo distribuidor");
+    }
+    const fromStock = await DistributorStock.findOne({
+      business: businessId,
+      distributor: fromDistributorId,
+      product: productId,
+    });
+
+    if (!fromStock || fromStock.quantity < quantity) {
+      throw new Error("Stock insuficiente");
+    }
+
+    let toStock = await DistributorStock.findOne({
+      business: businessId,
+      distributor: toDistributorId,
+      product: productId,
+    });
+
+    const fromBefore = fromStock.quantity;
+    const toBefore = toStock?.quantity || 0;
+
+    fromStock.quantity -= quantity;
+    await fromStock.save();
+
+    if (!toStock) {
+      toStock = await DistributorStock.create({
+        business: businessId,
+        distributor: toDistributorId,
+        product: productId,
+        quantity,
+      });
+    } else {
+      toStock.quantity += quantity;
+      await toStock.save();
+    }
+
+    const transfer = await StockTransfer.create({
+      business: businessId,
+      fromDistributor: fromDistributorId,
+      toDistributor: toDistributorId,
+      product: productId,
+      quantity,
+      fromStockBefore: fromBefore,
+      fromStockAfter: fromStock.quantity,
+      toStockBefore: toBefore,
+      toStockAfter: toStock.quantity,
+      status: "completed",
+    });
+
+    const toUser = await User.findById(toDistributorId);
+    if (toUser && !toUser.assignedProducts.includes(productId)) {
+      toUser.assignedProducts.push(productId);
+      await toUser.save();
+    }
+
+    return { fromStock, toStock, transfer };
+  }
+
+  async transferToBranchFromDistributor(
+    businessId,
+    fromDistributorId,
+    toBranchId,
+    productId,
+    quantity,
+  ) {
+    const branch = await Branch.findOne({
+      _id: toBranchId,
+      business: businessId,
+    });
+
+    if (!branch) {
+      throw new Error("Sede no encontrada");
+    }
+
+    const fromStock = await DistributorStock.findOne({
+      business: businessId,
+      distributor: fromDistributorId,
+      product: productId,
+    });
+
+    if (!fromStock || fromStock.quantity < quantity) {
+      throw new Error("Stock insuficiente");
+    }
+
+    fromStock.quantity -= quantity;
+    await fromStock.save();
+
+    let branchStock = await BranchStock.findOne({
+      business: businessId,
+      branch: toBranchId,
+      product: productId,
+    });
+
+    if (!branchStock) {
+      branchStock = await BranchStock.create({
+        business: businessId,
+        branch: toBranchId,
+        product: productId,
+        quantity,
+      });
+    } else {
+      branchStock.quantity += quantity;
+      await branchStock.save();
+    }
+
+    return { fromStock, branchStock };
+  }
+
   async getDistributorStock(businessId, distributorId) {
     const stock = await DistributorStock.find({
       distributor: distributorId,
@@ -92,11 +209,14 @@ class StockRepository {
       .populate("distributor", "name email")
       .lean();
 
+    // Filter out entries where product is null (deleted products)
+    const validStock = stock.filter((item) => item.product != null);
+
     const user = await User.findById(distributorId).select("assignedProducts");
     const assignedIds = (user?.assignedProducts || []).map((id) =>
       id.toString(),
     );
-    const existingIds = stock.map((s) => s.product._id.toString());
+    const existingIds = validStock.map((s) => s.product._id.toString());
     const missingIds = assignedIds.filter((id) => !existingIds.includes(id));
 
     if (missingIds.length > 0) {
@@ -107,7 +227,7 @@ class StockRepository {
         .select("name image purchasePrice distributorPrice clientPrice")
         .lean();
       missing.forEach((p) =>
-        stock.push({
+        validStock.push({
           _id: `synthetic-${p._id}`,
           distributor: { _id: distributorId },
           product: p,
@@ -119,7 +239,7 @@ class StockRepository {
       );
     }
 
-    return stock.map((item) => ({
+    return validStock.map((item) => ({
       ...item,
       isLowStock: item.quantity <= (item.lowStockAlert || 0),
     }));
@@ -138,6 +258,72 @@ class StockRepository {
       .lean();
   }
 
+  async getGlobalInventory(businessId) {
+    // 1. Fetch all products (Warehouse Stock)
+    const products = await Product.find({ business: businessId })
+      .select("name image category warehouseStock totalStock")
+      .populate("category", "name")
+      .lean();
+
+    // 2. Fetch all branch stocks
+    const branchStocks = await BranchStock.find({ business: businessId })
+      .populate("branch", "name")
+      .lean();
+
+    // 3. Fetch all distributor stocks
+    const distributorStocks = await DistributorStock.find({
+      business: businessId,
+    })
+      .populate("distributor", "name")
+      .lean();
+
+    // 4. Map and Aggregate
+    const inventoryMap = new Map();
+
+    // Initialize with products (Warehouse)
+    products.forEach((p) => {
+      inventoryMap.set(p._id.toString(), {
+        product: p,
+        warehouse: p.warehouseStock || 0,
+        branches: 0,
+        branchDetails: [],
+        distributors: 0,
+        distributorDetails: [],
+        systemTotal: p.totalStock || 0,
+      });
+    });
+
+    // Add Branch Stock
+    branchStocks.forEach((item) => {
+      if (!item.product) return;
+      const productId = item.product.toString();
+      if (!inventoryMap.has(productId)) return; // Access to deleted product?
+
+      const entry = inventoryMap.get(productId);
+      entry.branches += item.quantity || 0;
+      entry.branchDetails.push({
+        name: item.branch?.name || "Sede desconocida",
+        quantity: item.quantity,
+      });
+    });
+
+    // Add Distributor Stock
+    distributorStocks.forEach((item) => {
+      if (!item.product) return;
+      const productId = item.product.toString();
+      if (!inventoryMap.has(productId)) return;
+
+      const entry = inventoryMap.get(productId);
+      entry.distributors += item.quantity || 0;
+      entry.distributorDetails.push({
+        name: item.distributor?.name || "Distribuidor desconocido",
+        quantity: item.quantity,
+      });
+    });
+
+    return Array.from(inventoryMap.values());
+  }
+
   async getAlerts(businessId) {
     const lowWarehouse = await Product.find({
       business: businessId,
@@ -153,6 +339,55 @@ class StockRepository {
       warehouseAlerts: lowWarehouse,
       distributorAlerts: lowDist.filter((i) => i.quantity <= i.lowStockAlert),
     };
+  }
+
+  async getAllowedBranches(businessId, allowedBranchIds = []) {
+    const branchFilter = {
+      business: businessId,
+      active: true,
+      ...(Array.isArray(allowedBranchIds) && allowedBranchIds.length > 0
+        ? { _id: { $in: allowedBranchIds } }
+        : {}),
+    };
+
+    const branches = await Branch.find(branchFilter)
+      .select("name address isWarehouse")
+      .lean();
+
+    if (branches.length === 0) return [];
+
+    const branchIds = branches.map((b) => b._id);
+    const stocks = await BranchStock.find({
+      business: businessId,
+      branch: { $in: branchIds },
+    })
+      .populate("product", "name image clientPrice distributorPrice")
+      .lean();
+
+    const stockByBranch = new Map();
+    stocks.forEach((item) => {
+      if (!item.branch || !item.product) return;
+      const key = item.branch.toString();
+      if (!stockByBranch.has(key)) stockByBranch.set(key, []);
+      stockByBranch.get(key).push({
+        product: item.product,
+        quantity: item.quantity || 0,
+      });
+    });
+
+    return branches.map((branch) => {
+      const stock = stockByBranch.get(branch._id.toString()) || [];
+      const totalUnits = stock.reduce((sum, s) => sum + (s.quantity || 0), 0);
+      return {
+        _id: branch._id,
+        name: branch.name,
+        address: branch.address,
+        isWarehouse: branch.isWarehouse,
+        stock,
+        totalProducts: stock.length,
+        totalUnits,
+      };
+    });
   }
 
   async createTransfer(
@@ -176,6 +411,59 @@ class StockRepository {
       createdBy: userId,
       status: "pending",
     });
+  }
+
+  async reconcileStock(businessId, productId) {
+    // Buscar el producto
+    const product = await Product.findOne({
+      _id: productId,
+      business: businessId,
+    });
+
+    if (!product) {
+      throw new Error("Producto no encontrado");
+    }
+
+    // Calcular stock asignado en distribuidores
+    const distStocks = await DistributorStock.find({
+      product: productId,
+      business: businessId,
+    });
+    const totalDistributor = distStocks.reduce(
+      (sum, item) => sum + (item.quantity || 0),
+      0,
+    );
+
+    // Calcular stock asignado en sucursales
+    const branchStocks = await BranchStock.find({
+      product: productId,
+      business: businessId,
+    });
+    const totalBranch = branchStocks.reduce(
+      (sum, item) => sum + (item.quantity || 0),
+      0,
+    );
+
+    // Calcular unidades sin asignar (fantasma)
+    const unassigned =
+      (product.totalStock || 0) -
+      (product.warehouseStock || 0) -
+      totalDistributor -
+      totalBranch;
+
+    if (unassigned <= 0) {
+      throw new Error("No hay unidades sin asignar para reconciliar");
+    }
+
+    // Mover unidades fantasma a bodega principal
+    product.warehouseStock = (product.warehouseStock || 0) + unassigned;
+    await product.save();
+
+    return {
+      unitsReconciled: unassigned,
+      newWarehouseStock: product.warehouseStock,
+      totalStock: product.totalStock,
+    };
   }
 }
 

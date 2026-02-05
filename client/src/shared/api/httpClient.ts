@@ -59,9 +59,8 @@ httpClient.interceptors.request.use(
     const url = config.url || "";
     // Allow public or generic routes without strict business check
     const allowsWithoutBusiness =
-      url.startsWith("/auth") || // V2 Auth
-      url.startsWith("/v2/auth") || // Forward compat
-      url.startsWith("/business/me/memberships") ||
+      url.startsWith("/auth") ||
+      url.startsWith("/business/my-memberships") ||
       url.startsWith("/upload") ||
       url.startsWith("/users/god") ||
       url.startsWith("/issues") ||

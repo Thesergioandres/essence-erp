@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useBusiness } from "../../../context/BusinessContext";
 import { businessService } from "../../business/services";
 import { uploadService } from "../../common/services";
-import type { BusinessFeatures } from "../../../types";
+import type { BusinessFeatures } from "../types/business.types";
 
 const defaultFeatures: BusinessFeatures = {
   products: true,
@@ -105,8 +105,7 @@ export default function CreateBusiness() {
         contactLocation: form.contactLocation.trim() || undefined,
         logoUrl: form.logoUrl,
         logoPublicId: form.logoPublicId,
-        features: form.features,
-      });
+      } as any);
 
       setSuccess(true);
 
@@ -114,7 +113,7 @@ export default function CreateBusiness() {
       await refresh();
       setTimeout(() => {
         selectBusiness(business._id);
-        navigate("/admin/dashboard");
+        navigate("/admin/analytics");
       }, 1500);
     } catch (err: unknown) {
       const errorMessage =

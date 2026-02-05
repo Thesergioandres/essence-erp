@@ -3,7 +3,7 @@ import BusinessAssistantConfig from "../../../../models/BusinessAssistantConfig.
 import Category from "../../../../models/Category.js";
 import Product from "../../../../models/Product.js";
 import Sale from "../../../../models/Sale.js";
-import { aiService } from "../../../../services/ai.service.js";
+import { aiService } from "../../services/ai.service.js";
 
 export class BusinessAssistantRepository {
   async getOrCreateConfig(businessId) {
@@ -104,7 +104,10 @@ export class BusinessAssistantRepository {
             productSales.length
           : 0;
 
-      if (avgSalePrice > 0 && product.salePrice < avgSalePrice * 0.9) {
+      // Usar clientPrice o suggestedPrice como precio de venta actual
+      const currentProductPrice =
+        product.clientPrice || product.suggestedPrice || 0;
+      if (avgSalePrice > 0 && currentProductPrice < avgSalePrice * 0.9) {
         recommendations.push({
           type: "pricing",
           priority: "low",
@@ -112,7 +115,7 @@ export class BusinessAssistantRepository {
           productName: product.name,
           action: "adjust_price",
           reason: "Precio actual por debajo del promedio histórico",
-          currentPrice: product.salePrice,
+          currentPrice: currentProductPrice,
           suggestedPrice: Math.round(avgSalePrice * 0.95),
         });
       }

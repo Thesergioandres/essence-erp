@@ -1,19 +1,23 @@
 import { useEffect, useState } from "react";
 import { auditService } from "../../analytics/services";
-import type { AuditLog, AuditStats, DailySummary } from "../../../types";
+import type { AuditLog, AuditStats, DailySummary } from "../types/audit.types";
 
 export default function AuditLogs() {
   const [loading, setLoading] = useState(true);
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [stats, setStats] = useState<AuditStats | null>(null);
   const [dailySummary, setDailySummary] = useState<DailySummary | null>(null);
-  const [pagination, setPagination] = useState({
+  const [pagination, setPagination] = useState<Record<string, any>>({
+    page: 1,
+    limit: 50,
+    total: 0,
+    pages: 1,
     currentPage: 1,
     totalPages: 1,
     totalLogs: 0,
   });
 
-  const [filters, setFilters] = useState({
+  const [filters, setFilters] = useState<Record<string, any>>({
     page: 1,
     limit: 50,
     action: "",
@@ -32,18 +36,14 @@ export default function AuditLogs() {
         setLoading(true);
         const [logsData, statsData, summaryData] = await Promise.all([
           auditService.getLogs(filters),
-          auditService.getStats(30),
+          auditService.getStats(),
           auditService.getDailySummary(),
         ]);
 
-        setLogs(logsData.logs);
-        setPagination({
-          currentPage: logsData.currentPage,
-          totalPages: logsData.totalPages,
-          totalLogs: logsData.totalLogs,
-        });
-        setStats(statsData);
-        setDailySummary(summaryData);
+        setLogs(logsData.logs as AuditLog[]);
+        setPagination(logsData.pagination);
+        setStats(statsData as AuditStats);
+        setDailySummary(summaryData as DailySummary);
       } catch (error) {
         console.error("Error cargando auditoría:", error);
       } finally {
@@ -72,15 +72,15 @@ export default function AuditLogs() {
 
   const viewLogDetails = async (logId: string) => {
     try {
-      const log = await auditService.getLogById(logId);
-      setSelectedLog(log);
+      const result = await auditService.getLogById(logId);
+      setSelectedLog(result.log as AuditLog);
       setShowDetails(true);
     } catch (error) {
       console.error("Error cargando detalles:", error);
     }
   };
 
-  const formatDate = (date: string) => {
+  const formatDate = (date: string | Date) => {
     return new Date(date).toLocaleString("es-MX", {
       year: "numeric",
       month: "short",
@@ -215,12 +215,14 @@ export default function AuditLogs() {
               </h3>
               <div className="space-y-2">
                 {Object.entries(stats.moduleStats)
-                  .sort(([, a], [, b]) => b - a)
+                  .sort(([, a], [, b]) => (b as number) - (a as number))
                   .slice(0, 5)
                   .map(([module, count]) => (
                     <div key={module} className="flex justify-between text-sm">
                       <span className="capitalize text-gray-300">{module}</span>
-                      <span className="font-semibold text-white">{count}</span>
+                      <span className="font-semibold text-white">
+                        {count as number}
+                      </span>
                     </div>
                   ))}
               </div>
@@ -242,7 +244,9 @@ export default function AuditLogs() {
                       >
                         {severity}
                       </span>
-                      <span className="font-semibold text-white">{count}</span>
+                      <span className="font-semibold text-white">
+                        {count as number}
+                      </span>
                     </div>
                   )
                 )}
@@ -255,14 +259,16 @@ export default function AuditLogs() {
               </h3>
               <div className="space-y-2">
                 {Object.entries(stats.actionStats)
-                  .sort(([, a], [, b]) => b - a)
+                  .sort(([, a], [, b]) => (b as number) - (a as number))
                   .slice(0, 5)
                   .map(([action, count]) => (
                     <div key={action} className="flex justify-between text-sm">
                       <span className="text-xs text-gray-300">
                         {getActionLabel(action)}
                       </span>
-                      <span className="font-semibold text-white">{count}</span>
+                      <span className="font-semibold text-white">
+                        {count as number}
+                      </span>
                     </div>
                   ))}
               </div>

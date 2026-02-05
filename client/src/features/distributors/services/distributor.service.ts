@@ -5,17 +5,57 @@
  */
 
 import api from "../../../api/axios";
-import type { Distributor, User } from "../../../types";
+import type { User } from "../../auth/types/auth.types";
+import type { Distributor } from "../../business/types/business.types";
 
 export const distributorService = {
-  async getAll(): Promise<Distributor[]> {
-    const response = await api.get("/distributors");
-    return response.data;
+  async getAll(params?: {
+    page?: number;
+    limit?: number;
+    active?: boolean;
+    businessId?: string;
+  }): Promise<{
+    data: User[];
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      pages: number;
+      hasMore: boolean;
+    };
+  }> {
+    const response = await api.get("/distributors", { params });
+    const apiResponse = response.data;
+
+    // V2 API devuelve { success: true, data: {...} }
+    const actualData = apiResponse.data || apiResponse;
+
+    // Handle both array and paginated response formats
+    if (Array.isArray(actualData)) {
+      return {
+        data: actualData,
+        pagination: {
+          page: 1,
+          limit: actualData.length,
+          total: actualData.length,
+          pages: 1,
+          hasMore: false,
+        },
+      };
+    }
+    return actualData;
   },
 
-  async getById(id: string): Promise<Distributor> {
+  async getById(id: string): Promise<{
+    distributor: User;
+  }> {
     const response = await api.get(`/distributors/${id}`);
-    return response.data;
+    // V2 API returns { success: true, data: distributor }
+    // Frontend expects { distributor: User }
+    const apiResponse = response.data;
+    return {
+      distributor: apiResponse.data || apiResponse.distributor || apiResponse,
+    };
   },
 
   async create(data: {
@@ -32,7 +72,9 @@ export const distributorService = {
     password: string;
   }> {
     const response = await api.post("/distributors", data);
-    return response.data;
+    // V2 API devuelve { success: true, data: {...} }
+    const apiResponse = response.data;
+    return apiResponse.data || apiResponse;
   },
 
   async update(
@@ -48,14 +90,18 @@ export const distributorService = {
     distributor: Distributor;
   }> {
     const response = await api.put(`/distributors/${id}`, data);
-    return response.data;
+    // V2 API devuelve { success: true, data: {...} }
+    const apiResponse = response.data;
+    return apiResponse.data || apiResponse;
   },
 
   async delete(id: string): Promise<{
     message: string;
   }> {
     const response = await api.delete(`/distributors/${id}`);
-    return response.data;
+    // V2 API devuelve { success: true, data: {...} }
+    const apiResponse = response.data;
+    return apiResponse.data || apiResponse;
   },
 
   async toggleActive(id: string): Promise<{
@@ -63,7 +109,9 @@ export const distributorService = {
     distributor: Distributor;
   }> {
     const response = await api.put(`/distributors/${id}/toggle-active`);
-    return response.data;
+    // V2 API devuelve { success: true, data: {...} }
+    const apiResponse = response.data;
+    return apiResponse.data || apiResponse;
   },
 
   async getProfile(): Promise<{
@@ -75,7 +123,9 @@ export const distributorService = {
     };
   }> {
     const response = await api.get("/distributors/me/profile");
-    return response.data;
+    // V2 API devuelve { success: true, data: { distributor, stats } }
+    const apiResponse = response.data;
+    return apiResponse.data || apiResponse;
   },
 
   async getProducts(distributorId?: string): Promise<{
@@ -106,7 +156,16 @@ export const distributorService = {
     const url = distributorId
       ? `/distributors/${distributorId}/products`
       : "/distributors/me/products";
+    console.log("🔍 [distributorService.getProducts] URL:", url);
     const response = await api.get(url);
-    return response.data;
+    console.log(
+      "📦 [distributorService.getProducts] Raw response:",
+      response.data
+    );
+    // V2 API devuelve { success: true, data: { products, total } }
+    const apiResponse = response.data;
+    const result = apiResponse.data || apiResponse;
+    console.log("📦 [distributorService.getProducts] Parsed result:", result);
+    return result;
   },
 };

@@ -9,9 +9,8 @@ import type {
   DefectiveProduct,
   Product,
   ProductImage,
-  Sale,
-  SaleStats,
-} from "../../../types";
+} from "../../inventory/types/product.types";
+import type { Sale, SaleStats } from "../types/sales.types";
 
 // ==================== SALE SERVICE ====================
 export const saleService = {
@@ -80,7 +79,53 @@ export const saleService = {
     sale: Sale;
     remainingStock: number;
   }> {
-    const response = await api.post("/sales/admin", data);
+    const response = await api.post("/sales", data);
+    return response.data;
+  },
+
+  // Bulk order registration - accepts multiple items
+  async registerBulk(data: {
+    items: Array<{
+      productId: string;
+      quantity: number;
+      salePrice: number;
+    }>;
+    branchId?: string;
+    notes?: string;
+    saleDate?: string;
+    paymentType?: string;
+    paymentMethodId?: string;
+    customerId?: string;
+    creditDueDate?: string;
+    initialPayment?: number;
+    deliveryMethodId?: string;
+    shippingCost?: number;
+    deliveryAddress?: string;
+    additionalCosts?: Array<{
+      type: string;
+      description: string;
+      amount: number;
+    }>;
+    discount?: number;
+    saleGroupId?: string;
+    warranties?: Array<{
+      productId: string;
+      quantity: number;
+      type: "supplier_replacement" | "total_loss";
+      reason?: string;
+    }>;
+  }): Promise<{
+    success: boolean;
+    message: string;
+    data: {
+      saleGroupId: string;
+      totalAmount: number;
+      totalItems: number;
+      netProfit: number;
+      adminProfit: number;
+    };
+  }> {
+    const response = await api.post("/sales", data);
     return response.data;
   },
 
@@ -101,6 +146,11 @@ export const saleService = {
     return response.data;
   },
 
+  /**
+   * Get all sales with pagination and filters
+   * Source: server/src/infrastructure/http/controllers/ListSalesController.js
+   * Response: { success, sales, stats, pagination }
+   */
   async getAllSales(filters?: {
     startDate?: string;
     endDate?: string;
@@ -112,17 +162,15 @@ export const saleService = {
     limit?: number;
     statsOnly?: boolean;
   }): Promise<{
+    success: boolean;
     sales: Sale[];
-    stats: SaleStats & {
-      confirmedSales?: number;
-      pendingSales?: number;
-      totalProfit?: number;
-    };
+    stats: SaleStats;
     pagination?: {
       page: number;
       limit: number;
       total: number;
-      pages: number;
+      pages: number; // Alias de totalPages
+      totalPages: number;
       hasMore: boolean;
     };
   }> {
@@ -414,7 +462,8 @@ export const defectiveProductService = {
       ? `/defective-products/distributor/${distributorId}`
       : "/defective-products/distributor/me";
     const response = await api.get(url, { params: { status } });
-    return response.data;
+    const rawData = response.data;
+    return rawData?.data || rawData?.reports || [];
   },
 
   async getAllReports(filters?: {
@@ -432,7 +481,18 @@ export const defectiveProductService = {
     };
   }> {
     const response = await api.get("/defective-products", { params: filters });
-    return response.data;
+    // Handle V2 response format: { success, data: reports[] }
+    const rawData = response.data;
+    return {
+      reports: rawData?.data || rawData?.reports || [],
+      stats: rawData?.stats || {
+        total: 0,
+        pendiente: 0,
+        confirmado: 0,
+        rechazado: 0,
+        totalQuantity: 0,
+      },
+    };
   },
 
   async confirm(
@@ -486,7 +546,10 @@ export const defectiveProductService = {
     };
   }> {
     const response = await api.get("/defective-products/stats");
-    return response.data;
+    // Handle V2 response format: { success, stats }
+    return {
+      stats: response.data?.stats || response.data?.data || {},
+    };
   },
 
   async getBySaleGroup(saleGroupId: string): Promise<{

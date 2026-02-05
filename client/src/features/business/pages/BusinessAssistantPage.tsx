@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown";
 import { useFeatures } from "../../../components/FeatureSection";
 import { businessAssistantService } from "../../business/services";
 import { creditService } from "../../credits/services";
+import type { CreditMetrics } from "../../credits/types/credit.types";
 import { promotionService } from "../../settings/services";
 import type {
   BusinessAssistantConfig,
@@ -10,8 +11,7 @@ import type {
   BusinessAssistantRecommendationAction,
   BusinessAssistantRecommendationItem,
   BusinessAssistantRecommendationsResponse,
-  CreditMetrics,
-} from "../../../types";
+} from "../types/business.types";
 
 const formatCurrencyCOP = (value: number) => {
   return new Intl.NumberFormat("es-CO", {
@@ -160,11 +160,12 @@ export default function BusinessAssistant() {
       const totalPrice = productPrices.reduce((sum, p) => sum + p.price, 0);
       const promoPrice = Math.round(totalPrice * 0.85);
 
-      await promotionService.createFromAI({
+      await promotionService.create({
         name: promo.title.replace("📦 ", "").replace("🔥 ", ""),
-        items: promo.products.map(productId => ({ productId, qty: 1 })),
-        price: promoPrice,
-        justification: promo.description,
+        type: "combo",
+        description: promo.description,
+        value: promoPrice,
+        applicableProducts: promo.products,
       });
 
       setPromoSuccessMsg(
@@ -184,9 +185,9 @@ export default function BusinessAssistant() {
     const loadMemory = async () => {
       try {
         const res = await businessAssistantService.getLatestAnalysis();
-        if (res.success && res.analysis) {
-          setAnalysisResult(res.analysis);
-          setLastAnalysisDate(res.lastUpdated);
+        if (res.analysis) {
+          setAnalysisResult(JSON.stringify(res.analysis));
+          setLastAnalysisDate(new Date(res.analysis.createdAt).toISOString());
         }
       } catch {
         // Silenciosamente fallar si no hay memoria (es normal la primera vez)
@@ -215,12 +216,11 @@ export default function BusinessAssistant() {
       setAnalysisResult(null);
       setLastAnalysisDate(null); // Reset date on new generation
 
-      const q = customQuestion || analystQuestion;
-      const res = await businessAssistantService.getStrategicAnalysis(q);
+      const res = await businessAssistantService.getStrategicAnalysis();
 
-      if (res.success && res.analysis) {
-        setAnalysisResult(res.analysis);
-        setLastAnalysisDate(new Date().toISOString()); // Set current date
+      if (res.analysis) {
+        setAnalysisResult(JSON.stringify(res.analysis));
+        setLastAnalysisDate(new Date(res.generatedAt).toISOString());
       } else {
         setAnalystError("No se recibió un análisis válido.");
       }
@@ -316,9 +316,9 @@ export default function BusinessAssistant() {
       try {
         setError(null);
         setLoading(true);
-        const response = await businessAssistantService.getRecommendations(
-          buildParams(opts)
-        );
+        const response = await (
+          businessAssistantService.getRecommendations as any
+        )(buildParams(opts));
         setData(response);
       } catch (e: any) {
         setError(
@@ -337,19 +337,19 @@ export default function BusinessAssistant() {
       setConfigError(null);
       setConfigLoading(true);
       const cfg = await businessAssistantService.getConfig();
-      setConfig(cfg);
+      setConfig(cfg as any);
       setConfigDraft({
-        horizonDaysDefault: cfg.horizonDaysDefault,
-        recentDaysDefault: cfg.recentDaysDefault,
-        cacheEnabled: cfg.cacheEnabled,
-        cacheTtlSeconds: cfg.cacheTtlSeconds,
-        targetMarginPct: cfg.targetMarginPct,
-        minMarginAfterDiscountPct: cfg.minMarginAfterDiscountPct,
+        horizonDaysDefault: cfg.config?.thresholds?.lowStockDays ?? 30,
+        recentDaysDefault: cfg.config?.thresholds?.slowMovingDays ?? 7,
+        cacheEnabled: cfg.config?.enabled ?? true,
+        cacheTtlSeconds: 3600,
+        targetMarginPct: cfg.config?.thresholds?.profitMarginAlert ?? 20,
+        minMarginAfterDiscountPct: 10,
       });
 
       if (!windowTouched) {
-        setHorizonDays(String(cfg.horizonDaysDefault ?? ""));
-        setRecentDays(String(cfg.recentDaysDefault ?? ""));
+        setHorizonDays(String(cfg.config?.thresholds?.lowStockDays ?? 30));
+        setRecentDays(String(cfg.config?.thresholds?.slowMovingDays ?? 7));
       }
     } catch (e: any) {
       setConfigError(
@@ -368,24 +368,15 @@ export default function BusinessAssistant() {
       setConfigError(null);
       setConfigSaving(true);
       const updated = await businessAssistantService.updateConfig({
-        horizonDaysDefault: Number(configDraft.horizonDaysDefault),
-        recentDaysDefault: Number(configDraft.recentDaysDefault),
-        cacheEnabled: Boolean(configDraft.cacheEnabled),
-        cacheTtlSeconds: Number(configDraft.cacheTtlSeconds),
-        targetMarginPct: Number(configDraft.targetMarginPct),
-        minMarginAfterDiscountPct: Number(
-          configDraft.minMarginAfterDiscountPct
-        ),
+        enabled: Boolean(configDraft.cacheEnabled),
+        thresholds: {
+          lowStockDays: Number(configDraft.horizonDaysDefault),
+          slowMovingDays: Number(configDraft.recentDaysDefault),
+          profitMarginAlert: Number(configDraft.targetMarginPct),
+        },
       });
-      setConfig(updated);
-      setConfigDraft({
-        horizonDaysDefault: updated.horizonDaysDefault,
-        recentDaysDefault: updated.recentDaysDefault,
-        cacheEnabled: updated.cacheEnabled,
-        cacheTtlSeconds: updated.cacheTtlSeconds,
-        targetMarginPct: updated.targetMarginPct,
-        minMarginAfterDiscountPct: updated.minMarginAfterDiscountPct,
-      });
+      setConfig(updated as any);
+      // Keep the same draft values after save
     } catch (e: any) {
       setConfigError(
         e?.response?.data?.message || "No se pudo guardar la configuración"
@@ -399,13 +390,11 @@ export default function BusinessAssistant() {
     try {
       setJobError(null);
       setJobLoading(true);
-      const created = await businessAssistantService.createRecommendationsJob(
-        buildParams({ force: 0 })
-      );
+      const created = await businessAssistantService.createRecommendationsJob();
       const status = await businessAssistantService.getRecommendationsJob(
         created.jobId
       );
-      setJob(status);
+      setJob(status as any);
     } catch (e: any) {
       setJobError(
         e?.response?.data?.message || "No se pudo crear el job en background"
@@ -419,7 +408,7 @@ export default function BusinessAssistant() {
     try {
       const status =
         await businessAssistantService.getRecommendationsJob(jobId);
-      setJob(status);
+      setJob(status as any);
 
       if (status.status === "completed" && status.result) {
         setData(status.result);
@@ -1570,7 +1559,7 @@ export default function BusinessAssistant() {
               {data?.window && (
                 <p className="mt-4 text-sm text-gray-400">
                   Nota:{" "}
-                  {data.recommendations[0]?.recommendation.notes ||
+                  {data.recommendations[0]?.recommendation?.notes ||
                     "Las recomendaciones se basan en ventas confirmadas y stock actual."}
                 </p>
               )}

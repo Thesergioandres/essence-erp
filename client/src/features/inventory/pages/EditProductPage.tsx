@@ -4,8 +4,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   categoryService,
   productService,
-} from "../../inventory/services";
-import type { Category, Product } from "../../../types";
+} from "../../inventory/services/inventory.service";
+import type { Category, Product } from "../types/product.types";
 
 interface FormState {
   name: string;

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
+import type { User } from "../features/auth/types/auth.types";
 import { distributorService } from "../features/distributors/services";
-import { productService } from "../features/inventory/services";
+import { productService } from "../features/inventory/services/inventory.service";
+import type { Product } from "../features/inventory/types/product.types";
 import { specialSaleService } from "../features/sales/services";
-import type { Product, User } from "../types";
 
 interface Distribution {
   name: string;
@@ -82,7 +83,7 @@ export default function SpecialSaleForm({
 
   const loadDistributors = useCallback(async () => {
     try {
-      const response = await distributorService.getAll(true); // Solo activos
+      const response = await distributorService.getAll({ active: true } as any); // Solo activos
       // Extraer solo distribuidores (role: 'distribuidor')
       const distData = Array.isArray(response) ? response : response.data;
       const distributorUsers = distData.filter(
@@ -138,7 +139,7 @@ export default function SpecialSaleForm({
         ...newItems[index],
         productId: product._id,
         productName: product.name,
-        cost: product.cost || product.purchasePrice || 0,
+        cost: product.purchasePrice || 0,
       };
       setProductItems(newItems);
     }
@@ -303,6 +304,8 @@ export default function SpecialSaleForm({
           name: dist.name,
           amount: (dist.amount * itemProfit) / totalProfit,
           notes: dist.notes,
+          percentage: dist.percentage,
+          distributorId: dist.distributorId,
         }));
 
         const data = {

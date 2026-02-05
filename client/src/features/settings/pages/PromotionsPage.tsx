@@ -19,19 +19,19 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import ProductSelector from "../../../components/ProductSelector";
-import { branchService } from "../../branches/services";
-import { promotionService } from "../../settings/services";
 import { invalidateProductCache } from "../../../hooks/useProductCache";
+import { branchService } from "../../branches/services";
+import type { Branch } from "../../business/types/business.types";
+import type { Product } from "../../inventory/types/product.types";
+import { promotionService } from "../../settings/services";
 import type {
-  Branch,
-  Product,
   Promotion,
   PromotionComboItem,
   PromotionMetrics,
   PromotionStats,
   PromotionStatus,
   PromotionType,
-} from "../../../types";
+} from "../types/promotion.types";
 
 const typeConfig: Record<
   PromotionType,
@@ -67,6 +67,18 @@ const typeConfig: Record<
     color: "bg-orange-900/30 text-orange-400 border-orange-700/50",
     description: "Descuento por comprar más cantidad",
   },
+  fixed: {
+    label: "Precio Fijo",
+    icon: <Tag className="h-4 w-4" />,
+    color: "bg-cyan-900/30 text-cyan-400 border-cyan-700/50",
+    description: "Producto a precio fijo especial",
+  },
+  percentage: {
+    label: "Porcentaje",
+    icon: <Percent className="h-4 w-4" />,
+    color: "bg-emerald-900/30 text-emerald-400 border-emerald-700/50",
+    description: "Descuento porcentual directo",
+  },
 };
 
 const statusConfig: Record<
@@ -92,6 +104,21 @@ const statusConfig: Record<
     label: "Archivada",
     color: "bg-red-900/30 text-red-400 border-red-700/50",
     icon: <Trash2 className="h-3 w-3" />,
+  },
+  expired: {
+    label: "Expirada",
+    color: "bg-gray-700/30 text-gray-500 border-gray-600/50",
+    icon: <Trash2 className="h-3 w-3" />,
+  },
+  disabled: {
+    label: "Deshabilitada",
+    color: "bg-red-900/30 text-red-400 border-red-700/50",
+    icon: <Trash2 className="h-3 w-3" />,
+  },
+  scheduled: {
+    label: "Programada",
+    color: "bg-blue-900/30 text-blue-400 border-blue-700/50",
+    icon: <Play className="h-3 w-3" />,
   },
 };
 
@@ -168,14 +195,33 @@ export default function Promotions() {
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
+      const statusParam =
+        filterStatus !== "all"
+          ? (filterStatus as "active" | "expired" | "disabled" | "scheduled")
+          : undefined;
       const [promoRes, branchList] = await Promise.all([
         promotionService.getAll({
-          status: filterStatus !== "all" ? filterStatus : undefined,
+          status: statusParam,
         }),
         branchService.list(),
       ]);
       setPromotions(promoRes.promotions || []);
-      setStats(promoRes.stats || null);
+      // Handle stats with fallback for missing properties
+      if (promoRes.stats) {
+        setStats({
+          total: (promoRes.stats as any).total ?? 0,
+          active: promoRes.stats.active ?? 0,
+          paused: (promoRes.stats as any).paused ?? 0,
+          scheduled: (promoRes.stats as any).scheduled ?? 0,
+          expired: promoRes.stats.expired ?? 0,
+          archived: (promoRes.stats as any).archived ?? 0,
+          totalRevenue: (promoRes.stats as any).totalRevenue ?? 0,
+          totalDiscount: promoRes.stats.totalDiscount ?? 0,
+          totalUnitsSold: (promoRes.stats as any).totalUnitsSold ?? 0,
+        } as any);
+      } else {
+        setStats(null);
+      }
       setBranches(branchList || []);
     } catch (err) {
       console.error("Error loading promotions:", err);
@@ -188,7 +234,7 @@ export default function Promotions() {
   const loadMetrics = async () => {
     try {
       const data = await promotionService.getMetrics();
-      setMetrics(data);
+      setMetrics(data as any);
       setShowMetrics(true);
     } catch (err) {
       console.error("Error loading metrics:", err);
@@ -483,7 +529,18 @@ export default function Promotions() {
     });
     setComboItems(
       (promo.comboItems || []).map((item: PromotionComboItem) => {
-        const product = typeof item.product === "object" ? item.product : null;
+        const product =
+          typeof item.product === "object" && item.product !== null
+            ? (item.product as {
+                _id?: string;
+                name?: string;
+                image?: { url: string };
+                clientPrice?: number;
+                suggestedPrice?: number;
+                purchasePrice?: number;
+                distributorPrice?: number;
+              })
+            : null;
         return {
           product: product?._id || (item.product as string),
           productName: product?.name || "Producto",
@@ -559,7 +616,7 @@ export default function Promotions() {
         await promotionService.update(editingPromo._id, payload);
         setSuccess("Promoción actualizada correctamente");
       } else {
-        await promotionService.create(payload);
+        await promotionService.create(payload as any);
         setSuccess("Promoción creada correctamente");
       }
 

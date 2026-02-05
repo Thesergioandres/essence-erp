@@ -153,4 +153,14 @@ export class BusinessRepository {
       .lean();
     return members;
   }
+
+  async getUserMemberships(userId) {
+    const memberships = await Membership.find({
+      user: userId,
+      status: "active",
+    })
+      .populate("business")
+      .lean();
+    return memberships;
+  }
 }

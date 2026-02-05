@@ -80,6 +80,20 @@ class ExpenseController {
       res.status(500).json({ success: false, message: error.message });
     }
   }
+
+  async cleanupOrphans(req, res) {
+    try {
+      const businessId = req.businessId || req.headers["x-business-id"];
+      if (!businessId)
+        return res.status(400).json({ message: "Falta x-business-id" });
+
+      const result =
+        await ExpenseRepository.cleanupOrphanProfitHistory(businessId);
+      res.json({ success: true, data: result });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
 }
 
 export default new ExpenseController();

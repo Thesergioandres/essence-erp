@@ -4,8 +4,8 @@ import { useNavigate } from "react-router-dom";
 import {
   categoryService,
   productService,
-} from "../../inventory/services";
-import type { Category } from "../../../types";
+} from "../../inventory/services/inventory.service";
+import type { Category } from "../types/product.types";
 
 interface FormState {
   name: string;
@@ -44,6 +44,9 @@ export default function AddProduct() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showCategoryInput, setShowCategoryInput] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [creatingCategory, setCreatingCategory] = useState(false);
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -124,6 +127,26 @@ export default function AddProduct() {
     if (file) {
       setImageFile(file);
       setImagePreview(URL.createObjectURL(file));
+    }
+  };
+
+  const handleCreateCategory = async () => {
+    if (!newCategoryName.trim()) return;
+
+    setCreatingCategory(true);
+    try {
+      const newCategory = await categoryService.create({
+        name: newCategoryName.trim(),
+      });
+      setCategories(prev => [...prev, newCategory]);
+      setFormData(prev => ({ ...prev, category: newCategory._id }));
+      setNewCategoryName("");
+      setShowCategoryInput(false);
+    } catch (error) {
+      console.error("Error creating category:", error);
+      setError("No se pudo crear la categoría");
+    } finally {
+      setCreatingCategory(false);
     }
   };
 
@@ -429,20 +452,68 @@ export default function AddProduct() {
                   <label className="mb-2 block text-sm font-medium text-gray-300">
                     Categoría
                   </label>
-                  <select
-                    name="category"
-                    value={formData.category}
-                    onChange={handleChange}
-                    required
-                    className="w-full rounded-lg border border-gray-600 bg-gray-900/50 px-4 py-3 text-white focus:border-transparent focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  >
-                    <option value="">Selecciona una categoría</option>
-                    {categories.map(cat => (
-                      <option key={cat._id} value={cat._id}>
-                        {cat.name.toUpperCase()}
-                      </option>
-                    ))}
-                  </select>
+                  {!showCategoryInput ? (
+                    <div className="flex gap-2">
+                      <select
+                        name="category"
+                        value={formData.category}
+                        onChange={handleChange}
+                        required
+                        className="flex-1 rounded-lg border border-gray-600 bg-gray-900/50 px-4 py-3 text-white focus:border-transparent focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      >
+                        <option value="">Selecciona una categoría</option>
+                        {categories.map(cat => (
+                          <option key={cat._id} value={cat._id}>
+                            {cat.name.toUpperCase()}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => setShowCategoryInput(true)}
+                        className="whitespace-nowrap rounded-lg border border-purple-500/40 bg-purple-600/20 px-4 py-2 text-sm font-semibold text-purple-50 transition hover:border-purple-400/70 hover:bg-purple-600/30"
+                        title="Crear nueva categoría"
+                      >
+                        + Nueva
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={newCategoryName}
+                          onChange={e => setNewCategoryName(e.target.value)}
+                          placeholder="Nombre de la categoría"
+                          className="flex-1 rounded-lg border border-gray-600 bg-gray-900/50 px-4 py-3 text-white focus:border-transparent focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          onKeyDown={e => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleCreateCategory();
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={handleCreateCategory}
+                          disabled={creatingCategory || !newCategoryName.trim()}
+                          className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-purple-700 disabled:opacity-50"
+                        >
+                          {creatingCategory ? "..." : "Crear"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowCategoryInput(false);
+                            setNewCategoryName("");
+                          }}
+                          className="rounded-lg border border-gray-600 bg-gray-900/50 px-4 py-2 text-sm font-semibold text-white transition hover:bg-gray-800"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-3 rounded-lg border border-gray-700 bg-gray-900/40 px-4 py-3">

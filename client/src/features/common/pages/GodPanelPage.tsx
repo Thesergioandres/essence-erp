@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { authService } from "../../auth/services";
+import type { User } from "../../auth/types/auth.types";
 import { issueService, userAccessService } from "../../common/services";
-import type { IssueReport, User } from "../../../types";
+import type { IssueReport } from "../types/common.types";
 
 interface DurationForm {
   days: number;
@@ -71,7 +72,7 @@ export default function GodPanel() {
       const res = await issueService.list(
         status === "all" ? { limit: 50 } : { status, limit: 50 }
       );
-      setIssues(res.data);
+      setIssues(res.data as any);
     } catch (err) {
       console.error("god panel issues error", err);
       setIssuesError("No se pudieron cargar los reportes");
@@ -103,7 +104,7 @@ export default function GodPanel() {
     const load = async () => {
       try {
         const data = await userAccessService.list();
-        setUsers(data.filter(u => u.role === "super_admin"));
+        setUsers(data.filter(u => u.role === "super_admin")); // Only super_admins can access the app
       } catch (err) {
         console.error("god panel list error", err);
         setError("No se pudieron cargar los usuarios");
@@ -126,7 +127,9 @@ export default function GodPanel() {
     setIssueAction(id);
     try {
       const { report } = await issueService.updateStatus(id, status);
-      setIssues(prev => prev.map(item => (item._id === id ? report : item)));
+      setIssues(
+        prev => prev.map(item => (item._id === id ? report : item)) as any
+      );
     } catch (err) {
       console.error("god panel issues update error", err);
       setIssuesError("No se pudo actualizar el estado");
@@ -191,9 +194,16 @@ export default function GodPanel() {
           updatedUser = await userAccessService.resume(userId);
           break;
         case "remove":
-          await userAccessService.remove(userId);
+          const deleteStats = await userAccessService.remove(userId);
           setUsers(prev => prev.filter(u => u._id !== userId));
-          setFeedback("Usuario eliminado");
+          setFeedback(
+            `✅ Eliminado: ${deleteStats.deletedBusinesses} empresas, ` +
+              `${deleteStats.deletedDistributorUsers} distribuidores, ` +
+              `${deleteStats.deletedProducts} productos, ` +
+              `${deleteStats.deletedSales} ventas, ` +
+              `${deleteStats.deletedCustomers} clientes, ` +
+              `${deleteStats.deletedCredits} créditos`
+          );
           setConfirmUser(null);
           return;
       }
@@ -661,13 +671,13 @@ export default function GodPanel() {
                       </div>
                     </div>
 
-                    {report.logs?.length > 0 && (
+                    {(report.logs?.length ?? 0) > 0 && (
                       <details className="mt-3 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-gray-200">
                         <summary className="cursor-pointer text-gray-300">
-                          Ver logs ({report.logs.length})
+                          Ver logs ({report.logs?.length})
                         </summary>
                         <pre className="mt-2 whitespace-pre-wrap text-[11px] text-gray-300">
-                          {report.logs.join("\n")}
+                          {report.logs?.join("\n")}
                         </pre>
                       </details>
                     )}
@@ -699,19 +709,74 @@ export default function GodPanel() {
         )}
         {confirmUser && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
-            <div className="w-full max-w-md rounded-2xl border border-white/10 bg-gray-900/90 p-6 shadow-2xl shadow-black/40">
-              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-red-200/80">
-                Confirmar eliminación
+            <div className="w-full max-w-lg rounded-2xl border border-red-500/30 bg-gray-900/95 p-6 shadow-2xl shadow-red-500/10">
+              <div className="mb-4 flex items-center gap-3">
+                <div className="rounded-lg border border-red-500/40 bg-red-500/20 p-2">
+                  <svg
+                    className="h-6 w-6 text-red-200"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                    />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold uppercase tracking-[0.2em] text-red-200/80">
+                    ⚠️ ELIMINACIÓN PERMANENTE
+                  </p>
+                  <h3 className="mt-1 text-lg font-bold text-white">
+                    Eliminar usuario: {confirmUser.name}
+                  </h3>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-4">
+                <p className="mb-2 text-sm font-semibold text-red-200">
+                  Esta acción eliminará permanentemente:
+                </p>
+                <ul className="space-y-1.5 text-sm text-gray-300">
+                  <li className="flex items-start gap-2">
+                    <span className="text-red-400">•</span>
+                    <span>
+                      La cuenta de usuario <strong>{confirmUser.email}</strong>
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-red-400">•</span>
+                    <span>Todas las empresas donde es propietario</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-red-400">•</span>
+                    <span>
+                      Todos los distribuidores vinculados a esas empresas
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-red-400">•</span>
+                    <span>
+                      Productos, categorías, ventas, clientes, créditos
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-red-400">•</span>
+                    <span>
+                      Inventarios, sucursales, gastos y toda la data operativa
+                    </span>
+                  </li>
+                </ul>
+              </div>
+
+              <p className="mt-4 text-center text-sm font-bold text-red-200">
+                ⚠️ Esta operación NO se puede deshacer
               </p>
-              <h3 className="mt-2 text-lg font-bold text-white">
-                ¿Eliminar al usuario {confirmUser.name}?
-              </h3>
-              <p className="mt-1 text-sm text-gray-300">
-                Se borrará su cuenta y todo lo creado por él (negocios,
-                productos, categorías, ventas, distribuidores, analíticas
-                asociadas).
-              </p>
-              <div className="mt-4 flex justify-end gap-2 text-sm">
+
+              <div className="mt-6 flex justify-end gap-2 text-sm">
                 <button
                   onClick={() => setConfirmUser(null)}
                   className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 font-semibold text-gray-200 transition hover:border-white/30 hover:bg-white/10"
@@ -726,13 +791,13 @@ export default function GodPanel() {
                     )
                   }
                   onClick={() => handleAction(confirmUser._id, "remove")}
-                  className="flex items-center gap-2 rounded-lg border border-red-500/40 bg-red-500/20 px-4 py-2 font-semibold text-red-100 transition hover:border-red-400/60 hover:bg-red-500/30 disabled:opacity-50"
+                  className="flex items-center gap-2 rounded-lg border border-red-500/40 bg-red-600/80 px-4 py-2 font-semibold text-white transition hover:bg-red-600 disabled:opacity-50"
                 >
                   {actionKey?.startsWith("remove") &&
                   actionKey?.endsWith(confirmUser._id) ? (
-                    <span className="h-3 w-3 animate-spin rounded-full border-2 border-red-100/70 border-t-transparent" />
+                    <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
                   ) : null}
-                  <span>Eliminar definitivamente</span>
+                  <span>Confirmar eliminación permanente</span>
                 </button>
               </div>
             </div>

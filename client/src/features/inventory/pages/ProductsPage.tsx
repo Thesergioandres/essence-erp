@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { LoadingSpinner } from "../../../shared/components/ui";
-import type { Category, Product } from "../../../types";
 import {
   buildCacheKey,
   readSessionCache,
   writeSessionCache,
 } from "../../../utils/requestCache";
-import { categoryService, productService } from "../services";
+import { categoryService, productService } from "../services/inventory.service";
+import type { Category, Product } from "../types/product.types";
 
 const PRODUCTS_CACHE_TTL_MS = 60 * 1000;
 const CATEGORIES_CACHE_TTL_MS = 5 * 60 * 1000;

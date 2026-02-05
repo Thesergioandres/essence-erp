@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useBusiness } from "../context/BusinessContext";
-import type { BusinessFeatures } from "../types";
+import type { BusinessFeatures } from "../features/business/types/business.types";
 
 interface FeatureSectionProps {
   feature: keyof BusinessFeatures;

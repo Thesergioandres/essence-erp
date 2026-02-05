@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
+import type { SalesTarget } from "../../analytics/types/gamification.types";
 import { gamificationService } from "../../common/services";
-import type { SalesTarget } from "../../../types";
 
 const GamificationConfigPage = () => {
   const [loading, setLoading] = useState(true);
@@ -38,11 +38,11 @@ const GamificationConfigPage = () => {
       const data = await gamificationService.getConfig();
 
       // Populate form
-      setEvaluationPeriod(data.evaluationPeriod);
+      setEvaluationPeriod(data.evaluationPeriod || "monthly");
       setCustomPeriodDays(data.customPeriodDays || 30);
-      setTopPerformerBonus(data.topPerformerBonus);
-      setSecondPlaceBonus(data.secondPlaceBonus);
-      setThirdPlaceBonus(data.thirdPlaceBonus);
+      setTopPerformerBonus(data.topPerformerBonus ?? 1000);
+      setSecondPlaceBonus(data.secondPlaceBonus ?? 500);
+      setThirdPlaceBonus(data.thirdPlaceBonus ?? 250);
       setTop1CommissionBonus(data.top1CommissionBonus ?? 5);
       setTop2CommissionBonus(data.top2CommissionBonus ?? 3);
       setTop3CommissionBonus(data.top3CommissionBonus ?? 1);
@@ -50,9 +50,9 @@ const GamificationConfigPage = () => {
       setCurrentPeriodStart(
         data.currentPeriodStart ? data.currentPeriodStart.slice(0, 10) : ""
       );
-      setPointsPerSale(data.pointsPerSale);
-      setPointsPerPeso(data.pointsPerPeso);
-      setSalesTargets(data.salesTargets);
+      setPointsPerSale(data.pointsPerSale ?? 10);
+      setPointsPerPeso(data.pointsPerPeso ?? 0.01);
+      setSalesTargets(data.salesTargets || []);
     } catch (error) {
       console.error("Error loading config:", error);
       alert("Error al cargar la configuración");

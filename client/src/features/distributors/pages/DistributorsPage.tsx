@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useBusiness } from "../../../context/BusinessContext";
-import { distributorService } from "../../distributors/services";
 import { LoadingSpinner } from "../../../shared/components/ui";
-import type { User } from "../../../types";
 import {
   buildCacheKey,
   readSessionCache,
   writeSessionCache,
 } from "../../../utils/requestCache";
+import type { User } from "../../auth/types/auth.types";
+import { distributorService } from "../../distributors/services";
 
 const DISTRIBUTORS_CACHE_TTL_MS = 60 * 1000;
 

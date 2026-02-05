@@ -1,13 +1,70 @@
 import { Router } from "express";
 import { protect } from "../../../../middleware/auth.middleware.js";
-import { businessContext } from "../../../../middleware/business.middleware.js";
-import { requirePermission } from "../../../../middleware/business.middleware.js";
+import {
+  businessContext,
+  requirePermission,
+} from "../../../../middleware/business.middleware.js";
 import { AdvancedAnalyticsController } from "../controllers/AdvancedAnalyticsController.js";
 
 const router = Router();
 const controller = new AdvancedAnalyticsController();
 
 router.use(protect, businessContext);
+
+// Financial KPIs - Main dashboard endpoint
+router.get("/financial-kpis", requirePermission("readAnalytics"), (req, res) =>
+  controller.getFinancialKPIs(req, res),
+);
+
+// Sales funnel
+router.get("/sales-funnel", requirePermission("readAnalytics"), (req, res) =>
+  controller.getSalesFunnel(req, res),
+);
+
+// Sales timeline
+router.get("/sales-timeline", requirePermission("readAnalytics"), (req, res) =>
+  controller.getSalesTimeline(req, res),
+);
+
+// Comparative analysis
+router.get(
+  "/comparative-analysis",
+  requirePermission("readAnalytics"),
+  (req, res) => controller.getComparativeAnalysis(req, res),
+);
+
+// Alias for frontend compatibility
+router.get("/comparative", requirePermission("readAnalytics"), (req, res) =>
+  controller.getComparativeAnalysis(req, res),
+);
+
+// Sales by category
+router.get(
+  "/sales-by-category",
+  requirePermission("readAnalytics"),
+  (req, res) => controller.getSalesByCategory(req, res),
+);
+
+// Product rotation
+router.get(
+  "/product-rotation",
+  requirePermission("readAnalytics"),
+  (req, res) => controller.getProductRotation(req, res),
+);
+
+// Distributor rankings
+router.get(
+  "/distributor-rankings",
+  requirePermission("readAnalytics"),
+  (req, res) => controller.getDistributorRankings(req, res),
+);
+
+// Low stock visual
+router.get(
+  "/low-stock-visual",
+  requirePermission("readAnalytics"),
+  (req, res) => controller.getLowStockVisual(req, res),
+);
 
 router.get("/sales-summary", requirePermission("readAnalytics"), (req, res) =>
   controller.getSalesSummary(req, res),

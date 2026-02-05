@@ -1,12 +1,12 @@
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
-import type { Category } from "../../../types";
 import {
   buildCacheKey,
   readSessionCache,
   writeSessionCache,
 } from "../../../utils/requestCache";
-import { categoryService } from "../services";
+import { categoryService } from "../services/inventory.service";
+import type { Category } from "../types/product.types";
 
 const CATEGORIES_CACHE_TTL_MS = 5 * 60 * 1000;
 const CATEGORIES_CACHE_KEY = buildCacheKey("categories:list");

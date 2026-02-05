@@ -3,9 +3,9 @@ import { useNavigate, useParams } from "react-router-dom";
 import Footer from "../../../components/Footer";
 import Navbar from "../../../components/Navbar";
 import { useBusiness } from "../../../context/BusinessContext";
-import { productService } from "../../inventory/services";
 import { LoadingSpinner } from "../../../shared/components/ui";
-import type { Product } from "../../../types";
+import { productService } from "../../inventory/services/inventory.service";
+import type { Product } from "../types/product.types";
 
 export default function ProductDetail() {
   const { id } = useParams<{ id: string }>();
@@ -82,6 +82,15 @@ export default function ProductDetail() {
     );
   }
 
+  const categoryObj =
+    typeof product.category === "object" ? product.category : null;
+  const categorySlug =
+    categoryObj?.slug ||
+    (typeof product.category === "string" ? product.category : "");
+  const categoryName =
+    categoryObj?.name ||
+    (typeof product.category === "string" ? product.category : "Categoría");
+
   return (
     <div className="bg-linear-to-br min-h-screen from-gray-900 via-purple-900/20 to-gray-900">
       <Navbar />
@@ -134,10 +143,12 @@ export default function ProductDetail() {
             {/* Category Badge */}
             <div className="mb-3 sm:mb-4">
               <button
-                onClick={() => navigate(`/categoria/${product.category.slug}`)}
+                onClick={() =>
+                  categorySlug && navigate(`/categoria/${categorySlug}`)
+                }
                 className="inline-flex min-h-11 items-center rounded-full bg-purple-900/50 px-4 py-2 text-sm text-purple-300 transition hover:bg-purple-900/70 active:scale-95 sm:px-5 sm:py-2.5 sm:text-base"
               >
-                {product.category.name}
+                {categoryName}
               </button>
             </div>
 

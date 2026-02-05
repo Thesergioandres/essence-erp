@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { profitHistoryService } from "../../features/common/services";
 import type {
   ProfitHistoryAdminDistributor,
   ProfitHistoryAdminEntry,
   ProfitHistoryAdminOverview,
-} from "../../types";
+} from "../../features/analytics/types/analytics.types";
+import { profitHistoryService } from "../../features/common/services";
 import { useFeature } from "../FeatureSection";
 
 interface ProfitHistoryTableProps {

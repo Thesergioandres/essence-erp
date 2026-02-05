@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { expenseService } from "../../common/services";
 import { Button } from "../../../shared/components/ui";
-import type { Expense } from "../../../types";
 import {
   buildCacheKey,
   readSessionCache,
   writeSessionCache,
 } from "../../../utils/requestCache";
+import { expenseService } from "../../common/services";
+import type { Expense } from "../../common/types/common.types";
 
 const EXPENSES_CACHE_TTL_MS = 2 * 60 * 1000;
 const EXPENSES_CACHE_KEY = buildCacheKey("expenses:list");
@@ -87,6 +87,11 @@ export default function Expenses() {
     expenseDate: new Date().toISOString().slice(0, 10),
   });
 
+  const safeExpenses = useMemo(
+    () => expenses.filter((e): e is Expense => Boolean(e && e.expenseDate)),
+    [expenses]
+  );
+
   // Métricas calculadas
   const metrics = useMemo(() => {
     const now = new Date();
@@ -95,12 +100,12 @@ export default function Expenses() {
     const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
     const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
 
-    const thisMonthExpenses = expenses.filter(e => {
+    const thisMonthExpenses = safeExpenses.filter(e => {
       const d = new Date(e.expenseDate);
       return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
     });
 
-    const lastMonthExpenses = expenses.filter(e => {
+    const lastMonthExpenses = safeExpenses.filter(e => {
       const d = new Date(e.expenseDate);
       return d.getMonth() === lastMonth && d.getFullYear() === lastMonthYear;
     });
@@ -113,10 +118,13 @@ export default function Expenses() {
       (sum, e) => sum + (Number(e.amount) || 0),
       0
     );
-    const total = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+    const total = safeExpenses.reduce(
+      (sum, e) => sum + (Number(e.amount) || 0),
+      0
+    );
 
     // Agrupar por tipo
-    const byType = expenses.reduce<Record<string, number>>((acc, e) => {
+    const byType = safeExpenses.reduce<Record<string, number>>((acc, e) => {
       const type = e.type || e.category || e.description || "Otros";
       acc[type] = (acc[type] || 0) + (Number(e.amount) || 0);
       return acc;
@@ -140,19 +148,19 @@ export default function Expenses() {
       countThisMonth: thisMonthExpenses.length,
       growthPercent,
       topCategories,
-      averageExpense: expenses.length > 0 ? total / expenses.length : 0,
+      averageExpense: safeExpenses.length > 0 ? total / safeExpenses.length : 0,
     };
-  }, [expenses]);
+  }, [safeExpenses]);
 
   // Filtrar gastos por mes seleccionado
   const filteredExpenses = useMemo(() => {
-    if (!filterMonth) return expenses;
+    if (!filterMonth) return safeExpenses;
     const [year, month] = filterMonth.split("-").map(Number);
-    return expenses.filter(e => {
+    return safeExpenses.filter(e => {
       const d = new Date(e.expenseDate);
       return d.getFullYear() === year && d.getMonth() === month - 1;
     });
-  }, [expenses, filterMonth]);
+  }, [safeExpenses, filterMonth]);
 
   const filteredTotal = useMemo(() => {
     return filteredExpenses.reduce(
@@ -217,6 +225,10 @@ export default function Expenses() {
           expenseDate: form.expenseDate,
         });
 
+        if (!updated?.expense) {
+          throw new Error("Respuesta inválida al actualizar gasto");
+        }
+
         setExpenses(prev => {
           const next = prev.map(e =>
             e._id === editingId ? updated.expense : e
@@ -236,6 +248,10 @@ export default function Expenses() {
           amount: parsedAmount,
           expenseDate: form.expenseDate,
         });
+
+        if (!created?.expense) {
+          throw new Error("Respuesta inválida al crear gasto");
+        }
 
         setExpenses(prev => {
           const next = [created.expense, ...prev];

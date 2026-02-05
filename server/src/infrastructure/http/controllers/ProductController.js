@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { isCloudinaryConfigured } from "../../../../config/cloudinary.js";
 import { CreateProductUseCase } from "../../../application/use-cases/CreateProductUseCase.js";
 import { UpdateStockUseCase } from "../../../application/use-cases/UpdateStockUseCase.js";
 import { ProductRepository } from "../../database/repositories/ProductRepository.js";
@@ -10,9 +11,17 @@ const productRepository = new ProductRepository();
  */
 export const getAllProducts = async (req, res, next) => {
   try {
+    console.log("📦 GET /products - Headers:", req.headers["x-business-id"]);
+    console.log("📦 GET /products - businessId:", req.businessId);
+    console.log("📦 GET /products - user:", req.user?.id);
+
     const businessId = req.headers["x-business-id"] || req.businessId;
     if (!businessId) {
-      return res.status(400).json({ message: "Business ID required" });
+      console.log("❌ Business ID missing");
+      return res.status(400).json({
+        success: false,
+        message: "Business ID required",
+      });
     }
 
     const filter = {};
@@ -20,10 +29,51 @@ export const getAllProducts = async (req, res, next) => {
     if (req.query.active !== undefined)
       filter.isActive = req.query.active === "true";
 
-    const products = await productRepository.findAll(businessId, filter);
-    res.json({ products });
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
+
+    console.log("📦 Fetching products for business:", businessId);
+    let products = await productRepository.findAll(businessId, filter);
+    console.log("✅ Found products:", products.length);
+
+    // 🛡️ FIX TASK 3: DATA PRIVACY - Hide cost fields from distributors
+    // Check if user is distributor (not admin)
+    const isDistributor = req.user?.role === "distribuidor";
+    if (isDistributor) {
+      // Remove sensitive cost fields from response
+      products = products.map((product) => {
+        const {
+          purchasePrice,
+          averageCost,
+          supplierPrice,
+          totalInventoryValue,
+          ...safeProduct
+        } = product;
+        return safeProduct;
+      });
+      console.log("🛡️ Sensitive cost fields excluded for distributor");
+    }
+
+    const total = products.length;
+
+    res.json({
+      success: true,
+      data: products,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+        hasMore: page * limit < total,
+      },
+    });
   } catch (error) {
-    next(error);
+    console.error("❌ Error in getAllProducts:", error);
+    console.error("Stack:", error.stack);
+    res.status(500).json({
+      success: false,
+      message: error.message || "Error al obtener productos",
+    });
   }
 };
 
@@ -33,13 +83,29 @@ export const getAllProducts = async (req, res, next) => {
 export const getProductById = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const product = await productRepository.findById(id);
+    let product = await productRepository.findById(id);
     if (!product) {
-      return res.status(404).json({ message: "Product not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Product not found" });
     }
-    res.json(product);
+
+    // 🛡️ FIX TASK 3: DATA PRIVACY - Hide cost fields from distributors
+    const isDistributor = req.user?.role === "distribuidor";
+    if (isDistributor) {
+      const {
+        purchasePrice,
+        averageCost,
+        supplierPrice,
+        totalInventoryValue,
+        ...safeProduct
+      } = product;
+      product = safeProduct;
+    }
+
+    res.json({ success: true, data: product });
   } catch (error) {
-    next(error);
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -47,27 +113,215 @@ export const getProductById = async (req, res, next) => {
  * Create Product (Transactional)
  */
 export const createProduct = async (req, res, next) => {
-  let session = null;
   try {
-    session = await mongoose.startSession();
-    session.startTransaction();
+    console.log("🆕 POST /products - Creating product");
+    console.log("📦 Business ID:", req.headers["x-business-id"]);
+    console.log("👤 User ID:", req.user?.id);
+    console.log("📋 Body:", JSON.stringify(req.body, null, 2));
+    console.log("📁 File:", req.file ? "present" : "missing");
 
-    const useCase = new CreateProductUseCase();
+    // Process FormData - parse JSON arrays if they come as strings
     const productData = {
       ...req.body,
-      business: req.headers["x-business-id"], // Ensure business context
+      business: req.headers["x-business-id"],
       createdBy: req.user.id,
     };
 
-    const product = await useCase.execute(productData, session);
+    // Parse numbers
+    if (productData.purchasePrice)
+      productData.purchasePrice = Number(productData.purchasePrice);
+    if (productData.suggestedPrice)
+      productData.suggestedPrice = Number(productData.suggestedPrice);
+    if (productData.distributorPrice)
+      productData.distributorPrice = Number(productData.distributorPrice);
+    if (productData.clientPrice)
+      productData.clientPrice = Number(productData.clientPrice);
+    if (productData.totalStock)
+      productData.totalStock = Number(productData.totalStock);
+    if (productData.lowStockAlert)
+      productData.lowStockAlert = Number(productData.lowStockAlert);
 
-    await session.commitTransaction();
-    res.status(201).json(product);
+    // 📦 STOCK INICIAL: Asignar el stock inicial directamente a bodega central
+    if (productData.totalStock) {
+      productData.warehouseStock = productData.totalStock;
+      console.log(
+        `📦 Stock inicial asignado a bodega central: ${productData.warehouseStock} unidades`,
+      );
+    }
+
+    // Parse booleans
+    if (productData.featured === "true") productData.featured = true;
+    if (productData.featured === "false") productData.featured = false;
+
+    // Parse arrays
+    if (typeof productData.ingredients === "string") {
+      try {
+        productData.ingredients = JSON.parse(productData.ingredients);
+      } catch (e) {
+        productData.ingredients = productData.ingredients
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+      }
+    }
+    if (typeof productData.benefits === "string") {
+      try {
+        productData.benefits = JSON.parse(productData.benefits);
+      } catch (e) {
+        productData.benefits = productData.benefits
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+      }
+    }
+
+    // Handle image upload
+    if (req.file) {
+      if (isCloudinaryConfigured) {
+        // Cloudinary ya procesó la imagen mediante CloudinaryStorage
+        productData.image = {
+          url: req.file.path, // Cloudinary URL
+          publicId: req.file.filename, // Cloudinary public ID
+        };
+        console.log("☁️ Image uploaded to Cloudinary:", req.file.path);
+      } else {
+        // Fallback a Base64 si Cloudinary no está configurado
+        const base64Image = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
+        productData.image = {
+          url: base64Image,
+          publicId: `product_${Date.now()}`,
+        };
+        console.log("💾 Image stored as Base64 (Cloudinary disabled)");
+      }
+    }
+
+    console.log("📤 Executing CreateProductUseCase...");
+    console.log("📦 Processed data:", JSON.stringify(productData, null, 2));
+
+    const useCase = new CreateProductUseCase();
+    // Para desarrollo local sin replica set, ejecutar sin sesión/transacción
+    const product = await useCase.execute(productData, null);
+    console.log("✅ Product created:", product._id);
+
+    res.status(201).json({
+      success: true,
+      data: product,
+    });
   } catch (error) {
-    if (session) await session.abortTransaction();
-    next(error);
-  } finally {
-    if (session) session.endSession();
+    console.error("❌ Error in createProduct:", error);
+    console.error("Stack:", error.stack);
+    res.status(500).json({
+      success: false,
+      message: error.message || "Error al crear producto",
+    });
+  }
+};
+
+/**
+ * Update Product
+ */
+export const updateProduct = async (req, res, next) => {
+  try {
+    console.log("🔄 PUT /products/:id - Updating product");
+    console.log("📦 Product ID:", req.params.id);
+    console.log("📦 Business ID:", req.headers["x-business-id"]);
+    console.log("📋 Body:", JSON.stringify(req.body, null, 2));
+    console.log("📁 File:", req.file ? "present" : "missing");
+
+    const { id } = req.params;
+    const businessId = req.headers["x-business-id"];
+
+    // Process FormData - parse JSON arrays if they come as strings
+    const updateData = { ...req.body };
+
+    // Parse numbers
+    if (updateData.purchasePrice)
+      updateData.purchasePrice = Number(updateData.purchasePrice);
+    if (updateData.suggestedPrice)
+      updateData.suggestedPrice = Number(updateData.suggestedPrice);
+    if (updateData.distributorPrice)
+      updateData.distributorPrice = Number(updateData.distributorPrice);
+    if (updateData.clientPrice)
+      updateData.clientPrice = Number(updateData.clientPrice);
+    if (updateData.totalStock)
+      updateData.totalStock = Number(updateData.totalStock);
+    if (updateData.lowStockAlert)
+      updateData.lowStockAlert = Number(updateData.lowStockAlert);
+
+    // Parse booleans
+    if (updateData.featured === "true") updateData.featured = true;
+    if (updateData.featured === "false") updateData.featured = false;
+
+    // Parse arrays
+    if (typeof updateData.ingredients === "string") {
+      try {
+        updateData.ingredients = JSON.parse(updateData.ingredients);
+      } catch (e) {
+        updateData.ingredients = updateData.ingredients
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+      }
+    }
+    if (typeof updateData.benefits === "string") {
+      try {
+        updateData.benefits = JSON.parse(updateData.benefits);
+      } catch (e) {
+        updateData.benefits = updateData.benefits
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+      }
+    }
+
+    // Handle image upload
+    if (req.file) {
+      const isCloudinaryConfigured =
+        process.env.CLOUDINARY_CLOUD_NAME &&
+        process.env.CLOUDINARY_API_KEY &&
+        process.env.CLOUDINARY_API_SECRET;
+
+      if (isCloudinaryConfigured) {
+        updateData.image = {
+          url: req.file.path,
+          publicId: req.file.filename,
+        };
+        console.log("☁️ Image uploaded to Cloudinary:", req.file.path);
+      } else {
+        const base64Image = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
+        updateData.image = {
+          url: base64Image,
+          publicId: `product_${Date.now()}`,
+        };
+        console.log("💾 Image stored as Base64 (Cloudinary disabled)");
+      }
+    }
+
+    console.log("📤 Updating product in database...");
+
+    const repository = new ProductRepository();
+    const updatedProduct = await repository.update(id, businessId, updateData);
+
+    if (!updatedProduct) {
+      return res.status(404).json({
+        success: false,
+        message: "Producto no encontrado",
+      });
+    }
+
+    console.log("✅ Product updated:", updatedProduct._id);
+
+    res.json({
+      success: true,
+      data: updatedProduct,
+    });
+  } catch (error) {
+    console.error("❌ Error in updateProduct:", error);
+    console.error("Stack:", error.stack);
+    res.status(500).json({
+      success: false,
+      message: error.message || "Error al actualizar producto",
+    });
   }
 };
 
@@ -101,5 +355,41 @@ export const updateStock = async (req, res, next) => {
     next(error);
   } finally {
     if (session) session.endSession();
+  }
+};
+
+/**
+ * Delete Product
+ */
+export const deleteProduct = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const businessId = req.headers["x-business-id"];
+
+    console.log("🗑️ DELETE /products/:id - Deleting product");
+    console.log("📦 Product ID:", id);
+    console.log("📦 Business ID:", businessId);
+
+    if (!businessId) {
+      return res.status(400).json({
+        success: false,
+        message: "Business ID required",
+      });
+    }
+
+    const deletedProduct = await productRepository.delete(id, businessId);
+    console.log("✅ Product deleted:", deletedProduct.name);
+
+    res.json({
+      success: true,
+      message: "Producto eliminado correctamente",
+      data: deletedProduct,
+    });
+  } catch (error) {
+    console.error("❌ Error in deleteProduct:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message || "Error al eliminar producto",
+    });
   }
 };

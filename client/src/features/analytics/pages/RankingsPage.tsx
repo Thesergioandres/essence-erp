@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { useBusiness } from "../../../context/BusinessContext";
-import { gamificationService } from "../../common/services";
 import { LoadingSpinner } from "../../../shared/components/ui";
-import type { PeriodWinner, RankingResponse } from "../../../types";
+import { gamificationService } from "../../common/services";
+import type {
+  PeriodWinner,
+  RankingResponse,
+} from "../types/gamification.types";
 
 const Rankings = () => {
   const { businessId } = useBusiness();
@@ -214,11 +217,11 @@ const Rankings = () => {
           {/* Info del Periodo */}
           <div className="bg-linear-to-r mb-6 rounded-lg from-blue-500 to-purple-600 p-6 text-white shadow-md">
             <h2 className="mb-2 text-2xl font-semibold">
-              📅 Periodo: {rankingData.period.type.toUpperCase()}
+              📅 Periodo: {rankingData.period?.type?.toUpperCase() ?? "ACTUAL"}
             </h2>
             <p className="text-lg opacity-90">
-              {formatDate(rankingData.period.startDate)} -{" "}
-              {formatDate(rankingData.period.endDate)}
+              {formatDate(rankingData.period?.startDate)} -{" "}
+              {formatDate(rankingData.period?.endDate)}
             </p>
 
             <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">

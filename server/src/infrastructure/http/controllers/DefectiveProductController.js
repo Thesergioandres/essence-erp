@@ -45,6 +45,36 @@ export class DefectiveProductController {
     }
   }
 
+  async getDistributorReports(req, res) {
+    try {
+      const businessId = req.businessId;
+      if (!businessId) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Falta x-business-id" });
+      }
+
+      const distributorId =
+        req.params.distributorId || req.user?._id || req.user?.id;
+
+      if (!distributorId) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Falta distribuidor" });
+      }
+
+      const result = await repository.findByBusiness(businessId, {
+        distributor: distributorId,
+        status: req.query.status,
+      });
+
+      res.json({ success: true, data: result.reports });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      res.status(status).json({ success: false, message: error.message });
+    }
+  }
+
   async getAll(req, res) {
     try {
       const businessId = req.businessId;
@@ -108,6 +138,40 @@ export class DefectiveProductController {
         req.body,
       );
       res.json({ success: true, data: report });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      res.status(status).json({ success: false, message: error.message });
+    }
+  }
+
+  async getStats(req, res) {
+    try {
+      const businessId = req.businessId;
+      if (!businessId) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Falta x-business-id" });
+      }
+
+      const stats = await repository.getStats(businessId);
+      res.json({ success: true, stats });
+    } catch (error) {
+      console.error("[DefectiveProduct] Error in getStats:", error);
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  async cancel(req, res) {
+    try {
+      const businessId = req.businessId;
+      if (!businessId) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Falta x-business-id" });
+      }
+
+      const result = await repository.cancelReport(req.params.id, businessId);
+      res.json({ success: true, data: result });
     } catch (error) {
       const status = error.statusCode || 500;
       res.status(status).json({ success: false, message: error.message });

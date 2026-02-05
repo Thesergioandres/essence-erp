@@ -1,18 +1,19 @@
 import { FileSpreadsheet, FileText } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useFeature } from "../../../components/FeatureSection";
 import SaleDetailModal from "../../../components/SaleDetailModal";
-import { authService } from "../../auth/services";
-import { branchService } from "../../branches/services";
-import { saleService } from "../../sales/services";
 import { LoadingSpinner } from "../../../shared/components/ui";
-import type { Branch, Sale } from "../../../types";
 import { exportToExcel, exportToPDF } from "../../../utils/exportUtils";
 import {
   buildCacheKey,
   readSessionCache,
   writeSessionCache,
 } from "../../../utils/requestCache";
+import { authService } from "../../auth/services";
+import { branchService } from "../../branches/services";
+import type { Branch } from "../../business/types/business.types";
+import { saleService } from "../../sales/services";
+import type { Sale } from "../types/sales.types";
 
 const SALES_CACHE_TTL_MS = 60 * 1000;
 
@@ -50,6 +51,7 @@ export default function Sales() {
     "date-desc" | "date-asc" | "distributor"
   >("date-desc");
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [confirmingAll, setConfirmingAll] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [dateFilters, setDateFilters] = useState({
@@ -153,17 +155,22 @@ export default function Sales() {
     void fetchBranches();
   }, []);
 
+  const buildSalesParams = () => {
+    const params: any = {
+      page: pagination.page,
+      limit: pagination.limit,
+      sortBy: sortBy,
+    };
+    if (branchId) params.branchId = branchId;
+    if (filter !== "all") params.paymentStatus = filter;
+    if (dateFilters.startDate) params.startDate = dateFilters.startDate;
+    if (dateFilters.endDate) params.endDate = dateFilters.endDate;
+    return params;
+  };
+
   const loadSales = async () => {
     try {
-      const params: any = {
-        page: pagination.page,
-        limit: pagination.limit,
-        sortBy: sortBy,
-      };
-      if (branchId) params.branchId = branchId;
-      if (filter !== "all") params.paymentStatus = filter;
-      if (dateFilters.startDate) params.startDate = dateFilters.startDate;
-      if (dateFilters.endDate) params.endDate = dateFilters.endDate;
+      const params = buildSalesParams();
 
       const cacheKey = buildCacheKey("sales:list", params);
       const cached = readSessionCache<{
@@ -173,7 +180,7 @@ export default function Sales() {
       }>(cacheKey, SALES_CACHE_TTL_MS);
 
       if (cached?.sales?.length) {
-        setSales(cached.sales);
+        setSales(Array.isArray(cached.sales) ? cached.sales : []);
         if (cached.pagination) setPagination(cached.pagination);
         if (cached.stats) setStatsData(cached.stats);
         setLoading(false);
@@ -183,12 +190,12 @@ export default function Sales() {
 
       const response = await saleService.getAllSales(params);
       const normalized = {
-        sales: (response?.sales || response) as Sale[],
+        sales: (response?.sales || []) as Sale[],
         pagination: response?.pagination,
         stats: response?.stats,
       };
 
-      setSales(normalized.sales || []);
+      setSales(Array.isArray(normalized.sales) ? normalized.sales : []);
       if (normalized.pagination) setPagination(normalized.pagination);
       if (normalized.stats) setStatsData(normalized.stats);
       writeSessionCache(cacheKey, normalized);
@@ -216,12 +223,12 @@ export default function Sales() {
       });
 
       const normalized = {
-        sales: (response?.sales || response) as Sale[],
+        sales: (response?.sales || []) as Sale[],
         pagination: response?.pagination,
         stats: response?.stats,
       };
 
-      setSales(normalized.sales || []);
+      setSales(Array.isArray(normalized.sales) ? normalized.sales : []);
       if (normalized.stats) setStatsData(normalized.stats);
       if (normalized.pagination) {
         setPagination({
@@ -251,6 +258,16 @@ export default function Sales() {
 
       // Actualizar la lista sin recargar toda la página
       setSales(prevSales => prevSales.filter(sale => sale._id !== saleId));
+
+      // Recalcular métricas desde backend y limpiar cache del listado actual
+      const params = buildSalesParams();
+      const cacheKey = buildCacheKey("sales:list", params);
+      window.sessionStorage.removeItem(cacheKey);
+      if (showAllSales) {
+        await handleShowAllSales();
+      } else {
+        await loadSales();
+      }
     } catch (error) {
       console.error("Error al eliminar la venta:", error);
       alert("Error al eliminar la venta");
@@ -279,6 +296,16 @@ export default function Sales() {
       setSales(prevSales =>
         prevSales.filter(sale => sale.saleGroupId !== saleGroupId)
       );
+
+      // Recalcular métricas desde backend y limpiar cache del listado actual
+      const params = buildSalesParams();
+      const cacheKey = buildCacheKey("sales:list", params);
+      window.sessionStorage.removeItem(cacheKey);
+      if (showAllSales) {
+        await handleShowAllSales();
+      } else {
+        await loadSales();
+      }
     } catch (error) {
       console.error("Error al eliminar el grupo de ventas:", error);
       alert("Error al eliminar el grupo de ventas");
@@ -308,11 +335,87 @@ export default function Sales() {
             : sale
         )
       );
+      setStatsData({});
     } catch (error) {
       console.error("Error al confirmar pago:", error);
       alert("Error al confirmar el pago");
     } finally {
       setConfirmingId(null);
+    }
+  };
+
+  const handleConfirmSaleGroup = async (group: SaleGroup) => {
+    if (!confirm("¿Confirmar el pago de todas las ventas de este grupo?")) {
+      return;
+    }
+
+    try {
+      setConfirmingId(group.id);
+      const pendingSales = group.sales.filter(
+        sale => sale.paymentStatus === "pendiente"
+      );
+
+      await Promise.all(
+        pendingSales.map(sale => saleService.confirmPayment(sale._id))
+      );
+
+      // Actualizar ventas en memoria
+      const confirmedAt = new Date().toISOString();
+      setSales(prevSales =>
+        prevSales.map(sale =>
+          sale.saleGroupId === group.id
+            ? {
+                ...sale,
+                paymentStatus: "confirmado",
+                paymentConfirmedAt: confirmedAt,
+              }
+            : sale
+        )
+      );
+      setStatsData({});
+    } catch (error) {
+      console.error("Error al confirmar el grupo:", error);
+      alert("Error al confirmar el grupo de ventas");
+    } finally {
+      setConfirmingId(null);
+    }
+  };
+
+  const handleConfirmAllSales = async () => {
+    if (!confirm("¿Confirmar todas las ventas pendientes?")) {
+      return;
+    }
+
+    try {
+      setConfirmingAll(true);
+      const pendingConfirmableSales = sales.filter(
+        sale => sale.paymentStatus === "pendiente" && !hasActiveCredit(sale)
+      );
+
+      await Promise.all(
+        pendingConfirmableSales.map(sale =>
+          saleService.confirmPayment(sale._id)
+        )
+      );
+
+      const confirmedAt = new Date().toISOString();
+      setSales(prevSales =>
+        prevSales.map(sale =>
+          sale.paymentStatus === "pendiente" && !hasActiveCredit(sale)
+            ? {
+                ...sale,
+                paymentStatus: "confirmado",
+                paymentConfirmedAt: confirmedAt,
+              }
+            : sale
+        )
+      );
+      setStatsData({});
+    } catch (error) {
+      console.error("Error al confirmar todas las ventas:", error);
+      alert("Error al confirmar todas las ventas");
+    } finally {
+      setConfirmingAll(false);
     }
   };
 
@@ -346,6 +449,12 @@ export default function Sales() {
   };
 
   const groupSales = (): SaleGroup[] => {
+    // Validar que sales sea un array
+    if (!Array.isArray(sales)) {
+      console.error("Sales is not an array:", sales);
+      return [];
+    }
+
     const grouped = new Map<string, Sale[]>();
     const individual: Sale[] = [];
 
@@ -440,6 +549,9 @@ export default function Sales() {
   };
 
   const saleGroups = groupSales();
+  const pendingConfirmableCount = sales.filter(
+    sale => sale.paymentStatus === "pendiente" && !hasActiveCredit(sale)
+  ).length;
 
   const toggleGroup = (groupId: string) => {
     setExpandedGroups(prev => {
@@ -455,6 +567,14 @@ export default function Sales() {
 
   // useMemo para evitar recálculos pesados en cada render
   const stats = useMemo(() => {
+    // Validar que sales sea un array
+    if (!Array.isArray(sales)) {
+      return {
+        salesWithActiveCredit: [],
+        pendingCollectionAmount: 0,
+      };
+    }
+
     // Calcular ventas con crédito activo
     const salesWithActiveCredit = sales.filter(s => hasActiveCredit(s));
     const pendingCollectionAmount = salesWithActiveCredit.reduce((sum, s) => {
@@ -516,6 +636,19 @@ export default function Sales() {
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-white">Gestión de Ventas</h1>
         <div className="flex gap-2">
+          {canDeleteSales && pendingConfirmableCount > 0 && (
+            <button
+              onClick={handleConfirmAllSales}
+              disabled={confirmingAll || loading}
+              className="flex items-center gap-2 rounded-lg border border-emerald-600/50 bg-emerald-900/20 px-4 py-2 text-sm font-medium text-emerald-300 transition-colors hover:bg-emerald-900/40 disabled:opacity-50"
+            >
+              {confirmingAll ? <LoadingSpinner size="sm" /> : <span>✅</span>}
+              <span className="hidden sm:inline">
+                Confirmar todas ({pendingConfirmableCount})
+              </span>
+              <span className="sm:hidden">Confirmar todas</span>
+            </button>
+          )}
           <button
             onClick={() => handleExport("excel")}
             disabled={isExporting || loading || sales.length === 0}
@@ -596,13 +729,13 @@ export default function Sales() {
         <div className="rounded-xl border border-gray-700/50 bg-gray-800/50 p-4 shadow-lg backdrop-blur-sm">
           <p className="truncate text-xs text-gray-400 sm:text-sm">Ingresos</p>
           <p className="truncate text-xl font-bold text-white sm:text-2xl">
-            ${stats.totalRevenue.toLocaleString()}
+            ${(stats.totalRevenue || 0).toLocaleString()}
           </p>
         </div>
         <div className="rounded-xl border border-gray-700/50 bg-gray-800/50 p-4 shadow-lg backdrop-blur-sm">
           <p className="truncate text-xs text-gray-400 sm:text-sm">Ganancia</p>
           <p className="truncate text-xl font-bold text-green-400 sm:text-2xl">
-            ${stats.totalProfit.toLocaleString()}
+            ${(stats.totalProfit || 0).toLocaleString()}
           </p>
         </div>
       </div>
@@ -889,10 +1022,9 @@ export default function Sales() {
                     }
 
                     return (
-                      <>
+                      <React.Fragment key={group.id}>
                         {/* Fila principal del grupo o venta individual */}
                         <tr
-                          key={group.id}
                           className={`cursor-pointer hover:bg-gray-900/30 ${group.isGroup ? "bg-purple-900/10 font-semibold" : ""}`}
                           onClick={e => {
                             if ((e.target as HTMLElement).closest("button"))
@@ -1069,6 +1201,19 @@ export default function Sales() {
                                     ).toLocaleDateString()}
                                 </span>
                               ) : null}
+                              {group.isGroup &&
+                              group.paymentStatus === "pendiente" &&
+                              !hasActiveCredit(firstSale) ? (
+                                <button
+                                  onClick={() => handleConfirmSaleGroup(group)}
+                                  disabled={confirmingId === group.id}
+                                  className="font-medium text-green-400 hover:text-green-300 disabled:opacity-50"
+                                >
+                                  {confirmingId === group.id
+                                    ? "Confirmando grupo..."
+                                    : "Confirmar grupo"}
+                                </button>
+                              ) : null}
                               {/* Botón eliminar solo para ventas individuales */}
                               {!group.isGroup && canDeleteSales && (
                                 <button
@@ -1220,7 +1365,7 @@ export default function Sales() {
                               </tr>
                             );
                           })}
-                      </>
+                      </React.Fragment>
                     );
                   })}
                 </tbody>

@@ -6,8 +6,8 @@ import ProductCard from "../../../components/ProductCard";
 import {
   categoryService,
   productService,
-} from "../../inventory/services";
-import type { Category, Product } from "../../../types";
+} from "../../inventory/services/inventory.service";
+import type { Category, Product } from "../types/product.types";
 
 export default function CategoryProducts() {
   const { slug } = useParams<{ slug: string }>();
@@ -40,10 +40,14 @@ export default function CategoryProducts() {
 
         // Get products for this category
         const productsResponse = await productService.getAll();
-        const productsData = productsResponse.data || productsResponse;
-        const categoryProducts = productsData.filter(
-          p => p.category._id === foundCategory._id
-        );
+        const productsData = Array.isArray(productsResponse)
+          ? productsResponse
+          : productsResponse.data || [];
+        const categoryProducts = productsData.filter(p => {
+          const categoryId =
+            typeof p.category === "object" ? p.category?._id : p.category;
+          return categoryId === foundCategory._id;
+        });
         setProducts(categoryProducts);
       } catch (error) {
         console.error("Error loading data:", error);

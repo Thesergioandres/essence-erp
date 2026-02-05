@@ -1,3 +1,4 @@
+import Membership from "../../../../models/Membership.js";
 import ProfitHistory from "../../../../models/ProfitHistory.js";
 import SpecialSale from "../../../../models/SpecialSale.js";
 
@@ -5,43 +6,94 @@ export class SpecialSaleRepository {
   async create(data, businessId, userId) {
     const totalRevenue = data.quantity * data.specialPrice;
     const totalCost = data.quantity * data.cost;
-    const netProfit = totalRevenue - totalCost;
+    const totalProfit = totalRevenue - totalCost;
+    const distribution = Array.isArray(data.distribution)
+      ? data.distribution
+      : [];
+    const distributionSum = distribution.reduce(
+      (sum, dist) => sum + (Number(dist.amount) || 0),
+      0,
+    );
+    const remainingProfit = Math.max(totalProfit - distributionSum, 0);
 
     const specialSale = await SpecialSale.create({
       business: businessId,
       product: {
         name: data.product.name,
+        productId: data.product.productId,
         category: data.product.category,
         image: data.product.image,
       },
       quantity: data.quantity,
       specialPrice: data.specialPrice,
       cost: data.cost,
-      totalRevenue,
-      totalCost,
-      netProfit,
-      distribution: data.distribution || [],
+      totalProfit,
+      distribution,
       observations: data.observations,
       eventName: data.eventName,
       saleDate: data.saleDate || new Date(),
       createdBy: userId,
-      status: "confirmed",
+      status: "active",
     });
 
-    if (netProfit > 0 && Array.isArray(data.distribution)) {
-      for (const dist of data.distribution) {
-        if (dist.user && dist.amount > 0) {
+    const adminMembership = await Membership.findOne({
+      business: businessId,
+      role: "admin",
+      status: "active",
+    })
+      .select("user")
+      .lean();
+
+    if (totalProfit > 0 && distribution.length > 0) {
+      for (const dist of distribution) {
+        const distUserId = dist.distributorId || dist.user || dist.userId;
+        const distAmount = Number(dist.amount) || 0;
+        if (distUserId && distAmount > 0) {
           await ProfitHistory.create({
             business: businessId,
-            user: dist.user,
-            amount: dist.amount,
-            source: "special_sale",
-            sourceId: specialSale._id,
-            description: `Ganancia por venta especial: ${data.product.name}`,
+            user: distUserId,
+            type: "venta_especial",
+            amount: distAmount,
+            specialSale: specialSale._id,
+            product: data.product.productId || undefined,
+            description: data.eventName
+              ? `Comisión venta especial (${data.eventName})`
+              : `Comisión venta especial: ${data.product.name}`,
             date: data.saleDate || new Date(),
+            metadata: {
+              eventName: data.eventName,
+              quantity: data.quantity,
+              specialPrice: data.specialPrice,
+              cost: data.cost,
+              commission: distAmount,
+              percentage: dist.percentage,
+              specialSaleId: specialSale._id,
+            },
           });
         }
       }
+    }
+
+    if (remainingProfit > 0 && adminMembership?.user) {
+      await ProfitHistory.create({
+        business: businessId,
+        user: adminMembership.user,
+        type: "venta_especial",
+        amount: remainingProfit,
+        specialSale: specialSale._id,
+        product: data.product.productId || undefined,
+        description: data.eventName
+          ? `Ganancia venta especial (${data.eventName})`
+          : `Ganancia venta especial: ${data.product.name}`,
+        date: data.saleDate || new Date(),
+        metadata: {
+          eventName: data.eventName,
+          quantity: data.quantity,
+          specialPrice: data.specialPrice,
+          cost: data.cost,
+          specialSaleId: specialSale._id,
+        },
+      });
     }
 
     return specialSale;

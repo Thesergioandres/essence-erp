@@ -35,10 +35,9 @@ export const SalesTimelineChart: React.FC<SalesTimelineChartProps> = ({
       try {
         setLoading(true);
         const response = await advancedAnalyticsService.getSalesTimeline({
-          period,
           startDate,
           endDate,
-        });
+        } as any);
 
         console.log("Sales Timeline Response:", response);
 
@@ -48,15 +47,33 @@ export const SalesTimelineChart: React.FC<SalesTimelineChartProps> = ({
           return;
         }
 
-        const formattedData = response.timeline.map((item: any) => ({
-          ...item,
-          period: format(parseISO(item.period || item._id), "dd MMM", {
-            locale: es,
-          }),
-          revenue: Number(item.revenue) || 0,
-          profit: Number(item.profit) || 0,
-          salesCount: Number(item.ordersCount ?? item.salesCount) || 0,
-        }));
+        console.log("[SalesTimelineChart] timeline data:", response.timeline);
+        const formattedData = response.timeline
+          .filter((item: any) => item.date || item.period || item._id)
+          .map((item: any) => {
+            const dateStr = item.date || item.period || item._id;
+            let formattedPeriod = dateStr;
+
+            try {
+              if (dateStr && typeof dateStr === "string") {
+                formattedPeriod = format(parseISO(dateStr), "dd MMM", {
+                  locale: es,
+                });
+              }
+            } catch (e) {
+              console.warn("Error parsing date:", dateStr, e);
+              formattedPeriod = dateStr;
+            }
+
+            return {
+              ...item,
+              period: formattedPeriod,
+              date: dateStr,
+              revenue: Number(item.revenue) || 0,
+              profit: Number(item.profit) || 0,
+              salesCount: Number(item.ordersCount ?? item.salesCount) || 0,
+            };
+          });
 
         setData(formattedData);
       } catch (error) {

@@ -9,7 +9,11 @@ import {
   type ReactNode,
 } from "react";
 import { businessService } from "../features/business/services";
-import type { Business, BusinessFeatures, Membership } from "../types";
+import type {
+  Business,
+  BusinessFeatures,
+  Membership,
+} from "../features/business/types/business.types";
 
 interface BusinessContextValue {
   businessId: string | null;
@@ -115,7 +119,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
         fetched?.length,
         fetched
       );
-      setMemberships(fetched || []);
+      setMemberships((fetched || []) as any);
 
       // Safe Retry Logic: Si devuelve vacío y no hemos reintentado, prueba una vez más
       if ((!fetched || fetched.length === 0) && retryRef.current < 1) {
@@ -144,16 +148,32 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       const code = (err as { response?: { status?: number; data?: any } })
         ?.response?.data?.code;
 
-      // Si el token quedó viejo/ilegal y el backend responde 401/403, limpia sesión para evitar loops en público
-      if (status === 401 || (status === 403 && code !== "owner_inactive")) {
+      // Si el token quedó viejo/ilegal y el backend responde 401, limpia sesión
+      // Para 403, solo limpiar si NO es "owner_inactive" ni "pending" (usuario recién registrado)
+      const isPendingUser = code === "pending";
+      const isOwnerInactive = code === "owner_inactive";
+
+      if (status === 401) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        syncBusinessId(null);
+        setMemberships([]);
+      } else if (status === 403 && !isOwnerInactive && !isPendingUser) {
+        // 403 por otras razones (token inválido, etc) - limpiar sesión
         localStorage.removeItem("token");
         localStorage.removeItem("user");
         syncBusinessId(null);
         setMemberships([]);
       }
+      // Si es usuario pending (recién registrado), NO limpiar token - solo marcar memberships vacías
+      if (isPendingUser || status === 403) {
+        setMemberships([]);
+      }
 
       console.error("Error fetching memberships", err);
-      setError("No se pudieron cargar tus negocios");
+      if (!isPendingUser) {
+        setError("No se pudieron cargar tus negocios");
+      }
     } finally {
       setLoading(false);
       isFetchingRef.current = false;

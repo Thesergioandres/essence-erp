@@ -5,18 +5,19 @@
  */
 
 import api from "../../../api/axios";
-import type { DeliveryMethod, PaymentMethod, Promotion } from "../../../types";
+import type { Promotion } from "../types/promotion.types";
+import type { DeliveryMethod, PaymentMethod } from "../types/settings.types";
 
 // ==================== PAYMENT METHOD SERVICE ====================
 export const paymentMethodService = {
   async getAll(): Promise<PaymentMethod[]> {
     const response = await api.get("/payment-methods");
-    return response.data;
+    return response.data.data || response.data;
   },
 
   async getById(id: string): Promise<PaymentMethod> {
     const response = await api.get(`/payment-methods/${id}`);
-    return response.data;
+    return response.data.data || response.data;
   },
 
   async create(data: {
@@ -81,12 +82,12 @@ export const paymentMethodService = {
 export const deliveryMethodService = {
   async getAll(): Promise<DeliveryMethod[]> {
     const response = await api.get("/delivery-methods");
-    return response.data;
+    return response.data.data || response.data;
   },
 
   async getById(id: string): Promise<DeliveryMethod> {
     const response = await api.get(`/delivery-methods/${id}`);
-    return response.data;
+    return response.data.data || response.data;
   },
 
   async create(data: {
@@ -151,7 +152,14 @@ export const deliveryMethodService = {
 export const promotionService = {
   async getAll(params?: {
     status?: "active" | "scheduled" | "expired" | "disabled";
-    type?: "percentage" | "fixed" | "bogo" | "bundle";
+    type?:
+      | "percentage"
+      | "fixed"
+      | "bogo"
+      | "bundle"
+      | "combo"
+      | "volume"
+      | "discount";
   }): Promise<{
     promotions: Promotion[];
     stats?: {
@@ -173,17 +181,25 @@ export const promotionService = {
   async create(data: {
     name: string;
     description?: string;
-    type: "percentage" | "fixed" | "bogo" | "bundle";
-    value: number;
+    type:
+      | "percentage"
+      | "fixed"
+      | "bogo"
+      | "bundle"
+      | "combo"
+      | "volume"
+      | "discount";
+    value?: number;
     minPurchase?: number;
     maxDiscount?: number;
-    startDate: string;
-    endDate: string;
+    startDate?: string;
+    endDate?: string;
     applicableProducts?: string[];
     applicableCategories?: string[];
     code?: string;
     usageLimit?: number;
     perCustomerLimit?: number;
+    [key: string]: any;
   }): Promise<{
     message: string;
     promotion: Promotion;
@@ -194,22 +210,7 @@ export const promotionService = {
 
   async update(
     id: string,
-    data: Partial<{
-      name: string;
-      description: string;
-      type: "percentage" | "fixed" | "bogo" | "bundle";
-      value: number;
-      minPurchase: number;
-      maxDiscount: number;
-      startDate: string;
-      endDate: string;
-      applicableProducts: string[];
-      applicableCategories: string[];
-      code: string;
-      usageLimit: number;
-      perCustomerLimit: number;
-      isActive: boolean;
-    }>
+    data: Partial<Record<string, any>>
   ): Promise<{
     message: string;
     promotion: Promotion;
@@ -248,6 +249,24 @@ export const promotionService = {
     });
     return response.data;
   },
+
+  async getMetrics(): Promise<{
+    totalRevenue: number;
+    totalDiscount: number;
+    usageCount: number;
+    topPromotions: Array<{ _id: string; name: string; usageCount: number }>;
+  }> {
+    const response = await api.get("/promotions/metrics");
+    return response.data;
+  },
+
+  async toggleStatus(id: string): Promise<{
+    message: string;
+    promotion: Promotion;
+  }> {
+    const response = await api.put(`/promotions/${id}/toggle-status`);
+    return response.data;
+  },
 };
 
 // ==================== PROVIDER SERVICE ====================
@@ -268,6 +287,12 @@ export const providerService = {
     }>;
   }> {
     const response = await api.get("/providers");
+    // Backend V2 returns { success: true, data: providers[] }
+    // Normalize to { providers: providers[] }
+    if (response.data.success && response.data.data) {
+      return { providers: response.data.data };
+    }
+    // Fallback for old format
     return response.data;
   },
 

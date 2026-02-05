@@ -14,7 +14,9 @@ export const LowStockAlertsVisual: React.FC<{ reloadKey?: number }> = ({
       try {
         setLoading(true);
         const response = await advancedAnalyticsService.getLowStockVisual();
-        setProducts(response.lowStockProducts);
+        setProducts(
+          (response as any).lowStockProducts || (response as any).alerts || []
+        );
       } catch (error) {
         console.error("Error al cargar alertas de stock:", error);
       } finally {

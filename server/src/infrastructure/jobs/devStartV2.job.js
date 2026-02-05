@@ -16,6 +16,7 @@
 
 import { fork, spawn } from "child_process";
 import dotenv from "dotenv";
+import fs from "fs";
 import mongoose from "mongoose";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -38,8 +39,12 @@ const CONFIG = {
     "mongodb://localhost:27017/essence_local",
   SKIP_SYNC: process.env.DEV_SKIP_SYNC === "true",
   SKIP_VALIDATION: process.env.DEV_SKIP_VALIDATION === "true",
+  FORCE_SYNC: process.env.DEV_FORCE_SYNC === "true",
+  FAST_START_MINUTES: parseInt(process.env.DEV_FAST_START_MINUTES, 10) || 2,
   NODE_ENV: "development",
 };
+
+const SYNC_STATE_FILE = path.join(SERVER_DIR, "data", "sync-state.json");
 
 // ============================================================================
 // COLORES Y FORMATO
@@ -108,7 +113,8 @@ async function validateProductionPermissions() {
 
   try {
     // Importar dinámicamente para evitar errores si no existe
-    await import("../../../config/validateProdReadOnlyPermissions.js");
+    const { validateProdReadOnlyPermissions } =
+      await import("../../../config/validateProdReadOnlyPermissions.js");
 
     const connection = await mongoose
       .createConnection(CONFIG.PROD_URI, {
@@ -159,6 +165,13 @@ async function runSyncV2() {
     return true;
   }
 
+  if (shouldSkipSyncFastStart()) {
+    logWarning(
+      `Sincronización omitida: última sync reciente (< ${CONFIG.FAST_START_MINUTES} min)`,
+    );
+    return true;
+  }
+
   if (!CONFIG.PROD_URI) {
     logWarning("MONGO_URI_PROD_READ no configurada. Omitiendo sincronización.");
     return true;
@@ -198,6 +211,47 @@ async function runSyncV2() {
       resolve(true);
     });
   });
+}
+
+// ============================================================================
+// OPTIMIZACIÓN: SALTO DE SINCRONIZACIÓN RECIENTE
+// ============================================================================
+
+function shouldSkipSyncFastStart() {
+  if (CONFIG.FORCE_SYNC) {
+    return false;
+  }
+
+  if (!CONFIG.FAST_START_MINUTES || CONFIG.FAST_START_MINUTES <= 0) {
+    return false;
+  }
+
+  try {
+    if (!fs.existsSync(SYNC_STATE_FILE)) {
+      return false;
+    }
+
+    const content = fs.readFileSync(SYNC_STATE_FILE, "utf8");
+    const state = JSON.parse(content);
+    const lastSync = state?.lastSuccessfulSync || state?.lastSyncDate;
+
+    if (!lastSync) {
+      return false;
+    }
+
+    const lastSyncTime = new Date(lastSync).getTime();
+    if (!Number.isFinite(lastSyncTime)) {
+      return false;
+    }
+
+    const elapsedMs = Date.now() - lastSyncTime;
+    const elapsedMinutes = elapsedMs / 60000;
+
+    return elapsedMinutes < CONFIG.FAST_START_MINUTES;
+  } catch (error) {
+    logWarning(`No se pudo leer sync-state.json: ${error.message}`);
+    return false;
+  }
 }
 
 // ============================================================================

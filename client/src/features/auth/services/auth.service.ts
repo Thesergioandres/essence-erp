@@ -35,6 +35,7 @@ export const authService = {
   async register(payload: RegisterCredentials): Promise<AuthResponse> {
     const response = await api.post<AuthResponse>("/auth/register", payload);
 
+    // Guardar token para que el usuario pueda crear su negocio
     if (response.data.token) {
       localStorage.setItem("token", response.data.token);
       localStorage.setItem("user", JSON.stringify(response.data));
@@ -148,8 +149,10 @@ export const authService = {
   },
 
   async getProfile(): Promise<User> {
-    const response = await api.get<User>("/auth/profile");
-    return response.data;
+    const response = await api.get<{ success: boolean; data: User }>(
+      "/auth/profile"
+    );
+    return response.data.data;
   },
 
   async getAllUsers(): Promise<{ success: boolean; data: User[] }> {

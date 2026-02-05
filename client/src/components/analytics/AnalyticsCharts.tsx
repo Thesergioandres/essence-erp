@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { analyticsService } from "../../features/analytics/services";
 import type {
   DistributorProfit,
-  ProductProfit,
   TimelineData,
-} from "../../types";
+} from "../../features/analytics/types/analytics.types";
+import type { ProductProfit } from "../../features/inventory/types/product.types";
 
 interface AnalyticsChartsProps {
   dateRange: { startDate: string; endDate: string };
@@ -56,11 +56,14 @@ export default function AnalyticsCharts({ dateRange }: AnalyticsChartsProps) {
         const [prodRes, distRes, timeRes] = await Promise.all([
           analyticsService.getProfitByProduct(filters),
           analyticsService.getProfitByDistributor(filters),
-          analyticsService.getSalesTimeline({ days: timelineDays, ...filters }),
+          analyticsService.getSalesTimeline({
+            days: timelineDays,
+            ...filters,
+          } as any),
         ]);
-        setProducts(prodRes);
-        setDistributors(distRes);
-        setTimeline(timeRes);
+        setProducts((prodRes as any).products || prodRes);
+        setDistributors((distRes as any).distributors || distRes);
+        setTimeline((timeRes as any).timeline || timeRes);
       } catch (err) {
         console.error(err);
       } finally {

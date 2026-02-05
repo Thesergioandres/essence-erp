@@ -1,5 +1,23 @@
+import User from "../../../../models/User.js";
 import { LoginUseCase } from "../../../application/use-cases/LoginUseCase.js";
 import { RegisterUserUseCase } from "../../../application/use-cases/RegisterUserUseCase.js";
+
+/**
+ * Get current user profile
+ */
+export const getProfile = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select("-password").lean();
+    if (!user) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Usuario no encontrado" });
+    }
+    res.json({ success: true, data: user });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
 
 /**
  * Login Controller (Hexagonal)

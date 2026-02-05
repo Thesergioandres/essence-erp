@@ -168,7 +168,7 @@ class GodController {
 
   /**
    * DELETE /api/v2/god/users/:id
-   * Delete user and all associated data
+   * Delete user and all associated data (HARD DELETE - CASCADE)
    */
   async deleteUser(req, res) {
     const requestId = req.reqId || `delete-user-${Date.now()}`;
@@ -187,24 +187,38 @@ class GodController {
       }
 
       logApiInfo({
-        message: "god_delete_user_success",
+        message: "god_hard_delete_user_success",
         module: "god",
         requestId,
         extra: {
           deletedUserId: id,
           deletedBusinesses: result.deletedBusinesses,
+          deletedDistributorUsers: result.deletedDistributorUsers,
+          deletedProducts: result.deletedProducts,
+          deletedSales: result.deletedSales,
+          deletedCustomers: result.deletedCustomers,
+          deletedCredits: result.deletedCredits,
         },
       });
 
       res.json({
         success: true,
-        data: { deletedBusinesses: result.deletedBusinesses },
-        message: "Usuario eliminado correctamente",
+        data: {
+          deletedBusinesses: result.deletedBusinesses,
+          deletedDistributorUsers: result.deletedDistributorUsers,
+          deletedProducts: result.deletedProducts,
+          deletedSales: result.deletedSales,
+          deletedCustomers: result.deletedCustomers,
+          deletedCredits: result.deletedCredits,
+          deletedCategories: result.deletedCategories,
+          deletedInventoryEntries: result.deletedInventoryEntries,
+        },
+        message: "Usuario y todos sus datos eliminados permanentemente",
         requestId,
       });
     } catch (error) {
       logApiError({
-        message: "god_delete_user_error",
+        message: "god_hard_delete_user_error",
         module: "god",
         requestId,
         stack: error.stack,

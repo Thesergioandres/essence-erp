@@ -51,6 +51,17 @@ router.get(
 );
 
 /**
+ * @route   GET /api/v2/profit-history/admin/overview
+ * @desc    Get admin profit overview
+ * @access  Private/Admin
+ */
+router.get(
+  "/admin/overview",
+  requirePermission({ module: "analytics", action: "read" }),
+  (req, res) => ProfitHistoryController.getAdminOverview(req, res),
+);
+
+/**
  * @route   POST /api/v2/profit-history
  * @desc    Create profit entry
  * @access  Private/Admin
