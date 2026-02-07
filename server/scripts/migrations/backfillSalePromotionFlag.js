@@ -26,8 +26,13 @@ const __dirname = path.dirname(__filename);
 
 dotenv.config({ path: path.join(__dirname, "../../.env") });
 
-import "../../models/Product.js";
-import Sale from "../../models/Sale.js";
+let Sale;
+
+async function loadModels() {
+  await import("../../models/Product.js");
+  const saleModule = await import("../../models/Sale.js");
+  Sale = saleModule.default;
+}
 
 const DRY_RUN = process.argv.includes("--dry-run");
 const FORCE = process.argv.includes("--force");
@@ -66,6 +71,9 @@ function computePromotionFlag(sale) {
 }
 
 async function backfill() {
+  if (!Sale) {
+    throw new Error("Sale model not loaded. Call loadModels() first.");
+  }
   console.log("\n========================================");
   console.log("Sale Promotion Flag Backfill");
   console.log("========================================");
@@ -150,6 +158,7 @@ async function backfill() {
 
 async function main() {
   await connectDB();
+  await loadModels();
   await backfill();
   await mongoose.disconnect();
   console.log("\n✅ Done");
