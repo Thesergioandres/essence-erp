@@ -16,6 +16,8 @@ import { saleService } from "../../sales/services";
 import type { Sale } from "../types/sales.types";
 
 const SALES_CACHE_TTL_MS = 60 * 1000;
+const ALL_SALES_PAGE_LIMIT = 500;
+const ALL_SALES_MAX_PAGES = 50;
 
 export default function Sales() {
   // Hooks para features
@@ -183,15 +185,16 @@ export default function Sales() {
       }>(cacheKey, SALES_CACHE_TTL_MS);
 
       if (cached?.sales?.length) {
-        setSales(Array.isArray(cached.sales) ? cached.sales : []);
-        if (cached.pagination) setPagination(cached.pagination);
+        setSales(cached.sales);
         if (cached.stats) setStatsData(cached.stats);
+        if (cached.pagination) setPagination(cached.pagination);
         setLoading(false);
       } else {
         setLoading(true);
       }
 
       const response = await saleService.getAllSales(params);
+
       const normalized = {
         sales: (response?.sales || []) as Sale[],
         pagination: response?.pagination,
@@ -199,8 +202,10 @@ export default function Sales() {
       };
 
       setSales(Array.isArray(normalized.sales) ? normalized.sales : []);
-      if (normalized.pagination) setPagination(normalized.pagination);
       if (normalized.stats) setStatsData(normalized.stats);
+      if (normalized.pagination) {
+        setPagination(normalized.pagination);
+      }
       writeSessionCache(cacheKey, normalized);
     } catch (error) {
       console.error("Error al cargar ventas:", error);
@@ -219,24 +224,58 @@ export default function Sales() {
       setFilter("all");
       setDateFilters({ startDate: "", endDate: "" });
 
-      // Obtener todas las ventas con límite muy alto
-      const response = await saleService.getAllSales({
-        limit: 10000, // Límite alto para obtener todas
-        sortBy: "date-desc",
-      });
+      const allSales: Sale[] = [];
+      let page = 1;
+      let hasMore = true;
+      let latestStats: typeof statsData | undefined;
+      let latestPagination:
+        | {
+            page: number;
+            limit: number;
+            total: number;
+            pages?: number;
+            totalPages?: number;
+            hasMore: boolean;
+          }
+        | undefined;
 
-      const normalized = {
-        sales: (response?.sales || []) as Sale[],
-        pagination: response?.pagination,
-        stats: response?.stats,
-      };
+      while (hasMore && page <= ALL_SALES_MAX_PAGES) {
+        const response = await saleService.getAllSales({
+          page,
+          limit: ALL_SALES_PAGE_LIMIT,
+          sortBy: "date-desc",
+        });
 
-      setSales(Array.isArray(normalized.sales) ? normalized.sales : []);
-      if (normalized.stats) setStatsData(normalized.stats);
-      if (normalized.pagination) {
+        const batch = (response?.sales || []) as Sale[];
+        allSales.push(...batch);
+
+        latestStats = response?.stats;
+        latestPagination = response?.pagination;
+
+        if (
+          !latestPagination ||
+          !latestPagination.hasMore ||
+          batch.length === 0
+        ) {
+          hasMore = false;
+        } else {
+          page = latestPagination.page + 1;
+        }
+      }
+
+      setSales(allSales);
+      if (latestStats) setStatsData(latestStats);
+      if (latestPagination) {
+        const pages =
+          latestPagination.pages ??
+          latestPagination.totalPages ??
+          Math.max(1, Math.ceil(allSales.length / ALL_SALES_PAGE_LIMIT));
         setPagination({
-          ...normalized.pagination,
-          page: 1, // Reset a primera página
+          page: 1,
+          limit: ALL_SALES_PAGE_LIMIT,
+          total: allSales.length,
+          pages,
+          hasMore: false,
         });
       }
     } catch (error) {
