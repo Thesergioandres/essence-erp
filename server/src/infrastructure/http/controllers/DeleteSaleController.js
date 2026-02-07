@@ -10,6 +10,7 @@ import DefectiveProduct from "../../../../models/DefectiveProduct.js";
 import DistributorStock from "../../../../models/DistributorStock.js";
 import Product from "../../../../models/Product.js";
 import ProfitHistory from "../../../../models/ProfitHistory.js";
+import { rollbackSaleGamification } from "../../../../utils/gamificationEngine.js";
 import { SaleRepository } from "../../database/repositories/SaleRepository.js";
 
 const saleRepository = new SaleRepository();
@@ -176,6 +177,9 @@ export async function deleteSale(req, res) {
       // Delete related records
       await deleteRelatedRecords(sale, session || undefined);
 
+      // Roll back gamification points if they were applied
+      await rollbackSaleGamification({ sale });
+
       if (useTransaction) {
         await session.commitTransaction();
       }
@@ -272,6 +276,7 @@ export async function deleteSaleGroup(req, res) {
       for (const sale of sales) {
         await restoreStock(sale, session || undefined);
         await deleteRelatedRecords(sale, session || undefined);
+        await rollbackSaleGamification({ sale });
       }
 
       const sessionOptions = session ? { session } : undefined;

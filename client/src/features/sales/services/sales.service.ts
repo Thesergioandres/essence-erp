@@ -87,8 +87,11 @@ export const saleService = {
   async registerBulk(data: {
     items: Array<{
       productId: string;
+      promotionId?: string;
       quantity: number;
       salePrice: number;
+      distributorPrice?: number;
+      isPromotion?: boolean;
     }>;
     branchId?: string;
     notes?: string;
@@ -429,6 +432,7 @@ export const defectiveProductService = {
     productId: string;
     quantity: number;
     reason: string;
+    hasWarranty?: boolean;
     images?: ProductImage[];
   }): Promise<{
     message: string;
@@ -444,6 +448,7 @@ export const defectiveProductService = {
     productId: string;
     quantity: number;
     reason: string;
+    hasWarranty?: boolean;
     images?: ProductImage[];
   }): Promise<{
     message: string;

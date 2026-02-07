@@ -63,6 +63,17 @@ router.put(
   (req, res) => controller.reject(req, res),
 );
 
+router.put(
+  "/:id/approve-warranty",
+  requirePermission({ module: "defectiveProducts", action: "update" }),
+  (req, res) => controller.approveWarranty(req, res),
+);
+router.put(
+  "/:id/reject-warranty",
+  requirePermission({ module: "defectiveProducts", action: "update" }),
+  (req, res) => controller.rejectWarranty(req, res),
+);
+
 router.delete(
   "/:id",
   requirePermission({ module: "defectiveProducts", action: "update" }),

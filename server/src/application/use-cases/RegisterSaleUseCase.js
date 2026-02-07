@@ -2,6 +2,11 @@ import { v4 as uuidv4 } from "uuid";
 import DistributorStock from "../../../models/DistributorStock.js";
 import Membership from "../../../models/Membership.js";
 import PaymentMethod from "../../../models/PaymentMethod.js";
+import Promotion from "../../../models/Promotion.js";
+import {
+  applySaleGamification,
+  getCommissionBonusForDistributor,
+} from "../../../utils/gamificationEngine.js";
 import { FinanceService } from "../../domain/services/FinanceService.js";
 import { InventoryService } from "../../domain/services/InventoryService.js";
 import CreditRepository from "../../infrastructure/database/repositories/CreditRepository.js";
@@ -46,6 +51,8 @@ export class RegisterSaleUseCase {
       saleDate,
       deliveryMethodId,
       shippingCost,
+      discount = 0,
+      additionalCosts = [],
       distributorProfitPercentage = 20,
     } = input;
 
@@ -100,8 +107,88 @@ export class RegisterSaleUseCase {
 
     // 2. PHASE 1: Validate ALL items BEFORE making any changes
     const validatedItems = [];
+    let distributorCommissionBonus = 0;
+    if (distributorId) {
+      const bonusInfo = await getCommissionBonusForDistributor(distributorId);
+      distributorCommissionBonus = bonusInfo.bonusCommission || 0;
+    }
+
+    const discountTotal = Math.max(0, Number(discount || 0));
+    const additionalChargesTotal = (additionalCosts || []).reduce(
+      (sum, cost) =>
+        sum + (Number(cost?.amount || 0) > 0 ? Number(cost.amount) : 0),
+      0,
+    );
+    const additionalAdjustmentsTotal = (additionalCosts || []).reduce(
+      (sum, cost) =>
+        sum +
+        (Number(cost?.amount || 0) < 0 ? Math.abs(Number(cost.amount)) : 0),
+      0,
+    );
+    const additionalTotal = additionalChargesTotal + additionalAdjustmentsTotal;
+    const totalSubtotal = items.reduce(
+      (sum, item) =>
+        sum + Number(item.salePrice || 0) * Number(item.quantity || 0),
+      0,
+    );
+
+    const promotionIds = Array.from(
+      new Set(
+        items
+          .map((item) => {
+            if (!item.promotionId) return null;
+            if (typeof item.promotionId === "object") {
+              return item.promotionId._id || null;
+            }
+            return item.promotionId;
+          })
+          .filter((id) => Boolean(id)),
+      ),
+    );
+    const promotionMap = new Map();
+    if (promotionIds.length > 0) {
+      const promotions = await Promotion.find({
+        _id: { $in: promotionIds },
+      })
+        .select("_id distributorPrice")
+        .lean();
+      promotions.forEach((promo) => {
+        promotionMap.set(String(promo._id), promo);
+      });
+    }
+    const promotionTotals = items.reduce((acc, item) => {
+      const rawPromotionId = item.promotionId;
+      if (!rawPromotionId) return acc;
+      const key = String(
+        typeof rawPromotionId === "object"
+          ? rawPromotionId._id || rawPromotionId
+          : rawPromotionId,
+      );
+      const subtotal = Number(item.salePrice || 0) * Number(item.quantity || 0);
+      acc[key] = (acc[key] || 0) + subtotal;
+      return acc;
+    }, {});
+
     for (const item of items) {
-      const { productId, quantity, salePrice } = item;
+      const {
+        productId,
+        quantity,
+        salePrice,
+        distributorPrice: itemDistributorPrice,
+        isPromotion,
+        promotionId,
+      } = item;
+      const itemSubtotal = Number(salePrice || 0) * Number(quantity || 0);
+      const discountShare =
+        totalSubtotal > 0 ? (itemSubtotal / totalSubtotal) * discountTotal : 0;
+      const additionalShare =
+        totalSubtotal > 0
+          ? (itemSubtotal / totalSubtotal) * additionalTotal
+          : 0;
+      const actualPayment = Math.max(
+        0,
+        itemSubtotal - discountShare - additionalShare,
+      );
 
       if (quantity <= 0)
         throw new Error(`Invalid quantity for product ${productId}`);
@@ -139,14 +226,95 @@ export class RegisterSaleUseCase {
       const costBasis = product.averageCost || product.purchasePrice || 0;
       const isDistributorSale = Boolean(distributorId);
       const effectiveDistributorProfitPercentage = isDistributorSale
-        ? distributorProfitPercentage
+        ? distributorProfitPercentage + distributorCommissionBonus
         : 0;
-      const distributorPrice = isDistributorSale
-        ? FinanceService.calculateDistributorPrice(
+      const normalizedDistributorPrice =
+        itemDistributorPrice !== undefined && itemDistributorPrice !== null
+          ? Number(itemDistributorPrice)
+          : NaN;
+      const hasDistributorPriceOverride =
+        !Number.isNaN(normalizedDistributorPrice) &&
+        normalizedDistributorPrice > 0;
+      const promotionKey = promotionId
+        ? String(
+            typeof promotionId === "object"
+              ? promotionId._id || promotionId
+              : promotionId,
+          )
+        : null;
+      const promotionData = promotionKey
+        ? promotionMap.get(promotionKey)
+        : null;
+      const promotionTotal = promotionKey
+        ? Number(promotionTotals[promotionKey] || 0)
+        : 0;
+      const promotionDistributorTotal = promotionData
+        ? Number(promotionData.distributorPrice || 0)
+        : 0;
+      const promotionShare =
+        promotionTotal > 0 ? itemSubtotal / promotionTotal : 0;
+      const promotionDistributorUnitPrice =
+        promotionDistributorTotal > 0 && promotionShare > 0
+          ? (promotionDistributorTotal * promotionShare) /
+            Math.max(1, Number(quantity || 0))
+          : 0;
+      if (
+        isPromotion &&
+        (!promotionKey || !promotionData || promotionDistributorTotal <= 0)
+      ) {
+        console.warn(
+          "[RegisterSaleUseCase] Promo override missing.",
+          JSON.stringify(
+            {
+              productId,
+              promotionId: promotionId || null,
+              promotionKey,
+              promotionFound: Boolean(promotionData),
+              promotionDistributorTotal,
+              itemDistributorPrice: itemDistributorPrice ?? null,
+            },
+            null,
+            2,
+          ),
+        );
+      }
+
+      if (promotionKey && !promotionData) {
+        throw new Error("Promocion no encontrada para aplicar precio B2B.");
+      }
+
+      let distributorPrice = salePrice;
+      if (isDistributorSale) {
+        if (promotionKey) {
+          if (promotionDistributorUnitPrice <= 0) {
+            throw new Error(
+              "Promocion sin precio B2B valido para calcular la comision.",
+            );
+          }
+          distributorPrice = promotionDistributorUnitPrice;
+          console.log(
+            "[RegisterSaleUseCase] Promo override aplicado.",
+            JSON.stringify(
+              {
+                productId,
+                promotionId: promotionKey,
+                salePrice,
+                distributorPrice,
+                promotionDistributorTotal,
+              },
+              null,
+              2,
+            ),
+          );
+        } else if (hasDistributorPriceOverride) {
+          distributorPrice = normalizedDistributorPrice;
+        } else {
+          distributorPrice = FinanceService.calculateDistributorPrice(
             salePrice,
             effectiveDistributorProfitPercentage,
-          )
-        : salePrice;
+          );
+        }
+      }
       const distributorProfit = isDistributorSale
         ? FinanceService.calculateDistributorProfit(
             salePrice,
@@ -161,18 +329,29 @@ export class RegisterSaleUseCase {
         quantity,
       );
       const totalProfit = distributorProfit + adminProfit;
+      const adminNetProfit = adminProfit - additionalShare - discountShare;
 
       validatedItems.push({
         productId,
         product,
         quantity,
         salePrice,
+        discountShare,
+        actualPayment,
+        additionalShare,
         costBasis,
         distributorPrice,
         distributorProfit,
         adminProfit,
         totalProfit,
+        adminNetProfit,
+        isPromotion: Boolean(isPromotion) || Boolean(promotionId),
+        promotionId: promotionId || null,
         distributorProfitPercentage: effectiveDistributorProfitPercentage,
+        commissionBonus: distributorCommissionBonus,
+        commissionBonusAmount: isDistributorSale
+          ? (salePrice * quantity * distributorCommissionBonus) / 100
+          : 0,
       });
     }
 
@@ -188,12 +367,20 @@ export class RegisterSaleUseCase {
         product,
         quantity,
         salePrice,
+        discountShare,
+        actualPayment,
+        additionalShare,
         costBasis,
         distributorPrice,
         distributorProfit,
         adminProfit,
         totalProfit,
+        adminNetProfit,
+        isPromotion,
+        promotionId,
         distributorProfitPercentage,
+        commissionBonus,
+        commissionBonusAmount,
       } = item;
 
       // E. Create Sale Record FIRST (Infra)
@@ -201,20 +388,53 @@ export class RegisterSaleUseCase {
       const isCreditSale = paymentMethodCode === "credit";
       const shouldConfirmNow = !requiresAdminConfirmation && !isCreditSale;
 
+      const additionalCostsForSale = [];
+      const additionalChargeShare =
+        additionalTotal > 0
+          ? (additionalShare * additionalChargesTotal) / additionalTotal
+          : 0;
+      const additionalAdjustmentShare =
+        additionalTotal > 0
+          ? (additionalShare * additionalAdjustmentsTotal) / additionalTotal
+          : 0;
+
+      if (additionalChargeShare > 0) {
+        additionalCostsForSale.push({
+          type: "costo",
+          description: "Costo adicional prorrateado",
+          amount: additionalChargeShare,
+        });
+      }
+
+      if (additionalAdjustmentShare > 0) {
+        additionalCostsForSale.push({
+          type: "ajuste",
+          description: "Ajuste prorrateado",
+          amount: -additionalAdjustmentShare,
+        });
+      }
+
       const saleData = {
         business: businessId,
         product: productId,
         productName: product.name,
         quantity,
         salePrice,
+        actualPayment,
+        discount: discountShare,
+        additionalCosts: additionalCostsForSale,
         purchasePrice: product.purchasePrice,
         averageCostAtSale: costBasis,
         distributorPrice,
         distributorProfit,
         adminProfit,
         totalProfit,
-        netProfit: totalProfit, // Item level net profit placeholder
+        netProfit: adminNetProfit,
+        isPromotion,
+        promotion: promotionId || undefined,
         distributorProfitPercentage,
+        commissionBonus,
+        commissionBonusAmount,
         notes,
         saleDate: input.saleDate || new Date(),
         saleGroupId, // Link them!
@@ -338,12 +558,38 @@ export class RegisterSaleUseCase {
                 saleId: createdSale.saleId,
               },
             });
+
+            if (additionalShare > 0) {
+              await ProfitHistoryRepository.create({
+                business: businessId,
+                user: adminMembership.user,
+                type: "ajuste",
+                amount: -additionalShare,
+                sale: createdSale._id,
+                product: productId,
+                description: `Costo adicional venta ${createdSale.saleId}`,
+                date: saleDate,
+                metadata: {
+                  quantity,
+                  salePrice,
+                  saleId: createdSale.saleId,
+                },
+              });
+            }
           }
+        }
+
+        if (distributorId) {
+          await applySaleGamification({
+            businessId,
+            sale: createdSale,
+            product,
+          });
         }
       }
 
-      totalTransactionAmount += salePrice * quantity;
-      netTransactionProfit += totalProfit;
+      totalTransactionAmount += actualPayment;
+      netTransactionProfit += adminNetProfit;
     }
 
     if (paymentMethodCode === "credit") {

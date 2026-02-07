@@ -129,6 +129,7 @@ interface ProductSelectorProduct {
   category?: { _id: string; name: string } | string;
   totalStock?: number;
   purchasePrice?: number;
+  averageCost?: number;
   suggestedPrice?: number;
   clientPrice?: number;
   distributorPrice?: number;
@@ -260,6 +261,11 @@ export default function Promotions() {
       year: "numeric",
     });
   };
+
+  const isPromotionPriceBelowB2B =
+    formData.distributorPrice > 0 &&
+    formData.promotionPrice > 0 &&
+    formData.promotionPrice < formData.distributorPrice;
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -418,7 +424,7 @@ export default function Promotions() {
         return;
       }
       const price = product.clientPrice ?? product.suggestedPrice ?? 0;
-      const cost = product.purchasePrice ?? 0;
+      const cost = product.averageCost ?? product.purchasePrice ?? 0;
       const distPrice = product.distributorPrice ?? price;
 
       setComboItems(prev => [
@@ -538,6 +544,7 @@ export default function Promotions() {
                 clientPrice?: number;
                 suggestedPrice?: number;
                 purchasePrice?: number;
+                averageCost?: number;
                 distributorPrice?: number;
               })
             : null;
@@ -546,7 +553,7 @@ export default function Promotions() {
           productName: product?.name || "Producto",
           productImage: product?.image?.url,
           productPrice: product?.clientPrice || product?.suggestedPrice || 0,
-          purchasePrice: product?.purchasePrice || 0,
+          purchasePrice: product?.averageCost ?? product?.purchasePrice ?? 0,
           distributorPrice:
             product?.distributorPrice || product?.clientPrice || 0,
           quantity: item.quantity || 1,
@@ -575,6 +582,12 @@ export default function Promotions() {
         comboItems.length === 0
       ) {
         throw new Error("Debes agregar al menos un producto al bundle/combo");
+      }
+
+      if (isPromotionPriceBelowB2B) {
+        throw new Error(
+          "El precio de la promocion no puede ser menor al precio B2B"
+        );
       }
 
       const payload: Partial<Promotion> = {
@@ -1397,6 +1410,12 @@ export default function Promotions() {
                               sum + (item.purchasePrice || 0) * item.quantity,
                             0
                           );
+                          const distributorCostTotal = comboItems.reduce(
+                            (sum, item) =>
+                              sum +
+                              (item.distributorPrice || 0) * item.quantity,
+                            0
+                          );
                           const totalPublicNormal = calculateOriginalPrice();
                           const adminProfit =
                             formData.promotionPrice - totalCost;
@@ -1406,11 +1425,11 @@ export default function Promotions() {
                               ? Math.round((adminProfit / totalCost) * 100)
                               : 0;
                           const distributorProfit =
-                            formData.promotionPrice - formData.distributorPrice;
+                            formData.promotionPrice - distributorCostTotal;
                           const customerSavings =
                             totalPublicNormal - formData.promotionPrice;
                           const adminProfitB2B =
-                            formData.distributorPrice - totalCost;
+                            distributorCostTotal - totalCost;
                           // CHANGE: Markup (ROI) = (Profit / Cost) * 100
                           const adminMarginB2B =
                             totalCost > 0
@@ -1430,7 +1449,8 @@ export default function Promotions() {
                               {/* Alert if distributor price below cost */}
                               {belowCostAlert && (
                                 <div className="mb-3 rounded-lg border border-red-500/50 bg-red-900/30 p-2 text-xs text-red-400 sm:text-sm">
-                                  ⚠️ Precio distribuidor por debajo del costo
+                                  ⚠️ Precio distribuidor por debajo del margen
+                                  establecido
                                 </div>
                               )}
 
@@ -1491,10 +1511,9 @@ export default function Promotions() {
                                         className="w-full rounded border border-gray-600 bg-gray-800 px-2 py-1.5 text-base font-semibold text-white focus:border-purple-500 focus:outline-none"
                                         placeholder="$0"
                                       />
-                                      <div className="mt-1 text-right">
+                                      <div className="mt-1 flex items-center justify-between">
                                         <span className="text-[10px] text-gray-400">
-                                          Precio actual que te paga el
-                                          distribuidor:{" "}
+                                          Precio base sin promo:{" "}
                                           {formatCurrency(
                                             comboItems.reduce(
                                               (sum, item) =>
@@ -1505,7 +1524,34 @@ export default function Promotions() {
                                             )
                                           )}
                                         </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const baseDistributorTotal =
+                                              comboItems.reduce(
+                                                (sum, item) =>
+                                                  sum +
+                                                  (item.distributorPrice || 0) *
+                                                    item.quantity,
+                                                0
+                                              );
+                                            setFormData({
+                                              ...formData,
+                                              distributorPrice:
+                                                baseDistributorTotal,
+                                            });
+                                          }}
+                                          className="rounded border border-gray-600 px-2 py-0.5 text-[10px] text-gray-300 transition hover:border-purple-500"
+                                        >
+                                          Usar base
+                                        </button>
                                       </div>
+                                      {isPromotionPriceBelowB2B && (
+                                        <div className="mt-2 rounded border border-red-500/50 bg-red-900/30 px-2 py-1 text-xs text-red-300">
+                                          El precio de la promocion debe ser
+                                          mayor o igual al precio B2B.
+                                        </div>
+                                      )}
                                     </div>
                                     {formData.distributorPrice > 0 && (
                                       <div>
@@ -1521,7 +1567,7 @@ export default function Promotions() {
                                               (
                                               {Math.round(
                                                 (distributorProfit /
-                                                  formData.distributorPrice) *
+                                                  distributorCostTotal) *
                                                   100
                                               )}
                                               % ROI)
@@ -1662,7 +1708,7 @@ export default function Promotions() {
                 </button>
                 <button
                   type="submit"
-                  disabled={saving}
+                  disabled={saving || isPromotionPriceBelowB2B}
                   className="flex items-center gap-2 rounded-lg bg-purple-600 px-6 py-2 font-medium text-white transition hover:bg-purple-700 disabled:opacity-50"
                 >
                   {saving && <Loader2 className="h-4 w-4 animate-spin" />}

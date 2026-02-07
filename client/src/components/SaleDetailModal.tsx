@@ -90,8 +90,29 @@ export default function SaleDetailModal({
 
   // Calcular totales
   const totalVenta = sale.salePrice * sale.quantity;
-  const costoTotal = sale.purchasePrice * sale.quantity;
+  const costBasis = sale.averageCostAtSale ?? sale.purchasePrice ?? 0;
+  const costoTotal = costBasis * sale.quantity;
   const gananciaBruta = totalVenta - costoTotal;
+  const distributorUnitPrice = Number(sale.distributorPrice || 0);
+  const totalToDeliver =
+    distributor && distributorUnitPrice > 0
+      ? distributorUnitPrice * sale.quantity
+      : 0;
+  const normalUnitPrice = product?.clientPrice ?? null;
+  const hasPromoPriceFallback =
+    normalUnitPrice !== null && sale.salePrice < normalUnitPrice;
+  const hasDiscount = (sale.discount || 0) > 0;
+  const isPromotion = sale.isPromotion ?? hasPromoPriceFallback;
+  const saleKind = isPromotion
+    ? "Promocion"
+    : hasDiscount
+      ? "Descuento"
+      : "Venta normal";
+  const saleKindClass = isPromotion
+    ? "bg-emerald-500/15 text-emerald-300"
+    : hasDiscount
+      ? "bg-orange-500/15 text-orange-300"
+      : "bg-gray-500/15 text-gray-300";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
@@ -156,6 +177,13 @@ export default function SaleDetailModal({
                   <p className="text-lg font-medium text-white">
                     {product?.name || "N/A"}
                   </p>
+                  <div className="mt-1">
+                    <span
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${saleKindClass}`}
+                    >
+                      {saleKind}
+                    </span>
+                  </div>
                   {product?.description && (
                     <p className="text-sm text-gray-400">
                       {product.description}
@@ -212,11 +240,14 @@ export default function SaleDetailModal({
                     📱 {distributor?.phone || createdBy?.phone}
                   </p>
                 )}
-                {sale.distributorProfitPercentage !== undefined && (
-                  <p className="text-sm text-gray-400">
-                    Comisión: {sale.distributorProfitPercentage}%
-                  </p>
-                )}
+                {distributor &&
+                  sale.distributorProfitPercentage !== undefined && (
+                    <p className="text-sm text-gray-400">
+                      Comisión: $
+                      {Math.round(sale.distributorProfit || 0).toLocaleString()}{" "}
+                      ({sale.distributorProfitPercentage}%)
+                    </p>
+                  )}
               </div>
             </div>
 
@@ -251,16 +282,27 @@ export default function SaleDetailModal({
                   </p>
                 </div>
                 <div className="rounded-lg border border-gray-700 bg-gray-800/50 p-3">
-                  <p className="text-xs text-gray-400">Precio de Compra</p>
-                  <p className="text-lg font-semibold text-white">
-                    ${sale.purchasePrice.toLocaleString()}
+                  <p className="text-xs text-gray-400">
+                    {sale.averageCostAtSale !== undefined
+                      ? "Costo Promedio"
+                      : "Precio de Compra"}
                   </p>
+                  <p className="text-lg font-semibold text-white">
+                    ${costBasis.toLocaleString()}
+                  </p>
+                  {sale.averageCostAtSale !== undefined &&
+                    sale.purchasePrice !== undefined &&
+                    sale.purchasePrice !== sale.averageCostAtSale && (
+                      <p className="mt-1 text-xs text-gray-500">
+                        Compra: ${sale.purchasePrice.toLocaleString()}
+                      </p>
+                    )}
                 </div>
                 {distributor && (
                   <div className="rounded-lg border border-gray-700 bg-gray-800/50 p-3">
                     <p className="text-xs text-gray-400">Precio Distribuidor</p>
                     <p className="text-lg font-semibold text-white">
-                      ${sale.distributorPrice.toLocaleString()}
+                      ${distributorUnitPrice.toLocaleString()}
                     </p>
                   </div>
                 )}
@@ -276,6 +318,14 @@ export default function SaleDetailModal({
                     ${totalVenta.toLocaleString()}
                   </p>
                 </div>
+                {distributor && totalToDeliver > 0 && (
+                  <div className="rounded-lg border border-blue-700/50 bg-blue-900/20 p-3">
+                    <p className="text-xs text-blue-300">A Entregar</p>
+                    <p className="text-xl font-bold text-blue-300">
+                      ${totalToDeliver.toLocaleString()}
+                    </p>
+                  </div>
+                )}
                 <div className="rounded-lg border border-gray-700 bg-gray-800/50 p-3">
                   <p className="text-xs text-gray-400">Costo Total</p>
                   <p className="text-lg font-semibold text-white">
@@ -298,11 +348,13 @@ export default function SaleDetailModal({
                     ${(sale.adminProfit || 0).toLocaleString()}
                   </p>
                 </div>
-                {sale.netProfit !== undefined && (
+                {sale.adminProfit !== undefined && (
                   <div className="rounded-lg border border-emerald-700/50 bg-emerald-900/20 p-3">
-                    <p className="text-xs text-emerald-300">Ganancia Neta</p>
+                    <p className="text-xs text-emerald-300">
+                      Ganancia Neta Admin
+                    </p>
                     <p className="text-xl font-bold text-emerald-400">
-                      ${sale.netProfit.toLocaleString()}
+                      ${Number(sale.netProfit || 0).toLocaleString()}
                     </p>
                   </div>
                 )}

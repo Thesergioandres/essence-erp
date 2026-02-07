@@ -47,7 +47,12 @@ export class AnalyticsRepository {
             $sum: {
               $cond: [
                 { $eq: ["$paymentStatus", "confirmado"] },
-                "$salePrice",
+                {
+                  $multiply: [
+                    { $ifNull: ["$salePrice", 0] },
+                    { $ifNull: ["$quantity", 0] },
+                  ],
+                },
                 0,
               ],
             },
@@ -108,7 +113,12 @@ export class AnalyticsRepository {
             $sum: {
               $cond: [
                 { $eq: ["$paymentStatus", "confirmado"] },
-                "$salePrice",
+                {
+                  $multiply: [
+                    { $ifNull: ["$salePrice", 0] },
+                    { $ifNull: ["$quantity", 0] },
+                  ],
+                },
                 0,
               ],
             },
@@ -169,7 +179,14 @@ export class AnalyticsRepository {
             $first: { $ifNull: ["$productData.name", "Producto Eliminado"] },
           },
           quantity: { $sum: "$quantity" },
-          revenue: { $sum: "$salePrice" },
+          revenue: {
+            $sum: {
+              $multiply: [
+                { $ifNull: ["$salePrice", 0] },
+                { $ifNull: ["$quantity", 0] },
+              ],
+            },
+          },
         },
       },
       { $sort: { revenue: -1 } },

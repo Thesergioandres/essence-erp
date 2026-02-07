@@ -1,5 +1,7 @@
+import DistributorStats from "../models/DistributorStats.js";
 import GamificationConfig from "../models/GamificationConfig.js";
 import Sale from "../models/Sale.js";
+import { resolveLevelForPoints } from "./gamificationEngine.js";
 
 const BASE_PROFIT_PERCENTAGE = 20;
 
@@ -8,7 +10,27 @@ const getPeriodRange = (config) => {
   let startDate;
   let endDate;
 
-  if (config?.evaluationPeriod === "biweekly") {
+  const cycle = config?.cycle?.duration;
+  if (cycle === "quarterly") {
+    startDate = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+    endDate = new Date(
+      now.getFullYear(),
+      now.getMonth() + 1,
+      0,
+      23,
+      59,
+      59,
+      999,
+    );
+  } else if (cycle === "annual") {
+    startDate = new Date(now.getFullYear(), 0, 1);
+    endDate = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+  } else if (cycle === "custom" && config?.cycle?.customDays) {
+    startDate = new Date(
+      now.getTime() - config.cycle.customDays * 24 * 60 * 60 * 1000,
+    );
+    endDate = now;
+  } else if (config?.evaluationPeriod === "biweekly") {
     startDate = config.currentPeriodStart || now;
     endDate = new Date(startDate);
     endDate.setDate(endDate.getDate() + 15);
@@ -29,7 +51,7 @@ const getPeriodRange = (config) => {
       23,
       59,
       59,
-      999
+      999,
     );
   } else {
     // Por defecto, mes actual
@@ -41,7 +63,7 @@ const getPeriodRange = (config) => {
       23,
       59,
       59,
-      999
+      999,
     );
   }
 
@@ -50,7 +72,7 @@ const getPeriodRange = (config) => {
 
 export const getDistributorCommissionInfo = async (
   distributorId,
-  businessId = null
+  businessId = null,
 ) => {
   try {
     const config = await GamificationConfig.findOne();
@@ -105,15 +127,20 @@ export const getDistributorCommissionInfo = async (
       rankings.findIndex((r) => r._id.toString() === distributorId.toString()) +
       1;
 
-    let bonusCommission = 0;
-    if (position === 1) bonusCommission = config.top1CommissionBonus || 0;
-    else if (position === 2) bonusCommission = config.top2CommissionBonus || 0;
-    else if (position === 3) bonusCommission = config.top3CommissionBonus || 0;
+    const stats = await DistributorStats.findOne({
+      distributor: distributorId,
+    });
+    const level = resolveLevelForPoints(
+      config?.levels,
+      stats?.totalPoints || 0,
+    );
+    const bonusCommission = level?.benefits?.commissionBonus || 0;
 
     return {
       position: position || null,
       bonusCommission,
       profitPercentage: BASE_PROFIT_PERCENTAGE + bonusCommission,
+      level: level?.name || null,
       periodStart: startDate,
       periodEnd: endDate,
       totalDistributors: rankings.length,
@@ -138,7 +165,7 @@ export const getDistributorCommissionInfo = async (
  */
 export const getDistributorProfitPercentage = async (
   distributorId,
-  businessId = null
+  businessId = null,
 ) => {
   try {
     const info = await getDistributorCommissionInfo(distributorId, businessId);
@@ -159,11 +186,11 @@ export const getDistributorProfitPercentage = async (
 export const calculateDistributorPrice = async (
   purchasePrice,
   distributorId,
-  businessId = null
+  businessId = null,
 ) => {
   const profitPercentage = await getDistributorProfitPercentage(
     distributorId,
-    businessId
+    businessId,
   );
 
   // Calcular precio para que el distribuidor gane exactamente su porcentaje

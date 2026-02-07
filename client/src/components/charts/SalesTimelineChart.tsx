@@ -2,16 +2,6 @@ import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
-import {
-  CartesianGrid,
-  Legend,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import { advancedAnalyticsService } from "../../features/analytics/services";
 
 interface SalesTimelineChartProps {
@@ -29,6 +19,12 @@ export const SalesTimelineChart: React.FC<SalesTimelineChartProps> = ({
 }) => {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat("es-CO", {
+      style: "currency",
+      currency: "COP",
+      maximumFractionDigits: 0,
+    }).format(value || 0);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -72,6 +68,8 @@ export const SalesTimelineChart: React.FC<SalesTimelineChartProps> = ({
               revenue: Number(item.revenue) || 0,
               profit: Number(item.profit) || 0,
               salesCount: Number(item.ordersCount ?? item.salesCount) || 0,
+              quantity: Number(item.quantity) || 0,
+              netProfit: Number(item.netProfit ?? item.profit) || 0,
             };
           });
 
@@ -141,70 +139,47 @@ export const SalesTimelineChart: React.FC<SalesTimelineChartProps> = ({
       <h3 className="mb-4 text-xl font-bold text-white">
         Línea de Tiempo de Ventas
       </h3>
-      <ResponsiveContainer width="100%" height={400}>
-        <LineChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-          <XAxis
-            dataKey="period"
-            stroke="#9ca3af"
-            tick={{ fill: "#d1d5db", fontSize: 12 }}
-          />
-          <YAxis
-            yAxisId="left"
-            stroke="#9ca3af"
-            tick={{ fill: "#d1d5db", fontSize: 12 }}
-          />
-          <YAxis
-            yAxisId="right"
-            orientation="right"
-            stroke="#9ca3af"
-            tick={{ fill: "#d1d5db", fontSize: 12 }}
-          />
-          <Tooltip
-            formatter={(value: any) => {
-              const num = Number(value);
-              return isNaN(num) ? "$0.00" : `$${num.toFixed(2)}`;
-            }}
-            contentStyle={{
-              backgroundColor: "rgba(17, 24, 39, 0.95)",
-              border: "1px solid #374151",
-              borderRadius: "8px",
-              color: "#e5e7eb",
-            }}
-          />
-          <Legend wrapperStyle={{ color: "#d1d5db" }} />
-          <Line
-            yAxisId="left"
-            type="monotone"
-            dataKey="revenue"
-            stroke="#8b5cf6"
-            strokeWidth={2}
-            name="Ingresos"
-            dot={{ r: 4 }}
-            activeDot={{ r: 6 }}
-          />
-          <Line
-            yAxisId="left"
-            type="monotone"
-            dataKey="profit"
-            stroke="#10b981"
-            strokeWidth={2}
-            name="Ganancia"
-            dot={{ r: 4 }}
-            activeDot={{ r: 6 }}
-          />
-          <Line
-            yAxisId="right"
-            type="monotone"
-            dataKey="salesCount"
-            stroke="#f59e0b"
-            strokeWidth={2}
-            name="Nº Ventas"
-            dot={{ r: 4 }}
-            activeDot={{ r: 6 }}
-          />
-        </LineChart>
-      </ResponsiveContainer>
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-left text-sm text-gray-300">
+          <thead className="border-b border-gray-800 text-xs uppercase tracking-wide text-gray-500">
+            <tr>
+              <th className="py-2 pr-4">Fecha</th>
+              <th className="py-2 pr-4 text-right">Ventas</th>
+              <th className="py-2 pr-4 text-right">Productos</th>
+              <th className="py-2 text-right">Ingresos</th>
+              <th className="py-2 pr-4 text-right">Ganancia bruta</th>
+              <th className="py-2 text-right">Ganancia neta</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((item, index) => (
+              <tr
+                key={`${item.date || item.period}-${index}`}
+                className="border-b border-gray-800/60"
+              >
+                <td className="py-3 pr-4 text-white">
+                  {item.period || item.date || "Sin fecha"}
+                </td>
+                <td className="py-3 pr-4 text-right text-amber-300">
+                  {Number(item.salesCount || 0).toLocaleString()}
+                </td>
+                <td className="py-3 pr-4 text-right text-emerald-300">
+                  {Number(item.quantity || 0).toLocaleString()}
+                </td>
+                <td className="py-3 text-right text-sky-300">
+                  {formatCurrency(Number(item.revenue || 0))}
+                </td>
+                <td className="py-3 pr-4 text-right text-emerald-300">
+                  {formatCurrency(Number(item.profit || 0))}
+                </td>
+                <td className="py-3 text-right text-teal-300">
+                  {formatCurrency(Number(item.netProfit || 0))}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </motion.div>
   );
 };

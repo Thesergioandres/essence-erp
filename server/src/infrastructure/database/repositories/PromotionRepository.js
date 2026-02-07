@@ -32,9 +32,19 @@ export class PromotionRepository {
 
     const [promotions, total] = await Promise.all([
       Promotion.find(query)
-        .populate("products", "name image salePrice")
+        .populate(
+          "buyItems.product",
+          "name image clientPrice distributorPrice purchasePrice averageCost",
+        )
+        .populate(
+          "rewardItems.product",
+          "name image clientPrice distributorPrice purchasePrice averageCost",
+        )
+        .populate(
+          "comboItems.product",
+          "name image clientPrice distributorPrice purchasePrice averageCost",
+        )
         .populate("branches", "name")
-        .populate("segments", "name")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -55,9 +65,19 @@ export class PromotionRepository {
 
   async findById(id, businessId) {
     const promotion = await Promotion.findOne({ _id: id, business: businessId })
-      .populate("products", "name image salePrice purchasePrice")
+      .populate(
+        "buyItems.product",
+        "name image clientPrice distributorPrice purchasePrice averageCost",
+      )
+      .populate(
+        "rewardItems.product",
+        "name image clientPrice distributorPrice purchasePrice averageCost",
+      )
+      .populate(
+        "comboItems.product",
+        "name image clientPrice distributorPrice purchasePrice averageCost",
+      )
       .populate("branches", "name")
-      .populate("segments", "name")
       .lean();
 
     return promotion;
@@ -102,9 +122,19 @@ export class PromotionRepository {
       startDate: { $lte: now },
       endDate: { $gte: now },
     })
-      .populate("products", "name salePrice")
+      .populate(
+        "buyItems.product",
+        "name image clientPrice distributorPrice purchasePrice averageCost",
+      )
+      .populate(
+        "rewardItems.product",
+        "name image clientPrice distributorPrice purchasePrice averageCost",
+      )
+      .populate(
+        "comboItems.product",
+        "name image clientPrice distributorPrice purchasePrice averageCost",
+      )
       .populate("branches", "name")
-      .populate("segments", "name")
       .lean();
 
     return promotions;
@@ -156,14 +186,17 @@ export class PromotionRepository {
 
     let discountAmount = 0;
 
-    if (promotion.discountType === "percentage") {
+    const discountType = promotion?.discount?.type;
+    const discountValue = promotion?.discount?.value || 0;
+
+    if (discountType === "percentage") {
       const total = items.reduce(
         (sum, item) => sum + (item.price || 0) * (item.quantity || 0),
         0,
       );
-      discountAmount = (total * (promotion.discountValue || 0)) / 100;
-    } else if (promotion.discountType === "fixed") {
-      discountAmount = promotion.discountValue || 0;
+      discountAmount = (total * discountValue) / 100;
+    } else if (discountType === "amount") {
+      discountAmount = discountValue;
     }
 
     return {

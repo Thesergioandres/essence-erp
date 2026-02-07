@@ -1,6 +1,8 @@
 import Membership from "../../../../models/Membership.js";
+import Product from "../../../../models/Product.js";
 import ProfitHistory from "../../../../models/ProfitHistory.js";
 import Sale from "../../../../models/Sale.js";
+import { applySaleGamification } from "../../../../utils/gamificationEngine.js";
 
 export async function confirmSalePayment(req, res) {
   try {
@@ -110,6 +112,16 @@ export async function confirmSalePayment(req, res) {
     }
 
     const updatedSale = await Sale.findById(sale._id).lean();
+    if (updatedSale?.distributor) {
+      const product = updatedSale.product
+        ? await Product.findById(updatedSale.product).lean()
+        : null;
+      await applySaleGamification({
+        businessId,
+        sale: updatedSale,
+        product,
+      });
+    }
 
     return res.json({
       success: true,

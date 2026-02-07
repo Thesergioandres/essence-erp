@@ -105,6 +105,101 @@ const formatCompactCOP = (value: number) => {
   }).format(Number(value) || 0);
 };
 
+const clampNumber = (value: number, min: number, max: number) => {
+  if (!Number.isFinite(value)) return min;
+  return Math.min(max, Math.max(min, value));
+};
+
+const average = (values: number[]) => {
+  if (!values.length) return 0;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+};
+
+const isEmptyStrategicAnalysis = (analysis: any) => {
+  if (!analysis) return true;
+  const hasArrayValues = (arr: any) => Array.isArray(arr) && arr.length > 0;
+  const hasMetrics = Boolean(
+    analysis.keyMetrics &&
+    (analysis.keyMetrics.healthScore ||
+      analysis.keyMetrics.growthRate ||
+      analysis.keyMetrics.profitTrend)
+  );
+
+  return !(
+    hasArrayValues(analysis.strengths) ||
+    hasArrayValues(analysis.weaknesses) ||
+    hasArrayValues(analysis.opportunities) ||
+    hasArrayValues(analysis.threats) ||
+    hasArrayValues(analysis.recommendations) ||
+    hasMetrics
+  );
+};
+
+const formatAnalysisMarkdown = (raw: any) => {
+  if (!raw) return "";
+
+  let analysis = raw;
+  if (typeof raw === "string") {
+    try {
+      analysis = JSON.parse(raw);
+    } catch {
+      return raw;
+    }
+  }
+
+  const strengths = Array.isArray(analysis.strengths) ? analysis.strengths : [];
+  const weaknesses = Array.isArray(analysis.weaknesses)
+    ? analysis.weaknesses
+    : [];
+  const opportunities = Array.isArray(analysis.opportunities)
+    ? analysis.opportunities
+    : [];
+  const threats = Array.isArray(analysis.threats) ? analysis.threats : [];
+  const recommendations = Array.isArray(analysis.recommendations)
+    ? analysis.recommendations
+    : [];
+  const metrics = analysis.keyMetrics || {};
+  const summary = analysis.summary ? String(analysis.summary) : null;
+
+  const lines = [
+    "### Resumen Ejecutivo",
+    "",
+    summary ? `> ${summary}` : "",
+    "",
+    "**Indicadores clave**",
+    `- Salud del negocio: ${metrics.healthScore ?? 0}`,
+    `- Crecimiento: ${metrics.growthRate ?? 0}%`,
+    `- Tendencia de ganancia: ${metrics.profitTrend ?? "stable"}`,
+    "",
+    "**Fortalezas**",
+    strengths.length
+      ? strengths.map((item: string) => `- ${item}`).join("\n")
+      : "- Aun sin señales claras. Registra ventas e inventario para detectar fortalezas.",
+    "",
+    "**Debilidades**",
+    weaknesses.length
+      ? weaknesses.map((item: string) => `- ${item}`).join("\n")
+      : "- No se detectan debilidades por ahora. Mantener seguimiento diario.",
+    "",
+    "**Oportunidades**",
+    opportunities.length
+      ? opportunities.map((item: string) => `- ${item}`).join("\n")
+      : "- Aun no hay oportunidades destacadas. Alimenta el sistema con mas ventas.",
+    "",
+    "**Riesgos**",
+    threats.length
+      ? threats.map((item: string) => `- ${item}`).join("\n")
+      : "- Sin riesgos criticos detectados. Continuar monitoreo.",
+    "",
+    "**Recomendaciones**",
+    recommendations.length
+      ? recommendations.map((item: string) => `- ${item}`).join("\n")
+      : "- Aun no hay recomendaciones. Verifica stock, costos y ventas recientes.",
+  ].filter(Boolean);
+
+  return lines.join("\n");
+};
+
 export default function BusinessAssistant() {
   // Feature flags
   const features = useFeatures([
@@ -127,6 +222,147 @@ export default function BusinessAssistant() {
   const [analysisResult, setAnalysisResult] = useState<string | null>(null);
   const [analystError, setAnalystError] = useState<string | null>(null);
   const [lastAnalysisDate, setLastAnalysisDate] = useState<string | null>(null);
+
+  // Métricas adicionales para contexto
+  const [creditMetrics, setCreditMetrics] = useState<CreditMetrics | null>(
+    null
+  );
+
+  const buildLocalStrategicAnalysis = useCallback(
+    (
+      recommendations: BusinessAssistantRecommendationItem[] = [],
+      credit: CreditMetrics | null
+    ) => {
+      const primaryActions = recommendations
+        .map(item => item.recommendation.primary)
+        .filter(Boolean) as BusinessAssistantRecommendationAction[];
+
+      const actionCounts = primaryActions.reduce<Record<string, number>>(
+        (acc, action) => {
+          const key = action.action || "none";
+          acc[key] = (acc[key] || 0) + 1;
+          return acc;
+        },
+        {}
+      );
+
+      const confidenceValues = primaryActions
+        .map(action => action.confidence ?? 0)
+        .filter(value => Number.isFinite(value));
+      const avgConfidence = average(confidenceValues);
+
+      const growthValues = recommendations
+        .map(item => item.metrics?.unitsGrowthPct)
+        .filter(value => Number.isFinite(value) && value !== 0) as number[];
+      const avgGrowth = average(growthValues);
+
+      const marginValues = recommendations
+        .map(item => item.metrics?.recentMarginPct)
+        .filter(value => Number.isFinite(value) && value !== 0) as number[];
+      const avgMargin = average(marginValues);
+
+      const overdueCount = credit?.overdue?.count || 0;
+      const recoveryRate = Number(credit?.recoveryRate || 0);
+
+      const lowStockCount = actionCounts["buy_more_inventory"] || 0;
+      const pauseCount = actionCounts["pause_purchases"] || 0;
+      const priceDownCount = actionCounts["decrease_price"] || 0;
+      const promoCount = actionCounts["run_promotion"] || 0;
+
+      const baseScore = 62 + avgConfidence * 25;
+      const stockPenalty = Math.min(18, lowStockCount * 3);
+      const creditPenalty = overdueCount > 0 ? 8 : 0;
+      const recoveryBonus = recoveryRate >= 70 ? 6 : recoveryRate >= 50 ? 3 : 0;
+      const healthScore = clampNumber(
+        Math.round(baseScore - stockPenalty - creditPenalty + recoveryBonus),
+        0,
+        100
+      );
+
+      const profitTrend =
+        avgMargin >= 25 ? "up" : avgMargin <= 10 ? "down" : "stable";
+
+      const strengths = [] as string[];
+      if (avgConfidence >= 0.7) {
+        strengths.push("Recomendaciones con alta confianza disponibles.");
+      }
+      if (recoveryRate >= 70) {
+        strengths.push("Buena recuperacion de cartera (>=70%).");
+      }
+      if (pauseCount === 0 && lowStockCount === 0) {
+        strengths.push("Inventario estable sin alertas criticas.");
+      }
+
+      const weaknesses = [] as string[];
+      if (lowStockCount > 0) {
+        weaknesses.push(`Stock bajo en ${lowStockCount} productos clave.`);
+      }
+      if (priceDownCount > 0) {
+        weaknesses.push("Presion en precios: revisar estrategias de margen.");
+      }
+      if (overdueCount > 0) {
+        weaknesses.push(`Cartera vencida: ${overdueCount} creditos en riesgo.`);
+      }
+
+      const opportunities = [] as string[];
+      if (promoCount > 0) {
+        opportunities.push(
+          "Promociones listas para activar y acelerar ventas."
+        );
+      }
+      if (avgGrowth > 0) {
+        opportunities.push("Productos con crecimiento positivo sostenido.");
+      }
+
+      const threats = [] as string[];
+      if (lowStockCount > 3) {
+        threats.push("Riesgo de quiebre por bajo stock en varios productos.");
+      }
+      if (overdueCount > 5) {
+        threats.push("Cartera vencida alta puede impactar flujo de caja.");
+      }
+
+      const recommendationsText = [] as string[];
+      if (lowStockCount > 0) {
+        recommendationsText.push("Priorizar reposicion de inventario critico.");
+      }
+      if (promoCount > 0) {
+        recommendationsText.push("Lanzar promociones sugeridas esta semana.");
+      }
+      if (priceDownCount > 0) {
+        recommendationsText.push("Ajustar precios con foco en margen minimo.");
+      }
+      if (overdueCount > 0) {
+        recommendationsText.push("Refuerzo de cobro a clientes con mora.");
+      }
+
+      const summary =
+        recommendations.length > 0
+          ? `Se analizaron ${recommendations.length} productos. ` +
+            `Acciones prioritarias: ${lowStockCount} con stock bajo, ` +
+            `${priceDownCount} con ajuste de precio y ${promoCount} con promo sugerida.`
+          : "No hay recomendaciones suficientes para generar un resumen detallado.";
+
+      return {
+        analysis: {
+          summary,
+          strengths,
+          weaknesses,
+          opportunities,
+          threats,
+          keyMetrics: {
+            healthScore,
+            growthRate: Math.round(avgGrowth * 10) / 10,
+            profitTrend,
+            customerSatisfaction: undefined,
+          },
+          recommendations: recommendationsText,
+        },
+        generatedAt: new Date().toISOString(),
+      };
+    },
+    []
+  );
 
   // Filtro ABC
   const [abcFilter, setAbcFilter] = useState<"ALL" | "A" | "B" | "C">("ALL");
@@ -186,8 +422,18 @@ export default function BusinessAssistant() {
       try {
         const res = await businessAssistantService.getLatestAnalysis();
         if (res.analysis) {
-          setAnalysisResult(JSON.stringify(res.analysis));
-          setLastAnalysisDate(new Date(res.analysis.createdAt).toISOString());
+          const analysis = isEmptyStrategicAnalysis(res.analysis)
+            ? buildLocalStrategicAnalysis(
+                data?.recommendations || [],
+                creditMetrics
+              ).analysis
+            : res.analysis;
+          setAnalysisResult(formatAnalysisMarkdown(analysis));
+          setLastAnalysisDate(
+            new Date(
+              res.analysis.createdAt || new Date().toISOString()
+            ).toISOString()
+          );
         }
       } catch {
         // Silenciosamente fallar si no hay memoria (es normal la primera vez)
@@ -195,7 +441,7 @@ export default function BusinessAssistant() {
       }
     };
     loadMemory();
-  }, []);
+  }, [buildLocalStrategicAnalysis, creditMetrics, data?.recommendations]);
 
   const getAbcBadgeColor = (abcClass?: string) => {
     switch (abcClass) {
@@ -216,11 +462,23 @@ export default function BusinessAssistant() {
       setAnalysisResult(null);
       setLastAnalysisDate(null); // Reset date on new generation
 
+      if (customQuestion && customQuestion.trim()) {
+        setAnalystQuestion(customQuestion);
+      }
+
       const res = await businessAssistantService.getStrategicAnalysis();
 
       if (res.analysis) {
-        setAnalysisResult(JSON.stringify(res.analysis));
-        setLastAnalysisDate(new Date(res.generatedAt).toISOString());
+        const analysis = isEmptyStrategicAnalysis(res.analysis)
+          ? buildLocalStrategicAnalysis(
+              data?.recommendations || [],
+              creditMetrics
+            ).analysis
+          : res.analysis;
+        setAnalysisResult(formatAnalysisMarkdown(analysis));
+        setLastAnalysisDate(
+          new Date(res.generatedAt || new Date().toISOString()).toISOString()
+        );
       } else {
         setAnalystError("No se recibió un análisis válido.");
       }
@@ -232,11 +490,6 @@ export default function BusinessAssistant() {
       setAnalystLoading(false);
     }
   };
-
-  // Métricas adicionales para contexto
-  const [creditMetrics, setCreditMetrics] = useState<CreditMetrics | null>(
-    null
-  );
 
   const [config, setConfig] = useState<BusinessAssistantConfig | null>(null);
   const [configLoading, setConfigLoading] = useState(false);
@@ -402,7 +655,7 @@ export default function BusinessAssistant() {
     } finally {
       setJobLoading(false);
     }
-  }, [buildParams]);
+  }, []);
 
   const pollJob = useCallback(async (jobId: string) => {
     try {
@@ -528,6 +781,142 @@ export default function BusinessAssistant() {
     sortBy,
     abcFilter,
   ]);
+
+  const assistantStats = useMemo(() => {
+    const recs = data?.recommendations || [];
+    const primary = recs
+      .map(item => item.recommendation.primary)
+      .filter(Boolean) as BusinessAssistantRecommendationAction[];
+    const avgConfidence = average(
+      primary
+        .map(action => action.confidence ?? 0)
+        .filter(value => Number.isFinite(value))
+    );
+
+    const actionable = primary.filter(
+      action => (action.confidence ?? 0) >= 0.6
+    ).length;
+    const lowStock = primary.filter(
+      action => action.action === "buy_more_inventory"
+    ).length;
+    const priceAdjust = primary.filter(action =>
+      ["increase_price", "decrease_price"].includes(action.action)
+    ).length;
+
+    return {
+      total: recs.length,
+      actionable,
+      lowStock,
+      priceAdjust,
+      avgConfidence: avgConfidence ? Math.round(avgConfidence * 100) : 0,
+    };
+  }, [data?.recommendations]);
+
+  const actionPlan = useMemo(() => {
+    const recs = data?.recommendations || [];
+    const primary = recs
+      .map(item => item.recommendation.primary)
+      .filter(Boolean) as BusinessAssistantRecommendationAction[];
+    const counts = primary.reduce<Record<string, number>>((acc, item) => {
+      const key = item.action || "none";
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+
+    const lowStock = counts["buy_more_inventory"] || 0;
+    const pricing =
+      (counts["increase_price"] || 0) + (counts["decrease_price"] || 0);
+    const promotions = counts["run_promotion"] || 0;
+    const marginReview = counts["review_margin"] || 0;
+    const overdue = creditMetrics?.overdue?.count || 0;
+
+    const plan: string[] = [];
+    if (lowStock > 0) {
+      plan.push(`Reponer stock critico en ${lowStock} productos.`);
+    }
+    if (pricing > 0) {
+      plan.push(`Revisar precios en ${pricing} productos con alertas.`);
+    }
+    if (marginReview > 0) {
+      plan.push(`Ajustar margen en ${marginReview} referencias sensibles.`);
+    }
+    if (promotions > 0) {
+      plan.push(`Activar ${promotions} promociones sugeridas.`);
+    }
+    if (overdue > 0) {
+      plan.push(`Contactar ${overdue} clientes con credito vencido.`);
+    }
+
+    return plan.length > 0
+      ? plan
+      : ["No hay acciones urgentes. Mantener monitoreo diario."];
+  }, [creditMetrics?.overdue?.count, data?.recommendations]);
+
+  const criticalItems = useMemo(() => {
+    const recs = data?.recommendations || [];
+    const scored = recs.map(item => {
+      const primary = item.recommendation.primary;
+      let score = 0;
+
+      if (primary?.action === "buy_more_inventory") score += 5;
+      if (primary?.action === "review_margin") score += 4;
+      if (primary?.action === "decrease_price") score += 3;
+      if ((item.metrics?.recentMarginPct ?? 100) < 10) score += 4;
+      if ((item.metrics?.unitsGrowthPct ?? 0) < -10) score += 3;
+      if (
+        (item.stock?.warehouseStock ?? 0) <= (item.stock?.lowStockAlert ?? 0)
+      ) {
+        score += 3;
+      }
+      if ((primary?.confidence ?? 0) >= 0.7) score += 1;
+
+      return { item, score };
+    });
+
+    return scored
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5)
+      .map(({ item, score }) => ({ item, score }));
+  }, [data?.recommendations]);
+
+  const smartAlerts = useMemo(() => {
+    const alerts: Array<{ title: string; detail: string; tone: string }> = [];
+    const lowStock = (data?.recommendations || []).filter(
+      item => item.recommendation.primary?.action === "buy_more_inventory"
+    ).length;
+    const pricing = (data?.recommendations || []).filter(item =>
+      ["increase_price", "decrease_price"].includes(
+        item.recommendation.primary?.action || ""
+      )
+    ).length;
+    const overdue = creditMetrics?.overdue?.count || 0;
+
+    if (lowStock > 0) {
+      alerts.push({
+        title: "Stock critico",
+        detail: `${lowStock} productos requieren reposicion inmediata.`,
+        tone: "bg-red-900/20 border-red-700/40 text-red-200",
+      });
+    }
+
+    if (pricing > 0) {
+      alerts.push({
+        title: "Alertas de precio",
+        detail: `${pricing} productos con ajuste recomendado.`,
+        tone: "bg-yellow-900/20 border-yellow-700/40 text-yellow-200",
+      });
+    }
+
+    if (overdue > 0) {
+      alerts.push({
+        title: "Cartera vencida",
+        detail: `${overdue} creditos con riesgo de mora.`,
+        tone: "bg-orange-900/20 border-orange-700/40 text-orange-200",
+      });
+    }
+
+    return alerts;
+  }, [creditMetrics?.overdue?.count, data?.recommendations]);
 
   const renderPrimary = (item: BusinessAssistantRecommendationItem) => {
     const primary = item.recommendation.primary;
@@ -672,6 +1061,43 @@ export default function BusinessAssistant() {
         </div>
       </div>
 
+      {/* Estado del asistente */}
+      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-xl border border-indigo-500/30 bg-indigo-900/10 p-4">
+          <p className="text-xs text-indigo-200/80">Productos analizados</p>
+          <p className="mt-1 text-2xl font-bold text-white">
+            {assistantStats.total}
+          </p>
+          <p className="text-xs text-gray-400">
+            Ventana: {data?.window?.recentDays ?? 0}d /{" "}
+            {data?.window?.horizonDays ?? 0}d
+          </p>
+        </div>
+        <div className="rounded-xl border border-emerald-500/30 bg-emerald-900/10 p-4">
+          <p className="text-xs text-emerald-200/80">Acciones con prioridad</p>
+          <p className="mt-1 text-2xl font-bold text-white">
+            {assistantStats.actionable}
+          </p>
+          <p className="text-xs text-gray-400">
+            Confianza media: {assistantStats.avgConfidence}%
+          </p>
+        </div>
+        <div className="rounded-xl border border-amber-500/30 bg-amber-900/10 p-4">
+          <p className="text-xs text-amber-200/80">Alertas de stock</p>
+          <p className="mt-1 text-2xl font-bold text-white">
+            {assistantStats.lowStock}
+          </p>
+          <p className="text-xs text-gray-400">Revisar reposiciones hoy</p>
+        </div>
+        <div className="rounded-xl border border-sky-500/30 bg-sky-900/10 p-4">
+          <p className="text-xs text-sky-200/80">Ajustes de precio</p>
+          <p className="mt-1 text-2xl font-bold text-white">
+            {assistantStats.priceAdjust}
+          </p>
+          <p className="text-xs text-gray-400">Optimizar margen y demanda</p>
+        </div>
+      </div>
+
       {/* Resumen de insights del negocio */}
       {features.credits && creditMetrics && (
         <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -760,6 +1186,28 @@ export default function BusinessAssistant() {
               {analystLoading ? "Analizando..." : "Generar Análisis Diario"}
               <div className="absolute inset-0 -z-10 translate-x-[-100%] bg-gradient-to-r from-transparent via-white/20 to-transparent group-hover:animate-shimmer" />
             </button>
+          </div>
+
+          <div className="flex flex-wrap gap-2 text-xs text-gray-300">
+            {[
+              "Resumen rapido de ventas e inventario",
+              "Cuales son los riesgos de esta semana",
+              "Acciones prioritarias para margen",
+              "Que productos requieren reposicion",
+            ].map(prompt => (
+              <button
+                key={prompt}
+                type="button"
+                onClick={() => {
+                  setAnalystQuestion(prompt);
+                  handleGenerateAnalysis(prompt);
+                }}
+                disabled={analystLoading}
+                className="rounded-full border border-indigo-500/30 bg-indigo-500/10 px-3 py-1 text-xs text-indigo-200 transition hover:bg-indigo-500/20 disabled:opacity-60"
+              >
+                {prompt}
+              </button>
+            ))}
           </div>
 
           <div className="flex flex-col gap-4">
@@ -857,6 +1305,92 @@ export default function BusinessAssistant() {
               )}
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Plan del dia y alertas inteligentes */}
+      <div className="mb-8 grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="rounded-2xl border border-emerald-600/30 bg-emerald-900/10 p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-white">Plan del dia</h3>
+            <span className="rounded-full bg-emerald-500/20 px-2 py-1 text-[11px] font-semibold text-emerald-200">
+              Acciones
+            </span>
+          </div>
+          <ul className="space-y-2 text-sm text-emerald-100">
+            {actionPlan.map((item, index) => (
+              <li key={`${item}-${index}`} className="flex gap-2">
+                <span className="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full border border-emerald-500/40 text-[10px]">
+                  {index + 1}
+                </span>
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="rounded-2xl border border-purple-600/30 bg-purple-900/10 p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-white">
+              Ranking critico
+            </h3>
+            <span className="rounded-full bg-purple-500/20 px-2 py-1 text-[11px] font-semibold text-purple-200">
+              Top 5
+            </span>
+          </div>
+          {criticalItems.length === 0 ? (
+            <p className="text-sm text-purple-100">
+              No hay productos en riesgo en este momento.
+            </p>
+          ) : (
+            <div className="space-y-3 text-sm text-purple-100">
+              {criticalItems.map(({ item, score }) => (
+                <div
+                  key={item.productId}
+                  className="flex items-center justify-between rounded-lg border border-purple-500/20 bg-gray-900/30 px-3 py-2"
+                >
+                  <div>
+                    <p className="font-semibold text-white">
+                      {item.productName}
+                    </p>
+                    <p className="text-xs text-purple-200/80">
+                      Stock: {item.stock.warehouseStock} · Margen:{" "}
+                      {item.metrics.recentMarginPct.toFixed(1)}%
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-purple-500/20 px-2 py-1 text-[11px] text-purple-200">
+                    Score {score}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-2xl border border-sky-600/30 bg-sky-900/10 p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-white">
+              Alertas inteligentes
+            </h3>
+            <span className="rounded-full bg-sky-500/20 px-2 py-1 text-[11px] font-semibold text-sky-200">
+              Hoy
+            </span>
+          </div>
+          {smartAlerts.length === 0 ? (
+            <p className="text-sm text-sky-100">Sin alertas criticas hoy.</p>
+          ) : (
+            <div className="space-y-3">
+              {smartAlerts.map(alert => (
+                <div
+                  key={alert.title}
+                  className={`rounded-lg border px-3 py-2 text-sm ${alert.tone}`}
+                >
+                  <p className="font-semibold">{alert.title}</p>
+                  <p className="text-xs text-gray-100/80">{alert.detail}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -1331,7 +1865,18 @@ export default function BusinessAssistant() {
 
           {(visibleRecommendations || []).length === 0 ? (
             <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-6 text-gray-300">
-              No hay recomendaciones para mostrar.
+              <p className="text-base font-semibold text-white">
+                No hay recomendaciones para mostrar por ahora.
+              </p>
+              <p className="mt-2 text-sm text-gray-400">
+                Para generar insights automaticos, registra ventas, stock y
+                costos recientes.
+              </p>
+              <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-gray-400">
+                <li>Confirma ventas recientes con estado confirmado.</li>
+                <li>Actualiza stock de bodega y distribuidores.</li>
+                <li>Revisa precios y costos promedio.</li>
+              </ul>
             </div>
           ) : (
             <>

@@ -72,7 +72,7 @@ export function FinancialPanel({
   );
 
   const handleAddCost = () => {
-    if (newCost.description && newCost.amount > 0) {
+    if (newCost.description && newCost.amount !== 0) {
       onAddCost(newCost);
       setNewCost({ type: "", description: "", amount: 0 });
       setShowAddCost(false);
@@ -286,13 +286,16 @@ export function FinancialPanel({
                 </span>
                 <input
                   type="number"
-                  placeholder="Monto"
+                  placeholder="Monto (negativo descuenta)"
                   value={newCost.amount || ""}
                   onChange={e =>
                     setNewCost({ ...newCost, amount: Number(e.target.value) })
                   }
                   className="w-full rounded-lg border border-gray-600 bg-gray-800 py-2 pl-7 pr-3 text-sm text-white"
                 />
+                <p className="mt-1 text-xs text-gray-500">
+                  Usa valores negativos para descontar del total.
+                </p>
               </div>
               <button
                 type="button"
@@ -308,28 +311,36 @@ export function FinancialPanel({
         {/* Cost List */}
         {additionalCosts.length > 0 ? (
           <div className="space-y-2">
-            {additionalCosts.map(cost => (
-              <div
-                key={cost.id}
-                className="flex items-center justify-between rounded-lg bg-gray-900/50 px-3 py-2"
-              >
-                <span className="text-sm text-gray-300">
-                  {cost.description}
-                </span>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-red-400">
-                    -${cost.amount.toLocaleString()}
+            {additionalCosts.map(cost => {
+              const isNegative = cost.amount < 0;
+              return (
+                <div
+                  key={cost.id}
+                  className="flex items-center justify-between rounded-lg bg-gray-900/50 px-3 py-2"
+                >
+                  <span className="text-sm text-gray-300">
+                    {cost.description}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => onRemoveCost(cost.id)}
-                    className="text-gray-500 hover:text-red-400"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`text-sm font-medium ${
+                        isNegative ? "text-green-400" : "text-red-400"
+                      }`}
+                    >
+                      {isNegative ? "-" : "+"}$
+                      {Math.abs(cost.amount).toLocaleString()}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => onRemoveCost(cost.id)}
+                      className="text-gray-500 hover:text-red-400"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <p className="text-center text-xs text-gray-500">

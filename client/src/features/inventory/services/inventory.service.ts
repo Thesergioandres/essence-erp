@@ -357,10 +357,8 @@ export const stockService = {
     stats: { totalTransfers: number; totalQuantity: number };
   }> {
     try {
-      // Use branch-transfers endpoint which exists in V2
-      const response = await api.get("/branch-transfers", { params });
-      // Normalize V2 response: { success: true, data: transfers[] }
-      const transfers = response.data.data || response.data.transfers || [];
+      const response = await api.get("/stock/transfers", { params });
+      const transfers = response.data.transfers || response.data.data || [];
       return {
         transfers,
         pagination: response.data.pagination || {

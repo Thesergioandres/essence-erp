@@ -6,9 +6,9 @@ const cloudinaryEnabled = process.env.ENABLE_CLOUDINARY === "true";
 
 export const isCloudinaryConfigured = Boolean(
   cloudinaryEnabled &&
-    process.env.CLOUDINARY_CLOUD_NAME &&
-    process.env.CLOUDINARY_API_KEY &&
-    process.env.CLOUDINARY_API_SECRET
+  process.env.CLOUDINARY_CLOUD_NAME &&
+  process.env.CLOUDINARY_API_KEY &&
+  process.env.CLOUDINARY_API_SECRET,
 );
 
 if (isCloudinaryConfigured) {
@@ -20,11 +20,11 @@ if (isCloudinaryConfigured) {
   });
 } else if (cloudinaryEnabled) {
   console.warn(
-    "⚠️  Cloudinary habilitado pero faltan CLOUDINARY_*; se deshabilita la subida de imágenes."
+    "⚠️  Cloudinary habilitado pero faltan CLOUDINARY_*; se deshabilita la subida de imágenes.",
   );
 } else {
   console.log(
-    "ℹ️  Cloudinary deshabilitado en este entorno (ENABLE_CLOUDINARY != true)"
+    "ℹ️  Cloudinary deshabilitado en este entorno (ENABLE_CLOUDINARY != true)",
   );
 }
 
@@ -45,7 +45,7 @@ const storage = isCloudinaryConfigured
 export const upload = multer({
   storage: storage,
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB max
+    fileSize: 10 * 1024 * 1024, // 10MB max
   },
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith("image/")) {
@@ -62,7 +62,7 @@ export const deleteImage = async (publicId) => {
     if (!isCloudinaryConfigured) {
       console.warn(
         "⚠️  deleteImage llamado sin Cloudinary configurado; se omite la eliminación.",
-        publicId
+        publicId,
       );
       return;
     }
@@ -79,7 +79,7 @@ export const deleteFromCloudinary = deleteImage;
 // Función para subir imagen desde base64
 export const uploadToCloudinary = async (
   base64String,
-  folder = "essence-products"
+  folder = "essence-products",
 ) => {
   if (!isCloudinaryConfigured) {
     throw new Error("Cloudinary no está configurado");

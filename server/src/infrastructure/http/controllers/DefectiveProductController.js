@@ -177,4 +177,58 @@ export class DefectiveProductController {
       res.status(status).json({ success: false, message: error.message });
     }
   }
+
+  async approveWarranty(req, res) {
+    try {
+      const businessId = req.businessId;
+      if (!businessId) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Falta x-business-id" });
+      }
+
+      const result = await repository.approveWarranty(
+        req.params.id,
+        businessId,
+        req.user._id,
+        req.body,
+      );
+      res.json({
+        success: true,
+        message: "Garantía aprobada",
+        report: result.report,
+        newStock: result.newStock,
+      });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      res.status(status).json({ success: false, message: error.message });
+    }
+  }
+
+  async rejectWarranty(req, res) {
+    try {
+      const businessId = req.businessId;
+      if (!businessId) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Falta x-business-id" });
+      }
+
+      const result = await repository.rejectWarranty(
+        req.params.id,
+        businessId,
+        req.user._id,
+        req.body,
+      );
+      res.json({
+        success: true,
+        message: "Garantía rechazada",
+        report: result.report,
+        lossAmount: result.lossAmount,
+      });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      res.status(status).json({ success: false, message: error.message });
+    }
+  }
 }

@@ -39,23 +39,26 @@ class InventoryRepository {
     const qty = Number(quantity);
     if (Number.isNaN(qty) || qty <= 0) throw new Error("Cantidad inválida");
 
-    const unitCost =
-      Number(rawUnitCost) > 0
-        ? Number(rawUnitCost)
-        : product.purchasePrice || 0;
+    const currentCost = product.averageCost || product.purchasePrice || 0;
+    const unitCost = Number(rawUnitCost) > 0 ? Number(rawUnitCost) : currentCost;
     const totalCost = qty * unitCost;
 
     const previousStock = product.totalStock || 0;
-    const currentCost = product.averageCost || product.purchasePrice || 0;
     const previousValue =
       product.totalInventoryValue && product.totalInventoryValue > 0
         ? product.totalInventoryValue
         : previousStock * currentCost;
 
     const newTotalStock = previousStock + qty;
-    const newTotalValue = previousValue + totalCost;
-    const newAverageCost =
-      newTotalStock > 0 ? newTotalValue / newTotalStock : unitCost;
+    const usesFixedCosting = product.costingMethod === "fixed";
+    const newTotalValue = usesFixedCosting
+      ? newTotalStock * currentCost
+      : previousValue + totalCost;
+    const newAverageCost = usesFixedCosting
+      ? currentCost
+      : newTotalStock > 0
+        ? newTotalValue / newTotalStock
+        : unitCost;
 
     product.totalStock = newTotalStock;
     product.totalInventoryValue = newTotalValue;
@@ -91,6 +94,10 @@ class InventoryRepository {
       destination,
       requestId,
       purchaseGroupId: data.purchaseGroupId || null,
+      metadata: {
+        previousAverageCost: previousStock > 0 ? previousValue / previousStock : currentCost,
+        costingMethod: product.costingMethod || "average",
+      },
     });
 
     return {
@@ -232,8 +239,10 @@ class InventoryRepository {
     const newTotalValue = Math.max(totalValue - entryValue, 0);
     product.totalInventoryValue = newTotalValue;
 
-    product.averageCost =
-      product.totalStock > 0
+    const usesFixedCosting = product.costingMethod === "fixed";
+    product.averageCost = usesFixedCosting
+      ? product.averageCost || product.purchasePrice || 0
+      : product.totalStock > 0
         ? newTotalValue / product.totalStock
         : product.purchasePrice || 0;
     product.lastCostUpdate = new Date();

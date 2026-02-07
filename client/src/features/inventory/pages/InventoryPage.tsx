@@ -41,7 +41,7 @@ export default function InventoryPage() {
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Buscar por nombre..."
-          className="rounded-lg border border-gray-600 bg-gray-900/50 px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 sm:px-4 sm:py-3 sm:text-base"
+          className="min-h-[44px] rounded-lg border border-gray-600 bg-gray-900/50 px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 sm:px-4 sm:py-3 sm:text-base"
         />
       </div>
 
@@ -60,77 +60,127 @@ export default function InventoryPage() {
           No se encontraron productos.
         </div>
       ) : (
-        <div className="hidden overflow-hidden rounded-xl border border-gray-700/50 bg-gray-800/50 shadow-lg backdrop-blur-sm md:block">
-          <div className="w-full overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-700">
-              <thead className="bg-gray-900/60">
-                <tr>
-                  <th className="px-6 py-4 text-left text-sm font-semibold uppercase tracking-wider text-gray-400">
-                    Producto
-                  </th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold uppercase tracking-wider text-gray-400">
-                    Precio Cliente
-                  </th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold uppercase tracking-wider text-gray-400">
-                    Stock Total
-                  </th>
-                  <th className="px-6 py-4 text-right text-sm font-semibold uppercase tracking-wider text-gray-400">
-                    Acciones
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-700">
-                {filteredProducts.map(product => (
-                  <tr
-                    key={product._id}
-                    className="transition hover:bg-gray-900/60"
+        <>
+          <div className="space-y-3 md:hidden">
+            {filteredProducts.map(product => (
+              <div
+                key={product._id}
+                className="rounded-xl border border-gray-700/50 bg-gray-800/50 p-4 shadow-lg"
+              >
+                <div className="flex items-start gap-3">
+                  {product.image?.url ? (
+                    <img
+                      src={product.image.url}
+                      alt={product.name}
+                      className="h-16 w-16 rounded-lg object-cover"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="flex h-16 w-16 items-center justify-center rounded-lg border border-dashed border-gray-600 text-gray-500">
+                      N/A
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-base font-semibold text-white">
+                      {product.name}
+                    </p>
+                    <p className="truncate text-sm text-gray-400">
+                      {product.description}
+                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-3 text-sm">
+                      <span className="font-semibold text-purple-400">
+                        ${product.clientPrice?.toFixed(2) || "0.00"}
+                      </span>
+                      <span className="text-gray-300">
+                        Stock: {product.totalStock || 0}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <button
+                    onClick={() => console.log("Edit legacy")}
+                    className="min-h-[44px] w-full rounded-lg border border-purple-500/60 px-4 py-2 text-sm font-medium text-purple-300 transition hover:bg-purple-600/20 active:scale-95"
                   >
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-4">
-                        {product.image?.url ? (
-                          <img
-                            src={product.image.url}
-                            alt={product.name}
-                            className="h-14 w-14 rounded-lg object-cover"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="flex h-14 w-14 items-center justify-center rounded-lg border border-dashed border-gray-600 text-gray-500">
-                            N/A
-                          </div>
-                        )}
-                        <div>
-                          <p className="font-semibold text-white">
-                            {product.name}
-                          </p>
-                          <p className="max-w-xs truncate text-sm text-gray-400">
-                            {product.description}
-                          </p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 font-semibold text-purple-400">
-                      ${product.clientPrice?.toFixed(2) || "0.00"}
-                    </td>
-                    <td className="px-6 py-4 text-gray-300">
-                      {product.totalStock || 0}
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex justify-end gap-3">
-                        <button
-                          onClick={() => console.log("Edit legacy")}
-                          className="rounded-lg border border-purple-500/60 px-4 py-2 text-sm font-medium text-purple-300 transition hover:bg-purple-600/20 active:scale-95"
-                        >
-                          Editar
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    Editar
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
-        </div>
+
+          <div className="hidden overflow-hidden rounded-xl border border-gray-700/50 bg-gray-800/50 shadow-lg backdrop-blur-sm md:block">
+            <div className="w-full overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-700">
+                <thead className="bg-gray-900/60">
+                  <tr>
+                    <th className="px-6 py-4 text-left text-sm font-semibold uppercase tracking-wider text-gray-400">
+                      Producto
+                    </th>
+                    <th className="px-6 py-4 text-left text-sm font-semibold uppercase tracking-wider text-gray-400">
+                      Precio Cliente
+                    </th>
+                    <th className="px-6 py-4 text-left text-sm font-semibold uppercase tracking-wider text-gray-400">
+                      Stock Total
+                    </th>
+                    <th className="px-6 py-4 text-right text-sm font-semibold uppercase tracking-wider text-gray-400">
+                      Acciones
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-700">
+                  {filteredProducts.map(product => (
+                    <tr
+                      key={product._id}
+                      className="transition hover:bg-gray-900/60"
+                    >
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-4">
+                          {product.image?.url ? (
+                            <img
+                              src={product.image.url}
+                              alt={product.name}
+                              className="h-14 w-14 rounded-lg object-cover"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="flex h-14 w-14 items-center justify-center rounded-lg border border-dashed border-gray-600 text-gray-500">
+                              N/A
+                            </div>
+                          )}
+                          <div>
+                            <p className="font-semibold text-white">
+                              {product.name}
+                            </p>
+                            <p className="max-w-xs truncate text-sm text-gray-400">
+                              {product.description}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 font-semibold text-purple-400">
+                        ${product.clientPrice?.toFixed(2) || "0.00"}
+                      </td>
+                      <td className="px-6 py-4 text-gray-300">
+                        {product.totalStock || 0}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex justify-end gap-3">
+                          <button
+                            onClick={() => console.log("Edit legacy")}
+                            className="min-h-[44px] rounded-lg border border-purple-500/60 px-4 py-2 text-sm font-medium text-purple-300 transition hover:bg-purple-600/20 active:scale-95"
+                          >
+                            Editar
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

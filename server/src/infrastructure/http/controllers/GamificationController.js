@@ -78,8 +78,7 @@ export class GamificationController {
           .json({ success: false, message: "Falta x-business-id" });
       }
 
-      const { period = "current" } = req.query;
-      const result = await repository.getRanking(businessId, period);
+      const result = await repository.getRanking(businessId, req.query);
       res.json({ success: true, data: result });
     } catch (error) {
       res.status(500).json({ success: false, message: error.message });
@@ -91,6 +90,66 @@ export class GamificationController {
       const { distributorId } = req.params;
       const stats = await repository.getDistributorStats(distributorId);
       res.json({ success: true, data: stats });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  async getWinners(req, res) {
+    try {
+      const businessId = req.businessId;
+      if (!businessId) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Falta x-business-id" });
+      }
+
+      const result = await repository.getWinners(businessId, req.query);
+      res.json({ success: true, data: result });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  async markBonusPaid(req, res) {
+    try {
+      const businessId = req.businessId;
+      if (!businessId) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Falta x-business-id" });
+      }
+
+      const winner = await repository.markBonusPaid(businessId, req.params.id);
+
+      if (!winner) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Ganador no encontrado" });
+      }
+
+      res.json({ success: true, data: winner });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  async recalculatePoints(req, res) {
+    try {
+      const businessId = req.businessId;
+      if (!businessId) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Falta x-business-id" });
+      }
+
+      const distributorId = req.body?.distributorId || null;
+      const result = await repository.recalculatePoints(
+        businessId,
+        distributorId,
+      );
+
+      res.json({ success: true, data: result });
     } catch (error) {
       res.status(500).json({ success: false, message: error.message });
     }

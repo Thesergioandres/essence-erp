@@ -436,6 +436,199 @@ export class DefectiveProductRepository {
     return report;
   }
 
+  async approveWarranty(id, businessId, userId, data) {
+    const report = await DefectiveProduct.findOne({
+      _id: id,
+      business: businessId,
+    });
+
+    if (!report) {
+      const err = new Error("Reporte no encontrado");
+      err.statusCode = 404;
+      throw err;
+    }
+
+    if (!report.hasWarranty) {
+      const err = new Error("El reporte no tiene garantía");
+      err.statusCode = 400;
+      throw err;
+    }
+
+    if (report.warrantyStatus === "approved") {
+      const err = new Error("La garantía ya fue aprobada");
+      err.statusCode = 400;
+      throw err;
+    }
+
+    if (report.warrantyStatus === "rejected") {
+      const err = new Error("La garantía ya fue rechazada");
+      err.statusCode = 400;
+      throw err;
+    }
+
+    if (report.stockRestored) {
+      const err = new Error("El stock ya fue repuesto");
+      err.statusCode = 400;
+      throw err;
+    }
+
+    report.warrantyStatus = "approved";
+    report.stockRestored = true;
+    report.stockRestoredAt = new Date();
+    report.lossAmount = 0;
+    report.adminNotes = data?.adminNotes || report.adminNotes;
+
+    const quantity = report.quantity || 0;
+    let newStock = { warehouseStock: 0, totalStock: 0 };
+
+    if (quantity > 0) {
+      if (report.stockOrigin === "distributor" && report.distributor) {
+        await DistributorStock.findOneAndUpdate(
+          {
+            distributor: report.distributor,
+            product: report.product,
+            business: businessId,
+          },
+          { $inc: { quantity } },
+        );
+
+        const product = await Product.findByIdAndUpdate(
+          report.product,
+          { $inc: { totalStock: quantity } },
+          { new: true },
+        ).lean();
+        newStock = {
+          warehouseStock: product?.warehouseStock || 0,
+          totalStock: product?.totalStock || 0,
+        };
+      } else if (report.stockOrigin === "branch" && report.branch) {
+        await BranchStock.findOneAndUpdate(
+          {
+            branch: report.branch,
+            product: report.product,
+            business: businessId,
+          },
+          { $inc: { quantity } },
+        );
+
+        const product = await Product.findByIdAndUpdate(
+          report.product,
+          { $inc: { totalStock: quantity } },
+          { new: true },
+        ).lean();
+        newStock = {
+          warehouseStock: product?.warehouseStock || 0,
+          totalStock: product?.totalStock || 0,
+        };
+      } else {
+        const product = await Product.findByIdAndUpdate(
+          report.product,
+          { $inc: { warehouseStock: quantity, totalStock: quantity } },
+          { new: true },
+        ).lean();
+        newStock = {
+          warehouseStock: product?.warehouseStock || 0,
+          totalStock: product?.totalStock || 0,
+        };
+      }
+    }
+
+    await report.save();
+    return { report, newStock };
+  }
+
+  async rejectWarranty(id, businessId, userId, data) {
+    const report = await DefectiveProduct.findOne({
+      _id: id,
+      business: businessId,
+    });
+
+    if (!report) {
+      const err = new Error("Reporte no encontrado");
+      err.statusCode = 404;
+      throw err;
+    }
+
+    if (!report.hasWarranty) {
+      const err = new Error("El reporte no tiene garantía");
+      err.statusCode = 400;
+      throw err;
+    }
+
+    if (report.warrantyStatus === "approved") {
+      const err = new Error("La garantía ya fue aprobada");
+      err.statusCode = 400;
+      throw err;
+    }
+
+    if (report.warrantyStatus === "rejected") {
+      const err = new Error("La garantía ya fue rechazada");
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const product = await Product.findOne({
+      _id: report.product,
+      business: businessId,
+    }).lean();
+
+    if (!product) {
+      const err = new Error("Producto no encontrado");
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const unitCost = product.averageCost || product.purchasePrice || 0;
+    const lossAmount = unitCost * (report.quantity || 0);
+
+    report.warrantyStatus = "rejected";
+    report.lossAmount = lossAmount;
+    report.adminNotes = data?.adminNotes || report.adminNotes;
+
+    if (lossAmount > 0) {
+      const existing = await ProfitHistory.findOne({
+        business: businessId,
+        type: "ajuste",
+        "metadata.eventName": "defective_loss",
+        "metadata.reportId": report._id,
+      });
+
+      if (existing) {
+        if (existing.amount !== -lossAmount) {
+          existing.amount = -lossAmount;
+          existing.product = report.product;
+          existing.metadata = {
+            ...existing.metadata,
+            quantity: report.quantity,
+            unitCost,
+          };
+          await existing.save();
+        }
+      } else {
+        await ProfitHistory.create({
+          business: businessId,
+          user: userId,
+          type: "ajuste",
+          amount: -lossAmount,
+          product: report.product,
+          description: `Pérdida por garantía rechazada (${report.quantity}): ${product.name}`,
+          date: new Date(),
+          metadata: {
+            quantity: report.quantity,
+            salePrice: 0,
+            saleId: null,
+            eventName: "defective_loss",
+            reportId: report._id,
+            unitCost,
+          },
+        });
+      }
+    }
+
+    await report.save();
+    return { report, lossAmount };
+  }
+
   async cancelReport(id, businessId) {
     const report = await DefectiveProduct.findOne({
       _id: id,

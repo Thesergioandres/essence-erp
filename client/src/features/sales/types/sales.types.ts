@@ -67,6 +67,8 @@ export interface Sale {
   }>;
   totalAdditionalCosts?: number;
   distributorPrice?: number;
+  isPromotion?: boolean;
+  promotion?: { _id: string; name?: string } | string | null;
   saleGroupId?: string;
   saleId?: string;
   notes?: string;

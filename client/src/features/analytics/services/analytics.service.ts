@@ -1159,6 +1159,14 @@ export const advancedAnalyticsService = {
 
 // ==================== AUDIT SERVICE ====================
 export const auditService = {
+  mapStatsToRecord(entries?: Array<{ _id?: string; count?: number }>) {
+    return (entries || []).reduce((acc: Record<string, number>, item) => {
+      if (item?._id) {
+        acc[item._id] = item.count || 0;
+      }
+      return acc;
+    }, {});
+  },
   async getLogs(params?: {
     page?: number;
     limit?: number;
@@ -1195,8 +1203,25 @@ export const auditService = {
     actions: string[];
     resourceTypes: string[];
   }> {
-    const response = await api.get("/audit", { params });
-    return response.data;
+    const response = await api.get("/audit/logs", { params });
+    const payload = response.data?.data ? response.data : response.data || {};
+    const pagination = payload.pagination || {
+      page: params?.page || 1,
+      limit: params?.limit || 50,
+      total: 0,
+      pages: 1,
+    };
+    return {
+      logs: payload.data || payload.logs || [],
+      pagination: {
+        ...pagination,
+        currentPage: pagination.page || params?.page || 1,
+        totalPages: pagination.pages || 1,
+        totalLogs: pagination.total || 0,
+      },
+      actions: payload.actions || [],
+      resourceTypes: payload.resourceTypes || [],
+    };
   },
 
   async getLogById(id: string): Promise<{
@@ -1218,8 +1243,11 @@ export const auditService = {
       createdAt: Date;
     };
   }> {
-    const response = await api.get(`/audit/${id}`);
-    return response.data;
+    const response = await api.get(`/audit/logs/${id}`);
+    const payload = response.data?.data ?? response.data;
+    return {
+      log: payload,
+    } as any;
   },
 
   async getDailySummary(date?: string): Promise<{
@@ -1235,7 +1263,8 @@ export const auditService = {
     const response = await api.get("/audit/summary/daily", {
       params: { date },
     });
-    return response.data;
+    const payload = response.data?.data ?? response.data;
+    return payload || {};
   },
 
   async getStats(): Promise<{
@@ -1253,6 +1282,16 @@ export const auditService = {
     }>;
   }> {
     const response = await api.get("/audit/stats");
-    return response.data;
+    const payload = response.data?.data ?? response.data;
+    const statsPayload = payload?.stats || payload || {};
+    return {
+      stats: {
+        actionStats: this.mapStatsToRecord(statsPayload.actionStats),
+        moduleStats: this.mapStatsToRecord(statsPayload.moduleStats),
+        severityStats: this.mapStatsToRecord(statsPayload.severityStats),
+        userStats: statsPayload.userStats || [],
+      },
+      recentActivity: payload?.recentActivity || [],
+    } as any;
   },
 };

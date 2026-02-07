@@ -134,7 +134,10 @@ export class SaleRepository {
 
     const [sales, total] = await Promise.all([
       Sale.find(filter)
-        .populate("product", "name sku")
+        .populate(
+          "product",
+          "name sku clientPrice suggestedPrice distributorPrice",
+        )
         .populate("branch", "name")
         .populate("distributor", "name email")
         .populate("paymentMethod", "name code")

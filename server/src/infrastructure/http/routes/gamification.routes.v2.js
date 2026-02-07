@@ -1,8 +1,10 @@
 import { Router } from "express";
 import { protect } from "../../../../middleware/auth.middleware.js";
-import { businessContext } from "../../../../middleware/business.middleware.js";
-import { requireFeature } from "../../../../middleware/business.middleware.js";
-import { requirePermission } from "../../../../middleware/business.middleware.js";
+import {
+  businessContext,
+  requireFeature,
+  requirePermission,
+} from "../../../../middleware/business.middleware.js";
 import { GamificationController } from "../controllers/GamificationController.js";
 
 const router = Router();
@@ -15,18 +17,33 @@ router.get("/commission/:distributorId", (req, res) =>
 );
 router.post(
   "/check-period",
-  requirePermission("manageGamification"),
+  requirePermission({ module: "config", action: "update" }),
   (req, res) => controller.checkAndEvaluatePeriod(req, res),
 );
-router.get("/config", requirePermission("manageGamification"), (req, res) =>
-  controller.getConfig(req, res),
-);
-router.put("/config", requirePermission("manageGamification"), (req, res) =>
-  controller.updateConfig(req, res),
+router.get("/config", (req, res) => controller.getConfig(req, res));
+router.put(
+  "/config",
+  requirePermission({ module: "config", action: "update" }),
+  (req, res) => controller.updateConfig(req, res),
 );
 router.get("/ranking", (req, res) => controller.getRanking(req, res));
+router.get(
+  "/winners",
+  requirePermission({ module: "config", action: "read" }),
+  (req, res) => controller.getWinners(req, res),
+);
+router.put(
+  "/winners/:id/pay",
+  requirePermission({ module: "config", action: "update" }),
+  (req, res) => controller.markBonusPaid(req, res),
+);
 router.get("/stats/:distributorId", (req, res) =>
   controller.getDistributorStats(req, res),
+);
+router.post(
+  "/recalculate-points",
+  requirePermission({ module: "config", action: "update" }),
+  (req, res) => controller.recalculatePoints(req, res),
 );
 
 export default router;

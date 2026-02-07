@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import AuditLog from "../../../../models/AuditLog.js";
 import Membership from "../../../../models/Membership.js";
+import Product from "../../../../models/Product.js";
 
 export class AuditRepository {
   async getBusinessUserIds(businessId, isSuperAdmin) {
@@ -121,29 +122,108 @@ export class AuditRepository {
       }
     }
 
-    const [actionStats, moduleStats, userStats] = await Promise.all([
-      AuditLog.aggregate([
-        { $match: match },
-        { $group: { _id: "$action", count: { $sum: 1 } } },
-        { $sort: { count: -1 } },
-      ]),
-      AuditLog.aggregate([
-        { $match: match },
-        { $group: { _id: "$module", count: { $sum: 1 } } },
-        { $sort: { count: -1 } },
-      ]),
-      AuditLog.aggregate([
-        { $match: match },
-        { $group: { _id: "$user", count: { $sum: 1 } } },
-        { $sort: { count: -1 } },
-        { $limit: 10 },
-      ]),
-    ]);
+    const [actionStats, moduleStats, userStats, severityStats] =
+      await Promise.all([
+        AuditLog.aggregate([
+          { $match: match },
+          { $group: { _id: "$action", count: { $sum: 1 } } },
+          { $sort: { count: -1 } },
+        ]),
+        AuditLog.aggregate([
+          { $match: match },
+          { $group: { _id: "$module", count: { $sum: 1 } } },
+          { $sort: { count: -1 } },
+        ]),
+        AuditLog.aggregate([
+          { $match: match },
+          { $group: { _id: "$user", count: { $sum: 1 } } },
+          { $sort: { count: -1 } },
+          { $limit: 10 },
+        ]),
+        AuditLog.aggregate([
+          { $match: match },
+          { $group: { _id: "$severity", count: { $sum: 1 } } },
+          { $sort: { count: -1 } },
+        ]),
+      ]);
 
     return {
       actionStats,
       moduleStats,
       userStats,
+      severityStats,
+    };
+  }
+
+  async getDailySummary(businessId, date) {
+    const baseDate = date ? new Date(date) : new Date();
+    const dayStart = new Date(baseDate);
+    const dayEnd = new Date(baseDate);
+    dayStart.setHours(0, 0, 0, 0);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    const match = {
+      business: new mongoose.Types.ObjectId(businessId),
+      createdAt: { $gte: dayStart, $lte: dayEnd },
+    };
+
+    const [totalActions, salesAgg, topUsersAgg, warehouseAgg] =
+      await Promise.all([
+        AuditLog.countDocuments(match),
+        AuditLog.aggregate([
+          { $match: { ...match, action: "sale_registered" } },
+          {
+            $group: {
+              _id: null,
+              count: { $sum: 1 },
+              profit: {
+                $sum: { $ifNull: ["$metadata.totalProfit", 0] },
+              },
+            },
+          },
+        ]),
+        AuditLog.aggregate([
+          { $match: match },
+          {
+            $group: {
+              _id: "$user",
+              name: { $first: "$userName" },
+              count: { $sum: 1 },
+            },
+          },
+          { $sort: { count: -1 } },
+          { $limit: 5 },
+        ]),
+        Product.aggregate([
+          { $match: { business: new mongoose.Types.ObjectId(businessId) } },
+          {
+            $group: {
+              _id: null,
+              totalWarehouseStock: { $sum: "$warehouseStock" },
+            },
+          },
+        ]),
+      ]);
+
+    const salesSummary = salesAgg[0] || { count: 0, profit: 0 };
+    const warehouseSummary = warehouseAgg[0] || { totalWarehouseStock: 0 };
+
+    return {
+      date: dayStart.toISOString().split("T")[0],
+      totalActions,
+      sales: {
+        count: salesSummary.count || 0,
+        profit: salesSummary.profit || 0,
+      },
+      inventory: {
+        warehouse: {
+          totalWarehouseStock: warehouseSummary.totalWarehouseStock || 0,
+        },
+      },
+      topUsers: topUsersAgg.map((user) => ({
+        name: user.name || "Usuario",
+        count: user.count || 0,
+      })),
     };
   }
 }

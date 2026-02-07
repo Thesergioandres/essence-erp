@@ -29,6 +29,7 @@ export default function Catalog() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [inStockOnly, setInStockOnly] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
   const publicBusinessId = useMemo(() => {
     const fromQuery = searchParams.get("businessId");
     if (fromQuery) return fromQuery;
@@ -122,13 +123,85 @@ export default function Catalog() {
     return `${window.location.origin}/catalog${query ? `?${query}` : ""}`;
   }, [publicBusinessId, searchParams]);
 
+  const shareText = "Explora nuestro catalogo y elige tus favoritos.";
+
+  const shareTargets = useMemo(
+    () => [
+      {
+        id: "whatsapp",
+        label: "WhatsApp",
+        href: `https://wa.me/?text=${encodeURIComponent(
+          `${shareText}\n${shareLink}`
+        )}`,
+      },
+      {
+        id: "telegram",
+        label: "Telegram",
+        href: `https://t.me/share/url?url=${encodeURIComponent(
+          shareLink
+        )}&text=${encodeURIComponent(shareText)}`,
+      },
+      {
+        id: "facebook",
+        label: "Facebook",
+        href: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(
+          shareLink
+        )}`,
+      },
+      {
+        id: "x",
+        label: "X",
+        href: `https://twitter.com/intent/tweet?text=${encodeURIComponent(
+          shareText
+        )}&url=${encodeURIComponent(shareLink)}`,
+      },
+      {
+        id: "linkedin",
+        label: "LinkedIn",
+        href: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(
+          shareLink
+        )}`,
+      },
+      {
+        id: "email",
+        label: "Correo",
+        href: `mailto:?subject=${encodeURIComponent(
+          "Catalogo de productos"
+        )}&body=${encodeURIComponent(`${shareText}\n\n${shareLink}`)}`,
+      },
+    ],
+    [shareLink]
+  );
+
   const handleCopyShareLink = async () => {
     try {
       await navigator.clipboard.writeText(shareLink);
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2000);
+      setShareError(null);
     } catch (_error) {
       window.prompt("Copia este enlace", shareLink);
+    }
+  };
+
+  const handleNativeShare = async () => {
+    if (!navigator.share) {
+      handleCopyShareLink();
+      setShareError(
+        "Tu navegador no soporta compartir. Copiamos el enlace para ti."
+      );
+      return;
+    }
+
+    try {
+      await navigator.share({
+        title: "Catalogo",
+        text: shareText,
+        url: shareLink,
+      });
+      setShareError(null);
+    } catch (_error) {
+      setShareError("No se pudo abrir el panel de compartir.");
     }
   };
 
@@ -218,22 +291,22 @@ export default function Catalog() {
   ]);
 
   return (
-    <div className="min-h-screen bg-gray-950">
+    <div className="min-h-screen bg-[#0f1210] text-slate-100">
       {!hideChrome && <Navbar />}
 
       {!hideChrome && (
         <div className="relative overflow-hidden">
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(88,28,135,0.35),transparent_25%),radial-gradient(circle_at_80%_0%,rgba(219,39,119,0.35),transparent_25%),radial-gradient(circle_at_50%_80%,rgba(59,130,246,0.25),transparent_30%)]" />
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(16,185,129,0.28),transparent_30%),radial-gradient(circle_at_80%_0%,rgba(245,158,11,0.28),transparent_35%),radial-gradient(circle_at_50%_80%,rgba(14,165,233,0.2),transparent_40%)]" />
           <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center opacity-10" />
           <div className="relative mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
             <div className="grid items-center gap-10 lg:grid-cols-[1.4fr,1fr]">
               <div className="space-y-4 sm:space-y-6">
-                <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-blue-100 backdrop-blur-sm">
+                <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-emerald-100 backdrop-blur-sm">
                   <span className="relative flex h-2 w-2">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-300 opacity-75"></span>
-                    <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-400"></span>
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-300 opacity-75"></span>
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400"></span>
                   </span>
-                  Nuevo catálogo inteligente
+                  Catalogo inteligente
                 </div>
 
                 <h1 className="text-4xl font-bold leading-tight tracking-tight text-white sm:text-5xl lg:text-6xl">
@@ -247,13 +320,13 @@ export default function Catalog() {
                 </p>
 
                 <div className="flex flex-wrap gap-3">
-                  <div className="rounded-full border border-blue-400/30 bg-blue-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-blue-100">
+                  <div className="rounded-full border border-amber-400/30 bg-amber-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-amber-100">
                     Filtros dinamicos
                   </div>
-                  <div className="rounded-full border border-pink-400/30 bg-pink-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-pink-100">
+                  <div className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100">
                     Vistas grid/lista
                   </div>
-                  <div className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100">
+                  <div className="rounded-full border border-sky-400/30 bg-sky-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-sky-100">
                     Precios en vivo
                   </div>
                 </div>
@@ -269,7 +342,7 @@ export default function Catalog() {
                       {products.length}
                     </p>
                   </div>
-                  <div className="rounded-full bg-gradient-to-r from-blue-500 to-pink-500 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white">
+                  <div className="rounded-full bg-gradient-to-r from-amber-500 to-emerald-500 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white">
                     Actualizado
                   </div>
                 </div>
@@ -308,17 +381,34 @@ export default function Catalog() {
           </div>
         )}
 
-        <div className="rounded-xl border border-white/10 bg-gray-900/70 p-4 sm:flex sm:items-center sm:justify-between sm:gap-4">
-          <div className="mb-3 sm:mb-0">
-            <p className="text-sm font-semibold text-white">
-              Compartir catálogo
-            </p>
-            <p className="text-xs text-gray-400">
-              Genera un enlace público para tus clientes.
-            </p>
+        <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-5 shadow-2xl backdrop-blur-xl">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-white">
+                Compartir catalogo
+              </p>
+              <p className="text-xs text-gray-400">
+                Comparte con un clic o publica en cualquier red social.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={handleNativeShare}
+                className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-400"
+              >
+                Compartir ahora
+              </button>
+              <button
+                onClick={handleCopyShareLink}
+                className="rounded-lg border border-white/10 bg-gray-950/60 px-4 py-2 text-sm font-semibold text-gray-100 transition hover:bg-white/10"
+              >
+                {copiedLink ? "Copiado" : "Copiar link"}
+              </button>
+            </div>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-            <div className="flex w-full items-center gap-2 rounded-lg border border-white/10 bg-gray-950 px-3 py-2 text-xs text-gray-300 sm:w-96">
+
+          <div className="mt-4 grid gap-3 lg:grid-cols-[2fr,1fr]">
+            <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-gray-950/60 px-3 py-2 text-xs text-gray-300">
               <svg
                 className="h-4 w-4 text-gray-500"
                 fill="none"
@@ -340,13 +430,26 @@ export default function Catalog() {
               </svg>
               <span className="truncate">{shareLink}</span>
             </div>
-            <button
-              onClick={handleCopyShareLink}
-              className="whitespace-nowrap rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
-            >
-              {copiedLink ? "Copiado" : "Copiar link"}
-            </button>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {shareTargets.map(target => (
+                <a
+                  key={target.id}
+                  href={target.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-lg border border-white/10 bg-gray-950/60 px-3 py-2 text-xs font-semibold text-gray-100 transition hover:bg-white/10"
+                >
+                  {target.label}
+                </a>
+              ))}
+            </div>
           </div>
+
+          {(copiedLink || shareError) && (
+            <div className="mt-3 text-xs text-gray-400">
+              {copiedLink ? "Enlace copiado." : shareError}
+            </div>
+          )}
         </div>
 
         {/* Category Pills */}
@@ -356,8 +459,8 @@ export default function Catalog() {
               onClick={() => setSelectedCategory("all")}
               className={`whitespace-nowrap rounded-full px-4 py-2.5 text-sm font-medium transition-all duration-300 sm:px-6 sm:py-3 sm:text-base ${
                 selectedCategory === "all"
-                  ? "scale-105 bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg shadow-purple-500/50"
-                  : "border border-gray-700/50 bg-gray-800/50 text-gray-400 hover:bg-gray-800 hover:text-white"
+                  ? "scale-105 bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/40"
+                  : "border border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white"
               }`}
             >
               Todos
@@ -368,8 +471,8 @@ export default function Catalog() {
                 onClick={() => setSelectedCategory(cat._id)}
                 className={`whitespace-nowrap rounded-full px-4 py-2.5 text-sm font-medium transition-all duration-300 sm:px-6 sm:py-3 sm:text-base ${
                   selectedCategory === cat._id
-                    ? "scale-105 bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg shadow-purple-500/50"
-                    : "border border-gray-700/50 bg-gray-800/50 text-gray-400 hover:bg-gray-800 hover:text-white"
+                    ? "scale-105 bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/40"
+                    : "border border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white"
                 }`}
                 style={{ animationDelay: `${index * 50}ms` }}
               >
@@ -400,14 +503,14 @@ export default function Catalog() {
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
                 placeholder="Buscar productos..."
-                className="w-full rounded-xl border border-white/10 bg-gray-900/70 px-11 py-3 text-sm text-white outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="w-full rounded-xl border border-white/10 bg-gray-900/70 px-11 py-3 text-sm text-white outline-none transition focus:border-amber-400 focus:ring-1 focus:ring-amber-400"
               />
             </div>
 
             <select
               value={sortBy}
               onChange={e => setSortBy(e.target.value)}
-              className="rounded-xl border border-white/10 bg-gray-900/70 px-4 py-3 text-sm text-white transition hover:border-blue-500 focus:border-blue-500 focus:outline-none"
+              className="rounded-xl border border-white/10 bg-gray-900/70 px-4 py-3 text-sm text-white transition hover:border-amber-400 focus:border-amber-400 focus:outline-none"
             >
               <option value="name">Ordenar: A-Z</option>
               <option value="price-asc">Precio: Menor a Mayor</option>
@@ -420,7 +523,7 @@ export default function Catalog() {
                 onClick={() => setViewMode("grid")}
                 className={`rounded-lg p-2.5 transition-all ${
                   viewMode === "grid"
-                    ? "bg-blue-600 text-white shadow-lg"
+                    ? "bg-amber-500 text-white shadow-lg"
                     : "text-gray-400 hover:text-white"
                 }`}
               >
@@ -442,7 +545,7 @@ export default function Catalog() {
                 onClick={() => setViewMode("list")}
                 className={`rounded-lg p-2.5 transition-all ${
                   viewMode === "list"
-                    ? "bg-blue-600 text-white shadow-lg"
+                    ? "bg-amber-500 text-white shadow-lg"
                     : "text-gray-400 hover:text-white"
                 }`}
               >
@@ -464,7 +567,7 @@ export default function Catalog() {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <label className="flex cursor-pointer items-center justify-between rounded-lg border border-white/10 bg-gray-900/60 px-4 py-3 text-sm text-gray-200 transition hover:border-blue-500/50">
+            <label className="flex cursor-pointer items-center justify-between rounded-lg border border-white/10 bg-gray-900/60 px-4 py-3 text-sm text-gray-200 transition hover:border-emerald-400/50">
               <div>
                 <p className="font-semibold text-white">Solo con stock</p>
                 <p className="text-xs text-gray-400">
@@ -475,11 +578,11 @@ export default function Catalog() {
                 type="checkbox"
                 checked={inStockOnly}
                 onChange={e => setInStockOnly(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-500 text-blue-500 focus:ring-blue-500"
+                className="h-4 w-4 rounded border-gray-500 text-emerald-500 focus:ring-emerald-500"
               />
             </label>
 
-            <label className="flex cursor-pointer items-center justify-between rounded-lg border border-white/10 bg-gray-900/60 px-4 py-3 text-sm text-gray-200 transition hover:border-pink-500/50">
+            <label className="flex cursor-pointer items-center justify-between rounded-lg border border-white/10 bg-gray-900/60 px-4 py-3 text-sm text-gray-200 transition hover:border-amber-400/50">
               <div>
                 <p className="font-semibold text-white">Solo destacados</p>
                 <p className="text-xs text-gray-400">Prioriza lo que brilla</p>
@@ -488,7 +591,7 @@ export default function Catalog() {
                 type="checkbox"
                 checked={featuredOnly}
                 onChange={e => setFeaturedOnly(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-500 text-pink-500 focus:ring-pink-500"
+                className="h-4 w-4 rounded border-gray-500 text-amber-500 focus:ring-amber-500"
               />
             </label>
 
@@ -515,7 +618,7 @@ export default function Catalog() {
                         min: Number(e.target.value) || 0,
                       }))
                     }
-                    className="w-full rounded-md border border-white/10 bg-gray-800/80 px-2 py-1 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    className="w-full rounded-md border border-white/10 bg-gray-800/80 px-2 py-1 text-white focus:border-amber-400 focus:ring-1 focus:ring-amber-400"
                   />
                 </div>
                 <span className="text-gray-500">-</span>
@@ -531,7 +634,7 @@ export default function Catalog() {
                         max: Number(e.target.value) || maxPrice,
                       }))
                     }
-                    className="w-full rounded-md border border-white/10 bg-gray-800/80 px-2 py-1 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    className="w-full rounded-md border border-white/10 bg-gray-800/80 px-2 py-1 text-white focus:border-amber-400 focus:ring-1 focus:ring-amber-400"
                   />
                 </div>
               </div>
@@ -567,7 +670,7 @@ export default function Catalog() {
                   setFeaturedOnly(false);
                   setPriceRange({ min: 0, max: maxPrice });
                 }}
-                className="flex items-center gap-1.5 text-sm text-purple-400 transition-colors hover:text-purple-300"
+                className="flex items-center gap-1.5 text-sm text-amber-300 transition-colors hover:text-amber-200"
               >
                 <svg
                   className="h-4 w-4"
@@ -646,7 +749,7 @@ export default function Catalog() {
                 setFeaturedOnly(false);
                 setPriceRange({ min: 0, max: maxPrice });
               }}
-              className="rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 px-6 py-3 font-medium text-white transition-all hover:shadow-lg hover:shadow-purple-500/50"
+              className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-3 font-medium text-white transition-all hover:shadow-lg hover:shadow-amber-500/40"
             >
               Ver todos los productos
             </button>

@@ -3,11 +3,18 @@
   "short_name": "Essence",
   "description": "Sistema integral de gestión empresarial multi-negocio",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#1a1a2e",
-  "theme_color": "#6366f1",
+  "background_color": "#0b0b11",
+  "theme_color": "#0b0b11",
   "orientation": "any",
   "icons": [
+    {
+      "src": "/erp-logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
     {
       "src": "/erp-logo.png",
       "sizes": "512x512",

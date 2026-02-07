@@ -216,11 +216,20 @@ export class BusinessAssistantController {
       res.json({
         success: true,
         data: {
-          strategies: [],
-          score: 0,
-          insights: [],
-          recommendations: [],
-          generatedAt: null,
+          analysis: {
+            strengths: [],
+            weaknesses: [],
+            opportunities: [],
+            threats: [],
+            keyMetrics: {
+              healthScore: 0,
+              growthRate: 0,
+              profitTrend: "stable",
+              customerSatisfaction: undefined,
+            },
+            recommendations: [],
+          },
+          generatedAt: new Date().toISOString(),
           status: "pending",
           message:
             "Análisis estratégico pendiente. Se requieren más datos para generar estrategias.",

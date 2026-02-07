@@ -10,26 +10,40 @@ const controller = new PromotionController();
 
 router.use(protect, businessContext, requireFeature("promotions"));
 
-router.post("/", requirePermission("createPromotion"), (req, res) =>
-  controller.create(req, res),
+router.post(
+  "/",
+  requirePermission({ module: "promotions", action: "create" }),
+  (req, res) => controller.create(req, res),
 );
-router.get("/", requirePermission("readPromotion"), (req, res) =>
-  controller.getAll(req, res),
+router.get(
+  "/",
+  requirePermission({ module: "promotions", action: "read" }),
+  (req, res) => controller.getAll(req, res),
 );
-router.get("/active", requirePermission("readPromotion"), (req, res) =>
-  controller.getActive(req, res),
+router.get(
+  "/active",
+  requirePermission({ module: "promotions", action: "read" }),
+  (req, res) => controller.getActive(req, res),
 );
-router.get("/:id", requirePermission("readPromotion"), (req, res) =>
-  controller.getById(req, res),
+router.get(
+  "/:id",
+  requirePermission({ module: "promotions", action: "read" }),
+  (req, res) => controller.getById(req, res),
 );
-router.put("/:id", requirePermission("updatePromotion"), (req, res) =>
-  controller.update(req, res),
+router.put(
+  "/:id",
+  requirePermission({ module: "promotions", action: "update" }),
+  (req, res) => controller.update(req, res),
 );
-router.delete("/:id", requirePermission("deletePromotion"), (req, res) =>
-  controller.delete(req, res),
+router.delete(
+  "/:id",
+  requirePermission({ module: "promotions", action: "delete" }),
+  (req, res) => controller.delete(req, res),
 );
-router.post("/:id/evaluate", requirePermission("readPromotion"), (req, res) =>
-  controller.evaluate(req, res),
+router.post(
+  "/:id/evaluate",
+  requirePermission({ module: "promotions", action: "read" }),
+  (req, res) => controller.evaluate(req, res),
 );
 
 export default router;

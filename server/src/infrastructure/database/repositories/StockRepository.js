@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import Branch from "../../../../models/Branch.js";
 import BranchStock from "../../../../models/BranchStock.js";
 import DistributorStock from "../../../../models/DistributorStock.js";
@@ -479,6 +480,121 @@ class StockRepository {
       unitsReconciled: unassigned,
       newWarehouseStock: product.warehouseStock,
       totalStock: product.totalStock,
+    };
+  }
+
+  async getTransferHistory(businessId, filters = {}) {
+    const query = { business: businessId };
+
+    if (filters.fromDistributor) {
+      query.fromDistributor = filters.fromDistributor;
+    }
+
+    if (filters.toDistributor) {
+      query.toDistributor = filters.toDistributor;
+    }
+
+    if (filters.product) {
+      query.product = filters.product;
+    }
+
+    if (filters.status) {
+      query.status = filters.status;
+    }
+
+    if (filters.startDate || filters.endDate) {
+      query.createdAt = {};
+      if (filters.startDate) {
+        query.createdAt.$gte = new Date(filters.startDate);
+      }
+      if (filters.endDate) {
+        query.createdAt.$lte = new Date(filters.endDate);
+      }
+    }
+
+    const page = parseInt(filters.page, 10) || 1;
+    const limit = parseInt(filters.limit, 10) || 20;
+    const skip = (page - 1) * limit;
+
+    const aggregateMatch = {
+      business: new mongoose.Types.ObjectId(businessId),
+    };
+
+    if (query.fromDistributor) {
+      aggregateMatch.fromDistributor = new mongoose.Types.ObjectId(
+        query.fromDistributor,
+      );
+    }
+
+    if (query.toDistributor) {
+      aggregateMatch.toDistributor = new mongoose.Types.ObjectId(
+        query.toDistributor,
+      );
+    }
+
+    if (query.product) {
+      aggregateMatch.product = new mongoose.Types.ObjectId(query.product);
+    }
+
+    if (query.status) {
+      aggregateMatch.status = query.status;
+    }
+
+    if (query.createdAt) {
+      aggregateMatch.createdAt = query.createdAt;
+    }
+
+    const [transfers, total, statsAgg] = await Promise.all([
+      StockTransfer.find(query)
+        .populate("fromDistributor", "name email")
+        .populate("toDistributor", "name email")
+        .populate("product", "name image")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      StockTransfer.countDocuments(query),
+      StockTransfer.aggregate([
+        { $match: aggregateMatch },
+        {
+          $group: {
+            _id: null,
+            totalTransfers: { $sum: 1 },
+            totalQuantity: { $sum: "$quantity" },
+          },
+        },
+      ]),
+    ]);
+
+    const stats = statsAgg[0] || { totalTransfers: 0, totalQuantity: 0 };
+    const normalizedTransfers = transfers.map((transfer) => ({
+      ...transfer,
+      product:
+        transfer.product ||
+        (transfer.product === null
+          ? { _id: null, name: "Producto Eliminado" }
+          : transfer.product),
+      fromDistributor:
+        transfer.fromDistributor ||
+        (transfer.fromDistributor === null
+          ? { _id: null, name: "Distribuidor" }
+          : transfer.fromDistributor),
+      toDistributor:
+        transfer.toDistributor ||
+        (transfer.toDistributor === null
+          ? { _id: null, name: "Distribuidor" }
+          : transfer.toDistributor),
+    }));
+
+    return {
+      transfers: normalizedTransfers,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+      },
+      stats,
     };
   }
 }

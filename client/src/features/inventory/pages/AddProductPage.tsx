@@ -23,6 +23,7 @@ interface FormState {
 }
 
 export default function AddProduct() {
+  const maxImageBytes = 10 * 1024 * 1024;
   const navigate = useNavigate();
   const [categories, setCategories] = useState<Category[]>([]);
   const [formData, setFormData] = useState<FormState>({
@@ -125,6 +126,13 @@ export default function AddProduct() {
     const file = event.target.files?.[0];
 
     if (file) {
+      if (file.size > maxImageBytes) {
+        setError("Imagen muy pesada. Maximo 10MB.");
+        setImageFile(null);
+        setImagePreview(null);
+        event.target.value = "";
+        return;
+      }
       setImageFile(file);
       setImagePreview(URL.createObjectURL(file));
     }
@@ -203,12 +211,17 @@ export default function AddProduct() {
 
       navigate("/admin/products");
     } catch (err) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : (err as { response?: { data?: { message?: string } } })?.response
-              ?.data?.message || "Error al crear el producto";
-      setError(message);
+      const errorPayload = (err as { response?: { data?: any } })?.response
+        ?.data;
+      if (errorPayload?.code === "LIMIT_FILE_SIZE") {
+        setError("Imagen muy pesada. Maximo 10MB.");
+      } else {
+        const message =
+          err instanceof Error
+            ? err.message
+            : errorPayload?.message || "Error al crear el producto";
+        setError(message);
+      }
     } finally {
       setLoading(false);
     }

@@ -18,8 +18,11 @@ export interface OrderItem {
   id: string; // Unique ID for this line item
   productId: string;
   productName: string;
+  promotionId?: string;
   quantity: number;
   unitPrice: number; // Editable by admin
+  distributorPrice?: number; // Unit price paid to admin (promo override)
+  isPromotion?: boolean;
   purchasePrice: number; // Cost for profit calculation
   subtotal: number;
   grossProfit: number;
@@ -56,6 +59,8 @@ export interface OrderState {
   locationType: LocationType;
   locationId: string | null;
   locationName: string;
+  isDistributorSale: boolean;
+  distributorProfitPercentage: number;
 
   // Order Items
   items: OrderItem[];
@@ -105,7 +110,16 @@ export type OrderAction =
   | {
       type: "UPDATE_ITEM";
       itemId: string;
-      updates: Partial<Pick<OrderItem, "quantity" | "unitPrice">>;
+      updates: Partial<
+        Pick<
+          OrderItem,
+          | "quantity"
+          | "unitPrice"
+          | "distributorPrice"
+          | "isPromotion"
+          | "promotionId"
+        >
+      >;
     }
   | { type: "REMOVE_ITEM"; itemId: string }
   | { type: "ADD_WARRANTY"; warranty: Omit<WarrantyItem, "id"> }
@@ -125,6 +139,11 @@ export type OrderAction =
   | { type: "SET_CREDIT_DUE_DATE"; date: string | null }
   | { type: "SET_INITIAL_PAYMENT"; amount: number }
   | { type: "SET_NOTES"; notes: string }
+  | {
+      type: "SET_DISTRIBUTOR_PROFIT";
+      isDistributorSale: boolean;
+      profitPercentage: number;
+    }
   | { type: "CLEAR_ORDER" }
   | { type: "RECALCULATE" };
 
@@ -133,6 +152,7 @@ export interface ProductWithStock {
   _id: string;
   name: string;
   purchasePrice: number;
+  averageCost?: number;
   clientPrice: number;
   distributorPrice: number;
   warehouseStock: number;
@@ -148,8 +168,11 @@ export interface AdminOrderPayload {
   // Items
   items: Array<{
     productId: string;
+    promotionId?: string;
     quantity: number;
     salePrice: number;
+    distributorPrice?: number;
+    isPromotion?: boolean;
   }>;
 
   // Location

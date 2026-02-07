@@ -14,15 +14,22 @@ interface OrderCartProps {
     updates: { quantity?: number; unitPrice?: number }
   ) => void;
   onRemoveItem: (itemId: string) => void;
+  multiplierBadges?: Record<string, string[]>;
+  isDistributorSale?: boolean;
 }
 
 export function OrderCart({
   items,
   onUpdateItem,
   onRemoveItem,
+  multiplierBadges,
+  isDistributorSale,
 }: OrderCartProps) {
   const [editingPrice, setEditingPrice] = useState<string | null>(null);
   const [tempPrice, setTempPrice] = useState("");
+  const [quantityInputs, setQuantityInputs] = useState<Record<string, string>>(
+    {}
+  );
 
   const handlePriceEdit = (item: OrderItem) => {
     setEditingPrice(item.id);
@@ -44,6 +51,45 @@ export function OrderCart({
       Math.min(item.quantity + delta, item.availableStock)
     );
     onUpdateItem(item.id, { quantity: newQty });
+    setQuantityInputs(prev => {
+      if (!prev[item.id]) return prev;
+      const next = { ...prev };
+      delete next[item.id];
+      return next;
+    });
+  };
+
+  const handleQuantityInputChange = (item: OrderItem, value: string) => {
+    setQuantityInputs(prev => ({ ...prev, [item.id]: value }));
+
+    if (value.trim() === "") return;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return;
+    const nextQty = Math.max(1, Math.min(parsed, item.availableStock));
+    onUpdateItem(item.id, { quantity: nextQty });
+  };
+
+  const handleQuantityBlur = (item: OrderItem) => {
+    const raw = quantityInputs[item.id];
+    if (typeof raw === "undefined") return;
+
+    if (raw.trim() === "") {
+      onUpdateItem(item.id, { quantity: 1 });
+    } else {
+      const parsed = Number(raw);
+      if (Number.isFinite(parsed)) {
+        const nextQty = Math.max(1, Math.min(parsed, item.availableStock));
+        onUpdateItem(item.id, { quantity: nextQty });
+      } else {
+        onUpdateItem(item.id, { quantity: 1 });
+      }
+    }
+
+    setQuantityInputs(prev => {
+      const next = { ...prev };
+      delete next[item.id];
+      return next;
+    });
   };
 
   if (items.length === 0) {
@@ -74,6 +120,18 @@ export function OrderCart({
               <p className="text-xs text-gray-500">
                 {item.category || "Sin categoría"}
               </p>
+              {multiplierBadges?.[item.productId]?.length ? (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {multiplierBadges[item.productId].map((badge, index) => (
+                    <span
+                      key={`${item.productId}-bonus-${index}`}
+                      className="rounded-full bg-purple-500/20 px-2 py-0.5 text-xs text-purple-200"
+                    >
+                      {badge}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
             </div>
             <button
               type="button"
@@ -100,9 +158,24 @@ export function OrderCart({
                 >
                   <Minus className="h-4 w-4" />
                 </button>
-                <span className="w-12 text-center text-lg font-bold text-white">
-                  {item.quantity}
-                </span>
+                <input
+                  type="number"
+                  min={1}
+                  max={item.availableStock}
+                  value={
+                    Object.prototype.hasOwnProperty.call(
+                      quantityInputs,
+                      item.id
+                    )
+                      ? quantityInputs[item.id]
+                      : String(item.quantity)
+                  }
+                  onChange={e =>
+                    handleQuantityInputChange(item, e.target.value)
+                  }
+                  onBlur={() => handleQuantityBlur(item)}
+                  className="w-14 rounded-lg border border-gray-600 bg-gray-800/60 px-2 py-1 text-center text-base font-bold text-white outline-none focus:border-purple-500"
+                />
                 <button
                   type="button"
                   onClick={() => handleQuantityChange(item, 1)}
@@ -167,7 +240,9 @@ export function OrderCart({
               </span>
             </div>
             <div className="text-sm">
-              <span className="text-gray-400">Ganancia: </span>
+              <span className="text-gray-400">
+                {isDistributorSale ? "Comision: " : "Ganancia: "}
+              </span>
               <span
                 className={`font-bold ${
                   item.grossProfit >= 0 ? "text-green-400" : "text-red-400"

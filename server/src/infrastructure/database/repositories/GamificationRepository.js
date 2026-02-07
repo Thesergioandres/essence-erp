@@ -5,6 +5,11 @@ import Membership from "../../../../models/Membership.js";
 import PeriodWinner from "../../../../models/PeriodWinner.js";
 import Sale from "../../../../models/Sale.js";
 import { getDistributorCommissionInfo } from "../../../../utils/distributorPricing.js";
+import {
+  applySaleGamification,
+  computePointsForSale,
+  resolveLevelForPoints,
+} from "../../../../utils/gamificationEngine.js";
 
 export class GamificationRepository {
   async getBusinessDistributorIds(businessId) {
@@ -41,8 +46,18 @@ export class GamificationRepository {
     const now = new Date();
     const startDate = config.currentPeriodStart || now;
     let periodDuration = 15;
+    const cycleDuration = config?.cycle?.duration;
 
-    if (config.evaluationPeriod === "biweekly") periodDuration = 15;
+    if (cycleDuration === "infinite") {
+      return { message: "Ciclo infinito: sin cierre automatico" };
+    }
+
+    if (cycleDuration === "quarterly") periodDuration = 90;
+    else if (cycleDuration === "annual") periodDuration = 365;
+    else if (cycleDuration === "custom")
+      periodDuration = config.cycle?.customDays || 30;
+    else if (cycleDuration === "monthly") periodDuration = 30;
+    else if (config.evaluationPeriod === "biweekly") periodDuration = 15;
     else if (config.evaluationPeriod === "monthly") periodDuration = 30;
     else if (config.evaluationPeriod === "weekly") periodDuration = 7;
     else if (config.evaluationPeriod === "custom")
@@ -77,6 +92,7 @@ export class GamificationRepository {
         $group: {
           _id: "$distributor",
           totalSales: { $sum: 1 },
+          totalUnits: { $sum: "$quantity" },
           totalRevenue: { $sum: { $multiply: ["$salePrice", "$quantity"] } },
           totalProfit: { $sum: "$totalProfit" },
         },
@@ -167,6 +183,8 @@ export class GamificationRepository {
     config.lastEvaluationDate = now;
     await config.save();
 
+    await this.applyResetPolicy(businessId, config, allowedDistributors);
+
     return {
       message: "Período evaluado automáticamente",
       winner: periodWinner,
@@ -174,11 +192,85 @@ export class GamificationRepository {
     };
   }
 
+  async applyResetPolicy(businessId, config, allowedDistributors) {
+    const policyType = config?.resetPolicy?.type || "reset";
+    const carryPercent = Number(config?.resetPolicy?.carryPercent || 0);
+    const levels = Array.isArray(config?.levels) ? config.levels : [];
+    const sortedLevels = [...levels].sort(
+      (a, b) => (a.minPoints || 0) - (b.minPoints || 0),
+    );
+    const lowestLevel = sortedLevels[0] || { id: 1, name: "Novato" };
+
+    const filter = allowedDistributors?.length
+      ? { distributor: { $in: allowedDistributors } }
+      : {};
+
+    const statsList = await DistributorStats.find(filter);
+
+    for (const stats of statsList) {
+      if (policyType === "carry") {
+        stats.totalPoints = Math.round(
+          (stats.totalPoints || 0) * (carryPercent / 100),
+        );
+        stats.currentMonthPoints = 0;
+        const level = resolveLevelForPoints(levels, stats.totalPoints || 0);
+        stats.currentLevel = level?.name || lowestLevel.name;
+        stats.currentLevelId = level?.id || lowestLevel.id;
+      } else if (policyType === "downlevel") {
+        const currentLevel = resolveLevelForPoints(levels, stats.totalPoints);
+        const currentIndex = sortedLevels.findIndex(
+          (lvl) => lvl.id === currentLevel?.id,
+        );
+        const nextIndex = Math.max(0, currentIndex - 1);
+        const nextLevel = sortedLevels[nextIndex] || lowestLevel;
+        stats.currentLevel = nextLevel.name || lowestLevel.name;
+        stats.currentLevelId = nextLevel.id || lowestLevel.id;
+        stats.totalPoints = nextLevel.minPoints || 0;
+        stats.currentMonthPoints = 0;
+      } else {
+        stats.totalPoints = 0;
+        stats.currentMonthPoints = 0;
+        stats.currentLevel = lowestLevel.name || "Novato";
+        stats.currentLevelId = lowestLevel.id || 1;
+      }
+
+      await stats.save();
+    }
+  }
+
   async getConfig() {
     let config = await GamificationConfig.findOne();
 
     if (!config) {
       config = await GamificationConfig.create({
+        generalRules: {
+          pointsPerCurrencyUnit: 0.001,
+          pointsPerSaleConfirmed: 10,
+          penaltyPerDayLate: 5,
+        },
+        levels: [
+          {
+            id: 1,
+            name: "Novato",
+            minPoints: 0,
+            benefits: { commissionBonus: 0, discountBonus: 0 },
+          },
+          {
+            id: 2,
+            name: "Pro",
+            minPoints: 1000,
+            benefits: { commissionBonus: 2.5, discountBonus: 0 },
+          },
+          {
+            id: 3,
+            name: "Leyenda",
+            minPoints: 5000,
+            benefits: { commissionBonus: 5, discountBonus: 0 },
+          },
+        ],
+        activeMultipliers: [],
+        cycle: { duration: "monthly", customDays: 30 },
+        resetPolicy: { type: "reset", carryPercent: 0 },
         evaluationPeriod: "biweekly",
         customPeriodDays: 15,
         topPerformerBonus: 50000,
@@ -196,6 +288,54 @@ export class GamificationRepository {
           { level: "platinum", minAmount: 100000, bonus: 2500, badge: "💎" },
         ],
       });
+    } else {
+      let shouldSave = false;
+      if (!config.generalRules) {
+        config.generalRules = {
+          pointsPerCurrencyUnit: 0.001,
+          pointsPerSaleConfirmed: 10,
+          penaltyPerDayLate: 5,
+        };
+        shouldSave = true;
+      }
+      if (!config.levels || config.levels.length === 0) {
+        config.levels = [
+          {
+            id: 1,
+            name: "Novato",
+            minPoints: 0,
+            benefits: { commissionBonus: 0, discountBonus: 0 },
+          },
+          {
+            id: 2,
+            name: "Pro",
+            minPoints: 1000,
+            benefits: { commissionBonus: 2.5, discountBonus: 0 },
+          },
+          {
+            id: 3,
+            name: "Leyenda",
+            minPoints: 5000,
+            benefits: { commissionBonus: 5, discountBonus: 0 },
+          },
+        ];
+        shouldSave = true;
+      }
+      if (!config.activeMultipliers) {
+        config.activeMultipliers = [];
+        shouldSave = true;
+      }
+      if (!config.cycle) {
+        config.cycle = { duration: "monthly", customDays: 30 };
+        shouldSave = true;
+      }
+      if (!config.resetPolicy) {
+        config.resetPolicy = { type: "reset", carryPercent: 0 };
+        shouldSave = true;
+      }
+      if (shouldSave) {
+        await config.save();
+      }
     }
 
     return config;
@@ -214,13 +354,15 @@ export class GamificationRepository {
     return config;
   }
 
-  async getRanking(businessId, period = "current") {
+  async getRanking(businessId, params = {}) {
+    const period = params?.period || "current";
+    let startDate = params?.startDate;
+    let endDate = params?.endDate;
     const businessObjectId = new mongoose.Types.ObjectId(businessId);
     const allowedDistributors =
       await this.getBusinessDistributorIds(businessId);
     const config = await GamificationConfig.findOne();
 
-    let startDate, endDate;
     const now = new Date();
     const startOfMonth = new Date(
       now.getFullYear(),
@@ -232,7 +374,10 @@ export class GamificationRepository {
       0,
     );
 
-    if (period === "current") {
+    if (period === "custom" && startDate && endDate) {
+      startDate = new Date(startDate);
+      endDate = new Date(endDate);
+    } else if (period === "current") {
       const evalPeriod = config?.evaluationPeriod || "biweekly";
       let periodDays = 15;
       if (evalPeriod === "monthly") periodDays = 30;
@@ -325,6 +470,7 @@ export class GamificationRepository {
           $group: {
             _id: "$distributor",
             totalSales: { $sum: 1 },
+            totalUnits: { $sum: "$quantity" },
             totalRevenue: { $sum: { $multiply: ["$salePrice", "$quantity"] } },
             totalProfit: { $sum: "$totalProfit" },
           },
@@ -362,6 +508,7 @@ export class GamificationRepository {
           $group: {
             _id: "$distributor",
             totalSales: { $sum: 1 },
+            totalUnits: { $sum: "$quantity" },
             totalRevenue: { $sum: { $multiply: ["$salePrice", "$quantity"] } },
             totalProfit: { $sum: "$totalProfit" },
           },
@@ -383,16 +530,54 @@ export class GamificationRepository {
       }
     }
 
+    const distributorIds = ranking
+      .map((r) => r.distributor?._id || r._id)
+      .filter(Boolean);
+    const statsList = distributorIds.length
+      ? await DistributorStats.find({ distributor: { $in: distributorIds } })
+          .select("distributor totalPoints currentLevel periodWins")
+          .lean()
+      : [];
+    const statsMap = new Map(
+      statsList.map((stat) => [stat.distributor.toString(), stat]),
+    );
+
     return {
-      ranking: ranking.map((r, index) => ({
-        position: index + 1,
-        distributor: r.distributor,
-        totalSales: r.totalSales,
-        totalRevenue: r.totalRevenue,
-        totalProfit: r.totalProfit,
-      })),
-      periodStart: startDate,
-      periodEnd: endDate,
+      rankings: ranking.map((r, index) => {
+        const distributorId = (r.distributor?._id || r._id)?.toString();
+        const stats = distributorId ? statsMap.get(distributorId) : null;
+        return {
+          distributorId: r.distributor?._id || r._id,
+          distributorName: r.distributor?.name || "Distribuidor",
+          distributorEmail: r.distributor?.email || "",
+          totalSales: r.totalSales || 0,
+          totalUnits: r.totalUnits || 0,
+          totalRevenue: r.totalRevenue || 0,
+          totalProfit: r.totalProfit || 0,
+          position: index + 1,
+          totalPoints: stats?.totalPoints || 0,
+          currentLevel: stats?.currentLevel || "Novato",
+          periodWins: stats?.periodWins || 0,
+          profitPercentage:
+            r.totalRevenue > 0 ? (r.totalProfit / r.totalRevenue) * 100 : 0,
+        };
+      }),
+      period: {
+        startDate,
+        endDate,
+        type: config?.evaluationPeriod || "biweekly",
+      },
+      config: {
+        topPerformerBonus: config?.topPerformerBonus || 0,
+        secondPlaceBonus: config?.secondPlaceBonus || 0,
+        thirdPlaceBonus: config?.thirdPlaceBonus || 0,
+        top1CommissionBonus: config?.top1CommissionBonus || 0,
+        top2CommissionBonus: config?.top2CommissionBonus || 0,
+        top3CommissionBonus: config?.top3CommissionBonus || 0,
+        evaluationPeriod: config?.evaluationPeriod,
+        customPeriodDays: config?.customPeriodDays,
+        currentPeriodStart: config?.currentPeriodStart,
+      },
       usedFallback,
     };
   }
@@ -404,6 +589,138 @@ export class GamificationRepository {
       stats = await DistributorStats.create({ distributor: distributorId });
     }
 
+    const pendingSales = await Sale.find({
+      distributor: distributorId,
+      paymentStatus: "confirmado",
+      gamificationPointsApplied: { $ne: true },
+    })
+      .populate("product")
+      .lean();
+
+    if (pendingSales.length > 0) {
+      for (const sale of pendingSales) {
+        await applySaleGamification({
+          businessId: sale.business,
+          sale,
+          product: sale.product || null,
+        });
+      }
+
+      stats = await DistributorStats.findOne({ distributor: distributorId });
+    }
+
     return stats;
+  }
+
+  async recalculatePoints(businessId, distributorId = null) {
+    const config = await GamificationConfig.findOne().lean();
+    if (!config) {
+      return { updatedDistributors: 0, updatedSales: 0 };
+    }
+
+    const allowedDistributors = distributorId
+      ? [distributorId]
+      : await this.getBusinessDistributorIds(businessId);
+
+    const normalizedDistributors = allowedDistributors.map((id) =>
+      id instanceof mongoose.Types.ObjectId
+        ? id
+        : new mongoose.Types.ObjectId(id),
+    );
+
+    const salesFilter = {
+      business: new mongoose.Types.ObjectId(businessId),
+      paymentStatus: "confirmado",
+      distributor: { $in: normalizedDistributors },
+    };
+
+    const sales = await Sale.find(salesFilter).populate("product").lean();
+
+    const totals = new Map();
+    for (const sale of sales) {
+      const points = computePointsForSale(config, sale, sale.product);
+      const distributorKey = sale.distributor.toString();
+      const current = totals.get(distributorKey) || 0;
+      totals.set(distributorKey, current + points);
+
+      await Sale.updateOne(
+        { _id: sale._id },
+        {
+          $set: {
+            gamificationPoints: points,
+            gamificationPointsApplied: true,
+          },
+        },
+      );
+    }
+
+    let updatedDistributors = 0;
+    for (const distributor of normalizedDistributors) {
+      const distributorKey = distributor.toString();
+      const totalPoints = totals.get(distributorKey) || 0;
+      let stats = await DistributorStats.findOne({ distributor });
+
+      if (!stats) {
+        stats = await DistributorStats.create({ distributor });
+      }
+
+      stats.totalPoints = totalPoints;
+      stats.currentMonthPoints = totalPoints;
+
+      const level = resolveLevelForPoints(config.levels, totalPoints);
+      stats.currentLevel = level?.name || "Novato";
+      stats.currentLevelId = level?.id || 1;
+
+      await stats.save();
+      updatedDistributors += 1;
+    }
+
+    return { updatedDistributors, updatedSales: sales.length };
+  }
+
+  async getWinners(businessId, { limit = 20, page = 1 } = {}) {
+    const businessObjectId = new mongoose.Types.ObjectId(businessId);
+    const normalizedLimit = Math.max(1, parseInt(limit, 10) || 20);
+    const normalizedPage = Math.max(1, parseInt(page, 10) || 1);
+    const skip = (normalizedPage - 1) * normalizedLimit;
+
+    const [winners, total] = await Promise.all([
+      PeriodWinner.find({ business: businessObjectId })
+        .sort({ endDate: -1 })
+        .skip(skip)
+        .limit(normalizedLimit)
+        .lean(),
+      PeriodWinner.countDocuments({ business: businessObjectId }),
+    ]);
+
+    return {
+      winners,
+      pagination: {
+        page: normalizedPage,
+        limit: normalizedLimit,
+        total,
+        pages: Math.ceil(total / normalizedLimit),
+      },
+    };
+  }
+
+  async markBonusPaid(businessId, winnerId) {
+    const businessObjectId = new mongoose.Types.ObjectId(businessId);
+    const winner = await PeriodWinner.findOne({
+      _id: winnerId,
+      business: businessObjectId,
+    });
+
+    if (!winner) {
+      return null;
+    }
+
+    if (!winner.bonusPaid) {
+      winner.bonusPaid = true;
+      winner.bonusPaidAt = new Date();
+      await winner.save();
+    }
+
+    return winner;
   }
 }

@@ -10,6 +10,42 @@ export interface SalesTarget {
   badge: string;
 }
 
+export interface GeneralRules {
+  pointsPerCurrencyUnit: number;
+  pointsPerSaleConfirmed: number;
+  penaltyPerDayLate: number;
+}
+
+export interface LevelBenefits {
+  commissionBonus: number;
+  discountBonus?: number;
+}
+
+export interface LevelConfig {
+  id: number;
+  name: string;
+  minPoints: number;
+  benefits: LevelBenefits;
+}
+
+export interface ActiveMultiplier {
+  type: string;
+  targetType?: string;
+  targetId?: string;
+  value: number;
+  active: boolean;
+}
+
+export interface CycleConfig {
+  duration: "monthly" | "quarterly" | "annual" | "infinite" | "custom";
+  customDays?: number;
+}
+
+export interface ResetPolicy {
+  type: "reset" | "carry" | "downlevel";
+  carryPercent?: number;
+}
+
 export interface ProductBonus {
   product: string;
   bonusPerUnit: number;
@@ -18,6 +54,11 @@ export interface ProductBonus {
 
 export interface GamificationConfig {
   _id: string;
+  generalRules?: GeneralRules;
+  levels?: LevelConfig[];
+  activeMultipliers?: ActiveMultiplier[];
+  cycle?: CycleConfig;
+  resetPolicy?: ResetPolicy;
   evaluationPeriod: "daily" | "weekly" | "biweekly" | "monthly" | "custom";
   customPeriodDays?: number;
   topPerformerBonus: number;

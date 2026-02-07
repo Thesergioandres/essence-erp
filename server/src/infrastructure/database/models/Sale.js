@@ -44,6 +44,11 @@ const saleSchema = new mongoose.Schema(
       ref: "Product",
       required: [true, "El producto es obligatorio"],
     },
+    promotion: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Promotion",
+      index: true,
+    },
     // 📸 Snapshot: Nombre del producto al momento de la venta (para historial si se borra)
     productName: {
       type: String,
@@ -73,6 +78,11 @@ const saleSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    isPromotion: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
     // Ganancias calculadas
     distributorProfit: {
       type: Number,
@@ -99,6 +109,18 @@ const saleSchema = new mongoose.Schema(
     commissionBonusAmount: {
       type: Number,
       default: 0,
+    },
+    gamificationPoints: {
+      type: Number,
+      default: 0,
+    },
+    gamificationLevel: {
+      type: String,
+      default: "",
+    },
+    gamificationPointsApplied: {
+      type: Boolean,
+      default: false,
     },
     // Información adicional
     notes: {
@@ -211,7 +233,6 @@ const saleSchema = new mongoose.Schema(
         amount: {
           type: Number,
           required: true,
-          min: 0,
         },
       },
     ],
@@ -219,7 +240,6 @@ const saleSchema = new mongoose.Schema(
     totalAdditionalCosts: {
       type: Number,
       default: 0,
-      min: 0,
     },
     // ============ PAGO REAL Y DESCUENTOS ============
     // Pago real del cliente (puede ser menor al total por descuentos)
@@ -348,7 +368,7 @@ saleSchema.pre("save", function (next) {
   // Calcular total de costos adicionales
   if (this.additionalCosts && this.additionalCosts.length > 0) {
     this.totalAdditionalCosts = this.additionalCosts.reduce(
-      (sum, cost) => sum + (cost.amount || 0),
+      (sum, cost) => sum + Math.abs(cost.amount || 0),
       0,
     );
   } else {

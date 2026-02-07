@@ -1,16 +1,5 @@
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Legend,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import { advancedAnalyticsService } from "../../features/analytics/services";
 
 interface TopProductsChartProps {
@@ -20,18 +9,12 @@ interface TopProductsChartProps {
   reloadKey?: number;
 }
 
-const COLORS = [
-  "#8b5cf6",
-  "#ec4899",
-  "#f59e0b",
-  "#10b981",
-  "#3b82f6",
-  "#6366f1",
-  "#f97316",
-  "#14b8a6",
-  "#a855f7",
-  "#06b6d4",
-];
+const formatCurrency = (value: number) =>
+  new Intl.NumberFormat("es-CO", {
+    style: "currency",
+    currency: "COP",
+    maximumFractionDigits: 0,
+  }).format(value || 0);
 
 export const TopProductsChart: React.FC<TopProductsChartProps> = ({
   limit = 10,
@@ -121,7 +104,7 @@ export const TopProductsChart: React.FC<TopProductsChartProps> = ({
   }
 
   console.log(
-    "[TopProductsChart] Rendering chart with data:",
+    "[TopProductsChart] Rendering table with data:",
     JSON.stringify(data, null, 2)
   );
   return (
@@ -134,47 +117,49 @@ export const TopProductsChart: React.FC<TopProductsChartProps> = ({
       <h3 className="mb-4 text-xl font-bold text-white">
         Top {limit} Productos Más Vendidos
       </h3>
-      <ResponsiveContainer width="100%" height={400}>
-        <BarChart data={data} layout="vertical">
-          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-          <XAxis type="number" stroke="#9ca3af" />
-          <YAxis
-            type="category"
-            dataKey="name"
-            width={150}
-            tick={{ fontSize: 12, fill: "#d1d5db" }}
-          />
-          <Tooltip
-            formatter={(value: any, name: string) => {
-              const num = Number(value) || 0;
-              if (isNaN(num)) return ["0", name];
-              if (name === "totalRevenue") {
-                return [`$${num.toFixed(2)}`, "Ingresos"];
-              }
-              return [num.toFixed(0), "Cantidad"];
-            }}
-            contentStyle={{
-              backgroundColor: "rgba(17, 24, 39, 0.95)",
-              border: "1px solid #374151",
-              borderRadius: "8px",
-              color: "#e5e7eb",
-            }}
-          />
-          <Legend wrapperStyle={{ color: "#d1d5db" }} />
-          <Bar
-            dataKey="totalQuantity"
-            name="Cantidad Vendida"
-            radius={[0, 8, 8, 0]}
-          >
-            {data.map((_, index) => (
-              <Cell
-                key={`cell-${index}`}
-                fill={COLORS[index % COLORS.length]}
-              />
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-left text-sm text-gray-300">
+          <thead className="border-b border-gray-800 text-xs uppercase tracking-wide text-gray-500">
+            <tr>
+              <th className="py-2 pr-4">#</th>
+              <th className="py-2 pr-4">Producto</th>
+              <th className="py-2 pr-4">Categoria</th>
+              <th className="py-2 pr-4 text-right">Cantidad</th>
+              <th className="py-2 pr-4 text-right">Ingresos</th>
+              <th className="py-2 text-right">Utilidad</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((item, index) => (
+              <tr
+                key={item.productId || item._id || index}
+                className="border-b border-gray-800/60"
+              >
+                <td className="py-3 pr-4 text-gray-400">{index + 1}</td>
+                <td className="py-3 pr-4 font-medium text-white">
+                  {item.name || "Sin nombre"}
+                </td>
+                <td className="py-3 pr-4 text-gray-400">
+                  {item.category || "Sin categoria"}
+                </td>
+                <td className="py-3 pr-4 text-right">
+                  {Number(
+                    item.totalQuantity || item.quantity || 0
+                  ).toLocaleString()}
+                </td>
+                <td className="py-3 pr-4 text-right text-emerald-300">
+                  {formatCurrency(
+                    Number(item.totalRevenue || item.revenue || 0)
+                  )}
+                </td>
+                <td className="py-3 text-right text-sky-300">
+                  {formatCurrency(Number(item.totalProfit || item.profit || 0))}
+                </td>
+              </tr>
             ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
+          </tbody>
+        </table>
+      </div>
     </motion.div>
   );
 };

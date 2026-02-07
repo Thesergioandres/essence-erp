@@ -55,6 +55,11 @@ router.get(
   requirePermission({ module: "inventory", action: "read" }),
   StockController.getGlobalStock.bind(StockController),
 );
+router.get(
+  "/transfers",
+  requirePermission({ module: "inventory", action: "read" }),
+  StockController.getTransferHistory.bind(StockController),
+);
 router.post(
   "/reconcile",
   requirePermission({ module: "inventory", action: "update" }),

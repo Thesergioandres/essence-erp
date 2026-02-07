@@ -61,4 +61,23 @@ export class AuditController {
       res.status(500).json({ success: false, message: error.message });
     }
   }
+
+  async getDailySummary(req, res) {
+    try {
+      const businessId = req.businessId;
+      if (!businessId) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Falta x-business-id" });
+      }
+
+      const summary = await repository.getDailySummary(
+        businessId,
+        req.query?.date,
+      );
+      res.json({ success: true, data: summary });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
 }

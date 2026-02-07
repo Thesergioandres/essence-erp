@@ -52,6 +52,8 @@ export const registerSale = async (req, res, next) => {
       saleDate: req.body.saleDate,
       deliveryMethodId: req.body.deliveryMethodId,
       shippingCost: req.body.shippingCost,
+      discount: req.body.discount,
+      additionalCosts: req.body.additionalCosts,
       notes: req.body.notes,
       distributorProfitPercentage: req.body.distributorProfitPercentage,
     };

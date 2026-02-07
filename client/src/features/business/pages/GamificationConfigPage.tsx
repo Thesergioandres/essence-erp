@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
-import type { SalesTarget } from "../../analytics/types/gamification.types";
+import type {
+  ActiveMultiplier,
+  LevelConfig,
+  SalesTarget,
+} from "../../analytics/types/gamification.types";
 import { gamificationService } from "../../common/services";
 
 const GamificationConfigPage = () => {
@@ -22,6 +26,19 @@ const GamificationConfigPage = () => {
   const [pointsPerSale, setPointsPerSale] = useState<number>(10);
   const [pointsPerPeso, setPointsPerPeso] = useState<number>(0.01);
   const [salesTargets, setSalesTargets] = useState<SalesTarget[]>([]);
+  const [pointsPerCurrencyUnit, setPointsPerCurrencyUnit] =
+    useState<number>(0.001);
+  const [pointsPerSaleConfirmed, setPointsPerSaleConfirmed] =
+    useState<number>(10);
+  const [penaltyPerDayLate, setPenaltyPerDayLate] = useState<number>(5);
+  const [levels, setLevels] = useState<LevelConfig[]>([]);
+  const [activeMultipliers, setActiveMultipliers] = useState<
+    ActiveMultiplier[]
+  >([]);
+  const [cycleDuration, setCycleDuration] = useState<string>("monthly");
+  const [cycleCustomDays, setCycleCustomDays] = useState<number>(30);
+  const [resetPolicyType, setResetPolicyType] = useState<string>("reset");
+  const [resetCarryPercent, setResetCarryPercent] = useState<number>(0);
 
   // Evaluation form
   const [evalStartDate, setEvalStartDate] = useState("");
@@ -53,6 +70,19 @@ const GamificationConfigPage = () => {
       setPointsPerSale(data.pointsPerSale ?? 10);
       setPointsPerPeso(data.pointsPerPeso ?? 0.01);
       setSalesTargets(data.salesTargets || []);
+      setPointsPerCurrencyUnit(
+        data.generalRules?.pointsPerCurrencyUnit ?? 0.001
+      );
+      setPointsPerSaleConfirmed(
+        data.generalRules?.pointsPerSaleConfirmed ?? 10
+      );
+      setPenaltyPerDayLate(data.generalRules?.penaltyPerDayLate ?? 5);
+      setLevels(data.levels || []);
+      setActiveMultipliers(data.activeMultipliers || []);
+      setCycleDuration(data.cycle?.duration || "monthly");
+      setCycleCustomDays(data.cycle?.customDays || 30);
+      setResetPolicyType(data.resetPolicy?.type || "reset");
+      setResetCarryPercent(data.resetPolicy?.carryPercent ?? 0);
     } catch (error) {
       console.error("Error loading config:", error);
       alert("Error al cargar la configuración");
@@ -65,6 +95,26 @@ const GamificationConfigPage = () => {
     try {
       setSaving(true);
       await gamificationService.updateConfig({
+        generalRules: {
+          pointsPerCurrencyUnit,
+          pointsPerSaleConfirmed,
+          penaltyPerDayLate,
+        },
+        levels,
+        activeMultipliers,
+        cycle: {
+          duration: cycleDuration as
+            | "monthly"
+            | "quarterly"
+            | "annual"
+            | "infinite"
+            | "custom",
+          customDays: cycleCustomDays,
+        },
+        resetPolicy: {
+          type: resetPolicyType as "reset" | "carry" | "downlevel",
+          carryPercent: resetCarryPercent,
+        },
         evaluationPeriod: evaluationPeriod as
           | "daily"
           | "weekly"
@@ -145,6 +195,73 @@ const GamificationConfigPage = () => {
     const updated = [...salesTargets];
     updated[index] = { ...updated[index], [field]: value };
     setSalesTargets(updated);
+  };
+
+  const addLevel = () => {
+    const nextId = Math.max(0, ...levels.map(level => level.id)) + 1;
+    setLevels([
+      ...levels,
+      {
+        id: nextId,
+        name: "",
+        minPoints: 0,
+        benefits: { commissionBonus: 0, discountBonus: 0 },
+      },
+    ]);
+  };
+
+  const updateLevel = (
+    index: number,
+    field: "name" | "minPoints" | "commissionBonus" | "discountBonus",
+    value: string | number
+  ) => {
+    const updated = [...levels];
+    const current = updated[index];
+    if (!current) return;
+    if (field === "name" || field === "minPoints") {
+      updated[index] = { ...current, [field]: value } as any;
+    } else {
+      updated[index] = {
+        ...current,
+        benefits: {
+          ...current.benefits,
+          [field === "commissionBonus" ? "commissionBonus" : "discountBonus"]:
+            value,
+        },
+      };
+    }
+    setLevels(updated);
+  };
+
+  const removeLevel = (index: number) => {
+    setLevels(levels.filter((_, i) => i !== index));
+  };
+
+  const addMultiplier = () => {
+    setActiveMultipliers([
+      ...activeMultipliers,
+      {
+        type: "custom",
+        targetType: "all",
+        targetId: "",
+        value: 1,
+        active: true,
+      },
+    ]);
+  };
+
+  const updateMultiplier = (
+    index: number,
+    field: keyof ActiveMultiplier,
+    value: string | number | boolean
+  ) => {
+    const updated = [...activeMultipliers];
+    updated[index] = { ...updated[index], [field]: value } as ActiveMultiplier;
+    setActiveMultipliers(updated);
+  };
+
+  const removeMultiplier = (index: number) => {
+    setActiveMultipliers(activeMultipliers.filter((_, i) => i !== index));
   };
 
   if (loading) {
@@ -343,6 +460,303 @@ const GamificationConfigPage = () => {
               className="w-full rounded-md border border-gray-700 bg-gray-800 px-4 py-2 text-white focus:ring-2 focus:ring-blue-500"
             />
           </div>
+        </div>
+      </div>
+
+      {/* Motor de Reglas */}
+      <div className="mb-6 rounded-lg border border-gray-800 bg-gray-900 p-6">
+        <h2 className="mb-4 text-2xl font-semibold text-white">
+          🧮 Motor de Reglas
+        </h2>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div>
+            <label className="mb-2 block font-medium text-gray-300">
+              Puntos por $1 (unidad)
+            </label>
+            <input
+              type="number"
+              step="0.0001"
+              value={pointsPerCurrencyUnit}
+              onChange={e => setPointsPerCurrencyUnit(Number(e.target.value))}
+              className="w-full rounded-md border border-gray-700 bg-gray-800 px-4 py-2 text-white focus:ring-2 focus:ring-blue-500"
+            />
+            <p className="mt-1 text-xs text-gray-400">
+              Ej: 0.001 = 1 punto por cada 1000.
+            </p>
+          </div>
+
+          <div>
+            <label className="mb-2 block font-medium text-gray-300">
+              Puntos por venta confirmada
+            </label>
+            <input
+              type="number"
+              value={pointsPerSaleConfirmed}
+              onChange={e => setPointsPerSaleConfirmed(Number(e.target.value))}
+              className="w-full rounded-md border border-gray-700 bg-gray-800 px-4 py-2 text-white focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block font-medium text-gray-300">
+              Penalizacion por dia de mora
+            </label>
+            <input
+              type="number"
+              value={penaltyPerDayLate}
+              onChange={e => setPenaltyPerDayLate(Number(e.target.value))}
+              className="w-full rounded-md border border-gray-700 bg-gray-800 px-4 py-2 text-white focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Niveles */}
+      <div className="mb-6 rounded-lg border border-gray-800 bg-gray-900 p-6">
+        <h2 className="mb-4 text-2xl font-semibold text-white">
+          🧗 Niveles y Rangos
+        </h2>
+
+        {levels.map((level, index) => (
+          <div
+            key={level.id}
+            className="mb-4 grid grid-cols-1 gap-4 rounded border border-gray-800 p-4 md:grid-cols-5"
+          >
+            <div>
+              <label className="mb-1 block text-sm text-gray-300">Nombre</label>
+              <input
+                type="text"
+                value={level.name}
+                onChange={e => updateLevel(index, "name", e.target.value)}
+                className="w-full rounded border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white"
+                placeholder="Espartano"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm text-gray-300">
+                Puntos minimos
+              </label>
+              <input
+                type="number"
+                value={level.minPoints}
+                onChange={e =>
+                  updateLevel(index, "minPoints", Number(e.target.value))
+                }
+                className="w-full rounded border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm text-gray-300">
+                % Comision extra
+              </label>
+              <input
+                type="number"
+                step="0.1"
+                value={level.benefits?.commissionBonus || 0}
+                onChange={e =>
+                  updateLevel(index, "commissionBonus", Number(e.target.value))
+                }
+                className="w-full rounded border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm text-gray-300">
+                % Descuento compra
+              </label>
+              <input
+                type="number"
+                step="0.1"
+                value={level.benefits?.discountBonus || 0}
+                onChange={e =>
+                  updateLevel(index, "discountBonus", Number(e.target.value))
+                }
+                className="w-full rounded border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white"
+              />
+            </div>
+            <div className="flex items-end">
+              <button
+                onClick={() => removeLevel(index)}
+                className="w-full rounded bg-red-500 px-3 py-2 text-sm text-white hover:bg-red-600"
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+        ))}
+
+        <button
+          onClick={addLevel}
+          className="mt-2 rounded bg-green-500 px-4 py-2 text-white hover:bg-green-600"
+        >
+          + Agregar Nivel
+        </button>
+      </div>
+
+      {/* Multiplicadores */}
+      <div className="mb-6 rounded-lg border border-gray-800 bg-gray-900 p-6">
+        <h2 className="mb-4 text-2xl font-semibold text-white">
+          ⚡ Multiplicadores Activos
+        </h2>
+
+        {activeMultipliers.map((multiplier, index) => (
+          <div
+            key={index}
+            className="mb-4 grid grid-cols-1 gap-4 rounded border border-gray-800 p-4 md:grid-cols-5"
+          >
+            <div>
+              <label className="mb-1 block text-sm text-gray-300">Tipo</label>
+              <select
+                value={multiplier.type}
+                onChange={e => updateMultiplier(index, "type", e.target.value)}
+                className="w-full rounded border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white"
+              >
+                <option value="custom">custom</option>
+                <option value="weekend">weekend</option>
+                <option value="category">category</option>
+                <option value="product">product</option>
+                <option value="all">all</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm text-gray-300">Target</label>
+              <select
+                value={multiplier.targetType || "all"}
+                onChange={e =>
+                  updateMultiplier(index, "targetType", e.target.value)
+                }
+                className="w-full rounded border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white"
+              >
+                <option value="all">all</option>
+                <option value="weekend">weekend</option>
+                <option value="category">category</option>
+                <option value="product">product</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm text-gray-300">
+                Target ID
+              </label>
+              <input
+                type="text"
+                value={multiplier.targetId || ""}
+                onChange={e =>
+                  updateMultiplier(index, "targetId", e.target.value)
+                }
+                className="w-full rounded border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white"
+                placeholder="ID producto o categoria"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm text-gray-300">Valor</label>
+              <input
+                type="number"
+                step="0.1"
+                value={multiplier.value}
+                onChange={e =>
+                  updateMultiplier(index, "value", Number(e.target.value))
+                }
+                className="w-full rounded border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white"
+              />
+            </div>
+            <div className="flex items-end gap-2">
+              <button
+                onClick={() =>
+                  updateMultiplier(index, "active", !multiplier.active)
+                }
+                className="w-full rounded bg-gray-700 px-3 py-2 text-sm text-white hover:bg-gray-600"
+              >
+                {multiplier.active ? "Activo" : "Inactivo"}
+              </button>
+              <button
+                onClick={() => removeMultiplier(index)}
+                className="w-full rounded bg-red-500 px-3 py-2 text-sm text-white hover:bg-red-600"
+              >
+                X
+              </button>
+            </div>
+          </div>
+        ))}
+
+        <button
+          onClick={addMultiplier}
+          className="mt-2 rounded bg-green-500 px-4 py-2 text-white hover:bg-green-600"
+        >
+          + Agregar Multiplicador
+        </button>
+      </div>
+
+      {/* Ciclos y Reset */}
+      <div className="mb-6 rounded-lg border border-gray-800 bg-gray-900 p-6">
+        <h2 className="mb-4 text-2xl font-semibold text-white">
+          ⏳ Ciclos y Reset
+        </h2>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div>
+            <label className="mb-2 block font-medium text-gray-300">
+              Duracion del torneo
+            </label>
+            <select
+              value={cycleDuration}
+              onChange={e => setCycleDuration(e.target.value)}
+              className="w-full rounded-md border border-gray-700 bg-gray-800 px-4 py-2 text-white focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="monthly">Mensual</option>
+              <option value="quarterly">Trimestral</option>
+              <option value="annual">Anual</option>
+              <option value="infinite">Infinito</option>
+              <option value="custom">Personalizado</option>
+            </select>
+          </div>
+
+          {cycleDuration === "custom" && (
+            <div>
+              <label className="mb-2 block font-medium text-gray-300">
+                Dias personalizados
+              </label>
+              <input
+                type="number"
+                min="1"
+                value={cycleCustomDays}
+                onChange={e => setCycleCustomDays(Number(e.target.value))}
+                className="w-full rounded-md border border-gray-700 bg-gray-800 px-4 py-2 text-white focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          )}
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div>
+            <label className="mb-2 block font-medium text-gray-300">
+              Politica de reset
+            </label>
+            <select
+              value={resetPolicyType}
+              onChange={e => setResetPolicyType(e.target.value)}
+              className="w-full rounded-md border border-gray-700 bg-gray-800 px-4 py-2 text-white focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="reset">Reset a 0</option>
+              <option value="carry">Mantener %</option>
+              <option value="downlevel">Bajar nivel</option>
+            </select>
+          </div>
+
+          {resetPolicyType === "carry" && (
+            <div>
+              <label className="mb-2 block font-medium text-gray-300">
+                % que se mantiene
+              </label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                value={resetCarryPercent}
+                onChange={e => setResetCarryPercent(Number(e.target.value))}
+                className="w-full rounded-md border border-gray-700 bg-gray-800 px-4 py-2 text-white focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          )}
         </div>
       </div>
 

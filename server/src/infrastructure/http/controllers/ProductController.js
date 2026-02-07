@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { isCloudinaryConfigured } from "../../../../config/cloudinary.js";
+import DistributorStock from "../../../../models/DistributorStock.js";
 import { CreateProductUseCase } from "../../../application/use-cases/CreateProductUseCase.js";
 import { UpdateStockUseCase } from "../../../application/use-cases/UpdateStockUseCase.js";
 import { ProductRepository } from "../../database/repositories/ProductRepository.js";
@@ -73,6 +74,50 @@ export const getAllProducts = async (req, res, next) => {
     res.status(500).json({
       success: false,
       message: error.message || "Error al obtener productos",
+    });
+  }
+};
+
+/**
+ * Get Distributor Catalog (only products with stock > 0)
+ */
+export const getMyCatalog = async (req, res) => {
+  try {
+    if (req.user?.role !== "distribuidor") {
+      return res.status(403).json({
+        message: "Solo los distribuidores pueden acceder a su catálogo",
+      });
+    }
+
+    const filter = {
+      distributor: req.user.id,
+      quantity: { $gt: 0 },
+    };
+
+    if (req.businessId) {
+      filter.business = req.businessId;
+    }
+
+    const stockEntries = await DistributorStock.find(filter)
+      .populate({
+        path: "product",
+        select:
+          "name description purchasePrice distributorPrice clientPrice image category",
+        populate: { path: "category", select: "name slug" },
+      })
+      .lean();
+
+    const products = stockEntries
+      .filter((entry) => entry.product)
+      .map((entry) => ({
+        ...entry.product,
+        distributorStock: entry.quantity,
+      }));
+
+    res.json(products);
+  } catch (error) {
+    res.status(500).json({
+      message: error.message || "Error al obtener el catálogo",
     });
   }
 };

@@ -73,6 +73,12 @@ export default function SpecialSaleForm({
     .map(dist => dist.distributorId)
     .filter((id): id is string => Boolean(id));
 
+  const toPercentageNumber = (value: string) => {
+    if (!value || value.trim() === "") return undefined;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  };
+
   const loadProducts = useCallback(async () => {
     try {
       const response = await productService.getAll();
@@ -307,8 +313,7 @@ export default function SpecialSaleForm({
           name: dist.name,
           amount: (dist.amount * itemProfit) / totalProfit,
           notes: dist.notes,
-          percentage: dist.percentage,
-          distributorId: dist.distributorId,
+          percentage: toPercentageNumber(dist.percentage),
         }));
 
         const data = {

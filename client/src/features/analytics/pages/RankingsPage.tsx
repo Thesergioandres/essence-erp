@@ -129,6 +129,8 @@ const Rankings = () => {
     );
   }
 
+  const rankings = rankingData?.rankings || [];
+
   return (
     <div className="container mx-auto min-h-screen bg-gray-900 px-4 py-8">
       <h1 className="mb-8 text-3xl font-bold text-white">
@@ -232,7 +234,7 @@ const Rankings = () => {
                   <span className="text-sm opacity-80">Premio 1er Lugar</span>
                 </div>
                 <div className="text-3xl font-bold">
-                  {formatCurrency(rankingData.config.topPerformerBonus)}
+                  {formatCurrency(rankingData.config?.topPerformerBonus ?? 0)}
                 </div>
                 <p className="mt-1 text-xs opacity-75">
                   Bono en efectivo cada 15 días
@@ -249,19 +251,19 @@ const Rankings = () => {
                   <div className="flex justify-between">
                     <span>🥇 1er lugar:</span>
                     <span className="font-bold">
-                      +{rankingData.config.top1CommissionBonus ?? 5}% adicional
+                      +{rankingData.config?.top1CommissionBonus ?? 5}% adicional
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span>🥈 2do lugar:</span>
                     <span className="font-bold">
-                      +{rankingData.config.top2CommissionBonus ?? 3}% adicional
+                      +{rankingData.config?.top2CommissionBonus ?? 3}% adicional
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span>🥉 3er lugar:</span>
                     <span className="font-bold">
-                      +{rankingData.config.top3CommissionBonus ?? 2}% adicional
+                      +{rankingData.config?.top3CommissionBonus ?? 2}% adicional
                     </span>
                   </div>
                 </div>
@@ -292,7 +294,7 @@ const Rankings = () => {
           </div>
 
           {/* Podio de los 3 primeros lugares */}
-          {rankingData.rankings.length >= 3 && (
+          {rankings.length >= 3 && (
             <div className="bg-linear-to-br mb-6 rounded-lg border border-gray-700 from-gray-800 to-gray-900 p-6 shadow-lg">
               <h2 className="mb-4 text-center text-2xl font-bold text-white">
                 🏆 Podio Actual
@@ -308,16 +310,13 @@ const Rankings = () => {
                   </div>
                   <div className="mt-2 text-center">
                     <p className="font-bold text-white">
-                      {rankingData.rankings[1]?.distributorName}
+                      {rankings[1]?.distributorName}
                     </p>
                     <p className="text-sm text-gray-400">
-                      {formatCurrency(
-                        rankingData.rankings[1]?.totalRevenue || 0
-                      )}
+                      {formatCurrency(rankings[1]?.totalRevenue || 0)}
                     </p>
                     <span className="mt-1 inline-block rounded-full bg-blue-600 px-3 py-1 text-xs font-bold text-white">
-                      {rankingData.rankings[1]?.profitPercentage ?? 23}%
-                      ganancia
+                      {rankings[1]?.profitPercentage ?? 23}% ganancia
                     </span>
                   </div>
                 </div>
@@ -332,16 +331,13 @@ const Rankings = () => {
                   </div>
                   <div className="mt-2 text-center">
                     <p className="font-bold text-white">
-                      {rankingData.rankings[0]?.distributorName}
+                      {rankings[0]?.distributorName}
                     </p>
                     <p className="text-sm text-gray-400">
-                      {formatCurrency(
-                        rankingData.rankings[0]?.totalRevenue || 0
-                      )}
+                      {formatCurrency(rankings[0]?.totalRevenue || 0)}
                     </p>
                     <span className="mt-1 inline-block rounded-full bg-green-600 px-3 py-1 text-xs font-bold text-white">
-                      {rankingData.rankings[0]?.profitPercentage ?? 25}%
-                      ganancia
+                      {rankings[0]?.profitPercentage ?? 25}% ganancia
                     </span>
                   </div>
                 </div>
@@ -356,16 +352,13 @@ const Rankings = () => {
                   </div>
                   <div className="mt-2 text-center">
                     <p className="font-bold text-white">
-                      {rankingData.rankings[2]?.distributorName}
+                      {rankings[2]?.distributorName}
                     </p>
                     <p className="text-sm text-gray-400">
-                      {formatCurrency(
-                        rankingData.rankings[2]?.totalRevenue || 0
-                      )}
+                      {formatCurrency(rankings[2]?.totalRevenue || 0)}
                     </p>
                     <span className="mt-1 inline-block rounded-full bg-purple-600 px-3 py-1 text-xs font-bold text-white">
-                      {rankingData.rankings[2]?.profitPercentage ?? 21}%
-                      ganancia
+                      {rankings[2]?.profitPercentage ?? 21}% ganancia
                     </span>
                   </div>
                 </div>
@@ -405,7 +398,7 @@ const Rankings = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-700">
-                {rankingData.rankings.length === 0 ? (
+                {rankings.length === 0 ? (
                   <tr>
                     <td
                       colSpan={8}
@@ -415,7 +408,7 @@ const Rankings = () => {
                     </td>
                   </tr>
                 ) : (
-                  rankingData.rankings.map(rank => (
+                  rankings.map(rank => (
                     <tr
                       key={rank.distributorId}
                       className={`hover:bg-gray-700 ${

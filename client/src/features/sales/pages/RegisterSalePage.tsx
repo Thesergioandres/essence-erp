@@ -4,17 +4,34 @@
  * warranty management, and customer integration
  */
 
-import { CheckCircle, FileText, RefreshCcw, ShoppingBag } from "lucide-react";
+import {
+  CheckCircle,
+  FileText,
+  Package,
+  Plus,
+  RefreshCcw,
+  ShoppingBag,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
+import ProductSelector from "../../../components/ProductSelector";
+import PromotionSelector from "../../../components/PromotionSelector";
 import { useSession } from "../../../hooks/useSession";
 import LoadingSpinner from "../../../shared/components/ui/LoadingSpinner";
+import type {
+  DistributorStats,
+  GamificationConfig,
+  LevelConfig,
+} from "../../analytics/types/gamification.types";
 import { branchService } from "../../branches/services/branch.service";
 import { businessService } from "../../business/services/business.service";
 import type { Branch } from "../../business/types/business.types";
+import { gamificationService } from "../../common/services";
 import { distributorService } from "../../distributors/services/distributor.service";
 import { productsService } from "../../inventory/api/products.service";
 import type { Product } from "../../inventory/types/product.types";
+import { promotionService } from "../../settings/services";
+import type { Promotion } from "../../settings/types/promotion.types";
 import {
   CustomerSelector,
   FinancialPanel,
@@ -48,6 +65,8 @@ export default function RegisterSalePage() {
     ...initialOrderState,
     locationType: isDistributor ? "distributor" : "warehouse", // Default start
     locationName: isDistributor ? "Mi Inventario" : "Bodega Principal",
+    isDistributorSale: isDistributor,
+    distributorProfitPercentage: 20,
   });
 
   // State: Data sources
@@ -56,12 +75,26 @@ export default function RegisterSalePage() {
   const [branchStock, setBranchStock] = useState<Map<string, number>>(
     new Map()
   );
-  const [distributorHasStock, setDistributorHasStock] = useState<boolean>(true);
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
+  const [promotionsLoading, setPromotionsLoading] = useState(false);
+  const [promotionsError, setPromotionsError] = useState<string | null>(null);
+  const [productSelectorId, setProductSelectorId] = useState("");
+  const [promotionSelectorId, setPromotionSelectorId] = useState("");
 
   // State: Loading/Error/Success
   const [dataLoading, setDataLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [gamificationLoading, setGamificationLoading] = useState(false);
+  const [gamificationConfig, setGamificationConfig] =
+    useState<GamificationConfig | null>(null);
+  const [distributorStats, setDistributorStats] =
+    useState<DistributorStats | null>(null);
+  const [rankingInfo, setRankingInfo] = useState<{
+    position: number | null;
+    totalDistributors: number;
+    bonusCommission: number;
+  } | null>(null);
   const [saleResult, setSaleResult] = useState<{
     success: boolean;
     saleGroupId: string;
@@ -129,7 +162,6 @@ export default function RegisterSalePage() {
           const hasStock =
             distStockMap.size > 0 &&
             Array.from(distStockMap.values()).some(qty => qty > 0);
-          setDistributorHasStock(hasStock);
 
           // Auto-seleccionar: si tiene stock -> "Mi Inventario", si no -> primera sede
           if (hasStock) {
@@ -161,7 +193,9 @@ export default function RegisterSalePage() {
           ).map(p => ({
             _id: p._id,
             name: p.name,
-            purchasePrice: p.distributorPrice || p.purchasePrice || 0, // Profit base with fallback
+            purchasePrice:
+              p.averageCost ?? p.purchasePrice ?? p.distributorPrice ?? 0,
+            averageCost: p.averageCost ?? undefined,
             clientPrice: p.clientPrice ?? p.suggestedPrice ?? 0,
             distributorPrice: p.distributorPrice ?? 0,
             warehouseStock: p.warehouseStock ?? 0, // HYBRID MODEL: Distributors CAN see warehouse stock for dropshipping
@@ -185,7 +219,8 @@ export default function RegisterSalePage() {
           ).map(p => ({
             _id: p._id,
             name: p.name,
-            purchasePrice: p.purchasePrice,
+            purchasePrice: p.averageCost ?? p.purchasePrice ?? 0,
+            averageCost: p.averageCost ?? undefined,
             clientPrice: p.clientPrice ?? p.suggestedPrice ?? 0,
             distributorPrice: p.distributorPrice,
             warehouseStock: p.warehouseStock ?? 0,
@@ -203,7 +238,71 @@ export default function RegisterSalePage() {
     };
 
     fetchData();
-  }, [userLoading, isDistributor]);
+  }, [userLoading, isDistributor, user?._id]);
+
+  useEffect(() => {
+    if (userLoading) return;
+
+    const fetchPromotions = async () => {
+      setPromotionsLoading(true);
+      setPromotionsError(null);
+      try {
+        const response = await promotionService.getAll({ status: "active" });
+        setPromotions(response.promotions || []);
+      } catch (error) {
+        console.error("Error fetching promotions:", error);
+        setPromotionsError("Error al cargar promociones");
+      } finally {
+        setPromotionsLoading(false);
+      }
+    };
+
+    fetchPromotions();
+  }, [userLoading]);
+
+  useEffect(() => {
+    if (!isDistributor || !user?._id) return;
+
+    let isActive = true;
+    const loadGamification = async () => {
+      try {
+        setGamificationLoading(true);
+        const [configRes, statsRes, rankingRes] = await Promise.all([
+          gamificationService.getConfig(),
+          gamificationService.getDistributorStats(user._id),
+          gamificationService.getAdjustedCommission(user._id),
+        ]);
+
+        if (!isActive) return;
+        setGamificationConfig(configRes as GamificationConfig);
+        setDistributorStats(statsRes?.stats ?? null);
+        setRankingInfo({
+          position: rankingRes?.position ?? null,
+          totalDistributors: rankingRes?.totalDistributors ?? 0,
+          bonusCommission: rankingRes?.bonusCommission ?? 0,
+        });
+      } catch (error) {
+        console.error("Error loading gamification info:", error);
+      } finally {
+        if (isActive) setGamificationLoading(false);
+      }
+    };
+
+    loadGamification();
+    return () => {
+      isActive = false;
+    };
+  }, [isDistributor, user?._id]);
+
+  useEffect(() => {
+    const bonus = rankingInfo?.bonusCommission || 0;
+    const profitPercentage = 20 + bonus;
+    dispatch({
+      type: "SET_DISTRIBUTOR_PROFIT",
+      isDistributorSale: isDistributor,
+      profitPercentage,
+    });
+  }, [isDistributor, rankingInfo?.bonusCommission]);
 
   // Fetch branch stock when branch location is selected
   useEffect(() => {
@@ -256,7 +355,83 @@ export default function RegisterSalePage() {
           order.locationType === "warehouse" ? stock : p.warehouseStock,
       };
     });
-  }, [products, order.locationType, branchStock, isDistributor]);
+  }, [products, order.locationType, branchStock]);
+
+  const sellablePromotions = useMemo(
+    () =>
+      promotions.filter(
+        promo =>
+          (promo.type === "bundle" || promo.type === "combo") &&
+          (promo.comboItems?.length || 0) > 0
+      ),
+    [promotions]
+  );
+
+  const selectorProducts = useMemo(
+    () =>
+      productsWithLocationStock.map(product => ({
+        _id: product._id,
+        name: product.name,
+        category: product.category,
+        totalStock: product.totalStock,
+        warehouseStock: product.warehouseStock,
+        purchasePrice: product.purchasePrice,
+        averageCost: product.averageCost,
+        suggestedPrice: product.clientPrice,
+        clientPrice: product.clientPrice,
+        image: product.image,
+      })),
+    [productsWithLocationStock]
+  );
+
+  const gamificationSummary = useMemo(() => {
+    const levels = (gamificationConfig?.levels || []) as LevelConfig[];
+    const sorted = [...levels].sort(
+      (a, b) => (a.minPoints || 0) - (b.minPoints || 0)
+    );
+    const points = distributorStats?.totalPoints || 0;
+    let current = sorted[0] || null;
+    for (const level of sorted) {
+      if (points >= (level.minPoints || 0)) {
+        current = level;
+      }
+    }
+    const next = sorted.find(level => (level.minPoints || 0) > points) || null;
+    const currentMin = current?.minPoints || 0;
+    const nextMin = next?.minPoints || currentMin;
+    const pointsToNext = next ? Math.max(0, next.minPoints - points) : 0;
+    const pointsPerCurrencyUnit =
+      gamificationConfig?.generalRules?.pointsPerCurrencyUnit || 0;
+    const pointsPerSaleConfirmed =
+      gamificationConfig?.generalRules?.pointsPerSaleConfirmed || 0;
+    const estimatedRevenueToNext =
+      pointsPerCurrencyUnit > 0 ? pointsToNext / pointsPerCurrencyUnit : null;
+    const estimatedSalesToNext =
+      pointsPerSaleConfirmed > 0
+        ? Math.ceil(pointsToNext / pointsPerSaleConfirmed)
+        : null;
+
+    return {
+      points,
+      current,
+      next,
+      currentMin,
+      nextMin,
+      progressPercent:
+        next && nextMin > currentMin
+          ? Math.min(
+              100,
+              Math.max(
+                0,
+                ((points - currentMin) / (nextMin - currentMin)) * 100
+              )
+            )
+          : 100,
+      pointsToNext,
+      estimatedRevenueToNext,
+      estimatedSalesToNext,
+    };
+  }, [gamificationConfig, distributorStats]);
 
   // ==================== HANDLERS ====================
   const handleLocationChange = useCallback(
@@ -298,7 +473,8 @@ export default function RegisterSalePage() {
           productName: product.name,
           quantity,
           unitPrice: product.clientPrice,
-          purchasePrice: product.purchasePrice,
+          isPromotion: false,
+          purchasePrice: product.averageCost ?? product.purchasePrice ?? 0,
           availableStock: stock,
           category:
             typeof product.category === "object"
@@ -311,8 +487,193 @@ export default function RegisterSalePage() {
     [order.locationType]
   );
 
+  const handleAddPromotion = useCallback(
+    (promotion: Promotion) => {
+      setSubmitError(null);
+
+      const resolvePositive = (value: unknown) => {
+        const num = Number(value);
+        return Number.isFinite(num) && num > 0 ? num : null;
+      };
+
+      const items = promotion.comboItems || [];
+      if (items.length === 0) {
+        setSubmitError("Esta promocion no tiene productos configurados.");
+        return;
+      }
+
+      const baseTotal = items.reduce((sum, item) => {
+        const product =
+          typeof item.product === "object" && item.product !== null
+            ? item.product
+            : null;
+        const unitPrice =
+          item.unitPrice ??
+          product?.clientPrice ??
+          product?.suggestedPrice ??
+          0;
+        return sum + unitPrice * (item.quantity || 1);
+      }, 0);
+
+      const baseDistributorTotal = items.reduce((sum, item) => {
+        const product =
+          typeof item.product === "object" && item.product !== null
+            ? item.product
+            : null;
+        const unitPrice =
+          resolvePositive(product?.distributorPrice) ??
+          item.unitPrice ??
+          product?.clientPrice ??
+          product?.suggestedPrice ??
+          0;
+        return sum + unitPrice * (item.quantity || 1);
+      }, 0);
+
+      const promotionTotal =
+        promotion.promotionPrice && promotion.promotionPrice > 0
+          ? promotion.promotionPrice
+          : baseTotal;
+      const ratio = baseTotal > 0 ? promotionTotal / baseTotal : 1;
+      const distributorTotal =
+        promotion.distributorPrice && promotion.distributorPrice > 0
+          ? promotion.distributorPrice
+          : baseDistributorTotal;
+      const distributorRatio =
+        baseDistributorTotal > 0 ? distributorTotal / baseDistributorTotal : 1;
+
+      const additions: Array<{
+        product: ProductWithStock;
+        quantity: number;
+        unitPrice: number;
+        distributorPrice: number;
+      }> = [];
+      const missingProducts: string[] = [];
+      const insufficientStock: string[] = [];
+
+      items.forEach(item => {
+        const productId =
+          typeof item.product === "string" ? item.product : item.product?._id;
+        if (!productId) return;
+
+        const product = productsWithLocationStock.find(
+          p => p._id === productId
+        );
+        if (!product) {
+          const label =
+            typeof item.product === "object" && item.product !== null
+              ? item.product.name
+              : productId;
+          missingProducts.push(label || productId);
+          return;
+        }
+
+        const stock =
+          order.locationType === "warehouse"
+            ? (product.warehouseStock ?? 0)
+            : order.locationType === "branch"
+              ? (product.branchStock ?? 0)
+              : (product.distributorStock ?? 0);
+
+        const quantity = item.quantity || 1;
+        if (stock < quantity) {
+          insufficientStock.push(product.name);
+          return;
+        }
+
+        const baseUnitPrice =
+          item.unitPrice ??
+          product.clientPrice ??
+          product.distributorPrice ??
+          0;
+        const promoUnitPrice = Math.max(0, Math.round(baseUnitPrice * ratio));
+        const baseDistributorUnitPrice =
+          resolvePositive(product.distributorPrice) ?? baseUnitPrice;
+        const promoDistributorUnitPrice = Math.max(
+          0,
+          Math.round(baseDistributorUnitPrice * distributorRatio)
+        );
+
+        additions.push({
+          product,
+          quantity,
+          unitPrice: promoUnitPrice,
+          distributorPrice: promoDistributorUnitPrice,
+        });
+      });
+
+      if (missingProducts.length > 0) {
+        setSubmitError(
+          `No se pudieron cargar productos de la promocion: ${missingProducts.join(
+            ", "
+          )}.`
+        );
+        return;
+      }
+
+      if (insufficientStock.length > 0) {
+        setSubmitError(
+          `Sin stock suficiente para: ${insufficientStock.join(", ")}.`
+        );
+        return;
+      }
+
+      additions.forEach(
+        ({ product, quantity, unitPrice, distributorPrice }) => {
+          const existing = order.items.find(i => i.productId === product._id);
+          if (existing) {
+            dispatch({
+              type: "UPDATE_ITEM",
+              itemId: existing.id,
+              updates: {
+                quantity: existing.quantity + quantity,
+                unitPrice,
+                distributorPrice,
+                isPromotion: true,
+                promotionId: promotion._id,
+              },
+            });
+          } else {
+            dispatch({
+              type: "ADD_ITEM",
+              item: {
+                productId: product._id,
+                productName: product.name,
+                promotionId: promotion._id,
+                quantity,
+                unitPrice,
+                distributorPrice,
+                isPromotion: true,
+                purchasePrice:
+                  product.averageCost ?? product.purchasePrice ?? 0,
+                availableStock:
+                  order.locationType === "warehouse"
+                    ? (product.warehouseStock ?? 0)
+                    : order.locationType === "branch"
+                      ? (product.branchStock ?? 0)
+                      : (product.distributorStock ?? 0),
+                category:
+                  typeof product.category === "object"
+                    ? product.category?.name
+                    : product.category,
+                image: product.image,
+              },
+            });
+          }
+        }
+      );
+    },
+    [order.items, order.locationType, productsWithLocationStock]
+  );
+
   const handleUpdateItem = useCallback(
-    (itemId: string, updates: { quantity?: number; unitPrice?: number }) => {
+    (
+      itemId: string,
+      updates: {
+        quantity?: number;
+        unitPrice?: number;
+        distributorPrice?: number;
+      }
+    ) => {
       dispatch({ type: "UPDATE_ITEM", itemId, updates });
     },
     []
@@ -325,6 +686,28 @@ export default function RegisterSalePage() {
   const handleConfirmOrder = useCallback(async () => {
     if (order.items.length === 0) return;
 
+    const discountAmount =
+      order.discount || (order.subtotal * order.discountPercent) / 100 || 0;
+    const subtotal = order.subtotal || 0;
+    const belowCostItem = order.items.find(item => {
+      const cost = Number(item.purchasePrice || 0);
+      if (cost <= 0) return false;
+      const itemSubtotal = item.unitPrice * item.quantity;
+      const discountShare =
+        subtotal > 0 ? (itemSubtotal / subtotal) * discountAmount : 0;
+      const effectiveUnitPrice =
+        item.unitPrice - discountShare / Math.max(1, item.quantity);
+      return effectiveUnitPrice < cost;
+    });
+
+    if (belowCostItem) {
+      setSubmitError(
+        `El producto no se puede vender a ese precio: ${belowCostItem.productName}. ` +
+          `Costo minimo $${Number(belowCostItem.purchasePrice).toLocaleString()}.`
+      );
+      return;
+    }
+
     setIsSubmitting(true);
     setSubmitError(null);
 
@@ -336,8 +719,11 @@ export default function RegisterSalePage() {
       const payload: AdminOrderPayload = {
         items: order.items.map(item => ({
           productId: item.productId,
+          promotionId: item.promotionId,
           quantity: item.quantity,
           salePrice: item.unitPrice,
+          distributorPrice: item.distributorPrice,
+          isPromotion: item.isPromotion,
         })),
         paymentMethodId: order.paymentMethod,
         paymentType: order.paymentMethod,
@@ -385,7 +771,7 @@ export default function RegisterSalePage() {
       let totalAmount = 0;
 
       try {
-        const result = await saleService.registerBulk({
+        await saleService.registerBulk({
           items: payload.items,
           branchId: payload.branchId,
           paymentMethodId: payload.paymentMethodId,
@@ -456,6 +842,123 @@ export default function RegisterSalePage() {
     setSubmitError(null);
   }, []);
 
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: "MXN",
+      maximumFractionDigits: 0,
+    }).format(value);
+
+  const getProductNameById = (productId: string) =>
+    products.find(product => product._id === productId)?.name || productId;
+
+  const getCategoryNameById = (categoryId?: string) => {
+    if (!categoryId) return "Categoria";
+    const found = products.find(product => {
+      const category = product.category as any;
+      return category?._id === categoryId || category === categoryId;
+    });
+    const category = found?.category as any;
+    return category?.name || category || categoryId;
+  };
+
+  const resolveMultiplierLabel = (multiplier: any) => {
+    const type = multiplier?.type || "custom";
+    const targetType = multiplier?.targetType || "all";
+    const targetId = multiplier?.targetId || "";
+
+    if (type === "weekend" || targetType === "weekend") {
+      return "Fines de semana";
+    }
+
+    if (targetType === "product") {
+      return `Producto: ${getProductNameById(targetId)}`;
+    }
+
+    if (targetType === "category") {
+      return `Categoria: ${getCategoryNameById(targetId)}`;
+    }
+
+    return type === "custom" ? "Multiplicador" : type;
+  };
+
+  const projectedPoints = useMemo(() => {
+    if (!isDistributor) return 0;
+    const rules = gamificationConfig?.generalRules;
+    const pointsPerCurrencyUnit = Number(rules?.pointsPerCurrencyUnit || 0);
+    const pointsPerSaleConfirmed = Number(rules?.pointsPerSaleConfirmed || 0);
+    const multipliers = gamificationConfig?.activeMultipliers || [];
+
+    if (!pointsPerCurrencyUnit && !pointsPerSaleConfirmed) return 0;
+
+    const discountAmount =
+      order.discount || (order.subtotal * order.discountPercent) / 100 || 0;
+    const subtotal = order.subtotal || 0;
+
+    const now = new Date();
+    const isWeekend = now.getDay() === 0 || now.getDay() === 6;
+
+    return order.items.reduce((total, item) => {
+      const product = products.find(p => p._id === item.productId) as any;
+      const itemSubtotal = (item.unitPrice || 0) * (item.quantity || 0);
+      const discountShare =
+        subtotal > 0 ? (itemSubtotal / subtotal) * discountAmount : 0;
+      const saleAmount = Math.max(0, itemSubtotal - discountShare);
+      let points = saleAmount * pointsPerCurrencyUnit + pointsPerSaleConfirmed;
+
+      let multiplierValue = 1;
+      for (const multiplier of multipliers) {
+        if (!multiplier?.active) continue;
+        const targetType = multiplier?.targetType || "all";
+        const targetId = String(multiplier?.targetId || "");
+        const value = Number(multiplier?.value || 1);
+
+        if (value <= 0) continue;
+
+        if (multiplier.type === "weekend" || targetType === "weekend") {
+          if (isWeekend) multiplierValue *= value;
+          continue;
+        }
+
+        if (targetType === "all") {
+          multiplierValue *= value;
+          continue;
+        }
+
+        if (targetType === "product") {
+          if (String(item.productId) === targetId) multiplierValue *= value;
+          continue;
+        }
+
+        if (targetType === "category") {
+          const category = product?.category as any;
+          const categoryId = category?._id || category || "";
+          if (String(categoryId) === targetId) multiplierValue *= value;
+        }
+      }
+
+      points *= multiplierValue;
+      return total + Math.max(0, Math.round(points));
+    }, 0);
+  }, [
+    gamificationConfig,
+    isDistributor,
+    order.items,
+    order.discount,
+    order.discountPercent,
+    order.subtotal,
+    products,
+  ]);
+
+  const projectedTotalPoints =
+    (distributorStats?.totalPoints || 0) + projectedPoints;
+  const projectedPointsToNext = gamificationSummary.next
+    ? Math.max(0, gamificationSummary.nextMin - projectedTotalPoints)
+    : 0;
+  const projectedHitsNext = gamificationSummary.next
+    ? projectedPointsToNext === 0
+    : false;
+
   // ==================== LOADING STATE ====================
   if (dataLoading) {
     return (
@@ -520,31 +1023,60 @@ export default function RegisterSalePage() {
 
   // ==================== MAIN VIEW ====================
   return (
-    <div className="min-h-screen bg-[#070910] p-4 text-white sm:p-6">
-      <div className="mx-auto max-w-7xl">
+    <div className="relative min-h-screen overflow-hidden bg-[#05060b] text-white">
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute -left-40 top-0 h-[420px] w-[420px] rounded-full bg-teal-500/10 blur-[120px]" />
+        <div className="absolute -right-40 top-20 h-[480px] w-[480px] rounded-full bg-amber-400/10 blur-[140px]" />
+        <div className="absolute bottom-0 left-1/3 h-[360px] w-[360px] rounded-full bg-cyan-500/10 blur-[120px]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.06),_transparent_45%)]" />
+      </div>
+
+      <div className="relative mx-auto max-w-7xl px-4 pb-12 pt-6 sm:px-6">
         {/* Header */}
-        <div className="mb-6">
-          <h1 className="flex items-center gap-3 text-2xl font-bold sm:text-3xl">
-            <ShoppingBag className="h-7 w-7 text-purple-400 sm:h-8 sm:w-8" />
-            Registrar Venta
-          </h1>
-          <p className="mt-1 text-sm text-gray-400">
-            {isDistributor ? "Panel de Distribuidor" : "Panel de Administrador"}
-          </p>
+        <div className="mb-6 animate-fade-in">
+          <div className="rounded-2xl border border-white/10 bg-gradient-to-r from-slate-900/80 via-slate-800/70 to-slate-900/80 p-5 shadow-[0_20px_60px_-40px_rgba(15,23,42,0.9)] backdrop-blur">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-teal-300">
+                  Punto de venta
+                </p>
+                <h1 className="font-display mt-2 flex items-center gap-3 text-3xl font-semibold sm:text-4xl">
+                  <ShoppingBag className="h-8 w-8 text-teal-300" />
+                  Registrar Venta
+                </h1>
+                <p className="mt-1 text-sm text-slate-300">
+                  {isDistributor
+                    ? "Panel de Distribuidor"
+                    : "Panel de Administrador"}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-emerald-200">
+                  {isDistributor ? "Distribuidor" : "Administrador"}
+                </span>
+                <span className="rounded-full border border-slate-600/60 bg-slate-900/60 px-3 py-1 text-slate-200">
+                  Items: {order.items.length}
+                </span>
+                <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-amber-200">
+                  Total: {formatCurrency(order.totalPayable)}
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Error Alert */}
         {submitError && (
-          <div className="mb-4 rounded-xl border border-red-500/50 bg-red-500/10 p-4 text-red-300">
-            <p className="font-medium">Error al procesar el pedido</p>
+          <div className="mb-4 animate-fade-in rounded-2xl border border-red-500/40 bg-red-950/40 p-4 text-red-200 shadow-[0_20px_40px_-30px_rgba(248,113,113,0.6)]">
+            <p className="font-semibold">Error al procesar el pedido</p>
             <p className="text-sm opacity-80">{submitError}</p>
           </div>
         )}
 
         {/* NEW LAYOUT: Two Main Columns */}
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
           {/* ============ LEFT COLUMN: Products & Cart ============ */}
-          <div className="space-y-4">
+          <div className="space-y-5">
             {/* Location Selector - Compact */}
             <LocationSelector
               locationType={order.locationType}
@@ -553,20 +1085,183 @@ export default function RegisterSalePage() {
               onLocationChange={handleLocationChange}
             />
 
+            {/* Quick Selectors */}
+            <div className="animate-fade-in-up rounded-2xl border border-white/10 bg-slate-900/70 p-5 shadow-[0_18px_50px_-35px_rgba(15,23,42,0.9)]">
+              <h3 className="mb-4 text-lg font-semibold text-white">
+                Selectores rapidos
+              </h3>
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div className="rounded-xl border border-slate-700/60 bg-slate-900/60 p-3">
+                  <p className="mb-2 text-xs uppercase tracking-wide text-slate-400">
+                    Productos
+                  </p>
+                  <ProductSelector
+                    value={productSelectorId}
+                    onChange={productId => {
+                      setProductSelectorId(productId);
+                      if (!productId) return;
+                      const product = productsWithLocationStock.find(
+                        p => p._id === productId
+                      );
+                      if (!product) return;
+
+                      const stock =
+                        order.locationType === "warehouse"
+                          ? (product.warehouseStock ?? 0)
+                          : order.locationType === "branch"
+                            ? (product.branchStock ?? 0)
+                            : (product.distributorStock ?? 0);
+
+                      if (stock <= 0) {
+                        setSubmitError(
+                          `Sin stock disponible para ${product.name}.`
+                        );
+                        return;
+                      }
+
+                      handleAddProduct(product, 1);
+                      setProductSelectorId("");
+                    }}
+                    placeholder="Buscar producto para agregar..."
+                    showStock={true}
+                    products={selectorProducts}
+                  />
+                </div>
+
+                <div className="rounded-xl border border-slate-700/60 bg-slate-900/60 p-3">
+                  <p className="mb-2 text-xs uppercase tracking-wide text-slate-400">
+                    Promociones
+                  </p>
+                  <PromotionSelector
+                    value={promotionSelectorId}
+                    promotions={sellablePromotions}
+                    onChange={(promotionId, promotion) => {
+                      setPromotionSelectorId(promotionId);
+                      if (!promotionId || !promotion) return;
+                      handleAddPromotion(promotion);
+                      setPromotionSelectorId("");
+                    }}
+                    placeholder="Buscar promocion..."
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Promotions */}
+            <div className="animate-fade-in-up rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/80 via-slate-900/60 to-slate-800/60 p-5 shadow-[0_20px_60px_-40px_rgba(15,23,42,0.9)] backdrop-blur">
+              <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-white">
+                <ShoppingBag className="h-5 w-5 text-teal-300" />
+                Promociones Activas
+              </h3>
+
+              {promotionsLoading && (
+                <div className="flex h-24 items-center justify-center text-gray-400">
+                  Cargando promociones...
+                </div>
+              )}
+
+              {promotionsError && (
+                <div className="mb-3 rounded-lg border border-red-500/40 bg-red-900/20 p-3 text-sm text-red-300">
+                  {promotionsError}
+                </div>
+              )}
+
+              {!promotionsLoading && sellablePromotions.length === 0 && (
+                <div className="flex h-20 items-center justify-center text-gray-500">
+                  No hay promociones activas para vender.
+                </div>
+              )}
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                {sellablePromotions.map(promo => {
+                  const promoItems = promo.comboItems || [];
+                  const promoImage =
+                    promo.image?.url ||
+                    (typeof promoItems[0]?.product === "object"
+                      ? promoItems[0]?.product?.image?.url
+                      : undefined);
+                  const fallbackTotal = promoItems.reduce((sum, item) => {
+                    const product =
+                      typeof item.product === "object" && item.product !== null
+                        ? item.product
+                        : null;
+                    const unitPrice =
+                      item.unitPrice ??
+                      product?.clientPrice ??
+                      product?.suggestedPrice ??
+                      0;
+                    return sum + unitPrice * (item.quantity || 1);
+                  }, 0);
+                  const displayPrice =
+                    promo.promotionPrice && promo.promotionPrice > 0
+                      ? promo.promotionPrice
+                      : fallbackTotal;
+
+                  return (
+                    <div
+                      key={promo._id}
+                      className="rounded-xl border border-slate-700/70 bg-slate-900/70 p-3 transition hover:-translate-y-0.5 hover:border-teal-500/50 hover:shadow-[0_15px_30px_-20px_rgba(45,212,191,0.6)]"
+                    >
+                      <div className="flex items-start gap-3">
+                        {promoImage ? (
+                          <img
+                            src={promoImage}
+                            alt={promo.name}
+                            className="h-12 w-12 rounded-lg object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gray-700">
+                            <Package className="h-6 w-6 text-gray-500" />
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-white">
+                            {promo.name}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {promoItems.length} productos incluidos
+                          </p>
+                          <p className="mt-1 text-sm font-bold text-green-400">
+                            ${displayPrice.toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleAddPromotion(promo)}
+                        className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-teal-500/20 px-3 py-2 text-sm font-medium text-teal-200 transition hover:bg-teal-500/30"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Agregar promocion
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Inventory Grid - Main Focus */}
-            <InventoryGrid
-              products={productsWithLocationStock}
-              locationType={order.locationType}
-              loading={dataLoading}
-              onAddProduct={handleAddProduct}
-            />
+            <div
+              className="animate-fade-in-up"
+              style={{ animationDelay: "120ms" }}
+            >
+              <InventoryGrid
+                products={productsWithLocationStock}
+                locationType={order.locationType}
+                loading={dataLoading}
+                onAddProduct={handleAddProduct}
+              />
+            </div>
 
             {/* Cart - Below Inventory */}
-            <div className="rounded-xl border border-gray-700/50 bg-gray-800/30 p-4">
+            <div
+              className="animate-fade-in-up rounded-2xl border border-white/10 bg-slate-900/60 p-4 shadow-[0_18px_50px_-35px_rgba(15,23,42,0.9)]"
+              style={{ animationDelay: "140ms" }}
+            >
               <h3 className="mb-3 flex items-center gap-2 text-lg font-semibold text-white">
                 🛒 Carrito
                 {order.items.length > 0 && (
-                  <span className="rounded-full bg-purple-500/20 px-2 py-0.5 text-sm text-purple-300">
+                  <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-sm text-amber-200">
                     {order.items.length}
                   </span>
                 )}
@@ -580,7 +1275,153 @@ export default function RegisterSalePage() {
           </div>
 
           {/* ============ RIGHT COLUMN: Options & Summary ============ */}
-          <div className="space-y-4">
+          <div className="space-y-5">
+            {isDistributor && (
+              <div className="rounded-xl border border-gray-700/50 bg-gray-800/30 p-4">
+                <h3 className="mb-3 text-lg font-semibold text-white">
+                  🏅 Mi progreso
+                </h3>
+                {gamificationLoading ? (
+                  <p className="text-sm text-gray-400">
+                    Cargando gamificacion...
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div className="rounded-lg bg-gray-900/40 p-3">
+                        <p className="text-xs text-gray-400">Rango actual</p>
+                        <p className="text-base font-semibold text-white">
+                          {gamificationSummary.current?.name || "Sin rango"}
+                        </p>
+                      </div>
+                      <div className="rounded-lg bg-gray-900/40 p-3">
+                        <p className="text-xs text-gray-400">Puntos</p>
+                        <p className="text-base font-semibold text-white">
+                          {gamificationSummary.points}
+                        </p>
+                      </div>
+                      <div className="rounded-lg bg-gray-900/40 p-3">
+                        <p className="text-xs text-gray-400">Ranking</p>
+                        <p className="text-base font-semibold text-white">
+                          {rankingInfo?.position
+                            ? `#${rankingInfo.position} / ${rankingInfo.totalDistributors}`
+                            : "Sin ranking"}
+                        </p>
+                      </div>
+                      <div className="rounded-lg bg-gray-900/40 p-3">
+                        <p className="text-xs text-gray-400">Bono comision</p>
+                        <p className="text-base font-semibold text-white">
+                          +{rankingInfo?.bonusCommission || 0}%
+                        </p>
+                      </div>
+                    </div>
+
+                    {gamificationSummary.next ? (
+                      <div className="rounded-lg border border-gray-700/50 bg-gray-900/40 p-3 text-sm">
+                        <p className="text-xs text-gray-400">Siguiente rango</p>
+                        <p className="font-semibold text-white">
+                          {gamificationSummary.next.name}
+                        </p>
+                        <div className="mt-3">
+                          <div className="mb-1 flex items-center justify-between text-xs text-gray-400">
+                            <span>
+                              {gamificationSummary.currentMin} /{" "}
+                              {gamificationSummary.nextMin} pts
+                            </span>
+                            <span>
+                              {Math.round(gamificationSummary.progressPercent)}%
+                            </span>
+                          </div>
+                          <div className="h-2 rounded-full bg-gray-700">
+                            <div
+                              className="h-2 rounded-full bg-purple-500"
+                              style={{
+                                width: `${gamificationSummary.progressPercent}%`,
+                              }}
+                            />
+                          </div>
+                        </div>
+                        <p className="mt-1 text-gray-300">
+                          Te faltan {gamificationSummary.pointsToNext} puntos.
+                        </p>
+                        {gamificationSummary.estimatedRevenueToNext !==
+                          null && (
+                          <p className="text-gray-400">
+                            Aprox{" "}
+                            {formatCurrency(
+                              gamificationSummary.estimatedRevenueToNext
+                            )}{" "}
+                            en ventas.
+                          </p>
+                        )}
+                        {gamificationSummary.estimatedSalesToNext !== null && (
+                          <p className="text-gray-400">
+                            O ~{gamificationSummary.estimatedSalesToNext} ventas
+                            confirmadas.
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="rounded-lg border border-gray-700/50 bg-gray-900/40 p-3 text-sm text-gray-300">
+                        Estas en el rango maximo.
+                      </div>
+                    )}
+
+                    <div className="rounded-lg border border-gray-700/50 bg-gray-900/40 p-3 text-sm">
+                      <p className="text-xs text-gray-400">
+                        Multiplicadores activos
+                      </p>
+                      {gamificationConfig?.activeMultipliers?.filter(
+                        m => m.active
+                      ).length ? (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {gamificationConfig?.activeMultipliers
+                            ?.filter(m => m.active)
+                            .map((multiplier, idx) => (
+                              <span
+                                key={`${multiplier.type}-${idx}`}
+                                className="rounded-full bg-purple-500/20 px-3 py-1 text-xs text-purple-200"
+                              >
+                                {resolveMultiplierLabel(multiplier)}
+                                {multiplier.value
+                                  ? ` x${multiplier.value}`
+                                  : ""}
+                              </span>
+                            ))}
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-xs text-gray-500">
+                          No hay multiplicadores activos.
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="rounded-lg border border-gray-700/50 bg-gray-900/40 p-3 text-sm">
+                      <p className="text-xs text-gray-400">
+                        Proyeccion de puntos con este carrito
+                      </p>
+                      <p className="mt-2 text-lg font-semibold text-white">
+                        +{projectedPoints} pts
+                      </p>
+                      <p className="text-sm text-gray-300">
+                        Total estimado: {projectedTotalPoints} pts
+                      </p>
+                      {gamificationSummary.next && (
+                        <p className="text-xs text-gray-400">
+                          {projectedHitsNext
+                            ? `Alcanzas ${gamificationSummary.next.name}`
+                            : `Te faltarian ${projectedPointsToNext} pts para ${gamificationSummary.next.name}`}
+                        </p>
+                      )}
+                      <p className="text-xs text-gray-500">
+                        Estimado; se confirma al aprobar la venta.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Customer Selector */}
             <CustomerSelector
               customerId={order.customerId}

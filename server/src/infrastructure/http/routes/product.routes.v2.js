@@ -10,6 +10,7 @@ import {
   createProduct,
   deleteProduct,
   getAllProducts,
+  getMyCatalog,
   getProductById,
   updateProduct,
   updateStock,
@@ -19,6 +20,9 @@ const router = express.Router();
 
 // Get all products for business
 router.get("/", protect, businessContext, getAllProducts);
+
+// Get distributor catalog (products with stock > 0)
+router.get("/my-catalog", protect, getMyCatalog);
 
 // Get single product by ID
 router.get("/:id", protect, businessContext, getProductById);

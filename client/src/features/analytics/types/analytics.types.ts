@@ -185,6 +185,9 @@ export interface ProfitHistoryAdminOverview {
   totalAdminProfit?: number;
   totalDistributorProfit?: number;
   totalProfit: number;
+  grossProfit?: number;
+  totalExpenses?: number;
+  netProfit?: number;
   averageMargin?: number;
   salesCount?: number;
   distributorCount?: number;

@@ -70,8 +70,11 @@ const distributorStatsSchema = new mongoose.Schema(
     // Nivel actual
     currentLevel: {
       type: String,
-      enum: ["beginner", "bronze", "silver", "gold", "platinum", "diamond"],
-      default: "beginner",
+      default: "Novato",
+    },
+    currentLevelId: {
+      type: Number,
+      default: 1,
     },
 
     // Rachas
@@ -133,7 +136,7 @@ const distributorStatsSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 // Índices
@@ -143,7 +146,7 @@ distributorStatsSchema.index({ distributor: 1 }, { unique: true });
 
 const DistributorStats = mongoose.model(
   "DistributorStats",
-  distributorStatsSchema
+  distributorStatsSchema,
 );
 
 export default DistributorStats;

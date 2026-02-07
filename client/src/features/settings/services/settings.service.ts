@@ -170,7 +170,11 @@ export const promotionService = {
     };
   }> {
     const response = await api.get("/promotions", { params });
-    return response.data;
+    return {
+      promotions:
+        response.data?.data || response.data?.promotions || response.data || [],
+      stats: response.data?.stats,
+    };
   },
 
   async getById(id: string): Promise<Promotion> {

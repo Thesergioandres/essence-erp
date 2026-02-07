@@ -18,6 +18,8 @@ export const initialOrderState: OrderState = {
   locationType: "warehouse",
   locationId: null,
   locationName: "Bodega Principal",
+  isDistributorSale: false,
+  distributorProfitPercentage: 20,
 
   // Items
   items: [],
@@ -52,11 +54,20 @@ export const initialOrderState: OrderState = {
 
 // ==================== CALCULATION HELPERS ====================
 const calculateItemMetrics = (
-  item: Omit<OrderItem, "subtotal" | "grossProfit">
+  item: Omit<OrderItem, "subtotal" | "grossProfit">,
+  isDistributorSale = false,
+  distributorProfitPercentage = 20
 ): OrderItem => {
   const subtotal = item.quantity * item.unitPrice;
   const purchasePrice = item.purchasePrice || 0; // Safeguard against undefined/NaN
-  const grossProfit = subtotal - item.quantity * purchasePrice;
+  const hasDistributorPrice =
+    typeof item.distributorPrice === "number" &&
+    !Number.isNaN(item.distributorPrice);
+  const grossProfit = isDistributorSale
+    ? hasDistributorPrice
+      ? subtotal - item.quantity * (item.distributorPrice || 0)
+      : subtotal * (distributorProfitPercentage / 100)
+    : subtotal - item.quantity * purchasePrice;
   return { ...item, subtotal, grossProfit } as OrderItem;
 };
 
@@ -64,9 +75,13 @@ const recalculateTotals = (state: OrderState): OrderState => {
   // Subtotal from items
   const subtotal = state.items.reduce((sum, item) => sum + item.subtotal, 0);
 
-  // Total additional costs
-  const totalAdditionalCosts = state.additionalCosts.reduce(
-    (sum, cost) => sum + cost.amount,
+  // Total additional costs (positive charges) and adjustments (negative)
+  const additionalCharges = state.additionalCosts.reduce(
+    (sum, cost) => sum + (cost.amount > 0 ? cost.amount : 0),
+    0
+  );
+  const additionalAdjustments = state.additionalCosts.reduce(
+    (sum, cost) => sum + (cost.amount < 0 ? Math.abs(cost.amount) : 0),
     0
   );
 
@@ -83,24 +98,32 @@ const recalculateTotals = (state: OrderState): OrderState => {
   }
 
   // Total costs = shipping + additional costs (for display only)
-  const totalCosts = state.shippingCost + totalAdditionalCosts;
+  const totalCosts = state.shippingCost + additionalCharges;
 
   // Net profit calculation:
-  // - Gross profit from items (sale price - purchase price)
+  // - For distributor sales, manual discounts reduce the distributor commission
+  // - For regular sales, discounts reduce company profit
   // - Additional costs reduce profit (vendor pays these)
-  // - Discount reduces profit (vendor gives up this money)
   // - Shipping does NOT reduce profit (customer pays this)
-  const netProfit = itemsGrossProfit - totalAdditionalCosts - discountAmount;
+  const adjustedGrossProfit = state.isDistributorSale
+    ? Math.max(0, itemsGrossProfit - discountAmount)
+    : itemsGrossProfit;
+  const netProfit = state.isDistributorSale
+    ? adjustedGrossProfit - additionalCharges - additionalAdjustments
+    : itemsGrossProfit -
+      additionalCharges -
+      additionalAdjustments -
+      discountAmount;
 
   // Total payable = subtotal + shipping + additional costs - discount
   const totalPayable =
-    subtotal + state.shippingCost + totalAdditionalCosts - discountAmount;
+    subtotal + state.shippingCost - additionalAdjustments - discountAmount;
 
   return {
     ...state,
     subtotal,
     totalCosts,
-    grossProfit: itemsGrossProfit,
+    grossProfit: adjustedGrossProfit,
     netProfit,
     totalPayable: Math.max(0, totalPayable),
   };
@@ -136,17 +159,25 @@ export function orderReducer(
         const updatedItems = state.items.map((item, index) => {
           if (index === existingIndex) {
             const newQty = item.quantity + action.item.quantity;
-            return calculateItemMetrics({ ...item, quantity: newQty });
+            return calculateItemMetrics(
+              { ...item, quantity: newQty },
+              state.isDistributorSale,
+              state.distributorProfitPercentage
+            );
           }
           return item;
         });
         newState = { ...state, items: updatedItems };
       } else {
         // Add new item
-        const newItem = calculateItemMetrics({
-          ...action.item,
-          id: uuidv4(),
-        });
+        const newItem = calculateItemMetrics(
+          {
+            ...action.item,
+            id: uuidv4(),
+          },
+          state.isDistributorSale,
+          state.distributorProfitPercentage
+        );
         newState = { ...state, items: [...state.items, newItem] };
       }
       break;
@@ -156,7 +187,11 @@ export function orderReducer(
       const updatedItems = state.items.map(item => {
         if (item.id === action.itemId) {
           const updatedItem = { ...item, ...action.updates };
-          return calculateItemMetrics(updatedItem);
+          return calculateItemMetrics(
+            updatedItem,
+            state.isDistributorSale,
+            state.distributorProfitPercentage
+          );
         }
         return item;
       });
@@ -267,12 +302,31 @@ export function orderReducer(
       newState = { ...state, notes: action.notes };
       break;
 
+    case "SET_DISTRIBUTOR_PROFIT": {
+      const updatedItems = state.items.map(item =>
+        calculateItemMetrics(
+          item,
+          action.isDistributorSale,
+          action.profitPercentage
+        )
+      );
+      newState = {
+        ...state,
+        isDistributorSale: action.isDistributorSale,
+        distributorProfitPercentage: action.profitPercentage,
+        items: updatedItems,
+      };
+      break;
+    }
+
     case "CLEAR_ORDER":
       newState = {
         ...initialOrderState,
         locationType: state.locationType,
         locationId: state.locationId,
         locationName: state.locationName,
+        isDistributorSale: state.isDistributorSale,
+        distributorProfitPercentage: state.distributorProfitPercentage,
       };
       break;
 

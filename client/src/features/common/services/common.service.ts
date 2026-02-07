@@ -8,9 +8,11 @@ import api from "../../../api/axios";
 import type { ProfitHistoryAdminOverview } from "../../analytics/types/analytics.types";
 import type {
   Achievement,
+  DistributorStatsResponse,
   GamificationConfig,
   PeriodWinner,
   RankingResponse,
+  WinnersResponse,
 } from "../../analytics/types/gamification.types";
 import type { User } from "../../auth/types/auth.types";
 import type { ProductImage } from "../../inventory/types/product.types";
@@ -57,29 +59,6 @@ interface IssueReport {
   status: "open" | "reviewing" | "closed";
   createdAt: Date;
   updatedAt: Date;
-}
-
-interface WinnersResponse {
-  success: boolean;
-  winners: PeriodWinner[];
-  pagination?: {
-    page: number;
-    limit: number;
-    total: number;
-    pages: number;
-  };
-}
-
-interface DistributorStatsResponse {
-  success: boolean;
-  stats: {
-    currentPosition: number;
-    bestPosition: number;
-    totalWins: number;
-    totalBonusEarned: number;
-    currentPeriodSales: number;
-    averagePosition: number;
-  };
 }
 
 // ==================== UPLOAD SERVICE ====================
@@ -242,7 +221,7 @@ export const userAccessService = {
 export const gamificationService = {
   async getConfig(): Promise<GamificationConfig> {
     const response = await api.get<GamificationConfig>("/gamification/config");
-    return response.data;
+    return (response.data as any)?.data ?? response.data;
   },
 
   async updateConfig(
@@ -252,7 +231,7 @@ export const gamificationService = {
       message: string;
       config: GamificationConfig;
     }>("/gamification/config", config);
-    return response.data;
+    return (response.data as any)?.data ?? response.data;
   },
 
   async getRanking(params?: {
@@ -264,7 +243,7 @@ export const gamificationService = {
     const response = await api.get<RankingResponse>("/gamification/ranking", {
       params,
     });
-    return response.data;
+    return (response.data as any)?.data ?? response.data;
   },
 
   async evaluatePeriod(data: {
@@ -276,7 +255,7 @@ export const gamificationService = {
       "/gamification/evaluate",
       data
     );
-    return response.data;
+    return (response.data as any)?.data ?? response.data;
   },
 
   async getWinners(params?: {
@@ -287,7 +266,14 @@ export const gamificationService = {
     const response = await api.get<WinnersResponse>("/gamification/winners", {
       params,
     });
-    return response.data;
+    const payload = (response.data as any)?.data ?? response.data;
+    const pagination = payload?.pagination || {};
+    return {
+      winners: payload?.winners || [],
+      currentPage: pagination.page || 1,
+      totalPages: pagination.pages || 1,
+      total: pagination.total || 0,
+    };
   },
 
   async getDistributorStats(
@@ -296,7 +282,7 @@ export const gamificationService = {
     const response = await api.get<DistributorStatsResponse>(
       `/gamification/stats/${distributorId}`
     );
-    return response.data;
+    return (response.data as any)?.data ?? response.data;
   },
 
   async markBonusPaid(
@@ -305,12 +291,12 @@ export const gamificationService = {
     const response = await api.put<{ message: string; winner: PeriodWinner }>(
       `/gamification/winners/${winnerId}/pay`
     );
-    return response.data;
+    return (response.data as any)?.data ?? response.data;
   },
 
   async getAchievements(): Promise<Achievement[]> {
     const response = await api.get<Achievement[]>("/gamification/achievements");
-    return response.data;
+    return (response.data as any)?.data ?? response.data;
   },
 
   async getAdjustedCommission(distributorId: string): Promise<{
@@ -321,7 +307,7 @@ export const gamificationService = {
     totalDistributors: number;
   }> {
     const response = await api.get(`/gamification/commission/${distributorId}`);
-    return response.data;
+    return (response.data as any)?.data ?? response.data;
   },
 
   async checkAndEvaluatePeriod(): Promise<{
@@ -331,7 +317,7 @@ export const gamificationService = {
     const response = await api.post<{ message: string; winner?: PeriodWinner }>(
       "/gamification/check-period"
     );
-    return response.data;
+    return (response.data as any)?.data ?? response.data;
   },
 };
 

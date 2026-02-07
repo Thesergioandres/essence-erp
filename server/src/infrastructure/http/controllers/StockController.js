@@ -254,6 +254,28 @@ class StockController {
       res.status(500).json({ success: false, message: error.message });
     }
   }
+
+  async getTransferHistory(req, res) {
+    try {
+      const businessId = req.businessId || req.headers["x-business-id"];
+      if (!businessId)
+        return res.status(400).json({ message: "Falta x-business-id" });
+
+      const result = await StockRepository.getTransferHistory(
+        businessId,
+        req.query,
+      );
+
+      res.json({
+        success: true,
+        transfers: result.transfers,
+        pagination: result.pagination,
+        stats: result.stats,
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
 }
 
 export default new StockController();

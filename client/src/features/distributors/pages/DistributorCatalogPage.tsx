@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import Footer from "../../../components/Footer";
 import Navbar from "../../../components/Navbar";
 import ProductCard from "../../../components/ProductCard";
@@ -17,6 +17,9 @@ export default function DistributorCatalog() {
   const [products, setProducts] = useState<ProductWithStock[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [publicCatalogUrl, setPublicCatalogUrl] = useState("");
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState(
     searchParams.get("search") || ""
   );
@@ -33,6 +36,7 @@ export default function DistributorCatalog() {
     max: 0,
   });
   const [maxPrice, setMaxPrice] = useState(0);
+  const navigate = useNavigate();
   const hideChrome = useMemo(
     () =>
       searchParams.has("bare") ||
@@ -78,6 +82,99 @@ export default function DistributorCatalog() {
 
     loadProducts();
   }, []);
+
+  useEffect(() => {
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    if (user?._id) {
+      setPublicCatalogUrl(
+        `${window.location.origin}/distributor-catalog/${user._id}`
+      );
+    }
+  }, []);
+
+  const shareText = "Te comparto mi catalogo de productos.";
+
+  const shareTargets = useMemo(
+    () => [
+      {
+        id: "whatsapp",
+        label: "WhatsApp",
+        href: `https://wa.me/?text=${encodeURIComponent(
+          `${shareText}\n${publicCatalogUrl}`
+        )}`,
+      },
+      {
+        id: "telegram",
+        label: "Telegram",
+        href: `https://t.me/share/url?url=${encodeURIComponent(
+          publicCatalogUrl
+        )}&text=${encodeURIComponent(shareText)}`,
+      },
+      {
+        id: "facebook",
+        label: "Facebook",
+        href: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(
+          publicCatalogUrl
+        )}`,
+      },
+      {
+        id: "x",
+        label: "X",
+        href: `https://twitter.com/intent/tweet?text=${encodeURIComponent(
+          shareText
+        )}&url=${encodeURIComponent(publicCatalogUrl)}`,
+      },
+      {
+        id: "linkedin",
+        label: "LinkedIn",
+        href: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(
+          publicCatalogUrl
+        )}`,
+      },
+      {
+        id: "email",
+        label: "Correo",
+        href: `mailto:?subject=${encodeURIComponent(
+          "Catalogo de productos"
+        )}&body=${encodeURIComponent(`${shareText}\n\n${publicCatalogUrl}`)}`,
+      },
+    ],
+    [publicCatalogUrl]
+  );
+
+  const handleCopyShareLink = async () => {
+    if (!publicCatalogUrl) return;
+    try {
+      await navigator.clipboard.writeText(publicCatalogUrl);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+      setShareError(null);
+    } catch (_error) {
+      window.prompt("Copia este enlace", publicCatalogUrl);
+    }
+  };
+
+  const handleNativeShare = async () => {
+    if (!publicCatalogUrl) return;
+    if (!navigator.share) {
+      handleCopyShareLink();
+      setShareError(
+        "Tu navegador no soporta compartir. Copiamos el enlace para ti."
+      );
+      return;
+    }
+
+    try {
+      await navigator.share({
+        title: "Catalogo de distribuidor",
+        text: shareText,
+        url: publicCatalogUrl,
+      });
+      setShareError(null);
+    } catch (_error) {
+      setShareError("No se pudo abrir el panel de compartir.");
+    }
+  };
 
   const filteredProducts = useMemo(() => {
     let list = [...products];
@@ -173,20 +270,20 @@ export default function DistributorCatalog() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
+    <div className="min-h-screen bg-[#0f1210] text-slate-100">
       {!hideChrome && <Navbar />}
 
       {!hideChrome && (
         <header className="relative overflow-hidden">
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(59,130,246,0.25),transparent_25%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.25),transparent_25%),radial-gradient(circle_at_40%_80%,rgba(14,165,233,0.2),transparent_25%)]" />
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(16,185,129,0.28),transparent_30%),radial-gradient(circle_at_80%_0%,rgba(245,158,11,0.28),transparent_35%),radial-gradient(circle_at_40%_80%,rgba(14,165,233,0.2),transparent_40%)]" />
           <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center opacity-10" />
           <div className="relative mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
             <div className="grid items-center gap-10 lg:grid-cols-[1.4fr,1fr]">
               <div className="space-y-4 sm:space-y-6">
-                <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-teal-100 backdrop-blur-sm">
+                <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-emerald-100 backdrop-blur-sm">
                   <span className="relative flex h-2 w-2">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-teal-300 opacity-75"></span>
-                    <span className="relative inline-flex h-2 w-2 rounded-full bg-teal-400"></span>
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-300 opacity-75"></span>
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400"></span>
                   </span>
                   Catálogo del distribuidor
                 </div>
@@ -201,13 +298,13 @@ export default function DistributorCatalog() {
                 </p>
 
                 <div className="flex flex-wrap gap-3">
-                  <div className="rounded-full border border-teal-400/30 bg-teal-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-teal-100">
-                    Filtros rápidos
-                  </div>
-                  <div className="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100">
-                    Vista grid/lista
+                  <div className="rounded-full border border-amber-400/30 bg-amber-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-amber-100">
+                    Filtros rapidos
                   </div>
                   <div className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100">
+                    Vista grid/lista
+                  </div>
+                  <div className="rounded-full border border-sky-400/30 bg-sky-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-sky-100">
                     Stock y precio
                   </div>
                 </div>
@@ -223,7 +320,7 @@ export default function DistributorCatalog() {
                       {products.length}
                     </p>
                   </div>
-                  <div className="rounded-full bg-gradient-to-r from-teal-500 to-cyan-500 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white">
+                  <div className="rounded-full bg-gradient-to-r from-amber-500 to-emerald-500 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white">
                     Actualizado
                   </div>
                 </div>
@@ -259,14 +356,73 @@ export default function DistributorCatalog() {
       <main
         className={`mx-auto max-w-7xl space-y-6 px-4 ${hideChrome ? "py-6" : "py-8 sm:px-6 sm:py-12 lg:px-8 lg:py-16"}`}
       >
+        {publicCatalogUrl && (
+          <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-5 shadow-2xl backdrop-blur-xl">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-white">
+                  Comparte tu catalogo
+                </p>
+                <p className="text-xs text-gray-400">
+                  Publica tu inventario y envia el enlace a tus clientes.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={handleNativeShare}
+                  className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-400"
+                >
+                  Compartir ahora
+                </button>
+                <button
+                  onClick={handleCopyShareLink}
+                  className="rounded-lg border border-white/10 bg-gray-950/60 px-4 py-2 text-sm font-semibold text-gray-100 transition hover:bg-white/10"
+                >
+                  {copiedLink ? "Copiado" : "Copiar link"}
+                </button>
+                <button
+                  onClick={() => navigate("/distributor/share-catalog")}
+                  className="rounded-lg border border-white/10 bg-gray-950/60 px-4 py-2 text-sm font-semibold text-gray-100 transition hover:bg-white/10"
+                >
+                  Ver opciones
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 lg:grid-cols-[2fr,1fr]">
+              <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-gray-950/60 px-3 py-2 text-xs text-gray-300">
+                <span className="truncate">{publicCatalogUrl}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {shareTargets.map(target => (
+                  <a
+                    key={target.id}
+                    href={target.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-lg border border-white/10 bg-gray-950/60 px-3 py-2 text-xs font-semibold text-gray-100 transition hover:bg-white/10"
+                  >
+                    {target.label}
+                  </a>
+                ))}
+              </div>
+            </div>
+
+            {(copiedLink || shareError) && (
+              <div className="mt-3 text-xs text-gray-400">
+                {copiedLink ? "Enlace copiado." : shareError}
+              </div>
+            )}
+          </div>
+        )}
         <div className="scrollbar-hide mb-8 overflow-x-auto">
           <div className="flex min-w-max gap-2 pb-2 sm:gap-3">
             <button
               onClick={() => setSelectedCategory("all")}
               className={`whitespace-nowrap rounded-full px-4 py-2.5 text-sm font-medium transition-all duration-300 sm:px-6 sm:py-3 sm:text-base ${
                 selectedCategory === "all"
-                  ? "scale-105 bg-gradient-to-r from-teal-600 to-cyan-600 text-white shadow-lg shadow-teal-500/50"
-                  : "border border-gray-700/50 bg-gray-800/50 text-gray-400 hover:bg-gray-800 hover:text-white"
+                  ? "scale-105 bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/40"
+                  : "border border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white"
               }`}
             >
               Todas
@@ -277,8 +433,8 @@ export default function DistributorCatalog() {
                 onClick={() => setSelectedCategory(cat)}
                 className={`whitespace-nowrap rounded-full px-4 py-2.5 text-sm font-medium transition-all duration-300 sm:px-6 sm:py-3 sm:text-base ${
                   selectedCategory === cat
-                    ? "scale-105 bg-gradient-to-r from-teal-600 to-cyan-600 text-white shadow-lg shadow-teal-500/50"
-                    : "border border-gray-700/50 bg-gray-800/50 text-gray-400 hover:bg-gray-800 hover:text-white"
+                    ? "scale-105 bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/40"
+                    : "border border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white"
                 }`}
               >
                 {cat}
@@ -296,7 +452,7 @@ export default function DistributorCatalog() {
                   placeholder="Buscar productos por nombre o descripción"
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-gray-900/60 px-4 py-3 pl-12 text-white placeholder-gray-400 focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-400/30"
+                  className="w-full rounded-xl border border-white/10 bg-gray-900/60 px-4 py-3 pl-12 text-white placeholder-gray-400 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30"
                 />
                 <svg
                   className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400"
@@ -338,7 +494,7 @@ export default function DistributorCatalog() {
               <select
                 value={sortBy}
                 onChange={e => setSortBy(e.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-gray-900/60 px-4 py-3 text-white focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-400/30"
+                className="w-full rounded-xl border border-white/10 bg-gray-900/60 px-4 py-3 text-white focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30"
               >
                 <option value="name">Ordenar: A-Z</option>
                 <option value="price-asc">Precio: Menor a mayor</option>
@@ -353,7 +509,7 @@ export default function DistributorCatalog() {
                 onClick={() => setViewMode("grid")}
                 className={`rounded-lg p-2.5 transition-all ${
                   viewMode === "grid"
-                    ? "bg-teal-500 text-white shadow-lg"
+                    ? "bg-amber-500 text-white shadow-lg"
                     : "text-gray-400 hover:text-white"
                 }`}
               >
@@ -375,7 +531,7 @@ export default function DistributorCatalog() {
                 onClick={() => setViewMode("list")}
                 className={`rounded-lg p-2.5 transition-all ${
                   viewMode === "list"
-                    ? "bg-teal-500 text-white shadow-lg"
+                    ? "bg-amber-500 text-white shadow-lg"
                     : "text-gray-400 hover:text-white"
                 }`}
               >
@@ -408,7 +564,7 @@ export default function DistributorCatalog() {
                 type="checkbox"
                 checked={inStockOnly}
                 onChange={e => setInStockOnly(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-500 text-teal-500 focus:ring-teal-500"
+                className="h-4 w-4 rounded border-gray-500 text-emerald-500 focus:ring-emerald-500"
               />
             </label>
 
@@ -425,7 +581,7 @@ export default function DistributorCatalog() {
                 type="checkbox"
                 checked={featuredOnly}
                 onChange={e => setFeaturedOnly(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-500 text-teal-500 focus:ring-teal-500"
+                className="h-4 w-4 rounded border-gray-500 text-amber-500 focus:ring-amber-500"
               />
             </label>
 
@@ -451,7 +607,7 @@ export default function DistributorCatalog() {
                       min: Number(e.target.value) || 0,
                     }))
                   }
-                  className="w-1/2 rounded-lg border border-white/10 bg-gray-800/70 px-3 py-2 text-white focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-400/30"
+                  className="w-1/2 rounded-lg border border-white/10 bg-gray-800/70 px-3 py-2 text-white focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30"
                   placeholder="Mín"
                 />
                 <input
@@ -465,7 +621,7 @@ export default function DistributorCatalog() {
                       max: Number(e.target.value) || 0,
                     }))
                   }
-                  className="w-1/2 rounded-lg border border-white/10 bg-gray-800/70 px-3 py-2 text-white focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-400/30"
+                  className="w-1/2 rounded-lg border border-white/10 bg-gray-800/70 px-3 py-2 text-white focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30"
                   placeholder="Máx"
                 />
               </div>

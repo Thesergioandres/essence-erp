@@ -30,12 +30,17 @@ export function OrderSummary({
     totalPayable,
     paymentMethod,
     deliveryMethod,
+    isDistributorSale,
   } = order;
 
   const totalItems = items.reduce((sum, i) => sum + i.quantity, 0);
   const totalWarrantyItems = warranties.reduce((sum, w) => sum + w.quantity, 0);
-  const totalAdditionalCosts = additionalCosts.reduce(
-    (sum, c) => sum + c.amount,
+  const additionalCharges = additionalCosts.reduce(
+    (sum, c) => sum + (c.amount > 0 ? c.amount : 0),
+    0
+  );
+  const additionalAdjustments = additionalCosts.reduce(
+    (sum, c) => sum + (c.amount < 0 ? Math.abs(c.amount) : 0),
     0
   );
   const effectiveDiscount =
@@ -75,10 +80,16 @@ export function OrderSummary({
           </div>
         )}
 
-        {totalAdditionalCosts > 0 && (
+        {additionalCharges > 0 && (
           <div className="flex justify-between text-orange-400">
-            <span>Costos Adicionales</span>
-            <span>-${totalAdditionalCosts.toLocaleString()}</span>
+            <span>Costos de la Empresa</span>
+            <span>${additionalCharges.toLocaleString()}</span>
+          </div>
+        )}
+        {additionalAdjustments > 0 && (
+          <div className="flex justify-between text-green-400">
+            <span>Ajustes</span>
+            <span>-${additionalAdjustments.toLocaleString()}</span>
           </div>
         )}
       </div>
@@ -101,7 +112,9 @@ export function OrderSummary({
         </h4>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <p className="text-xs text-gray-500">Ganancia Bruta</p>
+            <p className="text-xs text-gray-500">
+              {isDistributorSale ? "Comision Bruta" : "Ganancia Bruta"}
+            </p>
             <p
               className={`text-lg font-bold ${
                 grossProfit >= 0 ? "text-green-400" : "text-red-400"
@@ -111,7 +124,9 @@ export function OrderSummary({
             </p>
           </div>
           <div>
-            <p className="text-xs text-gray-500">Ganancia Neta</p>
+            <p className="text-xs text-gray-500">
+              {isDistributorSale ? "Comision Neta" : "Ganancia Neta"}
+            </p>
             <p
               className={`text-lg font-bold ${
                 netProfit >= 0 ? "text-green-400" : "text-red-400"

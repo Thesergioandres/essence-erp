@@ -42,7 +42,7 @@ export default function AuditLogs() {
 
         setLogs(logsData.logs as AuditLog[]);
         setPagination(logsData.pagination);
-        setStats(statsData as AuditStats);
+        setStats((statsData as any).stats as AuditStats);
         setDailySummary(summaryData as DailySummary);
       } catch (error) {
         console.error("Error cargando auditoría:", error);

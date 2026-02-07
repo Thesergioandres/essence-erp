@@ -128,6 +128,9 @@ const DistributorCatalogShare = lazy(
 const PublicDistributorCatalog = lazy(
   () => import("./features/distributors/pages/PublicDistributorCatalogPage")
 );
+const DistributorAdvertising = lazy(
+  () => import("./features/advertising/pages/DistributorAdvertisingPage")
+);
 
 // Customers pages
 const Customers = lazy(
@@ -194,6 +197,9 @@ const DeliveryMethods = lazy(
 const Providers = lazy(() => import("./features/settings/pages/ProvidersPage"));
 const Promotions = lazy(
   () => import("./features/settings/pages/PromotionsPage")
+);
+const Advertising = lazy(
+  () => import("./features/advertising/pages/AdvertisingPage")
 );
 
 export default function App() {
@@ -486,6 +492,14 @@ export default function App() {
             }
           />
           <Route
+            path="advertising"
+            element={
+              <BusinessGate>
+                <Advertising />
+              </BusinessGate>
+            }
+          />
+          <Route
             path="customers"
             element={
               <BusinessGate>
@@ -542,6 +556,14 @@ export default function App() {
             element={
               <BusinessGate requiredFeature="inventory">
                 <DistributorCatalogShare />
+              </BusinessGate>
+            }
+          />
+          <Route
+            path="advertising"
+            element={
+              <BusinessGate requiredFeature="inventory">
+                <DistributorAdvertising />
               </BusinessGate>
             }
           />

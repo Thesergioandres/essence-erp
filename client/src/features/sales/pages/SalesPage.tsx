@@ -90,7 +90,10 @@ export default function Sales() {
           Producto: productName,
           Cantidad: sale.quantity,
           Total: sale.salePrice * sale.quantity,
-          Ganancia: sale.netProfit ?? sale.totalProfit ?? 0,
+          Ganancia:
+            (sale.adminProfit ?? 0) -
+            (sale.totalAdditionalCosts || 0) -
+            (sale.shippingCost || 0),
           Estado: sale.paymentStatus,
         };
       });
@@ -483,16 +486,13 @@ export default function Sales() {
           (sum, s) => sum + s.salePrice * s.quantity,
           0
         ),
-        // Usar netProfit si está disponible, sino adminProfit
+        // Ganancia Admin = solo adminProfit (sin incluir comisión del distribuidor)
+        // Luego restar costos adicionales que asume la empresa
         totalProfit: groupSales.reduce((sum, s) => {
-          // Calcular netProfit si no existe: totalProfit/adminProfit - deducciones
-          const saleNetProfit =
-            s.netProfit ??
-            (s.totalProfit ?? s.adminProfit ?? 0) -
-              (s.totalAdditionalCosts || 0) -
-              (s.shippingCost || 0) -
-              (s.discount || 0);
-          return sum + saleNetProfit;
+          const baseAdminProfit = s.adminProfit ?? 0;
+          const deductions =
+            (s.totalAdditionalCosts || 0) + (s.shippingCost || 0);
+          return sum + (baseAdminProfit - deductions);
         }, 0),
         totalDistributorProfit: groupSales.reduce(
           (sum, s) => sum + (s.distributorProfit || 0),
@@ -514,21 +514,19 @@ export default function Sales() {
 
     // Procesar ventas individuales
     individual.forEach(sale => {
-      // Calcular netProfit si no existe: totalProfit - deducciones
-      const saleNetProfit =
-        sale.netProfit ??
-        (sale.totalProfit ?? sale.adminProfit ?? 0) -
-          (sale.totalAdditionalCosts || 0) -
-          (sale.shippingCost || 0) -
-          (sale.discount || 0);
+      // Ganancia Admin = solo adminProfit - costos adicionales (empresa)
+      const baseAdminProfit = sale.adminProfit ?? 0;
+      const deductions =
+        (sale.totalAdditionalCosts || 0) + (sale.shippingCost || 0);
+      const adminNetProfit = baseAdminProfit - deductions;
 
       result.push({
         id: sale._id,
         sales: [sale],
         totalQuantity: sale.quantity,
         totalRevenue: sale.salePrice * sale.quantity,
-        // Usar netProfit calculado o de la BD
-        totalProfit: saleNetProfit,
+        // Solo ganancia del admin (no incluye comisión distribuidor)
+        totalProfit: adminNetProfit,
         totalDistributorProfit: sale.distributorProfit || 0,
         totalAdditionalCosts: sale.totalAdditionalCosts || 0,
         date: sale.saleDate,
@@ -600,16 +598,12 @@ export default function Sales() {
       totalRevenue:
         statsData.totalRevenue ||
         sales.reduce((sum, s) => sum + s.salePrice * s.quantity, 0),
-      // Siempre calcular netProfit desde las ventas para considerar deducciones
+      // Ganancia Admin = solo adminProfit - costos que asume la empresa
       totalProfit: sales.reduce((sum, s) => {
-        // Calcular netProfit si no existe: totalProfit/adminProfit - deducciones
-        const saleNetProfit =
-          s.netProfit ??
-          (s.totalProfit ?? s.adminProfit ?? 0) -
-            (s.totalAdditionalCosts || 0) -
-            (s.shippingCost || 0) -
-            (s.discount || 0);
-        return sum + saleNetProfit;
+        const baseAdminProfit = s.adminProfit ?? 0;
+        const deductions =
+          (s.totalAdditionalCosts || 0) + (s.shippingCost || 0);
+        return sum + (baseAdminProfit - deductions);
       }, 0),
       // Total de costos adicionales
       totalAdditionalCosts: sales.reduce(
@@ -765,7 +759,7 @@ export default function Sales() {
                         setBranchId(e.target.value);
                         setPagination(prev => ({ ...prev, page: 1 }));
                       }}
-                      className="w-full rounded-lg border border-gray-600 bg-gray-900/50 px-4 py-2.5 text-sm text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                      className="min-h-[44px] w-full rounded-lg border border-gray-600 bg-gray-900/50 px-4 py-2.5 text-sm text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
                     >
                       <option value="">Todas las sedes (stock general)</option>
                       {branches.map(branch => (
@@ -801,7 +795,7 @@ export default function Sales() {
                         startDate: e.target.value,
                       })
                     }
-                    className="w-full rounded-lg border border-gray-600 bg-gray-900/50 px-3 py-2.5 text-sm text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                    className="min-h-[44px] w-full rounded-lg border border-gray-600 bg-gray-900/50 px-3 py-2.5 text-sm text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
                   />
                 </div>
                 <div className="min-w-[180px] flex-1">
@@ -821,7 +815,7 @@ export default function Sales() {
                         endDate: e.target.value,
                       })
                     }
-                    className="w-full rounded-lg border border-gray-600 bg-gray-900/50 px-3 py-2.5 text-sm text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                    className="min-h-[44px] w-full rounded-lg border border-gray-600 bg-gray-900/50 px-3 py-2.5 text-sm text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
                   />
                 </div>
                 {(dateFilters.startDate || dateFilters.endDate) && (
@@ -830,7 +824,7 @@ export default function Sales() {
                       onClick={() =>
                         setDateFilters({ startDate: "", endDate: "" })
                       }
-                      className="rounded-lg border border-gray-700 bg-gray-900/40 px-4 py-2 text-sm text-gray-200 transition-colors hover:bg-gray-800"
+                      className="min-h-[44px] rounded-lg border border-gray-700 bg-gray-900/40 px-4 py-2 text-sm text-gray-200 transition-colors hover:bg-gray-800"
                     >
                       Limpiar fechas
                     </button>
@@ -846,7 +840,7 @@ export default function Sales() {
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => setFilter("all")}
-                  className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors sm:px-4 ${
+                  className={`min-h-[44px] rounded-lg px-3 py-2 text-sm font-medium transition-colors sm:px-4 ${
                     filter === "all"
                       ? "bg-purple-600 text-white"
                       : "border border-gray-700 text-gray-300 hover:bg-gray-800"
@@ -856,7 +850,7 @@ export default function Sales() {
                 </button>
                 <button
                   onClick={() => setFilter("pendiente")}
-                  className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors sm:px-4 ${
+                  className={`min-h-[44px] rounded-lg px-3 py-2 text-sm font-medium transition-colors sm:px-4 ${
                     filter === "pendiente"
                       ? "bg-yellow-500 text-white"
                       : "border border-gray-700 text-gray-300 hover:bg-gray-800"
@@ -866,7 +860,7 @@ export default function Sales() {
                 </button>
                 <button
                   onClick={() => setFilter("confirmado")}
-                  className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors sm:px-4 ${
+                  className={`min-h-[44px] rounded-lg px-3 py-2 text-sm font-medium transition-colors sm:px-4 ${
                     filter === "confirmado"
                       ? "bg-green-500 text-white"
                       : "border border-gray-700 text-gray-300 hover:bg-gray-800"
@@ -888,7 +882,7 @@ export default function Sales() {
                 id="sortBy"
                 value={sortBy}
                 onChange={e => setSortBy(e.target.value as any)}
-                className="rounded-lg border border-gray-600 bg-gray-900/50 px-4 py-2.5 text-sm text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                className="min-h-[44px] rounded-lg border border-gray-600 bg-gray-900/50 px-4 py-2.5 text-sm text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
               >
                 <option value="date-desc">Fecha (Más reciente primero)</option>
                 <option value="date-asc">Fecha (Más antigua primero)</option>
@@ -1074,9 +1068,22 @@ export default function Sales() {
                           )}
                           {distributorsEnabled && (
                             <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-200">
-                              {distributor
-                                ? `${firstSale.distributorProfitPercentage ?? 20}%`
-                                : "—"}
+                              {distributor ? (
+                                <div>
+                                  <span className="text-yellow-400">
+                                    $
+                                    {group.totalDistributorProfit.toLocaleString()}
+                                  </span>
+                                  <span className="ml-1 text-xs text-gray-500">
+                                    (
+                                    {firstSale.distributorProfitPercentage ??
+                                      20}
+                                    %)
+                                  </span>
+                                </div>
+                              ) : (
+                                "—"
+                              )}
                             </td>
                           )}
                           <td className="whitespace-nowrap px-6 py-4">
@@ -1329,9 +1336,9 @@ export default function Sales() {
                                 <td className="whitespace-nowrap px-6 py-3 text-sm text-green-400">
                                   $
                                   {(
-                                    sale.netProfit ??
-                                    sale.adminProfit ??
-                                    0
+                                    (sale.adminProfit ?? 0) -
+                                    (sale.totalAdditionalCosts || 0) -
+                                    (sale.shippingCost || 0)
                                   ).toLocaleString()}
                                 </td>
                                 {distributorsEnabled && (

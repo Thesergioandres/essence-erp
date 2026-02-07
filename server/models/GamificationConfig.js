@@ -2,6 +2,70 @@ import mongoose from "mongoose";
 
 const gamificationConfigSchema = new mongoose.Schema(
   {
+    // ==== Motor de reglas (nuevo) ====
+    generalRules: {
+      pointsPerCurrencyUnit: {
+        type: Number,
+        default: 0.001,
+        min: 0,
+      },
+      pointsPerSaleConfirmed: {
+        type: Number,
+        default: 10,
+        min: 0,
+      },
+      penaltyPerDayLate: {
+        type: Number,
+        default: 5,
+        min: 0,
+      },
+    },
+    levels: [
+      {
+        id: Number,
+        name: String,
+        minPoints: { type: Number, default: 0 },
+        benefits: {
+          commissionBonus: { type: Number, default: 0 },
+          discountBonus: { type: Number, default: 0 },
+        },
+      },
+    ],
+    activeMultipliers: [
+      {
+        type: {
+          type: String,
+          default: "custom",
+        },
+        targetType: {
+          type: String,
+          default: "all",
+        },
+        targetId: {
+          type: String,
+          default: "",
+        },
+        value: { type: Number, default: 1 },
+        active: { type: Boolean, default: true },
+      },
+    ],
+    cycle: {
+      duration: {
+        type: String,
+        enum: ["monthly", "quarterly", "annual", "infinite", "custom"],
+        default: "monthly",
+      },
+      customDays: { type: Number, default: 30, min: 1 },
+    },
+    resetPolicy: {
+      type: {
+        type: String,
+        enum: ["reset", "carry", "downlevel"],
+        default: "reset",
+      },
+      carryPercent: { type: Number, default: 0, min: 0, max: 100 },
+    },
+
     // Configuración del periodo de evaluación
     evaluationPeriod: {
       type: String,
@@ -114,12 +178,12 @@ const gamificationConfigSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 const GamificationConfig = mongoose.model(
   "GamificationConfig",
-  gamificationConfigSchema
+  gamificationConfigSchema,
 );
 
 export default GamificationConfig;

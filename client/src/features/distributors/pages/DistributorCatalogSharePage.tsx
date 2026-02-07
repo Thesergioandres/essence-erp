@@ -6,6 +6,7 @@ export default function DistributorCatalogShare() {
   const [loading, setLoading] = useState(true);
   const [catalogUrl, setCatalogUrl] = useState("");
   const [copied, setCopied] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -36,19 +37,73 @@ export default function DistributorCatalogShare() {
     }
   };
 
-  const handleShareWhatsApp = () => {
-    const message = encodeURIComponent(
-      `¡Mira mi catálogo de productos! 🛍️\n\n${catalogUrl}`
-    );
-    window.open(`https://wa.me/?text=${message}`, "_blank");
-  };
+  const shareText = "Te comparto mi catalogo de productos.";
 
-  const handleShareEmail = () => {
-    const subject = encodeURIComponent("Catálogo de Productos");
-    const body = encodeURIComponent(
-      `¡Hola!\n\nTe comparto mi catálogo de productos:\n\n${catalogUrl}\n\n¡Espero que encuentres algo que te guste!`
-    );
-    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  const shareTargets = [
+    {
+      id: "whatsapp",
+      label: "WhatsApp",
+      href: `https://wa.me/?text=${encodeURIComponent(
+        `${shareText}\n${catalogUrl}`
+      )}`,
+    },
+    {
+      id: "telegram",
+      label: "Telegram",
+      href: `https://t.me/share/url?url=${encodeURIComponent(
+        catalogUrl
+      )}&text=${encodeURIComponent(shareText)}`,
+    },
+    {
+      id: "facebook",
+      label: "Facebook",
+      href: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(
+        catalogUrl
+      )}`,
+    },
+    {
+      id: "x",
+      label: "X",
+      href: `https://twitter.com/intent/tweet?text=${encodeURIComponent(
+        shareText
+      )}&url=${encodeURIComponent(catalogUrl)}`,
+    },
+    {
+      id: "linkedin",
+      label: "LinkedIn",
+      href: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(
+        catalogUrl
+      )}`,
+    },
+    {
+      id: "email",
+      label: "Correo",
+      href: `mailto:?subject=${encodeURIComponent(
+        "Catalogo de productos"
+      )}&body=${encodeURIComponent(`${shareText}\n\n${catalogUrl}`)}`,
+    },
+  ];
+
+  const handleNativeShare = async () => {
+    if (!navigator.share) {
+      handleCopy();
+      setShareError(
+        "Tu navegador no soporta compartir. Copiamos el enlace para ti."
+      );
+      return;
+    }
+
+    try {
+      await navigator.share({
+        title: "Catalogo de productos",
+        text: shareText,
+        url: catalogUrl,
+      });
+      setShareError(null);
+    } catch (error) {
+      console.error("Error al compartir:", error);
+      setShareError("No se pudo abrir el panel de compartir.");
+    }
   };
 
   const handleOpenPreview = () => {
@@ -66,13 +121,13 @@ export default function DistributorCatalogShare() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-white">Compartir Catálogo</h1>
+        <h1 className="text-3xl font-bold text-white">Compartir catalogo</h1>
         <p className="mt-2 text-gray-300">
-          Comparte tu catálogo de productos con tus clientes
+          Publica tu catalogo y compártelo en cualquier red social.
         </p>
       </div>
 
-      <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-6">
+      <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-6 shadow-2xl backdrop-blur-xl">
         <div className="space-y-6">
           {/* URL del catálogo */}
           <div>
@@ -84,11 +139,11 @@ export default function DistributorCatalogShare() {
                 type="text"
                 value={catalogUrl}
                 readOnly
-                className="flex-1 rounded-lg border border-gray-700 bg-gray-900/40 px-4 py-2.5 text-gray-100"
+                className="flex-1 rounded-lg border border-white/10 bg-gray-950/60 px-4 py-2.5 text-gray-100"
               />
               <button
                 onClick={handleCopy}
-                className="rounded-lg border border-gray-700 bg-gray-900/40 px-4 py-2.5 text-gray-100 transition hover:bg-gray-700"
+                className="rounded-lg border border-white/10 bg-gray-950/60 px-4 py-2.5 text-gray-100 transition hover:bg-white/10"
               >
                 {copied ? (
                   <Check className="h-5 w-5 text-green-500" />
@@ -102,40 +157,48 @@ export default function DistributorCatalogShare() {
                 ¡URL copiada al portapapeles!
               </p>
             )}
+            {shareError && (
+              <p className="mt-2 text-sm text-amber-300">{shareError}</p>
+            )}
           </div>
 
           {/* Botones de compartir */}
           <div>
             <label className="mb-2 block text-sm font-medium text-gray-300">
-              Compartir por
+              Compartir por cualquier red
             </label>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <button
-                onClick={handleShareWhatsApp}
-                className="flex items-center justify-center gap-2 rounded-lg border border-gray-700 bg-green-600 px-4 py-3 text-white transition hover:bg-green-700"
+                onClick={handleNativeShare}
+                className="flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-amber-500/90 px-4 py-3 text-sm font-semibold text-white transition hover:bg-amber-500"
               >
                 <Share2 className="h-5 w-5" />
-                WhatsApp
+                Compartir ahora
               </button>
-              <button
-                onClick={handleShareEmail}
-                className="flex items-center justify-center gap-2 rounded-lg border border-gray-700 bg-blue-600 px-4 py-3 text-white transition hover:bg-blue-700"
-              >
-                <Share2 className="h-5 w-5" />
-                Correo
-              </button>
+              {shareTargets.map(target => (
+                <a
+                  key={target.id}
+                  href={target.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-gray-950/60 px-4 py-3 text-sm font-semibold text-gray-100 transition hover:bg-white/10"
+                >
+                  <Share2 className="h-5 w-5" />
+                  {target.label}
+                </a>
+              ))}
               <button
                 onClick={handleOpenPreview}
-                className="flex items-center justify-center gap-2 rounded-lg border border-gray-700 bg-purple-600 px-4 py-3 text-white transition hover:bg-purple-700"
+                className="flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-emerald-500/90 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500"
               >
                 <Eye className="h-5 w-5" />
-                Vista Previa
+                Vista previa
               </button>
             </div>
           </div>
 
           {/* Información adicional */}
-          <div className="rounded-lg border border-gray-700 bg-gray-900/40 p-4">
+          <div className="rounded-lg border border-white/10 bg-gray-950/60 p-4">
             <h3 className="mb-2 font-medium text-white">ℹ️ Información</h3>
             <ul className="space-y-1 text-sm text-gray-300">
               <li>
@@ -160,7 +223,7 @@ export default function DistributorCatalogShare() {
               href={catalogUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 text-purple-400 hover:text-purple-300"
+              className="inline-flex items-center gap-2 text-amber-300 hover:text-amber-200"
             >
               <ExternalLink className="h-4 w-4" />
               Abrir catálogo en nueva pestaña

@@ -62,6 +62,7 @@ export default function DefectiveProductsManagement() {
     quantity: 1,
     reason: "",
     hasWarranty: false,
+    countsAsLoss: false,
   });
   const [submitting, setSubmitting] = useState(false);
 
@@ -243,6 +244,16 @@ export default function DefectiveProductsManagement() {
       return;
     }
 
+    if (!reportForm.hasWarranty && !reportForm.countsAsLoss) {
+      alert("Selecciona garantia o perdida antes de enviar");
+      return;
+    }
+
+    if (reportForm.hasWarranty && reportForm.countsAsLoss) {
+      alert("Selecciona solo una opcion: garantia o perdida");
+      return;
+    }
+
     if (reportOrigin === "branch" && !selectedBranchId) {
       alert("Selecciona la sede desde donde reportas");
       return;
@@ -272,6 +283,7 @@ export default function DefectiveProductsManagement() {
           productId: reportForm.productId,
           quantity: reportForm.quantity,
           reason: reportForm.reason,
+          hasWarranty: reportForm.hasWarranty,
         });
 
         await Promise.all([loadReports(), loadBranchStock(selectedBranchId)]);
@@ -280,6 +292,7 @@ export default function DefectiveProductsManagement() {
           productId: reportForm.productId,
           quantity: reportForm.quantity,
           reason: reportForm.reason,
+          hasWarranty: reportForm.hasWarranty,
         });
 
         await Promise.all([loadReports(), loadProducts()]);
@@ -290,6 +303,7 @@ export default function DefectiveProductsManagement() {
         quantity: 1,
         reason: "",
         hasWarranty: false,
+        countsAsLoss: false,
       });
       setShowReportModal(false);
       alert(
@@ -349,6 +363,7 @@ export default function DefectiveProductsManagement() {
               quantity: 1,
               reason: "",
               hasWarranty: false,
+              countsAsLoss: false,
             });
             setShowReportModal(true);
           }}
@@ -880,13 +895,21 @@ export default function DefectiveProductsManagement() {
       {/* Modal para reportar desde bodega */}
       {showReportModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-md rounded-lg border border-gray-800 bg-gray-900 p-6">
-            <h2 className="mb-4 text-2xl font-bold text-white">
-              Reportar Producto Defectuoso
-            </h2>
+          <div className="w-full max-w-2xl rounded-xl border border-gray-800 bg-gray-900 p-5">
+            <div className="mb-4">
+              <h2 className="text-2xl font-bold text-white">
+                Reportar Producto Defectuoso
+              </h2>
+              <p className="text-sm text-gray-400">
+                Completa los datos y define garantia o perdida.
+              </p>
+            </div>
 
-            <form onSubmit={handleReportFromInventory} className="space-y-4">
-              <div className="flex gap-2">
+            <form
+              onSubmit={handleReportFromInventory}
+              className="max-h-[75vh] space-y-3 overflow-y-auto pr-1"
+            >
+              <div className="grid gap-2 sm:grid-cols-2">
                 <button
                   type="button"
                   onClick={() => {
@@ -898,6 +921,7 @@ export default function DefectiveProductsManagement() {
                       quantity: 1,
                       reason: "",
                       hasWarranty: false,
+                      countsAsLoss: false,
                     });
                   }}
                   className={`flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
@@ -917,6 +941,7 @@ export default function DefectiveProductsManagement() {
                       quantity: 1,
                       reason: "",
                       hasWarranty: false,
+                      countsAsLoss: false,
                     });
                   }}
                   className={`flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
@@ -944,6 +969,7 @@ export default function DefectiveProductsManagement() {
                         quantity: 1,
                         reason: "",
                         hasWarranty: false,
+                        countsAsLoss: false,
                       });
                       await loadBranchStock(value);
                     }}
@@ -960,68 +986,70 @@ export default function DefectiveProductsManagement() {
                 </div>
               )}
 
-              <div>
-                <label className="mb-2 block text-sm font-medium text-gray-300">
-                  Producto *
-                </label>
-                <select
-                  value={reportForm.productId}
-                  onChange={e =>
-                    setReportForm({
-                      ...reportForm,
-                      productId: e.target.value,
-                      quantity: 1,
-                    })
-                  }
-                  className="w-full rounded-lg border border-gray-600 bg-gray-900/50 px-4 py-3 text-white focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  disabled={reportOrigin === "branch" && !selectedBranchId}
-                  required
-                >
-                  <option value="">Selecciona un producto</option>
-                  {reportOrigin === "branch"
-                    ? branchStock
-                        .filter(s => s.quantity > 0)
-                        .map(s => {
-                          const product =
-                            typeof s.product === "object" ? s.product : null;
-                          return (
-                            <option key={s._id} value={product?._id}>
-                              {product?.name} | Stock sede: {s.quantity} |
-                              Cliente: ${product?.clientPrice || 0}
+              <div className="grid gap-3 md:grid-cols-[2fr,1fr]">
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-300">
+                    Producto *
+                  </label>
+                  <select
+                    value={reportForm.productId}
+                    onChange={e =>
+                      setReportForm({
+                        ...reportForm,
+                        productId: e.target.value,
+                        quantity: 1,
+                      })
+                    }
+                    className="w-full rounded-lg border border-gray-600 bg-gray-900/50 px-4 py-3 text-white focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={reportOrigin === "branch" && !selectedBranchId}
+                    required
+                  >
+                    <option value="">Selecciona un producto</option>
+                    {reportOrigin === "branch"
+                      ? branchStock
+                          .filter(s => s.quantity > 0)
+                          .map(s => {
+                            const product =
+                              typeof s.product === "object" ? s.product : null;
+                            return (
+                              <option key={s._id} value={product?._id}>
+                                {product?.name} | Stock sede: {s.quantity} |
+                                Cliente: ${product?.clientPrice || 0}
+                              </option>
+                            );
+                          })
+                      : products
+                          .filter(p => !p.isPromotion)
+                          .map(product => (
+                            <option key={product._id} value={product._id}>
+                              {product.name} | Stock bodega:{" "}
+                              {product.warehouseStock} | Compra: $
+                              {product.purchasePrice} | Cliente: $
+                              {product.clientPrice || 0}
                             </option>
-                          );
-                        })
-                    : products
-                        .filter(p => !p.isPromotion)
-                        .map(product => (
-                          <option key={product._id} value={product._id}>
-                            {product.name} | Stock bodega:{" "}
-                            {product.warehouseStock} | Compra: $
-                            {product.purchasePrice} | Cliente: $
-                            {product.clientPrice || 0}
-                          </option>
-                        ))}
-                </select>
-              </div>
+                          ))}
+                  </select>
+                </div>
 
-              <div>
-                <label className="mb-2 block text-sm font-medium text-gray-300">
-                  Cantidad *
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max={Math.max(maxQuantity || 0, 1)}
-                  value={reportForm.quantity}
-                  onChange={e =>
-                    setReportForm({
-                      ...reportForm,
-                      quantity: parseInt(e.target.value),
-                    })
-                  }
-                  className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-white focus:border-transparent focus:ring-2 focus:ring-red-500"
-                  required
-                />
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-300">
+                    Cantidad *
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max={Math.max(maxQuantity || 0, 1)}
+                    value={reportForm.quantity}
+                    onChange={e =>
+                      setReportForm({
+                        ...reportForm,
+                        quantity: parseInt(e.target.value),
+                      })
+                    }
+                    className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-white focus:border-transparent focus:ring-2 focus:ring-red-500"
+                    required
+                  />
+                </div>
               </div>
 
               <div>
@@ -1033,7 +1061,7 @@ export default function DefectiveProductsManagement() {
                   onChange={e =>
                     setReportForm({ ...reportForm, reason: e.target.value })
                   }
-                  rows={3}
+                  rows={2}
                   className="w-full resize-none rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-white focus:border-transparent focus:ring-2 focus:ring-red-500"
                   placeholder="Describe el defecto del producto..."
                   required
@@ -1041,32 +1069,69 @@ export default function DefectiveProductsManagement() {
               </div>
 
               <div className="rounded-lg border border-blue-500/20 bg-blue-500/10 p-4">
-                <label className="flex cursor-pointer items-center gap-3">
-                  <input
-                    type="checkbox"
-                    checked={reportForm.hasWarranty}
-                    onChange={e =>
-                      setReportForm({
-                        ...reportForm,
-                        hasWarranty: e.target.checked,
-                      })
-                    }
-                    className="h-5 w-5 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-2 focus:ring-blue-500"
-                  />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-blue-200">
-                      Este producto tiene garantía del proveedor
-                    </p>
-                    <p className="text-xs text-blue-300/80">
-                      Si el proveedor acepta la garantía, se restara del stock
-                      pero no afectara metricas de finanzas.
-                    </p>
-                  </div>
-                </label>
+                <p className="mb-3 text-sm font-semibold text-blue-200">
+                  Selecciona como se debe registrar
+                </p>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-blue-500/30 bg-blue-500/10 p-3">
+                    <input
+                      type="checkbox"
+                      checked={reportForm.hasWarranty}
+                      onChange={e =>
+                        setReportForm({
+                          ...reportForm,
+                          hasWarranty: e.target.checked,
+                          countsAsLoss: e.target.checked
+                            ? false
+                            : reportForm.countsAsLoss,
+                        })
+                      }
+                      className="mt-1 h-5 w-5 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-2 focus:ring-blue-500"
+                    />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-blue-100">
+                        Tiene garantia del proveedor
+                      </p>
+                      <p className="text-xs text-blue-200/80">
+                        Solo reduce inventario, costo $0.
+                      </p>
+                    </div>
+                  </label>
+
+                  <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3">
+                    <input
+                      type="checkbox"
+                      checked={reportForm.countsAsLoss}
+                      onChange={e =>
+                        setReportForm({
+                          ...reportForm,
+                          countsAsLoss: e.target.checked,
+                          hasWarranty: e.target.checked
+                            ? false
+                            : reportForm.hasWarranty,
+                        })
+                      }
+                      className="mt-1 h-5 w-5 rounded border-gray-600 bg-gray-700 text-red-500 focus:ring-2 focus:ring-red-500"
+                    />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-red-100">
+                        Se toma como perdida
+                      </p>
+                      <p className="text-xs text-red-200/80">
+                        Descuenta stock y registra gasto.
+                      </p>
+                    </div>
+                  </label>
+                </div>
+                {!reportForm.hasWarranty && !reportForm.countsAsLoss && (
+                  <p className="mt-3 text-xs text-amber-300">
+                    Debes seleccionar una opcion para continuar.
+                  </p>
+                )}
               </div>
 
               <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/10 p-3">
-                <p className="text-sm text-yellow-200">
+                <p className="text-xs text-yellow-200">
                   ℹ️ Los reportes desde bodega o sede se auto-confirman
                   automáticamente y descuentan del stock correspondiente.
                 </p>
@@ -1085,6 +1150,7 @@ export default function DefectiveProductsManagement() {
                       quantity: 1,
                       reason: "",
                       hasWarranty: false,
+                      countsAsLoss: false,
                     });
                   }}
                   className="flex-1 rounded-lg border border-gray-700 px-4 py-2 text-gray-200 transition hover:bg-white/5"
@@ -1094,7 +1160,10 @@ export default function DefectiveProductsManagement() {
                 </button>
                 <button
                   type="submit"
-                  disabled={submitting}
+                  disabled={
+                    submitting ||
+                    (!reportForm.hasWarranty && !reportForm.countsAsLoss)
+                  }
                   className="bg-linear-to-r flex-1 rounded-lg from-red-600 to-orange-600 px-4 py-2 font-semibold text-white transition hover:from-red-700 hover:to-orange-700 disabled:opacity-50"
                 >
                   {submitting ? "Reportando..." : "Reportar"}
