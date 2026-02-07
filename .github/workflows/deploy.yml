@@ -47,7 +47,7 @@ jobs:
             echo 'VAPID_SUBJECT=${VAPID_SUBJECT}' >> .env &&
             echo 'MONGO_EXPRESS_USER=admin' >> .env &&
             echo 'MONGO_EXPRESS_PASS=admin123' >> .env &&
-            echo 'VITE_API_URL=/api' > client/.env.production &&
+            echo 'VITE_API_URL=/api/v2' > client/.env.production &&
             cd client && npm install && npm run build &&
             cd .. &&
             docker-compose down --remove-orphans &&
