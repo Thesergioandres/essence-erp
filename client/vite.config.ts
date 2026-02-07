@@ -100,30 +100,6 @@ export default defineConfig({
     target: "esnext",
     minify: "esbuild",
     cssMinify: true,
-    rollupOptions: {
-      output: {
-        manualChunks: id => {
-          if (!id.includes("node_modules")) return;
-
-          if (
-            id.includes("/node_modules/react/") ||
-            id.includes("/node_modules/react-dom/")
-          ) {
-            return "react-vendor";
-          }
-          if (id.includes("recharts")) {
-            return "recharts";
-          }
-          if (id.includes("lucide-react")) {
-            return "icons";
-          }
-          if (id.includes("axios")) {
-            return "utils";
-          }
-          return "vendor";
-        },
-      },
-    },
     chunkSizeWarningLimit: 1000,
   },
   server: {
