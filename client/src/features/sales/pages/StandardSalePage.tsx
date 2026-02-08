@@ -21,6 +21,7 @@ import type { Branch } from "../../business/types/business.types";
 import { gamificationService } from "../../common/services";
 import { distributorService } from "../../distributors/services/distributor.service";
 import { productsService } from "../../inventory/api/products.service";
+import { stockService } from "../../inventory/services/inventory.service";
 import type { Product } from "../../inventory/types/product.types";
 import {
   CustomerSelector,
@@ -277,14 +278,16 @@ export default function StandardSalePage() {
 
       try {
         console.log("📦 Fetching branch stock for:", order.locationId);
-        const branchStockData = await branchService.getBranchStock(
+        const branchStockData = await stockService.getBranchStock(
           order.locationId
         );
 
         const stockMap = new Map<string, number>();
-        branchStockData.stock.forEach(item => {
-          if (item.product?._id) {
-            stockMap.set(String(item.product._id), item.quantity || 0);
+        branchStockData.forEach(item => {
+          const productId =
+            typeof item.product === "object" ? item.product?._id : item.product;
+          if (productId) {
+            stockMap.set(String(productId), item.quantity || 0);
           }
         });
 
