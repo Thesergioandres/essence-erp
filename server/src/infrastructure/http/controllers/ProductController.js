@@ -175,7 +175,7 @@ export const getProductHistory = async (req, res) => {
       deleted: { $ne: true },
     })
       .select(
-        "createdAt provider quantity unitCost totalCost averageCostAfter notes purchaseGroupId requestId",
+        "createdAt provider type quantity unitCost totalCost averageCostAfter notes purchaseGroupId requestId",
       )
       .populate({ path: "provider", select: "name" })
       .sort({ createdAt: -1 })
@@ -320,17 +320,19 @@ export const updateProduct = async (req, res, next) => {
     const updateData = { ...req.body };
 
     // Parse numbers
-    if (updateData.purchasePrice)
+    if (updateData.purchasePrice !== undefined)
       updateData.purchasePrice = Number(updateData.purchasePrice);
-    if (updateData.suggestedPrice)
+    if (updateData.suggestedPrice !== undefined)
       updateData.suggestedPrice = Number(updateData.suggestedPrice);
-    if (updateData.distributorPrice)
+    if (updateData.distributorPrice !== undefined)
       updateData.distributorPrice = Number(updateData.distributorPrice);
-    if (updateData.clientPrice)
+    if (updateData.clientPrice !== undefined)
       updateData.clientPrice = Number(updateData.clientPrice);
-    if (updateData.totalStock)
+    if (updateData.totalStock !== undefined)
       updateData.totalStock = Number(updateData.totalStock);
-    if (updateData.lowStockAlert)
+    if (updateData.warehouseStock !== undefined)
+      updateData.warehouseStock = Number(updateData.warehouseStock);
+    if (updateData.lowStockAlert !== undefined)
       updateData.lowStockAlert = Number(updateData.lowStockAlert);
 
     // Parse booleans
@@ -385,7 +387,12 @@ export const updateProduct = async (req, res, next) => {
     console.log("📤 Updating product in database...");
 
     const repository = new ProductRepository();
-    const updatedProduct = await repository.update(id, businessId, updateData);
+    const updatedProduct = await repository.updateWithManualStock(
+      id,
+      businessId,
+      updateData,
+      req.user?.id,
+    );
 
     if (!updatedProduct) {
       return res.status(404).json({

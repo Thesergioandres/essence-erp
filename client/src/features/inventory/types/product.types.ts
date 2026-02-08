@@ -154,6 +154,7 @@ export interface ProductPayload {
 export interface InventoryEntry {
   _id: string;
   product: { _id: string; name: string } | string;
+  type?: "entry" | "adjustment";
   quantity: number;
   unitCost?: number;
   totalCost?: number;
@@ -171,6 +172,7 @@ export interface ProductHistoryEntry {
   _id: string;
   createdAt: string;
   provider?: { _id: string; name: string } | null;
+  type?: "entry" | "adjustment";
   quantity: number;
   unitCost?: number;
   totalCost?: number;

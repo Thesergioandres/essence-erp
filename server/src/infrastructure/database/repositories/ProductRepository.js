@@ -118,6 +118,106 @@ export class ProductRepository {
   }
 
   /**
+   * Update a product and register manual stock adjustments when needed.
+   * @param {string} id
+   * @param {string} businessId
+   * @param {Object} updateData
+   * @param {string} userId
+   * @returns {Promise<Object|null>}
+   */
+  async updateWithManualStock(id, businessId, updateData, userId) {
+    const product = await Product.findOne({ _id: id, business: businessId });
+    if (!product) return null;
+
+    const hasTotalStock = Object.prototype.hasOwnProperty.call(
+      updateData,
+      "totalStock",
+    );
+    const hasWarehouseStock = Object.prototype.hasOwnProperty.call(
+      updateData,
+      "warehouseStock",
+    );
+
+    if (hasTotalStock || hasWarehouseStock) {
+      const distStocks = await DistributorStock.find({
+        product: id,
+        business: businessId,
+      });
+      const totalDistributor = distStocks.reduce(
+        (sum, item) => sum + (item.quantity || 0),
+        0,
+      );
+
+      const branchStocks = await BranchStock.find({
+        product: id,
+        business: businessId,
+      });
+      const totalBranch = branchStocks.reduce(
+        (sum, item) => sum + (item.quantity || 0),
+        0,
+      );
+
+      const currentWarehouse = product.warehouseStock || 0;
+      let desiredWarehouse = currentWarehouse;
+      const providedWarehouse = hasWarehouseStock
+        ? Number(updateData.warehouseStock)
+        : null;
+      const warehouseChanged =
+        hasWarehouseStock &&
+        !Number.isNaN(providedWarehouse) &&
+        providedWarehouse !== currentWarehouse;
+
+      if (warehouseChanged) {
+        desiredWarehouse = Number(providedWarehouse);
+      } else if (hasTotalStock) {
+        const desiredTotal = Number(updateData.totalStock);
+        desiredWarehouse = desiredTotal - totalDistributor - totalBranch;
+      }
+
+      if (Number.isNaN(desiredWarehouse) || desiredWarehouse < 0) {
+        throw new Error("El stock en bodega no puede ser negativo");
+      }
+
+      updateData.warehouseStock = desiredWarehouse;
+      updateData.totalStock = desiredWarehouse + totalDistributor + totalBranch;
+
+      const diff = desiredWarehouse - currentWarehouse;
+      if (diff !== 0) {
+        const unitCost = product.averageCost || product.purchasePrice || 0;
+        const totalCost = diff * unitCost;
+
+        if (!userId) {
+          throw new Error("Usuario requerido para registrar ajuste de stock");
+        }
+
+        await InventoryEntry.create({
+          business: businessId,
+          product: product._id,
+          user: userId,
+          type: "adjustment",
+          quantity: diff,
+          unitCost,
+          totalCost,
+          averageCostAfter: product.averageCost || unitCost,
+          notes: "Ajuste manual de stock desde panel de edicion",
+          destination: "warehouse",
+          metadata: {
+            previousWarehouseStock: currentWarehouse,
+            newWarehouseStock: desiredWarehouse,
+          },
+        });
+      }
+    }
+
+    const updatedProduct = await Product.findOneAndUpdate(
+      { _id: id, business: businessId },
+      { $set: updateData },
+      { new: true, runValidators: true },
+    );
+    return updatedProduct;
+  }
+
+  /**
    * Delete a product by ID
    * @param {string} id
    * @param {string} businessId

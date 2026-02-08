@@ -29,7 +29,12 @@ const inventoryEntrySchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
-    quantity: { type: Number, required: true, min: 1 },
+    type: {
+      type: String,
+      enum: ["entry", "adjustment"],
+      default: "entry",
+    },
+    quantity: { type: Number, required: true },
     // Costo unitario de esta entrada específica
     unitCost: { type: Number, default: 0 },
     // Costo total de esta entrada (quantity * unitCost)
@@ -53,7 +58,7 @@ const inventoryEntrySchema = new mongoose.Schema(
     deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     metadata: { type: mongoose.Schema.Types.Mixed },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 inventoryEntrySchema.index({ business: 1, createdAt: -1 });

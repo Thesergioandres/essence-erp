@@ -475,12 +475,13 @@ export default function EditProduct() {
                     type="number"
                     name="totalStock"
                     value={formData.totalStock}
-                    readOnly
-                    disabled
-                    className="w-full cursor-not-allowed rounded-lg border border-gray-700 bg-gray-900/30 px-4 py-3 text-gray-400"
+                    onChange={handleChange}
+                    min="0"
+                    className="w-full rounded-lg border border-gray-600 bg-gray-900/50 px-4 py-3 text-white placeholder-gray-500 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-purple-500"
                   />
                   <p className="mt-1 text-xs text-amber-400">
-                    Solo cambia con Entradas de Inventario, ventas o ajustes.
+                    Cualquier ajuste genera un registro automatico en el
+                    historial.
                   </p>
                 </div>
 
@@ -492,13 +493,12 @@ export default function EditProduct() {
                     type="number"
                     name="warehouseStock"
                     value={formData.warehouseStock}
-                    readOnly
-                    disabled
-                    className="w-full cursor-not-allowed rounded-lg border border-gray-700 bg-gray-900/30 px-4 py-3 text-gray-400"
+                    onChange={handleChange}
+                    min="0"
+                    className="w-full rounded-lg border border-gray-600 bg-gray-900/50 px-4 py-3 text-white placeholder-gray-500 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-purple-500"
                   />
                   <p className="mt-1 text-xs text-amber-400">
-                    Ajusta desde Entradas de Inventario para mantener
-                    trazabilidad.
+                    El sistema recalcula el total global automaticamente.
                   </p>
                 </div>
 
