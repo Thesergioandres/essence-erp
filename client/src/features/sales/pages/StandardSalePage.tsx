@@ -138,18 +138,23 @@ export default function StandardSalePage() {
           const allowedBranchIds = hasAllowedBranchList
             ? rawAllowedBranches.map(id => String(id))
             : [];
+          const allowAllBranches = rawAllowedBranches == null;
           const allowAnyBranches =
-            hasAllowedBranchList && allowedBranchIds.length > 0;
+            allowAllBranches ||
+            (hasAllowedBranchList && allowedBranchIds.length > 0);
           const activeBranches = allBranches.filter(b => b.active !== false);
-          const distributorBranches = allowAnyBranches
-            ? activeBranches.filter(b => allowedBranchIds.includes(b._id))
-            : [];
+          const distributorBranches = allowAllBranches
+            ? activeBranches
+            : allowAnyBranches
+              ? activeBranches.filter(b => allowedBranchIds.includes(b._id))
+              : [];
           const warehouseBranchIds = activeBranches
             .filter(b => b.isWarehouse)
             .map(b => b._id);
-          const canUseWarehouse =
-            allowAnyBranches &&
-            warehouseBranchIds.some(id => allowedBranchIds.includes(id));
+          const canUseWarehouse = allowAllBranches
+            ? warehouseBranchIds.length > 0
+            : allowAnyBranches &&
+              warehouseBranchIds.some(id => allowedBranchIds.includes(id));
           const visibleBranches = canUseWarehouse
             ? distributorBranches
             : distributorBranches.filter(b => !b.isWarehouse);
@@ -623,6 +628,7 @@ export default function StandardSalePage() {
         await saleService.registerStandardBulk({
           items: payload.items,
           branchId: payload.branchId,
+          locationType: order.locationType,
           paymentMethodId: payload.paymentMethodId,
           paymentType: payload.paymentType,
           customerId: payload.customerId,
@@ -659,6 +665,9 @@ export default function StandardSalePage() {
           await defectiveProductService.reportAdmin({
             productId: warranty.productId,
             quantity: warranty.quantity,
+            hasWarranty: warranty.type === "supplier_replacement",
+            saleGroupId,
+            origin: "order",
             reason:
               warranty.reason ||
               `${warranty.type === "supplier_replacement" ? "Reemplazo proveedor" : "Pérdida total"} - Orden ${saleGroupId}`,

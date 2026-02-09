@@ -10,6 +10,7 @@ const buildSaleInput = (req, distributorId) => ({
   user: req.user,
   businessId: req.headers["x-business-id"],
   distributorId,
+  locationType: req.body.locationType || req.body.sourceLocation,
   branchId: req.body.branchId || req.body.branch,
   items: req.body.items,
   paymentMethodId: req.body.paymentMethodId,

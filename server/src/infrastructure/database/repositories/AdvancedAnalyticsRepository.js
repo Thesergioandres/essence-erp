@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import Credit from "../../../../models/Credit.js";
 import CreditPayment from "../../../../models/CreditPayment.js";
+import DefectiveProduct from "../../../../models/DefectiveProduct.js";
 import Expense from "../../../../models/Expense.js";
 import Membership from "../../../../models/Membership.js";
 import Product from "../../../../models/Product.js";
@@ -94,6 +95,10 @@ export class AdvancedAnalyticsRepository {
       weekSpecialData,
       monthData,
       monthSpecialData,
+      warrantyRangeData,
+      warrantyTodayData,
+      warrantyWeekData,
+      warrantyMonthData,
       creditRangeData,
       creditTodayData,
       creditWeekData,
@@ -129,6 +134,19 @@ export class AdvancedAnalyticsRepository {
                 ],
               },
             },
+            netProfit: {
+              $sum: {
+                $ifNull: [
+                  {
+                    $subtract: [
+                      { $ifNull: ["$netProfit", "$totalProfit"] },
+                      { $ifNull: ["$distributorProfit", 0] },
+                    ],
+                  },
+                  { $ifNull: ["$adminProfit", 0] },
+                ],
+              },
+            },
             quantity: { $sum: "$quantity" },
           },
         },
@@ -147,6 +165,7 @@ export class AdvancedAnalyticsRepository {
             sales: { $sum: 1 },
             revenue: { $sum: { $multiply: ["$specialPrice", "$quantity"] } },
             profit: { $sum: "$totalProfit" },
+            netProfit: { $sum: "$totalProfit" },
             quantity: { $sum: "$quantity" },
           },
         },
@@ -179,6 +198,19 @@ export class AdvancedAnalyticsRepository {
                 ],
               },
             },
+            netProfit: {
+              $sum: {
+                $ifNull: [
+                  {
+                    $subtract: [
+                      { $ifNull: ["$netProfit", "$totalProfit"] },
+                      { $ifNull: ["$distributorProfit", 0] },
+                    ],
+                  },
+                  { $ifNull: ["$adminProfit", 0] },
+                ],
+              },
+            },
           },
         },
       ]),
@@ -196,6 +228,7 @@ export class AdvancedAnalyticsRepository {
             sales: { $sum: 1 },
             revenue: { $sum: { $multiply: ["$specialPrice", "$quantity"] } },
             profit: { $sum: "$totalProfit" },
+            netProfit: { $sum: "$totalProfit" },
           },
         },
       ]),
@@ -227,6 +260,19 @@ export class AdvancedAnalyticsRepository {
                 ],
               },
             },
+            netProfit: {
+              $sum: {
+                $ifNull: [
+                  {
+                    $subtract: [
+                      { $ifNull: ["$netProfit", "$totalProfit"] },
+                      { $ifNull: ["$distributorProfit", 0] },
+                    ],
+                  },
+                  { $ifNull: ["$adminProfit", 0] },
+                ],
+              },
+            },
           },
         },
       ]),
@@ -244,6 +290,7 @@ export class AdvancedAnalyticsRepository {
             sales: { $sum: 1 },
             revenue: { $sum: { $multiply: ["$specialPrice", "$quantity"] } },
             profit: { $sum: "$totalProfit" },
+            netProfit: { $sum: "$totalProfit" },
           },
         },
       ]),
@@ -275,6 +322,19 @@ export class AdvancedAnalyticsRepository {
                 ],
               },
             },
+            netProfit: {
+              $sum: {
+                $ifNull: [
+                  {
+                    $subtract: [
+                      { $ifNull: ["$netProfit", "$totalProfit"] },
+                      { $ifNull: ["$distributorProfit", 0] },
+                    ],
+                  },
+                  { $ifNull: ["$adminProfit", 0] },
+                ],
+              },
+            },
           },
         },
       ]),
@@ -292,8 +352,53 @@ export class AdvancedAnalyticsRepository {
             sales: { $sum: 1 },
             revenue: { $sum: { $multiply: ["$specialPrice", "$quantity"] } },
             profit: { $sum: "$totalProfit" },
+            netProfit: { $sum: "$totalProfit" },
           },
         },
+      ]),
+      DefectiveProduct.aggregate([
+        {
+          $match: {
+            business: businessObjectId,
+            status: "confirmado",
+            origin: "order",
+            ...(dateRange ? { reportDate: dateRange } : {}),
+          },
+        },
+        { $group: { _id: null, totalLoss: { $sum: "$lossAmount" } } },
+      ]),
+      DefectiveProduct.aggregate([
+        {
+          $match: {
+            business: businessObjectId,
+            status: "confirmado",
+            origin: "order",
+            reportDate: { $gte: todayStart, $lte: todayEnd },
+          },
+        },
+        { $group: { _id: null, totalLoss: { $sum: "$lossAmount" } } },
+      ]),
+      DefectiveProduct.aggregate([
+        {
+          $match: {
+            business: businessObjectId,
+            status: "confirmado",
+            origin: "order",
+            reportDate: { $gte: weekStart, $lte: new Date() },
+          },
+        },
+        { $group: { _id: null, totalLoss: { $sum: "$lossAmount" } } },
+      ]),
+      DefectiveProduct.aggregate([
+        {
+          $match: {
+            business: businessObjectId,
+            status: "confirmado",
+            origin: "order",
+            reportDate: { $gte: monthStart, $lte: new Date() },
+          },
+        },
+        { $group: { _id: null, totalLoss: { $sum: "$lossAmount" } } },
       ]),
       CreditPayment.aggregate([
         {
@@ -379,32 +484,56 @@ export class AdvancedAnalyticsRepository {
       sales: 0,
       revenue: 0,
       profit: 0,
+      netProfit: 0,
       quantity: 0,
     };
     const rangeSpecial = rangeSpecialData[0] || {
       sales: 0,
       revenue: 0,
       profit: 0,
+      netProfit: 0,
       quantity: 0,
     };
-    const daily = todayData[0] || { sales: 0, revenue: 0, profit: 0 };
-    const weekly = weekData[0] || { sales: 0, revenue: 0, profit: 0 };
-    const monthly = monthData[0] || { sales: 0, revenue: 0, profit: 0 };
+    const daily = todayData[0] || {
+      sales: 0,
+      revenue: 0,
+      profit: 0,
+      netProfit: 0,
+    };
+    const weekly = weekData[0] || {
+      sales: 0,
+      revenue: 0,
+      profit: 0,
+      netProfit: 0,
+    };
+    const monthly = monthData[0] || {
+      sales: 0,
+      revenue: 0,
+      profit: 0,
+      netProfit: 0,
+    };
     const dailySpecial = todaySpecialData[0] || {
       sales: 0,
       revenue: 0,
       profit: 0,
+      netProfit: 0,
     };
     const weeklySpecial = weekSpecialData[0] || {
       sales: 0,
       revenue: 0,
       profit: 0,
+      netProfit: 0,
     };
     const monthlySpecial = monthSpecialData[0] || {
       sales: 0,
       revenue: 0,
       profit: 0,
+      netProfit: 0,
     };
+    const warrantyRange = warrantyRangeData[0]?.totalLoss || 0;
+    const warrantyDaily = warrantyTodayData[0]?.totalLoss || 0;
+    const warrantyWeekly = warrantyWeekData[0]?.totalLoss || 0;
+    const warrantyMonthly = warrantyMonthData[0]?.totalLoss || 0;
     const creditRange = creditRangeData[0]?.totalAmount || 0;
     const creditDaily = creditTodayData[0]?.totalAmount || 0;
     const creditWeekly = creditWeekData[0]?.totalAmount || 0;
@@ -415,29 +544,33 @@ export class AdvancedAnalyticsRepository {
       sales: range.sales + rangeSpecial.sales,
       revenue: range.revenue + rangeSpecial.revenue,
       profit: range.profit + rangeSpecial.profit,
+      netProfit: range.netProfit + rangeSpecial.netProfit,
       quantity: range.quantity + rangeSpecial.quantity,
     };
     const combinedDaily = {
       sales: daily.sales + dailySpecial.sales,
       revenue: daily.revenue + dailySpecial.revenue,
       profit: daily.profit + dailySpecial.profit,
+      netProfit: daily.netProfit + dailySpecial.netProfit,
     };
     const combinedWeekly = {
       sales: weekly.sales + weeklySpecial.sales,
       revenue: weekly.revenue + weeklySpecial.revenue,
       profit: weekly.profit + weeklySpecial.profit,
+      netProfit: weekly.netProfit + weeklySpecial.netProfit,
     };
     const combinedMonthly = {
       sales: monthly.sales + monthlySpecial.sales,
       revenue: monthly.revenue + monthlySpecial.revenue,
       profit: monthly.profit + monthlySpecial.profit,
+      netProfit: monthly.netProfit + monthlySpecial.netProfit,
     };
 
     // 🎯 FIX TASK 2: Calculate REAL Net Profit (Gross Profit - Expenses)
-    const realNetProfit = combinedRange.profit - expenses.totalExpenses;
-    const dailyNetProfit = combinedDaily.profit; // No daily expenses aggregation yet
-    const weeklyNetProfit = combinedWeekly.profit; // Would need week-specific expenses
-    const monthlyNetProfit = combinedMonthly.profit; // Would need month-specific expenses
+    const netSalesProfit = combinedRange.netProfit - warrantyRange;
+    const dailyNetProfit = combinedDaily.netProfit - warrantyDaily;
+    const weeklyNetProfit = combinedWeekly.netProfit - warrantyWeekly;
+    const monthlyNetProfit = combinedMonthly.netProfit - warrantyMonthly;
 
     return {
       kpis: {
@@ -468,7 +601,7 @@ export class AdvancedAnalyticsRepository {
         sales: combinedRange.sales,
         revenue: combinedRange.revenue + creditRange,
         grossProfit: combinedRange.profit, // Renamed for clarity
-        netProfit: realNetProfit, // 🎯 Real Net Profit = Gross - Expenses
+        netProfit: netSalesProfit, // Ganancia neta de ventas
         quantity: combinedRange.quantity,
         avgTicket:
           combinedRange.sales > 0
@@ -572,13 +705,31 @@ export class AdvancedAnalyticsRepository {
         dateFormat = "%Y-%m-%d";
     }
 
+    const timeZone = "America/Bogota";
+
     const timeline = await Sale.aggregate([
       { $match: match },
       {
         $project: {
           saleDate: "$saleDate",
           revenue: { $multiply: ["$salePrice", "$quantity"] },
-          profit: "$totalProfit",
+          profit: {
+            $ifNull: [
+              "$totalProfit",
+              { $add: ["$adminProfit", "$distributorProfit"] },
+            ],
+          },
+          netProfit: {
+            $ifNull: [
+              {
+                $subtract: [
+                  { $ifNull: ["$netProfit", "$totalProfit"] },
+                  { $ifNull: ["$distributorProfit", 0] },
+                ],
+              },
+              { $ifNull: ["$adminProfit", 0] },
+            ],
+          },
           quantity: "$quantity",
         },
       },
@@ -598,6 +749,7 @@ export class AdvancedAnalyticsRepository {
                 saleDate: "$saleDate",
                 revenue: { $multiply: ["$specialPrice", "$quantity"] },
                 profit: "$totalProfit",
+                netProfit: "$totalProfit",
                 quantity: "$quantity",
               },
             },
@@ -606,23 +758,62 @@ export class AdvancedAnalyticsRepository {
       },
       {
         $group: {
-          _id: { $dateToString: { format: dateFormat, date: "$saleDate" } },
+          _id: {
+            $dateToString: {
+              format: dateFormat,
+              date: "$saleDate",
+              timezone: timeZone,
+            },
+          },
           salesCount: { $sum: 1 },
           revenue: { $sum: "$revenue" },
           profit: { $sum: "$profit" },
+          netProfit: { $sum: "$netProfit" },
           quantity: { $sum: "$quantity" },
         },
       },
       { $sort: { _id: 1 } },
     ]);
 
+    const warrantyTimeline = await DefectiveProduct.aggregate([
+      {
+        $match: {
+          business: businessObjectId,
+          status: "confirmado",
+          origin: "order",
+          ...(dateRange ? { reportDate: dateRange } : {}),
+        },
+      },
+      {
+        $group: {
+          _id: {
+            $dateToString: {
+              format: dateFormat,
+              date: "$reportDate",
+              timezone: timeZone,
+            },
+          },
+          totalLoss: { $sum: "$lossAmount" },
+        },
+      },
+    ]);
+
+    const warrantyLossByDate = new Map(
+      warrantyTimeline.map((item) => [item._id, item.totalLoss || 0]),
+    );
+    const totalWarrantyLoss = warrantyTimeline.reduce(
+      (sum, item) => sum + (item.totalLoss || 0),
+      0,
+    );
+
     const total = timeline.reduce(
       (acc, t) => ({
         sales: acc.sales + t.salesCount,
         revenue: acc.revenue + t.revenue,
         profit: acc.profit + t.profit,
+        netProfit: acc.netProfit + t.netProfit,
       }),
-      { sales: 0, revenue: 0, profit: 0 },
+      { sales: 0, revenue: 0, profit: 0, netProfit: 0 },
     );
 
     const peak = timeline.reduce(
@@ -631,17 +822,22 @@ export class AdvancedAnalyticsRepository {
     );
 
     return {
-      timeline: timeline.map((t) => ({
-        date: t._id,
-        salesCount: t.salesCount,
-        revenue: t.revenue,
-        profit: t.profit,
-        quantity: t.quantity,
-      })),
+      timeline: timeline.map((t) => {
+        const warrantyLoss = warrantyLossByDate.get(t._id) || 0;
+        return {
+          date: t._id,
+          salesCount: t.salesCount,
+          revenue: t.revenue,
+          profit: t.profit,
+          netProfit: t.netProfit - warrantyLoss,
+          quantity: t.quantity,
+        };
+      }),
       summary: {
         totalSales: total.sales,
         totalRevenue: total.revenue,
         totalProfit: total.profit,
+        totalNetProfit: total.netProfit - totalWarrantyLoss,
         peakDate: peak._id,
         peakSales: peak.salesCount,
       },

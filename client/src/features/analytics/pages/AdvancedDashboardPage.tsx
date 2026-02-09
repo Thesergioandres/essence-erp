@@ -728,7 +728,9 @@ export default function AdvancedDashboard() {
                         <p
                           className={`mt-1 text-2xl font-bold ${Number(creditMetrics.recoveryRate) >= 50 ? "text-green-400" : "text-amber-400"}`}
                         >
-                          {creditMetrics.recoveryRate}%
+                          {creditMetrics.total.totalCredits === 0
+                            ? "100%"
+                            : `${creditMetrics.recoveryRate}%`}
                         </p>
                       </div>
                     </div>
@@ -760,16 +762,23 @@ export default function AdvancedDashboard() {
                             <div
                               className="bg-linear-to-r h-full from-green-500 via-yellow-500 to-red-500"
                               style={{
-                                width: `${Math.min(100, Number(creditMetrics.recoveryRate))}%`,
+                                width: `${Math.min(
+                                  100,
+                                  creditMetrics.total.totalCredits === 0
+                                    ? 100
+                                    : Number(creditMetrics.recoveryRate)
+                                )}%`,
                               }}
                             />
                           </div>
                           <span className="text-sm font-medium text-gray-200">
-                            {Number(creditMetrics.recoveryRate) >= 70
+                            {creditMetrics.total.totalCredits === 0
                               ? "✅ Excelente"
-                              : Number(creditMetrics.recoveryRate) >= 50
-                                ? "⚠️ Aceptable"
-                                : "❌ Crítico"}
+                              : Number(creditMetrics.recoveryRate) >= 70
+                                ? "✅ Excelente"
+                                : Number(creditMetrics.recoveryRate) >= 50
+                                  ? "⚠️ Aceptable"
+                                  : "❌ Crítico"}
                           </span>
                         </div>
                       </div>

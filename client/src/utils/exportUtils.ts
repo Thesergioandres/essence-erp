@@ -120,7 +120,10 @@ export const exportKPIsToPDF = async (kpis: any) => {
     body: [
       ["Ventas", kpis.todaySales.toString()],
       ["Ingresos", `$${kpis.todayRevenue.toFixed(2)}`],
-      ["Ganancia", `$${kpis.todayProfit.toFixed(2)}`],
+      [
+        "Ganancia neta",
+        `$${(kpis.todayNetProfit ?? kpis.todayProfit).toFixed(2)}`,
+      ],
     ],
     theme: "grid",
     headStyles: { fillColor: [139, 92, 246] },
@@ -136,7 +139,10 @@ export const exportKPIsToPDF = async (kpis: any) => {
     body: [
       ["Ventas", kpis.weekSales.toString()],
       ["Ingresos", `$${kpis.weekRevenue.toFixed(2)}`],
-      ["Ganancia", `$${kpis.weekProfit.toFixed(2)}`],
+      [
+        "Ganancia neta",
+        `$${(kpis.weekNetProfit ?? kpis.weekProfit).toFixed(2)}`,
+      ],
     ],
     theme: "grid",
     headStyles: { fillColor: [139, 92, 246] },
@@ -152,7 +158,10 @@ export const exportKPIsToPDF = async (kpis: any) => {
     body: [
       ["Ventas", kpis.monthSales.toString()],
       ["Ingresos", `$${kpis.monthRevenue.toFixed(2)}`],
-      ["Ganancia", `$${kpis.monthProfit.toFixed(2)}`],
+      [
+        "Ganancia neta",
+        `$${(kpis.monthNetProfit ?? kpis.monthProfit).toFixed(2)}`,
+      ],
       ["Ticket Promedio", `$${kpis.averageTicket.toFixed(2)}`],
       ["Distribuidores Activos", kpis.totalActiveDistributors.toString()],
     ],

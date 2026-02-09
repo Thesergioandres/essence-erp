@@ -19,6 +19,7 @@
 // I will check if Sale.js was moved.
 
 import mongoose from "mongoose";
+import BranchStock from "../../../../models/BranchStock.js";
 import DistributorStock from "../../../../models/DistributorStock.js";
 import Membership from "../../../../models/Membership.js";
 import Product from "../models/Product.js";
@@ -228,8 +229,22 @@ export class AnalyticsRepository {
       business: businessObjectId,
       quantity: { $gt: 0 },
     })
-      .populate("product", "name purchasePrice averageCost clientPrice")
+      .populate(
+        "product",
+        "name purchasePrice averageCost clientPrice distributorPrice",
+      )
       .populate("distributor", "name email")
+      .lean();
+
+    const branchStocks = await BranchStock.find({
+      business: businessObjectId,
+      quantity: { $gt: 0 },
+    })
+      .populate(
+        "product",
+        "name purchasePrice averageCost clientPrice distributorPrice",
+      )
+      .populate("branch", "name")
       .lean();
 
     // Check if business has distributors
@@ -242,8 +257,7 @@ export class AnalyticsRepository {
       .lean();
     const hasDistributors = distributorMemberships.length > 0;
 
-    // For now, we don't have branches feature
-    const hasBranches = false;
+    const hasBranches = branchStocks.length > 0;
 
     // Calculate warehouse metrics
     let warehouseGrossProfit = 0;
@@ -276,10 +290,23 @@ export class AnalyticsRepository {
       const product = stock.product;
       const distributor = stock.distributor;
 
-      // Admin's perspective: investment is at averageCost/purchasePrice
-      // Sales value is at clientPrice
+      // Admin's perspective for distributor inventory: profit is B2B margin
+      // Sales value is at distributorPrice (already excludes distributor commission)
       const costPrice = product.averageCost || product.purchasePrice || 0;
-      const sellPrice = product.clientPrice || 0;
+      let sellPrice = product.distributorPrice || 0;
+      if (sellPrice <= 0) {
+        // Fallback to avoid zero B2B price when stock exists
+        sellPrice = product.clientPrice || 0;
+        if (sellPrice <= 0) {
+          console.warn(
+            "[EstimatedProfit] Missing B2B price for distributor stock",
+            {
+              productId: product._id,
+              distributorId: distributor._id,
+            },
+          );
+        }
+      }
 
       const investment = costPrice * qty;
       const salesValue = sellPrice * qty;
@@ -314,13 +341,67 @@ export class AnalyticsRepository {
     }
     distributorsGrossProfit = distributorsSalesValue - distributorsInvestment;
 
+    // Calculate branches metrics (aggregated and per-branch)
+    let branchesGrossProfit = 0;
+    let branchesInvestment = 0;
+    let branchesSalesValue = 0;
+    let branchesTotalUnits = 0;
+    const branchMap = new Map();
+
+    for (const stock of branchStocks) {
+      if (!stock.product || !stock.branch) continue;
+
+      const qty = stock.quantity || 0;
+      const product = stock.product;
+      const branch = stock.branch;
+
+      const costPrice = product.averageCost || product.purchasePrice || 0;
+      const sellPrice = product.clientPrice || product.distributorPrice || 0;
+
+      const investment = costPrice * qty;
+      const salesValue = sellPrice * qty;
+      const profit = salesValue - investment;
+
+      branchesInvestment += investment;
+      branchesSalesValue += salesValue;
+      branchesTotalUnits += qty;
+
+      const branchId = branch._id.toString();
+      if (!branchMap.has(branchId)) {
+        branchMap.set(branchId, {
+          id: branchId,
+          name: branch.name || "Sede",
+          grossProfit: 0,
+          adminProfit: 0,
+          investment: 0,
+          salesValue: 0,
+          totalProducts: 0,
+          totalUnits: 0,
+        });
+      }
+
+      const b = branchMap.get(branchId);
+      b.grossProfit += profit;
+      b.adminProfit += profit;
+      b.investment += investment;
+      b.salesValue += salesValue;
+      b.totalUnits += qty;
+      b.totalProducts += 1;
+    }
+    branchesGrossProfit = branchesSalesValue - branchesInvestment;
+
     // Consolidated totals
-    const totalGrossProfit = warehouseGrossProfit + distributorsGrossProfit;
-    const totalInvestment = warehouseInvestment + distributorsInvestment;
-    const totalSalesValue = warehouseSalesValue + distributorsSalesValue;
-    const totalUnits = warehouseTotalUnits + distributorsTotalUnits;
+    const totalGrossProfit =
+      warehouseGrossProfit + branchesGrossProfit + distributorsGrossProfit;
+    const totalInvestment =
+      warehouseInvestment + branchesInvestment + distributorsInvestment;
+    const totalSalesValue =
+      warehouseSalesValue + branchesSalesValue + distributorsSalesValue;
+    const totalUnits =
+      warehouseTotalUnits + branchesTotalUnits + distributorsTotalUnits;
     const totalProducts =
       warehouseProducts.length +
+      new Set(branchStocks.map((s) => s.product?._id?.toString())).size +
       new Set(distributorStocks.map((s) => s.product?._id?.toString())).size;
 
     // Determine scenario
@@ -352,14 +433,14 @@ export class AnalyticsRepository {
         salesValue: warehouseSalesValue,
       },
       branches: {
-        grossProfit: 0,
-        adminProfit: 0,
-        netProfit: 0,
-        totalProducts: 0,
-        totalUnits: 0,
-        investment: 0,
-        salesValue: 0,
-        branches: [],
+        grossProfit: branchesGrossProfit,
+        adminProfit: branchesGrossProfit,
+        netProfit: branchesGrossProfit,
+        totalProducts: branchMap.size,
+        totalUnits: branchesTotalUnits,
+        investment: branchesInvestment,
+        salesValue: branchesSalesValue,
+        branches: Array.from(branchMap.values()),
       },
       distributors: {
         grossProfit: distributorsGrossProfit,

@@ -40,6 +40,8 @@ export class DefectiveProductRepository {
       hasWarranty: data.hasWarranty,
       warrantyStatus: data.hasWarranty ? "pending" : "not_applicable",
       lossAmount,
+      saleGroupId: data.saleGroupId,
+      origin: data.origin || "direct",
       stockOrigin: "warehouse",
       status: "confirmado",
       confirmedAt: Date.now(),

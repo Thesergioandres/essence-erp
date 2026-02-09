@@ -354,15 +354,220 @@ class ProfitHistoryRepository {
           },
         },
       ]),
-      // Recent entries
-      ProfitHistory.find(filter)
-        .populate("user", "name email")
-        .populate("product", "name")
-        .populate("sale")
-        .populate("specialSale", "eventName")
-        .sort({ date: -1 })
-        .limit(limit)
-        .lean(),
+      // Recent entries (grouped by sale)
+      ProfitHistory.aggregate([
+        { $match: filter },
+        { $sort: { date: -1, createdAt: -1 } },
+        {
+          $lookup: {
+            from: "users",
+            localField: "user",
+            foreignField: "_id",
+            as: "userInfo",
+          },
+        },
+        { $unwind: { path: "$userInfo", preserveNullAndEmptyArrays: true } },
+        {
+          $lookup: {
+            from: "products",
+            localField: "product",
+            foreignField: "_id",
+            as: "productInfo",
+          },
+        },
+        { $unwind: { path: "$productInfo", preserveNullAndEmptyArrays: true } },
+        {
+          $lookup: {
+            from: "sales",
+            localField: "sale",
+            foreignField: "_id",
+            as: "saleInfo",
+          },
+        },
+        { $unwind: { path: "$saleInfo", preserveNullAndEmptyArrays: true } },
+        {
+          $lookup: {
+            from: "users",
+            localField: "saleInfo.distributor",
+            foreignField: "_id",
+            as: "saleDistributorInfo",
+          },
+        },
+        {
+          $unwind: {
+            path: "$saleDistributorInfo",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $lookup: {
+            from: "specialsales",
+            localField: "specialSale",
+            foreignField: "_id",
+            as: "specialSaleInfo",
+          },
+        },
+        {
+          $unwind: {
+            path: "$specialSaleInfo",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $addFields: {
+            source: {
+              $cond: [
+                { $eq: ["$type", "venta_especial"] },
+                "special",
+                "normal",
+              ],
+            },
+            saleIdField: {
+              $ifNull: [
+                "$metadata.saleId",
+                {
+                  $ifNull: [
+                    "$saleInfo.saleId",
+                    {
+                      $ifNull: ["$sale", { $ifNull: ["$specialSale", "$_id"] }],
+                    },
+                  ],
+                },
+              ],
+            },
+            eventNameField: {
+              $ifNull: ["$metadata.eventName", "$specialSaleInfo.eventName"],
+            },
+            productNameField: {
+              $ifNull: [
+                "$productInfo.name",
+                {
+                  $ifNull: [
+                    "$saleInfo.productName",
+                    { $ifNull: ["$metadata.productName", "Sin producto"] },
+                  ],
+                },
+              ],
+            },
+            distributorNameField: { $ifNull: ["$userInfo.name", "Admin"] },
+            distributorEmailField: { $ifNull: ["$userInfo.email", ""] },
+            entryDate: {
+              $ifNull: [
+                "$createdAt",
+                {
+                  $ifNull: [
+                    "$date",
+                    {
+                      $ifNull: [
+                        "$saleInfo.saleDate",
+                        {
+                          $ifNull: [
+                            "$saleInfo.createdAt",
+                            "$specialSaleInfo.saleDate",
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+            isCommissionEntry: {
+              $regexMatch: {
+                input: { $ifNull: ["$description", ""] },
+                regex: /comisi[oó]n/i,
+              },
+            },
+            isDistributorUser: {
+              $or: [
+                { $in: ["$user", distributorUserObjectIds] },
+                { $eq: ["$userInfo.role", "distribuidor"] },
+              ],
+            },
+            isCommissionType: { $eq: ["$type", "commission"] },
+            amountSafe: { $ifNull: ["$amount", 0] },
+          },
+        },
+        {
+          $addFields: {
+            isDistributorCommission: {
+              $or: [
+                "$isCommissionType",
+                "$isCommissionEntry",
+                "$isDistributorUser",
+              ],
+            },
+            hasDistributorContext: {
+              $or: [
+                "$isDistributorCommission",
+                { $ne: ["$saleInfo.distributor", null] },
+              ],
+            },
+            distributorProfit: {
+              $cond: ["$isDistributorCommission", "$amountSafe", 0],
+            },
+            adminProfit: {
+              $cond: ["$isDistributorCommission", 0, "$amountSafe"],
+            },
+          },
+        },
+        {
+          $group: {
+            _id: { source: "$source", saleId: "$saleIdField" },
+            id: { $first: "$_id" },
+            date: { $first: "$entryDate" },
+            saleId: { $first: "$saleIdField" },
+            source: { $first: "$source" },
+            eventName: { $first: "$eventNameField" },
+            distributorName: {
+              $first: {
+                $ifNull: ["$saleDistributorInfo.name", "$distributorNameField"],
+              },
+            },
+            distributorEmail: {
+              $first: {
+                $ifNull: [
+                  "$saleDistributorInfo.email",
+                  "$distributorEmailField",
+                ],
+              },
+            },
+            productName: { $first: "$productNameField" },
+            distributorProfit: { $sum: "$distributorProfit" },
+            totalProfit: { $sum: "$amountSafe" },
+            hasDistributorContext: { $max: "$hasDistributorContext" },
+          },
+        },
+        {
+          $addFields: {
+            adminProfit: {
+              $cond: [
+                "$hasDistributorContext",
+                { $subtract: ["$totalProfit", "$distributorProfit"] },
+                "$totalProfit",
+              ],
+            },
+          },
+        },
+        {
+          $project: {
+            _id: 0,
+            id: 1,
+            date: 1,
+            saleId: 1,
+            source: 1,
+            eventName: 1,
+            distributorName: 1,
+            distributorEmail: 1,
+            productName: 1,
+            distributorProfit: 1,
+            adminProfit: 1,
+            totalProfit: 1,
+          },
+        },
+        { $sort: { date: -1 } },
+        { $limit: limit },
+      ]),
       // By type breakdown
       ProfitHistory.aggregate([
         { $match: filter },
@@ -472,41 +677,6 @@ class ProfitHistoryRepository {
       return acc;
     }, {});
 
-    const distributorIdSet = new Set(
-      distributorUserObjectIds.map((id) => id?.toString()),
-    );
-
-    // Transform recentEntries to match frontend expectations
-    const transformedEntries = recentEntries.map((entry) => {
-      const description =
-        typeof entry.description === "string" ? entry.description : "";
-      const isCommissionEntry = /comisi[oó]n/i.test(description);
-      const isDistributorUser = entry.user?._id
-        ? distributorIdSet.has(entry.user._id.toString())
-        : false;
-      const isDistributorCommission = isCommissionEntry || isDistributorUser;
-      const amount = Number(entry.amount) || 0;
-      const distributorProfit = isDistributorCommission ? amount : 0;
-      const adminProfit = isDistributorCommission ? 0 : amount;
-      const totalProfit = adminProfit + distributorProfit;
-
-      return {
-        id: entry._id,
-        date: entry.date,
-        saleId: entry.metadata?.saleId || entry.sale?._id || entry._id,
-        source: entry.type === "venta_especial" ? "special" : "normal",
-        eventName:
-          entry.metadata?.eventName || entry.specialSale?.eventName || null,
-        distributorName: entry.user?.name || "Admin",
-        distributorEmail: entry.user?.email || "",
-        productName: entry.product?.name || entry.description || "-",
-        distributorProfit,
-        adminProfit,
-        netProfit: isDistributorCommission ? undefined : adminProfit,
-        totalProfit,
-      };
-    });
-
     const netProfitAdjusted = totals.netProfit - commissions.total;
     const totalAdminProfit = netProfitAdjusted;
 
@@ -521,6 +691,17 @@ class ProfitHistoryRepository {
       },
     ];
 
+    const debugSale = recentEntries.find(
+      (entry) => entry?.saleId === "SALE-ZP1P80",
+    );
+    if (debugSale) {
+      console.log("[ProfitHistory] Sale SALE-ZP1P80", {
+        distributorProfit: debugSale.distributorProfit,
+        adminProfit: debugSale.adminProfit,
+        totalProfit: debugSale.totalProfit,
+      });
+    }
+
     return {
       totalProfit: netProfitAdjusted,
       grossProfit: totals.grossProfit,
@@ -528,13 +709,13 @@ class ProfitHistoryRepository {
       netProfit: netProfitAdjusted,
       totalAdminProfit,
       totalDistributorProfit: commissions.total,
-      totalEntries: totals.totalEntries,
+      totalEntries: recentEntries.length,
       totalDistributorCommissions: commissions.total,
       distributorCommissionEntries: commissions.count,
       distributors: distributorsWithAdmin,
       byType: typeBreakdown,
       topUsers: byUser,
-      recentEntries: transformedEntries,
+      recentEntries,
       filters: { startDate, endDate, limit },
     };
   }

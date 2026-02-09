@@ -105,11 +105,12 @@ export const FinancialKPICards: React.FC<{
         },
         {
           id: "rangeProfit",
-          label: "Ganancia (rango)",
-          tooltip: "Ganancia estimada para el rango seleccionado.",
+          label: "Ganancia neta (rango)",
+          tooltip:
+            "Ganancia neta de ventas en el rango (ventas - costo producto - costos adicionales - comision distribuidor - garantias).",
           value: formatMoney(
-            range.grossProfit ??
-              range.netProfit ??
+            range.netProfit ??
+              range.grossProfit ??
               range.totalProfit ??
               range.profit ??
               daily.profit ??
@@ -161,9 +162,14 @@ export const FinancialKPICards: React.FC<{
         },
         {
           id: "todayProfit",
-          label: "Ganancia Hoy",
-          tooltip: "Ganancia estimada generada hoy.",
-          value: formatMoney(daily.profit ?? summary.todayProfit),
+          label: "Ganancia neta Hoy",
+          tooltip: "Ganancia neta de ventas generada hoy.",
+          value: formatMoney(
+            summary.todayNetProfit ??
+              daily.netProfit ??
+              daily.profit ??
+              summary.todayProfit
+          ),
           icon: <TrendingUp className="h-8 w-8" />,
           color: "bg-emerald-500",
         },
@@ -185,9 +191,14 @@ export const FinancialKPICards: React.FC<{
         },
         {
           id: "weekProfit",
-          label: "Ganancia Semana",
-          tooltip: "Ganancia estimada generada en la semana actual.",
-          value: formatMoney(weekly.profit ?? summary.weekProfit),
+          label: "Ganancia neta Semana",
+          tooltip: "Ganancia neta de ventas generada en la semana actual.",
+          value: formatMoney(
+            summary.weekNetProfit ??
+              weekly.netProfit ??
+              weekly.profit ??
+              summary.weekProfit
+          ),
           icon: <TrendingUp className="h-8 w-8" />,
           color: "bg-green-500",
         },
@@ -209,9 +220,14 @@ export const FinancialKPICards: React.FC<{
         },
         {
           id: "monthProfit",
-          label: "Ganancia Mes",
-          tooltip: "Ganancia estimada generada en el mes.",
-          value: formatMoney(monthly.profit ?? summary.monthProfit),
+          label: "Ganancia neta Mes",
+          tooltip: "Ganancia neta de ventas generada en el mes.",
+          value: formatMoney(
+            summary.monthNetProfit ??
+              monthly.netProfit ??
+              monthly.profit ??
+              summary.monthProfit
+          ),
           icon: <TrendingUp className="h-8 w-8" />,
           color: "bg-cyan-600",
         },

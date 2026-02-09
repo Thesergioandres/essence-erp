@@ -104,14 +104,17 @@ const formatCurrency = (amount: number) =>
     maximumFractionDigits: 0,
   }).format(amount || 0);
 
-const formatDateTime = (value: string) =>
-  new Date(value).toLocaleString("es-CO", {
+const formatDateTime = (value: string | Date) => {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return "Sin fecha";
+  return date.toLocaleString("es-CO", {
     year: "numeric",
     month: "short",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   });
+};
 
 const isValidObjectId = (value: string) => /^[a-f\d]{24}$/i.test(value);
 
@@ -568,7 +571,7 @@ export default function ProfitHistoryView({
                   <h3 className="text-lg font-semibold text-teal-200">
                     📦 Utilidad Potencial del Inventario
                     <InfoTooltip
-                      text="Calculo teorico de cuanto ganarias si vendieras todo tu stock actual hoy."
+                      text="Calculo teorico con reglas por ubicacion: bodega/sedes usan precio cliente; distribuidores usan precio B2B."
                       tone="neutral"
                       className="border-teal-200/70 text-teal-200"
                     />
@@ -594,7 +597,7 @@ export default function ProfitHistoryView({
                     <div className="rounded-lg border border-gray-700 bg-gray-900/50 p-3">
                       <p className="text-xs text-gray-400">
                         Tu Ganancia Admin
-                        <InfoTooltip text="Suma de la utilidad de tus ventas directas + la diferencia del precio B2B de tus distribuidores." />
+                        <InfoTooltip text="Bodega/sedes: precio cliente - costo. Distribuidores: precio B2B - costo." />
                       </p>
                       <p className="mt-1 text-xl font-bold text-emerald-400">
                         {formatCurrency(
@@ -695,6 +698,9 @@ export default function ProfitHistoryView({
                             {estimatedProfit.warehouse.totalUnits} unidades
                           </span>
                         </h4>
+                        <p className="mb-2 text-xs text-gray-400">
+                          Ganancia full: precio cliente - costo compra.
+                        </p>
                         <div className="grid grid-cols-3 gap-2 text-xs">
                           <div>
                             <span className="text-gray-400">Inversión:</span>
@@ -734,6 +740,9 @@ export default function ProfitHistoryView({
                                 {estimatedProfit.branches.totalUnits} unidades
                               </span>
                             </h4>
+                            <p className="mb-2 text-xs text-gray-400">
+                              Ganancia full: precio cliente - costo compra.
+                            </p>
                             <div className="space-y-2">
                               {estimatedProfit.branches.branches.map(branch => (
                                 <div
@@ -782,8 +791,7 @@ export default function ProfitHistoryView({
                               </span>
                             </h4>
                             <p className="mb-2 text-xs text-gray-400">
-                              Tu ganancia es solo el margen (precio distribuidor
-                              - costo)
+                              Ganancia de canal: precio B2B - costo compra.
                             </p>
                             <div className="space-y-2">
                               {estimatedProfit.distributors.distributors
@@ -916,14 +924,17 @@ export default function ProfitHistoryView({
                       <p className="text-xs text-gray-400">Tasa recuperación</p>
                       <p
                         className={`mt-1 text-xl font-bold ${
-                          Number(creditMetrics.recoveryRate || 0) >= 70
+                          Number(creditMetrics.recoveryRate || 0) >= 70 ||
+                          creditMetrics.total.totalCredits === 0
                             ? "text-green-400"
                             : Number(creditMetrics.recoveryRate || 0) >= 50
                               ? "text-yellow-400"
                               : "text-red-400"
                         }`}
                       >
-                        {creditMetrics.recoveryRate || 0}%
+                        {creditMetrics.total.totalCredits === 0
+                          ? "100%"
+                          : `${creditMetrics.recoveryRate || 0}%`}
                       </p>
                     </div>
                   </div>
@@ -1116,69 +1127,98 @@ export default function ProfitHistoryView({
 
                 {!loading &&
                   overview?.recentEntries?.map(
-                    (entry: ProfitHistoryAdminEntry) => (
-                      <tr key={entry.id} className="hover:bg-gray-950/40">
-                        <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-200">
-                          {formatDateTime(entry.date)}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-300">
-                          <div className="flex flex-col">
-                            <span className="font-semibold">
-                              {entry.saleId || entry.id}
-                            </span>
-                            {entry.eventName && (
-                              <span className="text-xs text-purple-300">
-                                {entry.eventName}
-                              </span>
-                            )}
-                            <span className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-gray-800 px-2 py-0.5 text-[11px] font-semibold uppercase text-gray-200">
-                              <span
-                                className={
-                                  entry.source === "special"
-                                    ? "text-pink-300"
-                                    : "text-emerald-300"
-                                }
-                              >
-                                ●
-                              </span>
-                              {entry.source === "special"
-                                ? "Especial"
-                                : "Normal"}
-                            </span>
-                          </div>
-                        </td>
-                        {distributorsEnabled && (
-                          <td className="px-4 py-3 text-sm text-gray-100">
+                    (entry: ProfitHistoryAdminEntry) => {
+                      const adminProfit = Number(
+                        entry.adminProfit ??
+                          (entry as any).totalAdminProfit ??
+                          (entry as any).admin ??
+                          0
+                      );
+                      const totalProfit = Number(
+                        entry.totalProfit ?? (entry as any).total ?? 0
+                      );
+                      let distributorProfit = Number(
+                        entry.distributorProfit ??
+                          (entry as any).totalDistributorProfit ??
+                          (entry as any).distProfit
+                      );
+                      if (
+                        (!Number.isFinite(distributorProfit) ||
+                          entry.distributorProfit == null) &&
+                        entry.distributorName &&
+                        entry.distributorName !== "Admin"
+                      ) {
+                        distributorProfit = Math.max(
+                          0,
+                          totalProfit - adminProfit
+                        );
+                      }
+                      if (!Number.isFinite(distributorProfit)) {
+                        distributorProfit = 0;
+                      }
+                      const rowTotal =
+                        totalProfit || distributorProfit + adminProfit;
+                      console.log("Fila procesada:", entry);
+                      return (
+                        <tr key={entry.id} className="hover:bg-gray-950/40">
+                          <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-200">
+                            {formatDateTime(entry.date)}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-300">
                             <div className="flex flex-col">
                               <span className="font-semibold">
-                                {entry.distributorName}
+                                {entry.saleId || entry.id}
                               </span>
-                              <span className="text-xs text-gray-400">
-                                {entry.distributorEmail || "Admin"}
+                              {entry.eventName && (
+                                <span className="text-xs text-purple-300">
+                                  {entry.eventName}
+                                </span>
+                              )}
+                              <span className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-gray-800 px-2 py-0.5 text-[11px] font-semibold uppercase text-gray-200">
+                                <span
+                                  className={
+                                    entry.source === "special"
+                                      ? "text-pink-300"
+                                      : "text-emerald-300"
+                                  }
+                                >
+                                  ●
+                                </span>
+                                {entry.source === "special"
+                                  ? "Especial"
+                                  : "Normal"}
                               </span>
                             </div>
                           </td>
-                        )}
-                        <td className="px-4 py-3 text-sm text-gray-200">
-                          {entry.productName || "-"}
-                        </td>
-                        {distributorsEnabled && (
-                          <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-cyan-300">
-                            {formatCurrency(entry.distributorProfit)}
-                          </td>
-                        )}
-                        <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-emerald-300">
-                          {formatCurrency(entry.adminProfit ?? 0)}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-purple-200">
-                          {formatCurrency(
-                            entry.totalProfit ??
-                              (entry.adminProfit || 0) +
-                                (entry.distributorProfit || 0)
+                          {distributorsEnabled && (
+                            <td className="px-4 py-3 text-sm text-gray-100">
+                              <div className="flex flex-col">
+                                <span className="font-semibold">
+                                  {entry.distributorName}
+                                </span>
+                                <span className="text-xs text-gray-400">
+                                  {entry.distributorEmail || "Admin"}
+                                </span>
+                              </div>
+                            </td>
                           )}
-                        </td>
-                      </tr>
-                    )
+                          <td className="px-4 py-3 text-sm text-gray-200">
+                            {entry.productName || "-"}
+                          </td>
+                          {distributorsEnabled && (
+                            <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-cyan-300">
+                              {formatCurrency(distributorProfit)}
+                            </td>
+                          )}
+                          <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-emerald-300">
+                            {formatCurrency(adminProfit)}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-purple-200">
+                            {formatCurrency(rowTotal)}
+                          </td>
+                        </tr>
+                      );
+                    }
                   )}
               </tbody>
             </table>
@@ -1202,81 +1242,106 @@ export default function ProfitHistoryView({
               )}
 
             {!loading &&
-              overview?.recentEntries?.map(entry => (
-                <div
-                  key={entry.id}
-                  className="rounded-lg border border-gray-800 bg-gray-900 p-4 shadow-sm"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-gray-400">
-                        {formatDateTime(entry.date)}
-                      </p>
-                      <p className="text-sm font-semibold text-white">
-                        {entry.saleId || entry.id}
-                      </p>
-                      {entry.eventName && (
-                        <p className="text-xs text-purple-300">
-                          {entry.eventName}
+              overview?.recentEntries?.map(entry => {
+                const adminProfit = Number(
+                  entry.adminProfit ??
+                    (entry as any).totalAdminProfit ??
+                    (entry as any).admin ??
+                    0
+                );
+                const totalProfit = Number(
+                  entry.totalProfit ?? (entry as any).total ?? 0
+                );
+                let distributorProfit = Number(
+                  entry.distributorProfit ??
+                    (entry as any).totalDistributorProfit ??
+                    (entry as any).distProfit
+                );
+                if (
+                  (!Number.isFinite(distributorProfit) ||
+                    entry.distributorProfit == null) &&
+                  entry.distributorName &&
+                  entry.distributorName !== "Admin"
+                ) {
+                  distributorProfit = Math.max(0, totalProfit - adminProfit);
+                }
+                if (!Number.isFinite(distributorProfit)) {
+                  distributorProfit = 0;
+                }
+                const rowTotal = totalProfit || distributorProfit + adminProfit;
+                console.log("Fila procesada:", entry);
+                return (
+                  <div
+                    key={entry.id}
+                    className="rounded-lg border border-gray-800 bg-gray-900 p-4 shadow-sm"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-gray-400">
+                          {formatDateTime(entry.date)}
                         </p>
-                      )}
-                    </div>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-gray-800 px-2 py-1 text-[11px] font-semibold uppercase text-gray-200">
-                      <span
-                        className={
-                          entry.source === "special"
-                            ? "text-pink-300"
-                            : "text-emerald-300"
-                        }
-                      >
-                        ●
-                      </span>
-                      {entry.source === "special" ? "Especial" : "Normal"}
-                    </span>
-                  </div>
-
-                  <div className="mt-3 space-y-2 text-sm text-gray-200">
-                    {distributorsEnabled && (
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-gray-400">Distribuidor</span>
-                        <span className="text-right font-semibold text-white">
-                          {entry.distributorName}
-                        </span>
-                      </div>
-                    )}
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-gray-400">Producto</span>
-                      <span className="text-right text-white">
-                        {entry.productName || "-"}
-                      </span>
-                    </div>
-                    {distributorsEnabled && (
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-gray-400">Ganancia dist</span>
-                        <span className="font-semibold text-cyan-300">
-                          {formatCurrency(entry.distributorProfit)}
-                        </span>
-                      </div>
-                    )}
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-gray-400">Ganancia admin</span>
-                      <span className="font-semibold text-emerald-300">
-                        {formatCurrency(entry.adminProfit ?? 0)}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-gray-400">Total</span>
-                      <span className="font-semibold text-purple-200">
-                        {formatCurrency(
-                          entry.totalProfit ??
-                            (entry.adminProfit || 0) +
-                              (entry.distributorProfit || 0)
+                        <p className="text-sm font-semibold text-white">
+                          {entry.saleId || entry.id}
+                        </p>
+                        {entry.eventName && (
+                          <p className="text-xs text-purple-300">
+                            {entry.eventName}
+                          </p>
                         )}
+                      </div>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-gray-800 px-2 py-1 text-[11px] font-semibold uppercase text-gray-200">
+                        <span
+                          className={
+                            entry.source === "special"
+                              ? "text-pink-300"
+                              : "text-emerald-300"
+                          }
+                        >
+                          ●
+                        </span>
+                        {entry.source === "special" ? "Especial" : "Normal"}
                       </span>
                     </div>
+
+                    <div className="mt-3 space-y-2 text-sm text-gray-200">
+                      {distributorsEnabled && (
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-gray-400">Distribuidor</span>
+                          <span className="text-right font-semibold text-white">
+                            {entry.distributorName}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-gray-400">Producto</span>
+                        <span className="text-right text-white">
+                          {entry.productName || "-"}
+                        </span>
+                      </div>
+                      {distributorsEnabled && (
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-gray-400">Ganancia dist</span>
+                          <span className="font-semibold text-cyan-300">
+                            {formatCurrency(distributorProfit)}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-gray-400">Ganancia admin</span>
+                        <span className="font-semibold text-emerald-300">
+                          {formatCurrency(adminProfit)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-gray-400">Total</span>
+                        <span className="font-semibold text-purple-200">
+                          {formatCurrency(rowTotal)}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
           </div>
         </div>
 

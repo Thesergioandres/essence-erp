@@ -53,10 +53,27 @@ export class RegisterPromotionSaleUseCase {
       saleDate,
       deliveryMethodId,
       shippingCost,
+      locationType,
       discount = 0,
       additionalCosts = [],
       distributorProfitPercentage = 20,
     } = input;
+
+    const resolveSaleDate = (rawDate) => {
+      if (!rawDate) return new Date();
+      if (rawDate instanceof Date) return rawDate;
+      if (typeof rawDate === "string") {
+        if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+          const [year, month, day] = rawDate.split("-").map(Number);
+          return new Date(Date.UTC(year, month - 1, day, 5, 0, 0, 0));
+        }
+        const parsed = new Date(rawDate);
+        if (!Number.isNaN(parsed.getTime())) return parsed;
+      }
+      return new Date();
+    };
+
+    const resolvedSaleDate = resolveSaleDate(saleDate);
 
     // 1. Validation (Business Rules)
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -178,6 +195,8 @@ export class RegisterPromotionSaleUseCase {
       return acc;
     }, {});
 
+    const sourceLocation = locationType || input.sourceLocation;
+
     for (const item of items) {
       const { productId, quantity, salePrice, promotionId } = item;
       const itemSubtotal = Number(salePrice || 0) * Number(quantity || 0);
@@ -199,7 +218,11 @@ export class RegisterPromotionSaleUseCase {
       if (!product) throw new Error(`Product not found: ${productId}`);
 
       let availableStock = 0;
-      if (distributorId) {
+      const useDistributorStock =
+        Boolean(distributorId) && sourceLocation === "distributor";
+      const useBranchStock = sourceLocation === "branch" && Boolean(branchId);
+
+      if (useDistributorStock) {
         const distStock = await DistributorStock.findOne({
           business: businessId,
           distributor: distributorId,
@@ -212,7 +235,7 @@ export class RegisterPromotionSaleUseCase {
             `Stock insuficiente en el distribuidor para ${product.name}. Disponible: ${availableStock}`,
           );
         }
-      } else if (branchId) {
+      } else if (useBranchStock) {
         const branchStock = await BranchStock.findOne({
           business: businessId,
           branch: branchId,
@@ -399,7 +422,7 @@ export class RegisterPromotionSaleUseCase {
         commissionBonus,
         commissionBonusAmount,
         notes,
-        saleDate: input.saleDate || new Date(),
+        saleDate: resolvedSaleDate,
         saleGroupId, // Link them!
         paymentMethod: resolvedPaymentMethodId, // Use resolved ObjectId
         paymentMethodCode: paymentMethodCode, // Store the code for quick lookups
@@ -412,13 +435,14 @@ export class RegisterPromotionSaleUseCase {
         // Cash sales (non-credit) must be CONFIRMED immediately to count towards profit.
         // Credit sales remain PENDING until fully paid.
         paymentStatus: shouldConfirmNow ? "confirmado" : "pendiente",
-        paymentConfirmedAt: shouldConfirmNow ? new Date() : null,
+        paymentConfirmedAt: shouldConfirmNow ? resolvedSaleDate : null,
       };
 
-      // Only set distributor field if this is actually a distributor sale
+      // Track distributor and branch attribution independently
       if (distributorId) {
         saleData.distributor = distributorId;
-      } else if (branchId) {
+      }
+      if (branchId) {
         saleData.branch = branchId;
         if (branchName) {
           saleData.branchName = branchName;
@@ -438,9 +462,13 @@ export class RegisterPromotionSaleUseCase {
         image: product.image?.url || product.image || "",
       });
 
+      const useDistributorStock =
+        Boolean(distributorId) && sourceLocation === "distributor";
+      const useBranchStock = sourceLocation === "branch" && Boolean(branchId);
+
       // F. Deduct Stock ONLY AFTER sale is confirmed (Infra) - LOCATION-AWARE
       // This ensures stock is only deducted if the sale was successfully created
-      if (distributorId) {
+      if (useDistributorStock) {
         // Distributor Sale → Deduct from DistributorStock
         const distStock = await DistributorStock.findOneAndUpdate(
           {
@@ -461,7 +489,7 @@ export class RegisterPromotionSaleUseCase {
         console.log(
           `📦 Deducted ${quantity} from DistributorStock (distributor: ${distributorId})`,
         );
-      } else if (branchId) {
+      } else if (useBranchStock) {
         // Admin Sale from Branch → Deduct from BranchStock
         const updatedBranchStock = await BranchStock.findOneAndUpdate(
           {
@@ -497,7 +525,7 @@ export class RegisterPromotionSaleUseCase {
       // G. Create ProfitHistory entries for tracking
       // Only create entries for CONFIRMED sales
       if (saleData.paymentStatus === "confirmado") {
-        const saleDate = input.saleDate || new Date();
+        const saleDate = resolvedSaleDate;
 
         // If distributor sale, create entry for distributor's profit
         if (distributorId && distributorProfit > 0) {

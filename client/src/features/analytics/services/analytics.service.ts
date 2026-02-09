@@ -250,13 +250,28 @@ export const analyticsService = {
         averages: {
           dailySales: daily.sales || kpis.todaySales || 0,
           dailyRevenue: daily.revenue || kpis.todayRevenue || 0,
-          dailyProfit: daily.profit || kpis.todayProfit || 0,
+          dailyProfit:
+            daily.netProfit ||
+            kpis.todayNetProfit ||
+            daily.profit ||
+            kpis.todayProfit ||
+            0,
           weeklySales: weekly.sales || kpis.weekSales || 0,
           weeklyRevenue: weekly.revenue || kpis.weekRevenue || 0,
-          weeklyProfit: weekly.profit || kpis.weekProfit || 0,
+          weeklyProfit:
+            weekly.netProfit ||
+            kpis.weekNetProfit ||
+            weekly.profit ||
+            kpis.weekProfit ||
+            0,
           monthlySales: monthly.sales || kpis.monthSales || 0,
           monthlyRevenue: monthly.revenue || kpis.monthRevenue || 0,
-          monthlyProfit: monthly.profit || kpis.monthProfit || 0,
+          monthlyProfit:
+            monthly.netProfit ||
+            kpis.monthNetProfit ||
+            monthly.profit ||
+            kpis.monthProfit ||
+            0,
         },
         comparisons: {
           vsLastWeek: 0,
@@ -1123,6 +1138,7 @@ export const advancedAnalyticsService = {
       totalSales: number;
       revenue: number;
       profit: number;
+      conversionRate: number;
       averageOrderValue: number;
       change: number;
     }>;
@@ -1149,6 +1165,7 @@ export const advancedAnalyticsService = {
       const totalRevenue = Number(item.totalRevenue ?? item.revenue ?? 0);
       const totalProfit = Number(item.totalProfit ?? item.profit ?? 0);
       const averageOrderValue = totalSales > 0 ? totalRevenue / totalSales : 0;
+      const conversionRate = Number(item.conversionRate ?? 0);
 
       return {
         rank: index + 1,
@@ -1158,6 +1175,7 @@ export const advancedAnalyticsService = {
         totalSales,
         revenue: totalRevenue,
         profit: totalProfit,
+        conversionRate,
         averageOrderValue: Number(
           item.avgOrderValue ?? item.averageOrderValue ?? averageOrderValue
         ),

@@ -160,6 +160,7 @@ export const saleService = {
     }>;
     discount?: number;
     saleGroupId?: string;
+    locationType?: "warehouse" | "branch" | "distributor";
   }): Promise<{
     success: boolean;
     message: string;
@@ -203,6 +204,7 @@ export const saleService = {
     }>;
     discount?: number;
     saleGroupId?: string;
+    locationType?: "warehouse" | "branch" | "distributor";
   }): Promise<{
     success: boolean;
     message: string;
@@ -519,6 +521,8 @@ export const defectiveProductService = {
     quantity: number;
     reason: string;
     hasWarranty?: boolean;
+    saleGroupId?: string;
+    origin?: "order" | "direct";
     images?: ProductImage[];
   }): Promise<{
     message: string;
