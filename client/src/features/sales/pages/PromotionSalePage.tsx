@@ -40,10 +40,7 @@ import {
   WarrantySection,
 } from "../components/admin-order";
 import { initialOrderState, orderReducer } from "../reducers/orderReducer";
-import {
-  defectiveProductService,
-  saleService,
-} from "../services/sales.service";
+import { saleService } from "../services/sales.service";
 import type {
   AdminOrderPayload,
   ProductWithStock,
@@ -524,9 +521,113 @@ export default function PromotionSalePage() {
     [allowWarehouse, isDistributor]
   );
 
+  const resolvePromoLocationId = useCallback(() => {
+    if (order.locationType === "branch") return order.locationId || "";
+    if (order.locationType === "warehouse") {
+      const warehouseBranch = branches.find(
+        branch => (branch as Branch & { isWarehouse?: boolean }).isWarehouse
+      );
+      return warehouseBranch?._id || "";
+    }
+    return "";
+  }, [branches, order.locationId, order.locationType]);
+
+  const getPromotionAvailability = useCallback(
+    (promotion: Promotion) => {
+      const distributorRestrictionEnabled =
+        promotion.allowAllDistributors === false ||
+        (promotion.allowAllDistributors === undefined &&
+          (promotion.allowedDistributors?.length ?? 0) > 0);
+
+      if (isDistributor && distributorRestrictionEnabled) {
+        const allowedDistributors = promotion.allowedDistributors || [];
+        if (allowedDistributors.length === 0) {
+          return {
+            available: false,
+            reason: "No disponible para este distribuidor",
+          };
+        }
+
+        const distributorId = user?._id || "";
+        const hasDistributorAccess = allowedDistributors.some(distributor =>
+          typeof distributor === "string"
+            ? distributor === distributorId
+            : distributor?._id === distributorId
+        );
+
+        if (!hasDistributorAccess) {
+          return {
+            available: false,
+            reason: "No disponible para este distribuidor",
+          };
+        }
+      }
+
+      const locationRestrictionEnabled =
+        promotion.allowAllLocations === false ||
+        (promotion.allowAllLocations === undefined &&
+          ((promotion.allowedLocations?.length ?? 0) > 0 ||
+            (promotion.branches?.length ?? 0) > 0));
+
+      if (!locationRestrictionEnabled) {
+        return { available: true };
+      }
+
+      const allowedLocations = promotion.allowedLocations?.length
+        ? promotion.allowedLocations
+        : promotion.branches || [];
+
+      if (allowedLocations.length === 0) {
+        return {
+          available: false,
+          reason: "No disponible en ninguna sede",
+        };
+      }
+
+      if (order.locationType === "distributor") {
+        return { available: true };
+      }
+
+      const locationId = resolvePromoLocationId();
+      if (!locationId) {
+        return {
+          available: false,
+          reason: "No disponible en esta sucursal",
+        };
+      }
+
+      const hasAccess = allowedLocations.some(location =>
+        typeof location === "string"
+          ? location === locationId
+          : location?._id === locationId
+      );
+
+      return hasAccess
+        ? { available: true }
+        : { available: false, reason: "No disponible en esta sucursal" };
+    },
+    [isDistributor, order.locationType, resolvePromoLocationId, user?._id]
+  );
+
+  const availablePromotions = useMemo(
+    () =>
+      sellablePromotions.filter(
+        promo => getPromotionAvailability(promo).available
+      ),
+    [getPromotionAvailability, sellablePromotions]
+  );
+
   const handleAddPromotion = useCallback(
     (promotion: Promotion) => {
       setSubmitError(null);
+
+      const availability = getPromotionAvailability(promotion);
+      if (!availability.available) {
+        setSubmitError(
+          "Esta promocion no esta disponible para la ubicacion seleccionada."
+        );
+        return;
+      }
 
       const resolvePositive = (value: unknown) => {
         const num = Number(value);
@@ -699,7 +800,12 @@ export default function PromotionSalePage() {
         }
       );
     },
-    [order.items, order.locationType, productsWithLocationStock]
+    [
+      getPromotionAvailability,
+      order.items,
+      order.locationType,
+      productsWithLocationStock,
+    ]
   );
 
   const handleUpdateItem = useCallback(
@@ -857,6 +963,12 @@ export default function PromotionSalePage() {
           additionalCosts: payload.additionalCosts,
           paymentProof: payload.paymentProof,
           paymentProofMimeType: payload.paymentProofMimeType,
+          warranties: order.warranties.map(warranty => ({
+            productId: warranty.productId,
+            quantity: warranty.quantity,
+            type: warranty.type,
+            reason: warranty.reason,
+          })),
         });
 
         totalProcessedItems = payload.items.reduce(
@@ -872,28 +984,6 @@ export default function PromotionSalePage() {
         throw new Error(
           err.response?.data?.message || "Error al procesar el pedido"
         );
-      }
-
-      // Process warranty items as defective products
-      for (const warranty of order.warranties) {
-        try {
-          await defectiveProductService.reportAdmin({
-            productId: warranty.productId,
-            quantity: warranty.quantity,
-            hasWarranty: warranty.type === "supplier_replacement",
-            saleGroupId,
-            origin: "order",
-            reason:
-              warranty.reason ||
-              `${warranty.type === "supplier_replacement" ? "Reemplazo proveedor" : "Pérdida total"} - Orden ${saleGroupId}`,
-          });
-        } catch (err) {
-          console.error(
-            `Error processing warranty for ${warranty.productName}:`,
-            err
-          );
-          // Don't fail the whole order for warranty errors
-        }
       }
 
       // Success!
@@ -1185,7 +1275,8 @@ export default function PromotionSalePage() {
                     </p>
                     <PromotionSelector
                       value={promotionSelectorId}
-                      promotions={sellablePromotions}
+                      promotions={availablePromotions}
+                      getPromotionAvailability={getPromotionAvailability}
                       onChange={(promotionId, promotion) => {
                         setPromotionSelectorId(promotionId);
                         if (!promotionId || !promotion) return;
@@ -1219,14 +1310,14 @@ export default function PromotionSalePage() {
                   </div>
                 )}
 
-                {!promotionsLoading && sellablePromotions.length === 0 && (
+                {!promotionsLoading && availablePromotions.length === 0 && (
                   <div className="flex h-20 items-center justify-center text-gray-500">
                     No hay promociones activas para vender.
                   </div>
                 )}
 
                 <div className="grid gap-3 sm:grid-cols-2">
-                  {sellablePromotions.map(promo => {
+                  {availablePromotions.map(promo => {
                     const promoItems = promo.comboItems || [];
                     const promoImage =
                       promo.image?.url ||

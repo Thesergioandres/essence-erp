@@ -116,4 +116,32 @@ export class PromotionController {
       res.status(500).json({ success: false, message: error.message });
     }
   }
+
+  async toggleStatus(req, res) {
+    try {
+      const businessId = req.businessId;
+      if (!businessId) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Falta x-business-id" });
+      }
+
+      const promotion = await repository.findById(req.params.id, businessId);
+      if (!promotion) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Promoción no encontrada" });
+      }
+
+      const nextStatus = promotion.status === "active" ? "paused" : "active";
+      const updated = await repository.update(req.params.id, businessId, {
+        status: nextStatus,
+      });
+
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      res.status(status).json({ success: false, message: error.message });
+    }
+  }
 }

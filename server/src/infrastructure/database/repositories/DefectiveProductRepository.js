@@ -702,7 +702,20 @@ export class DefectiveProductRepository {
           _id: null,
           totalReports: { $sum: 1 },
           totalQuantity: { $sum: "$quantity" },
-          totalLoss: { $sum: "$lossAmount" },
+          totalLoss: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $in: ["$status", ["confirmado", "procesado"]] },
+                    { $gt: ["$lossAmount", 0] },
+                  ],
+                },
+                "$lossAmount",
+                0,
+              ],
+            },
+          },
           pendingCount: {
             $sum: { $cond: [{ $eq: ["$status", "pendiente"] }, 1, 0] },
           },

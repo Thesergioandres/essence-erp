@@ -15,6 +15,11 @@ router.post(
   requirePermission({ module: "expenses", action: "create" }),
   ExpenseController.create.bind(ExpenseController),
 );
+router.post(
+  "/inventory-withdrawal",
+  requirePermission({ module: "expenses", action: "create" }),
+  ExpenseController.createInventoryWithdrawal.bind(ExpenseController),
+);
 router.get(
   "/",
   requirePermission({ module: "expenses", action: "read" }),

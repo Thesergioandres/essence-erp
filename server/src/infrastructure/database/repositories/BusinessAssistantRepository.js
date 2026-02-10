@@ -4,8 +4,64 @@ import Category from "../../../../models/Category.js";
 import Product from "../../../../models/Product.js";
 import Sale from "../../../../models/Sale.js";
 import { aiService } from "../../services/ai.service.js";
+import { AdvancedAnalyticsRepository } from "./AdvancedAnalyticsRepository.js";
+
+const analyticsRepository = new AdvancedAnalyticsRepository();
 
 export class BusinessAssistantRepository {
+  suggestPromotion(products, sales, options = {}) {
+    const staleDays = options.staleDays ?? 45;
+    const minStock = options.minStock ?? 8;
+    const comboSize = options.comboSize ?? 3;
+    const maxCombos = options.maxCombos ?? 3;
+    const now = new Date();
+    const staleDate = new Date(now.getTime() - staleDays * 24 * 60 * 60 * 1000);
+
+    const lastSaleByProduct = new Map();
+    sales.forEach((sale) => {
+      const productId = sale.product?.toString?.() || null;
+      if (!productId) return;
+      const saleDate = sale.saleDate ? new Date(sale.saleDate) : null;
+      if (!saleDate || Number.isNaN(saleDate.getTime())) return;
+      const existing = lastSaleByProduct.get(productId);
+      if (!existing || saleDate > existing) {
+        lastSaleByProduct.set(productId, saleDate);
+      }
+    });
+
+    const staleProducts = products.filter((product) => {
+      const productId = product._id?.toString?.() || "";
+      const lastSale = lastSaleByProduct.get(productId);
+      const stock = Number(product.stock ?? product.totalStock ?? 0);
+      if (stock < minStock) return false;
+      if (!lastSale) return true;
+      return lastSale < staleDate;
+    });
+
+    const sorted = staleProducts.sort((a, b) => {
+      const stockA = Number(a.stock ?? a.totalStock ?? 0);
+      const stockB = Number(b.stock ?? b.totalStock ?? 0);
+      return stockB - stockA;
+    });
+
+    const picks = sorted.slice(0, comboSize * maxCombos);
+    const combos = [];
+    for (let i = 0; i < picks.length; i += comboSize) {
+      const group = picks.slice(i, i + comboSize);
+      if (group.length < comboSize) break;
+      const names = group.map((p) => p.name).join(" + ");
+      combos.push({
+        type: "combo",
+        title: `📦 Combo Reactivacion: ${names}`,
+        description: `Productos sin ventas en ${staleDays} dias y stock >= ${minStock}. Ideal para reactivar rotacion con un combo.`,
+        products: group.map((p) => p._id.toString()),
+      });
+      if (combos.length >= maxCombos) break;
+    }
+
+    return combos;
+  }
+
   async getOrCreateConfig(businessId) {
     if (!businessId) {
       return BusinessAssistantConfig.findOne({
@@ -56,7 +112,7 @@ export class BusinessAssistantRepository {
       now.getTime() - recentDays * 24 * 60 * 60 * 1000,
     );
 
-    const [products, sales, categories] = await Promise.all([
+    const [products, sales, categories, financialKPIs] = await Promise.all([
       Product.find({
         business: businessObjectId,
         isDeleted: { $ne: true },
@@ -67,7 +123,16 @@ export class BusinessAssistantRepository {
         paymentStatus: "confirmado",
       }).lean(),
       Category.find({ business: businessObjectId }).lean(),
+      analyticsRepository
+        .getFinancialKPIs(businessId, params.startDate, params.endDate)
+        .catch(() => null),
     ]);
+
+    const netProfitRange =
+      typeof financialKPIs?.range?.netProfit === "number"
+        ? financialKPIs.range.netProfit
+        : 0;
+    const allowInvestment = netProfitRange > 0;
 
     const recommendations = [];
 
@@ -83,9 +148,13 @@ export class BusinessAssistantRepository {
           priority: "high",
           productId: product._id,
           productName: product.name,
-          action: "buy_more_inventory",
-          reason: `Stock bajo (${product.stock} unidades) con ventas recientes`,
-          suggestedQuantity: Math.max(20, recentSales.length * 2),
+          action: allowInvestment ? "buy_more_inventory" : "pause_purchases",
+          reason: allowInvestment
+            ? `Stock bajo (${product.stock} unidades) con ventas recientes`
+            : "Ganancia neta del periodo baja; prioriza liquidez antes de reinvertir.",
+          suggestedQuantity: allowInvestment
+            ? Math.max(20, recentSales.length * 2)
+            : undefined,
         });
       }
 
@@ -123,14 +192,22 @@ export class BusinessAssistantRepository {
       }
     }
 
+    const promotions = this.suggestPromotion(products, sales, {
+      staleDays: 45,
+      minStock: 8,
+      comboSize: 3,
+    });
+
     return {
       recommendations,
+      promotions,
       metadata: {
         generatedAt: now,
         horizonDays,
         recentDays,
         productsAnalyzed: products.length,
         salesAnalyzed: sales.length,
+        netProfitRange,
       },
     };
   }

@@ -18,10 +18,14 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import ProductSelector from "../../../components/ProductSelector";
 import { invalidateProductCache } from "../../../hooks/useProductCache";
+import type { User } from "../../auth/types/auth.types";
 import { branchService } from "../../branches/services";
 import type { Branch } from "../../business/types/business.types";
+import { distributorService } from "../../distributors/services/distributor.service";
+import { productsService } from "../../inventory/api/products.service";
 import type { Product } from "../../inventory/types/product.types";
 import { promotionService } from "../../settings/services";
 import type {
@@ -157,6 +161,7 @@ export default function Promotions() {
   const [stats, setStats] = useState<PromotionStats | null>(null);
   const [metrics, setMetrics] = useState<PromotionMetrics | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [distributors, setDistributors] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<string>("all");
@@ -167,6 +172,13 @@ export default function Promotions() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [allLocations, setAllLocations] = useState(true);
+  const lastAllowedLocationsRef = useRef<string[]>([]);
+  const [allDistributors, setAllDistributors] = useState(true);
+  const lastAllowedDistributorsRef = useRef<string[]>([]);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const prefillHandledRef = useRef<string | null>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -178,7 +190,8 @@ export default function Promotions() {
     distributorPrice: 0,
     startDate: "",
     endDate: "",
-    branches: [] as string[],
+    allowedLocations: [] as string[],
+    allowedDistributors: [] as string[],
     showInCatalog: true,
     displayOrder: 0,
     usageLimit: "",
@@ -200,11 +213,12 @@ export default function Promotions() {
         filterStatus !== "all"
           ? (filterStatus as "active" | "expired" | "disabled" | "scheduled")
           : undefined;
-      const [promoRes, branchList] = await Promise.all([
+      const [promoRes, branchList, distributorRes] = await Promise.all([
         promotionService.getAll({
           status: statusParam,
         }),
         branchService.list(),
+        distributorService.getAll(),
       ]);
       setPromotions(promoRes.promotions || []);
       // Handle stats with fallback for missing properties
@@ -224,6 +238,7 @@ export default function Promotions() {
         setStats(null);
       }
       setBranches(branchList || []);
+      setDistributors(distributorRes?.data || []);
     } catch (err) {
       console.error("Error loading promotions:", err);
       setError("Error al cargar promociones");
@@ -245,6 +260,93 @@ export default function Promotions() {
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  const notifyPromotionsUpdated = useCallback(() => {
+    try {
+      window.dispatchEvent(new CustomEvent("promotions-updated"));
+      localStorage.setItem("promotions-updated", Date.now().toString());
+    } catch (err) {
+      console.warn("No se pudo notificar promociones actualizadas", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    const prefill = (location.state as { prefillPromotion?: any } | null)
+      ?.prefillPromotion;
+    if (!prefill) return;
+
+    const signature = JSON.stringify({
+      name: prefill.name,
+      type: prefill.type,
+      products: prefill.products || [],
+    });
+    if (prefillHandledRef.current === signature) return;
+    prefillHandledRef.current = signature;
+
+    resetForm();
+    setFormData(prev => ({
+      ...prev,
+      name: prefill.name || "",
+      description: prefill.description || "",
+      type: (prefill.type as PromotionType) || "combo",
+    }));
+    setShowModal(true);
+
+    const productIds = Array.isArray(prefill.products) ? prefill.products : [];
+    if (productIds.length > 0) {
+      Promise.all(
+        productIds.map((id: string) =>
+          productsService.getProductById(id).catch(() => null)
+        )
+      ).then(items => {
+        const nextItems = items
+          .filter((item): item is Product => Boolean(item))
+          .map(item => {
+            const price = item.clientPrice ?? item.suggestedPrice ?? 0;
+            const cost = item.averageCost ?? item.purchasePrice ?? 0;
+            const distPrice = item.distributorPrice ?? price;
+
+            return {
+              product: item._id,
+              productName: item.name,
+              productImage: item.image?.url,
+              productPrice: price,
+              purchasePrice: cost,
+              distributorPrice: distPrice,
+              quantity: 1,
+              unitPrice: price,
+            };
+          });
+        setComboItems(nextItems);
+      });
+    }
+
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [location.pathname, location.state, navigate]);
+
+  useEffect(() => {
+    if (distributors.length === 0) return;
+    if (formData.allowedDistributors.length === 0) return;
+
+    const allSelected =
+      formData.allowedDistributors.length === distributors.length;
+
+    if (allSelected) {
+      lastAllowedDistributorsRef.current = formData.allowedDistributors;
+      if (!allDistributors) {
+        setAllDistributors(true);
+      }
+      setFormData(prev => ({
+        ...prev,
+        allowedDistributors: [],
+      }));
+      return;
+    }
+
+    if (allDistributors) {
+      setAllDistributors(false);
+    }
+  }, [allDistributors, distributors.length, formData.allowedDistributors]);
 
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat("es-CO", {
@@ -488,13 +590,18 @@ export default function Promotions() {
       distributorPrice: 0,
       startDate: "",
       endDate: "",
-      branches: [],
+      allowedLocations: [],
+      allowedDistributors: [],
       showInCatalog: true,
       displayOrder: 0,
       usageLimit: "",
       usageLimitPerCustomer: "",
       totalStock: "",
     });
+    setAllLocations(true);
+    lastAllowedLocationsRef.current = [];
+    setAllDistributors(true);
+    lastAllowedDistributorsRef.current = [];
     setComboItems([]);
     setImagePreview(null);
     setImageBase64(null);
@@ -515,6 +622,20 @@ export default function Promotions() {
       promo.distributorPrice
     );
     setEditingPromo(promo);
+    const existingAllowedLocations =
+      (promo.allowedLocations?.length
+        ? promo.allowedLocations
+        : promo.branches) || [];
+
+    const normalizedAllowedLocations = existingAllowedLocations.map(b =>
+      typeof b === "string" ? b : b._id
+    );
+
+    const existingAllowedDistributors = promo.allowedDistributors || [];
+    const normalizedAllowedDistributors = existingAllowedDistributors.map(d =>
+      typeof d === "string" ? d : d._id
+    );
+
     setFormData({
       name: promo.name,
       description: promo.description || "",
@@ -524,15 +645,22 @@ export default function Promotions() {
       distributorPrice: promo.distributorPrice || 0,
       startDate: promo.startDate ? promo.startDate.split("T")[0] : "",
       endDate: promo.endDate ? promo.endDate.split("T")[0] : "",
-      branches: (promo.branches || []).map(b =>
-        typeof b === "string" ? b : b._id
-      ),
+      allowedLocations: normalizedAllowedLocations,
+      allowedDistributors: normalizedAllowedDistributors,
       showInCatalog: promo.showInCatalog !== false,
       displayOrder: promo.displayOrder || 0,
       usageLimit: promo.usageLimit?.toString() || "",
       usageLimitPerCustomer: promo.usageLimitPerCustomer?.toString() || "",
       totalStock: promo.totalStock?.toString() || "",
     });
+    const isGlobal =
+      promo.allowAllLocations ?? normalizedAllowedLocations.length === 0;
+    setAllLocations(isGlobal);
+    lastAllowedLocationsRef.current = normalizedAllowedLocations;
+    const isGlobalDistributors =
+      promo.allowAllDistributors ?? normalizedAllowedDistributors.length === 0;
+    setAllDistributors(isGlobalDistributors);
+    lastAllowedDistributorsRef.current = normalizedAllowedDistributors;
     setComboItems(
       (promo.comboItems || []).map((item: PromotionComboItem) => {
         const product =
@@ -590,19 +718,26 @@ export default function Promotions() {
         );
       }
 
+      const hasNoLocations =
+        !allLocations && formData.allowedLocations.length === 0;
+      const hasNoDistributors =
+        !allDistributors && formData.allowedDistributors.length === 0;
+      const computedStatus =
+        hasNoLocations && hasNoDistributors ? "paused" : formData.status;
+
       const payload: Partial<Promotion> = {
         name: formData.name,
         description: formData.description,
         type: formData.type,
-        status: formData.status,
+        status: computedStatus,
         promotionPrice: formData.promotionPrice,
         distributorPrice: formData.distributorPrice,
         startDate: formData.startDate || undefined,
         endDate: formData.endDate || undefined,
-        branches:
-          formData.branches.length > 0
-            ? (formData.branches as unknown as Branch[])
-            : undefined,
+        allowAllLocations: allLocations,
+        allowedLocations: formData.allowedLocations as unknown as Branch[],
+        allowAllDistributors: allDistributors,
+        allowedDistributors: formData.allowedDistributors as unknown as User[],
         showInCatalog: formData.showInCatalog,
         displayOrder: formData.displayOrder,
         usageLimit: formData.usageLimit
@@ -633,6 +768,8 @@ export default function Promotions() {
         setSuccess("Promoción creada correctamente");
       }
 
+      notifyPromotionsUpdated();
+
       // Invalidate product cache to reflect changes in ProductSelector/Catalog
       invalidateProductCache();
 
@@ -656,6 +793,7 @@ export default function Promotions() {
       setSuccess(
         `Promoción ${promotion.status === "active" ? "activada" : "pausada"}`
       );
+      notifyPromotionsUpdated();
     } catch (err) {
       console.error("Error toggling status:", err);
       setError("Error al cambiar estado");
@@ -672,6 +810,7 @@ export default function Promotions() {
 
       setPromotions(prev => prev.filter(p => p._id !== id));
       setSuccess("Promoción archivada");
+      notifyPromotionsUpdated();
       void loadData();
     } catch (err) {
       console.error("Error deleting:", err);
@@ -681,6 +820,7 @@ export default function Promotions() {
 
   // Filtrar promociones
   const filteredPromotions = promotions.filter(promo => {
+    if (!promo) return false;
     const matchesSearch =
       promo.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       promo.description?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -1193,28 +1333,161 @@ export default function Promotions() {
                     <label className="mb-1 block text-sm font-medium text-gray-300">
                       Sucursales (opcional)
                     </label>
-                    <select
-                      multiple
-                      value={formData.branches}
-                      onChange={e =>
-                        setFormData({
-                          ...formData,
-                          branches: Array.from(
-                            e.target.selectedOptions,
-                            opt => opt.value
-                          ),
-                        })
-                      }
-                      className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-white focus:border-purple-500 focus:outline-none"
-                    >
-                      {branches.map(b => (
-                        <option key={b._id} value={b._id}>
-                          {b.name}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="space-y-3 rounded-lg border border-gray-700 bg-gray-800/60 p-3">
+                      <label className="flex items-center justify-between gap-3 text-sm text-gray-200">
+                        <span>Todas las sucursales</span>
+                        <input
+                          type="checkbox"
+                          checked={allLocations}
+                          onChange={e => {
+                            const enabled = e.target.checked;
+                            setAllLocations(enabled);
+                            if (enabled) {
+                              lastAllowedLocationsRef.current =
+                                formData.allowedLocations;
+                              setFormData({
+                                ...formData,
+                                allowedLocations: [],
+                              });
+                            } else {
+                              const restored =
+                                lastAllowedLocationsRef.current || [];
+                              setFormData({
+                                ...formData,
+                                allowedLocations: restored,
+                              });
+                            }
+                          }}
+                          className="h-4 w-4 rounded border-gray-600 bg-gray-800 text-purple-600 focus:ring-purple-500"
+                        />
+                      </label>
+
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {branches.map(branch => {
+                          const checked = formData.allowedLocations.includes(
+                            branch._id
+                          );
+                          return (
+                            <label
+                              key={branch._id}
+                              className={`flex items-center justify-between rounded-lg border border-gray-700 px-3 py-2 text-sm text-gray-200 transition ${
+                                allLocations
+                                  ? "opacity-50"
+                                  : "hover:border-purple-500/60"
+                              }`}
+                            >
+                              <span className="truncate">{branch.name}</span>
+                              <input
+                                type="checkbox"
+                                disabled={allLocations}
+                                checked={checked}
+                                onChange={() => {
+                                  if (allLocations) return;
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    allowedLocations: checked
+                                      ? prev.allowedLocations.filter(
+                                          id => id !== branch._id
+                                        )
+                                      : [...prev.allowedLocations, branch._id],
+                                  }));
+                                }}
+                                className="h-4 w-4 rounded border-gray-600 bg-gray-800 text-purple-600 focus:ring-purple-500"
+                              />
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
                     <p className="mt-1 text-xs text-gray-500">
-                      Deja vacío para aplicar en todas las sucursales
+                      Si no seleccionas sedes, la promocion aplica en todas.
+                    </p>
+                  </div>
+
+                  {/* Distributors */}
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-300">
+                      Distribuidores (opcional)
+                    </label>
+                    <div className="space-y-3 rounded-lg border border-gray-700 bg-gray-800/60 p-3">
+                      <label className="flex items-center justify-between gap-3 text-sm text-gray-200">
+                        <span>Todos los distribuidores</span>
+                        <input
+                          type="checkbox"
+                          checked={allDistributors}
+                          onChange={e => {
+                            const enabled = e.target.checked;
+                            setAllDistributors(enabled);
+                            if (enabled) {
+                              lastAllowedDistributorsRef.current =
+                                formData.allowedDistributors;
+                              setFormData({
+                                ...formData,
+                                allowedDistributors: [],
+                              });
+                            } else {
+                              setFormData({
+                                ...formData,
+                                allowedDistributors: [],
+                              });
+                            }
+                          }}
+                          className="h-4 w-4 rounded border-gray-600 bg-gray-800 text-purple-600 focus:ring-purple-500"
+                        />
+                      </label>
+
+                      {distributors.length === 0 ? (
+                        <p className="text-xs text-gray-500">
+                          No hay distribuidores registrados.
+                        </p>
+                      ) : (
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {distributors.map(distributor => {
+                            const checked =
+                              formData.allowedDistributors.includes(
+                                distributor._id
+                              );
+                            return (
+                              <label
+                                key={distributor._id}
+                                className={`flex items-center justify-between rounded-lg border border-gray-700 px-3 py-2 text-sm text-gray-200 transition ${
+                                  allDistributors
+                                    ? "opacity-50"
+                                    : "hover:border-purple-500/60"
+                                }`}
+                              >
+                                <span className="truncate">
+                                  {distributor.name}
+                                </span>
+                                <input
+                                  type="checkbox"
+                                  disabled={allDistributors}
+                                  checked={checked}
+                                  onChange={() => {
+                                    if (allDistributors) return;
+                                    setFormData(prev => ({
+                                      ...prev,
+                                      allowedDistributors: checked
+                                        ? prev.allowedDistributors.filter(
+                                            id => id !== distributor._id
+                                          )
+                                        : [
+                                            ...prev.allowedDistributors,
+                                            distributor._id,
+                                          ],
+                                    }));
+                                  }}
+                                  className="h-4 w-4 rounded border-gray-600 bg-gray-800 text-purple-600 focus:ring-purple-500"
+                                />
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Si no seleccionas distribuidores, la promocion aplica en
+                      todos.
                     </p>
                   </div>
 
@@ -1425,11 +1698,12 @@ export default function Promotions() {
                               ? Math.round((adminProfit / totalCost) * 100)
                               : 0;
                           const distributorProfit =
-                            formData.promotionPrice - distributorCostTotal;
+                            formData.promotionPrice -
+                            (formData.distributorPrice || 0);
                           const customerSavings =
                             totalPublicNormal - formData.promotionPrice;
                           const adminProfitB2B =
-                            distributorCostTotal - totalCost;
+                            formData.distributorPrice - totalCost;
                           // CHANGE: Markup (ROI) = (Profit / Cost) * 100
                           const adminMarginB2B =
                             totalCost > 0
@@ -1514,31 +1788,15 @@ export default function Promotions() {
                                       <div className="mt-1 flex items-center justify-between">
                                         <span className="text-[10px] text-gray-400">
                                           Precio base sin promo:{" "}
-                                          {formatCurrency(
-                                            comboItems.reduce(
-                                              (sum, item) =>
-                                                sum +
-                                                (item.distributorPrice || 0) *
-                                                  item.quantity,
-                                              0
-                                            )
-                                          )}
+                                          {formatCurrency(distributorCostTotal)}
                                         </span>
                                         <button
                                           type="button"
                                           onClick={() => {
-                                            const baseDistributorTotal =
-                                              comboItems.reduce(
-                                                (sum, item) =>
-                                                  sum +
-                                                  (item.distributorPrice || 0) *
-                                                    item.quantity,
-                                                0
-                                              );
                                             setFormData({
                                               ...formData,
                                               distributorPrice:
-                                                baseDistributorTotal,
+                                                distributorCostTotal,
                                             });
                                           }}
                                           className="rounded border border-gray-600 px-2 py-0.5 text-[10px] text-gray-300 transition hover:border-purple-500"
@@ -1567,7 +1825,7 @@ export default function Promotions() {
                                               (
                                               {Math.round(
                                                 (distributorProfit /
-                                                  distributorCostTotal) *
+                                                  formData.distributorPrice) *
                                                   100
                                               )}
                                               % ROI)

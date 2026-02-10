@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
 import Branch from "../../../models/Branch.js";
 import BranchStock from "../../../models/BranchStock.js";
+import DefectiveProduct from "../../../models/DefectiveProduct.js";
 import DistributorStock from "../../../models/DistributorStock.js";
 import Membership from "../../../models/Membership.js";
 import PaymentMethod from "../../../models/PaymentMethod.js";
@@ -8,10 +9,15 @@ import Promotion from "../../../models/Promotion.js";
 import { applySaleGamification } from "../../../utils/gamificationEngine.js";
 import { FinanceService } from "../../domain/services/FinanceService.js";
 import { InventoryService } from "../../domain/services/InventoryService.js";
+import Sale from "../../infrastructure/database/models/Sale.js";
 import CreditRepository from "../../infrastructure/database/repositories/CreditRepository.js";
 import { ProductRepository } from "../../infrastructure/database/repositories/ProductRepository.js";
 import ProfitHistoryRepository from "../../infrastructure/database/repositories/ProfitHistoryRepository.js";
 import { SaleRepository } from "../../infrastructure/database/repositories/SaleRepository.js";
+import {
+  buildPromotionSalesSummary,
+  normalizeId,
+} from "../../utils/promotionMetrics.js";
 export class RegisterPromotionSaleUseCase {
   constructor() {
     this.saleRepository = new SaleRepository();
@@ -56,6 +62,7 @@ export class RegisterPromotionSaleUseCase {
       locationType,
       discount = 0,
       additionalCosts = [],
+      warranties = [],
       distributorProfitPercentage = 20,
     } = input;
 
@@ -158,6 +165,117 @@ export class RegisterPromotionSaleUseCase {
       0,
     );
 
+    const normalizedWarranties = Array.isArray(warranties) ? warranties : [];
+    const warrantyItems = [];
+
+    for (const warranty of normalizedWarranties) {
+      const productId = warranty?.productId;
+      const quantity = Number(warranty?.quantity || 0);
+
+      if (!productId) {
+        throw new Error("Producto de garantia invalido.");
+      }
+
+      if (!Number.isFinite(quantity) || quantity <= 0) {
+        throw new Error(
+          `Cantidad de garantia invalida para producto ${productId}.`,
+        );
+      }
+
+      const type =
+        warranty?.type === "supplier_replacement"
+          ? "supplier_replacement"
+          : "total_loss";
+
+      warrantyItems.push({
+        productId,
+        quantity,
+        type,
+        reason: warranty?.reason,
+      });
+    }
+
+    const requiredByProduct = new Map();
+    items.forEach((item) => {
+      const key = String(item.productId);
+      requiredByProduct.set(
+        key,
+        (requiredByProduct.get(key) || 0) + Number(item.quantity || 0),
+      );
+    });
+    warrantyItems.forEach((warranty) => {
+      const key = String(warranty.productId);
+      requiredByProduct.set(
+        key,
+        (requiredByProduct.get(key) || 0) + Number(warranty.quantity || 0),
+      );
+    });
+
+    const productCache = new Map();
+    let warrantyLossTotal = 0;
+
+    for (const warranty of warrantyItems) {
+      if (warranty.type !== "total_loss") continue;
+      const productKey = String(warranty.productId);
+      const product =
+        productCache.get(productKey) ||
+        (await this.productRepository.findById(warranty.productId));
+
+      if (!product) {
+        throw new Error(`Product not found: ${warranty.productId}`);
+      }
+
+      productCache.set(productKey, product);
+
+      const unitCost = product.averageCost || product.purchasePrice || 0;
+      warrantyLossTotal += unitCost * Number(warranty.quantity || 0);
+    }
+
+    const sourceLocation = locationType || input.sourceLocation;
+    const resolvedSourceLocation =
+      sourceLocation === "distributor" && distributorId
+        ? "distributor"
+        : sourceLocation === "branch" && branchId
+          ? "branch"
+          : "warehouse";
+
+    const resolveStockAvailability = async (productId) => {
+      const useDistributorStock =
+        Boolean(distributorId) && resolvedSourceLocation === "distributor";
+      const useBranchStock =
+        resolvedSourceLocation === "branch" && Boolean(branchId);
+
+      if (useDistributorStock) {
+        const distStock = await DistributorStock.findOne({
+          business: businessId,
+          distributor: distributorId,
+          product: productId,
+        });
+        return {
+          availableStock: distStock?.quantity || 0,
+          stockOrigin: "distributor",
+        };
+      }
+
+      if (useBranchStock) {
+        const branchStock = await BranchStock.findOne({
+          business: businessId,
+          branch: branchId,
+          product: productId,
+        });
+        return {
+          availableStock: branchStock?.quantity || 0,
+          stockOrigin: "branch",
+        };
+      }
+
+      const product = await this.productRepository.findById(productId);
+      return {
+        availableStock: product?.warehouseStock ?? 0,
+        stockOrigin: "warehouse",
+      };
+    };
+
     const promotionIds = Array.from(
       new Set(
         items
@@ -172,11 +290,15 @@ export class RegisterPromotionSaleUseCase {
       ),
     );
     const promotionMap = new Map();
+    const promotionItemsMap = new Map();
     if (promotionIds.length > 0) {
       const promotions = await Promotion.find({
         _id: { $in: promotionIds },
+        business: businessId,
       })
-        .select("_id distributorPrice")
+        .select(
+          "_id distributorPrice status startDate endDate usageLimit usageCount totalStock currentStock comboItems allowAllLocations allowedLocations branches allowAllDistributors allowedDistributors",
+        )
         .lean();
       promotions.forEach((promo) => {
         promotionMap.set(String(promo._id), promo);
@@ -195,7 +317,148 @@ export class RegisterPromotionSaleUseCase {
       return acc;
     }, {});
 
-    const sourceLocation = locationType || input.sourceLocation;
+    const promotionUsageSummary = new Map();
+    let warehouseBranchId = null;
+    if (sourceLocation === "warehouse") {
+      const warehouseBranch = await Branch.findOne({
+        business: businessId,
+        isWarehouse: true,
+      })
+        .select("_id")
+        .lean();
+      warehouseBranchId = warehouseBranch?._id
+        ? String(warehouseBranch._id)
+        : null;
+    }
+
+    const resolvedLocationId =
+      sourceLocation === "branch" && branchId
+        ? String(branchId)
+        : sourceLocation === "warehouse"
+          ? warehouseBranchId
+          : null;
+
+    items.forEach((item) => {
+      const rawPromotionId = item.promotionId;
+      if (!rawPromotionId) return;
+      const key = normalizeId(rawPromotionId);
+      if (!key) return;
+      if (!promotionItemsMap.has(key)) {
+        promotionItemsMap.set(key, []);
+      }
+      promotionItemsMap.get(key).push({
+        productId: item.productId,
+        quantity: item.quantity,
+        salePrice: item.salePrice,
+      });
+    });
+
+    promotionItemsMap.forEach((promoItems, promotionKey) => {
+      const promotionData = promotionMap.get(promotionKey);
+      if (!promotionData) {
+        throw new Error("Promocion no encontrada para aplicar precio B2B.");
+      }
+
+      if (promotionData.status && promotionData.status !== "active") {
+        throw new Error("Promocion no activa para registrar venta.");
+      }
+
+      if (
+        promotionData.startDate &&
+        resolvedSaleDate < new Date(promotionData.startDate)
+      ) {
+        throw new Error("Promocion aun no esta vigente.");
+      }
+
+      if (
+        promotionData.endDate &&
+        resolvedSaleDate > new Date(promotionData.endDate)
+      ) {
+        throw new Error("Promocion expirada.");
+      }
+
+      const locationRestrictionEnabled =
+        sourceLocation !== "distributor" &&
+        (promotionData.allowAllLocations === false ||
+          (promotionData.allowAllLocations === undefined &&
+            ((promotionData.allowedLocations?.length ?? 0) > 0 ||
+              (promotionData.branches?.length ?? 0) > 0)));
+
+      if (locationRestrictionEnabled) {
+        const allowedLocations =
+          promotionData.allowedLocations &&
+          promotionData.allowedLocations.length
+            ? promotionData.allowedLocations
+            : promotionData.branches || [];
+
+        if (!allowedLocations.length) {
+          throw new Error(
+            "Esta promocion no esta disponible para la ubicacion seleccionada.",
+          );
+        }
+
+        if (!resolvedLocationId) {
+          throw new Error(
+            "Esta promocion no esta disponible para la ubicacion seleccionada.",
+          );
+        }
+        const hasAccess = allowedLocations.some(
+          (location) => String(location) === resolvedLocationId,
+        );
+        if (!hasAccess) {
+          throw new Error(
+            "Esta promocion no esta disponible para la ubicacion seleccionada.",
+          );
+        }
+      }
+
+      const distributorRestrictionEnabled =
+        promotionData.allowAllDistributors === false ||
+        (promotionData.allowAllDistributors === undefined &&
+          (promotionData.allowedDistributors?.length ?? 0) > 0);
+
+      if (distributorId && distributorRestrictionEnabled) {
+        const allowedDistributors = promotionData.allowedDistributors || [];
+        if (!allowedDistributors.length) {
+          throw new Error(
+            "Esta promocion no esta disponible para este distribuidor.",
+          );
+        }
+        const allowed = allowedDistributors.some(
+          (dist) => String(dist) === String(distributorId),
+        );
+        if (!allowed) {
+          throw new Error(
+            "Esta promocion no esta disponible para este distribuidor.",
+          );
+        }
+      }
+
+      const summary = buildPromotionSalesSummary(promotionData, promoItems);
+      if (!summary.usageCount || summary.usageCount <= 0) {
+        throw new Error("Promocion invalida para los items seleccionados.");
+      }
+
+      const currentUsage = Number(promotionData.usageCount || 0);
+      if (
+        promotionData.usageLimit !== null &&
+        promotionData.usageLimit !== undefined &&
+        currentUsage + summary.usageCount > Number(promotionData.usageLimit)
+      ) {
+        throw new Error("La promocion alcanzo su limite de usos.");
+      }
+
+      const availableStock =
+        promotionData.currentStock ?? promotionData.totalStock ?? null;
+      if (
+        availableStock !== null &&
+        Number(availableStock) < summary.usageCount
+      ) {
+        throw new Error("Stock insuficiente para la promocion.");
+      }
+
+      promotionUsageSummary.set(promotionKey, summary);
+    });
 
     for (const item of items) {
       const { productId, quantity, salePrice, promotionId } = item;
@@ -217,10 +480,16 @@ export class RegisterPromotionSaleUseCase {
       const product = await this.productRepository.findById(productId);
       if (!product) throw new Error(`Product not found: ${productId}`);
 
+      productCache.set(String(productId), product);
+
+      const requiredQuantity =
+        requiredByProduct.get(String(productId)) || quantity;
+
       let availableStock = 0;
       const useDistributorStock =
-        Boolean(distributorId) && sourceLocation === "distributor";
-      const useBranchStock = sourceLocation === "branch" && Boolean(branchId);
+        Boolean(distributorId) && resolvedSourceLocation === "distributor";
+      const useBranchStock =
+        resolvedSourceLocation === "branch" && Boolean(branchId);
 
       if (useDistributorStock) {
         const distStock = await DistributorStock.findOne({
@@ -230,7 +499,9 @@ export class RegisterPromotionSaleUseCase {
         });
 
         availableStock = distStock?.quantity || 0;
-        if (!InventoryService.hasSufficientStock(availableStock, quantity)) {
+        if (
+          !InventoryService.hasSufficientStock(availableStock, requiredQuantity)
+        ) {
           throw new Error(
             `Stock insuficiente en el distribuidor para ${product.name}. Disponible: ${availableStock}`,
           );
@@ -243,14 +514,18 @@ export class RegisterPromotionSaleUseCase {
         });
 
         availableStock = branchStock?.quantity || 0;
-        if (!InventoryService.hasSufficientStock(availableStock, quantity)) {
+        if (
+          !InventoryService.hasSufficientStock(availableStock, requiredQuantity)
+        ) {
           throw new Error(
             `Stock insuficiente en la sede para ${product.name}. Disponible: ${availableStock}`,
           );
         }
       } else {
         availableStock = product.warehouseStock ?? 0;
-        if (!InventoryService.hasSufficientStock(availableStock, quantity)) {
+        if (
+          !InventoryService.hasSufficientStock(availableStock, requiredQuantity)
+        ) {
           throw new Error(
             `Stock insuficiente en bodega para ${product.name}. Disponible: ${availableStock}`,
           );
@@ -341,11 +616,56 @@ export class RegisterPromotionSaleUseCase {
       });
     }
 
+    const validatedProductIds = new Set(
+      validatedItems.map((item) => String(item.productId)),
+    );
+
+    for (const warranty of warrantyItems) {
+      const productKey = String(warranty.productId);
+      if (validatedProductIds.has(productKey)) continue;
+
+      const product =
+        productCache.get(productKey) ||
+        (await this.productRepository.findById(warranty.productId));
+      if (!product) {
+        throw new Error(`Product not found: ${warranty.productId}`);
+      }
+
+      productCache.set(productKey, product);
+
+      const { availableStock } = await resolveStockAvailability(
+        warranty.productId,
+      );
+      const requiredQuantity =
+        requiredByProduct.get(productKey) || warranty.quantity;
+
+      if (
+        !InventoryService.hasSufficientStock(availableStock, requiredQuantity)
+      ) {
+        throw new Error(
+          `Stock insuficiente para garantia en ${product.name}. Disponible: ${availableStock}`,
+        );
+      }
+    }
+
     // 3. PHASE 2: All validations passed, now make the changes
     const results = [];
     const creditItems = [];
     let totalTransactionAmount = 0;
     let netTransactionProfit = 0;
+    let adminMembership = null;
+
+    const resolveAdminMembership = async () => {
+      if (adminMembership) return adminMembership;
+      adminMembership = await Membership.findOne({
+        business: businessId,
+        role: "admin",
+        status: "active",
+      })
+        .select("user")
+        .lean();
+      return adminMembership;
+    };
 
     for (const item of validatedItems) {
       const {
@@ -400,12 +720,18 @@ export class RegisterPromotionSaleUseCase {
         });
       }
 
-      const resolvedSourceLocation =
-        sourceLocation === "distributor" && distributorId
-          ? "distributor"
-          : sourceLocation === "branch" && branchId
-            ? "branch"
-            : "warehouse";
+      if (warrantyLossTotal > 0 && totalSubtotal > 0) {
+        const warrantyShare =
+          (itemSubtotal / totalSubtotal) * warrantyLossTotal;
+        if (warrantyShare > 0) {
+          additionalCostsForSale.push({
+            type: "warranty",
+            description: "Garantia prorrateada",
+            amount: warrantyShare,
+          });
+        }
+      }
+
       const saleData = {
         business: businessId,
         product: productId,
@@ -436,13 +762,14 @@ export class RegisterPromotionSaleUseCase {
         paymentProof: paymentProof || null,
         paymentProofMimeType: paymentProofMimeType || null,
         deliveryMethod: deliveryMethodId,
-        shippingCost: 0,
+        shippingCost: shippingCost ?? 0,
         createdBy: user.id, // Track who created the sale
         // 💰 FINANCIAL LOGIC FIX:
         // Cash sales (non-credit) must be CONFIRMED immediately to count towards profit.
         // Credit sales remain PENDING until fully paid.
         paymentStatus: shouldConfirmNow ? "confirmado" : "pendiente",
         paymentConfirmedAt: shouldConfirmNow ? resolvedSaleDate : null,
+        promotionMetricsApplied: false,
       };
 
       // Track distributor and branch attribution independently
@@ -470,8 +797,9 @@ export class RegisterPromotionSaleUseCase {
       });
 
       const useDistributorStock =
-        Boolean(distributorId) && sourceLocation === "distributor";
-      const useBranchStock = sourceLocation === "branch" && Boolean(branchId);
+        Boolean(distributorId) && resolvedSourceLocation === "distributor";
+      const useBranchStock =
+        resolvedSourceLocation === "branch" && Boolean(branchId);
 
       // F. Deduct Stock ONLY AFTER sale is confirmed (Infra) - LOCATION-AWARE
       // This ensures stock is only deducted if the sale was successfully created
@@ -557,13 +885,7 @@ export class RegisterPromotionSaleUseCase {
         // Create entry for admin's profit
         if (adminProfit > 0) {
           // Find admin user for this business via Membership
-          const adminMembership = await Membership.findOne({
-            business: businessId,
-            role: "admin",
-            status: "active",
-          })
-            .select("user")
-            .lean();
+          const adminMembership = await resolveAdminMembership();
 
           if (adminMembership) {
             await ProfitHistoryRepository.create({
@@ -617,6 +939,174 @@ export class RegisterPromotionSaleUseCase {
       netTransactionProfit += adminNetProfit;
     }
 
+    if (warrantyItems.length > 0) {
+      const adminMembership = await resolveAdminMembership();
+
+      for (const warranty of warrantyItems) {
+        const productKey = String(warranty.productId);
+        const product =
+          productCache.get(productKey) ||
+          (await this.productRepository.findById(warranty.productId));
+
+        if (!product) {
+          throw new Error(`Product not found: ${warranty.productId}`);
+        }
+
+        const quantity = Number(warranty.quantity || 0);
+        if (quantity <= 0) continue;
+
+        if (resolvedSourceLocation === "distributor" && distributorId) {
+          const distStock = await DistributorStock.findOneAndUpdate(
+            {
+              business: businessId,
+              distributor: distributorId,
+              product: warranty.productId,
+              quantity: { $gte: quantity },
+            },
+            { $inc: { quantity: -quantity } },
+            session ? { session, new: true } : { new: true },
+          );
+
+          if (!distStock) {
+            throw new Error(
+              `Stock insuficiente en el distribuidor para ${product.name}.`,
+            );
+          }
+        } else if (resolvedSourceLocation === "branch" && branchId) {
+          const branchStock = await BranchStock.findOneAndUpdate(
+            {
+              business: businessId,
+              branch: branchId,
+              product: warranty.productId,
+              quantity: { $gte: quantity },
+            },
+            { $inc: { quantity: -quantity } },
+            session ? { session, new: true } : { new: true },
+          );
+
+          if (!branchStock) {
+            throw new Error(
+              `Stock insuficiente en la sede para ${product.name}.`,
+            );
+          }
+        } else {
+          await this.productRepository.updateWarehouseStock(
+            warranty.productId,
+            -quantity,
+            session,
+          );
+        }
+
+        await this.productRepository.updateStock(
+          warranty.productId,
+          -quantity,
+          session,
+        );
+
+        const hasWarranty = warranty.type === "supplier_replacement";
+        const unitCost = product.averageCost || product.purchasePrice || 0;
+        const lossAmount = hasWarranty ? 0 : unitCost * quantity;
+
+        const reportData = {
+          distributor:
+            resolvedSourceLocation === "distributor" ? distributorId : null,
+          branch: resolvedSourceLocation === "branch" ? branchId : null,
+          product: warranty.productId,
+          business: businessId,
+          quantity,
+          reason:
+            warranty.reason ||
+            `${hasWarranty ? "Reemplazo proveedor" : "Pérdida total"} - Orden ${saleGroupId}`,
+          images: [],
+          hasWarranty,
+          warrantyStatus: hasWarranty ? "pending" : "not_applicable",
+          lossAmount,
+          saleGroupId,
+          origin: "order",
+          stockOrigin: resolvedSourceLocation,
+          status: "confirmado",
+          confirmedAt: Date.now(),
+          confirmedBy: user.id,
+          adminNotes: hasWarranty
+            ? "Reporte con garantia - pendiente reposicion de stock"
+            : "Reporte sin garantia - perdida registrada",
+        };
+
+        const [createdReport] = session
+          ? await DefectiveProduct.create([reportData], { session })
+          : await DefectiveProduct.create([reportData]);
+
+        if (!hasWarranty && lossAmount > 0) {
+          if (adminMembership) {
+            await ProfitHistoryRepository.create({
+              business: businessId,
+              user: adminMembership.user,
+              type: "ajuste",
+              amount: -lossAmount,
+              product: warranty.productId,
+              description: `Pérdida por defectuoso (${quantity}): ${product.name}`,
+              date: resolvedSaleDate,
+              metadata: {
+                quantity,
+                salePrice: 0,
+                saleId: null,
+                eventName: "defective_loss",
+                reportId: createdReport?._id,
+                saleGroupId,
+                unitCost,
+              },
+            });
+          }
+        }
+      }
+    }
+
+    const requiresAdminConfirmation = Boolean(distributorId);
+    const isCreditSale = paymentMethodCode === "credit";
+    const shouldConfirmNow = !requiresAdminConfirmation && !isCreditSale;
+
+    if (shouldConfirmNow && promotionUsageSummary.size > 0) {
+      for (const [promotionKey, summary] of promotionUsageSummary.entries()) {
+        const promotionData = promotionMap.get(promotionKey);
+        const update = {
+          $inc: {
+            usageCount: summary.usageCount,
+            totalRevenue: summary.revenue,
+            totalUnitsSold: summary.unitsSold,
+          },
+        };
+
+        if (promotionData) {
+          const currentStock =
+            promotionData.currentStock ?? promotionData.totalStock ?? null;
+          if (currentStock !== null) {
+            update.$set = {
+              currentStock: Math.max(
+                0,
+                Number(currentStock) - summary.usageCount,
+              ),
+            };
+          }
+        }
+
+        await Promotion.updateOne(
+          { _id: promotionKey, business: businessId },
+          update,
+          session ? { session } : undefined,
+        );
+
+        await Sale.updateMany(
+          {
+            business: businessId,
+            saleGroupId,
+            promotion: promotionKey,
+          },
+          { $set: { promotionMetricsApplied: true } },
+          session ? { session } : undefined,
+        );
+      }
+    }
+
     if (paymentMethodCode === "credit") {
       if (!customerId) {
         throw new Error("El cliente es obligatorio para ventas a crédito.");
@@ -651,7 +1141,7 @@ export class RegisterPromotionSaleUseCase {
       saleGroupId,
       totalAmount: totalTransactionAmount,
       totalItems: results.length,
-      netProfit: netTransactionProfit - (shippingCost || 0),
+      netProfit: netTransactionProfit - (shippingCost || 0) - warrantyLossTotal,
       adminProfit: results.reduce((sum, r) => sum + r.adminProfit, 0),
     };
   }

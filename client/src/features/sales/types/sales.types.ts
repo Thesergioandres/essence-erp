@@ -51,7 +51,9 @@ export interface Sale {
   branch?: SaleBranch | string | null;
   branchName?: string;
   paymentMethod?: unknown | string;
+  paymentMethodCode?: string;
   deliveryMethod?: unknown | string | null;
+  deliveryMethodCode?: string;
   paymentMethodName?: string;
   source?: "pos" | "catalog" | "special";
   adminProfit?: number;
@@ -107,6 +109,7 @@ export interface Sale {
     | null;
   createdAt?: string;
   updatedAt?: string;
+  actualPayment?: number;
 }
 
 export interface SaleStats {

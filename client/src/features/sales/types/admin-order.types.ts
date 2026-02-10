@@ -39,6 +39,7 @@ export interface WarrantyItem {
   type: "supplier_replacement" | "total_loss";
   reason?: string;
   availableStock: number;
+  unitCost: number;
 }
 
 // ==================== ADDITIONAL COST TYPES ====================

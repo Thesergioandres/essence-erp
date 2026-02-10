@@ -30,6 +30,30 @@ const expenseSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    product: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Product",
+      default: null,
+    },
+    quantity: {
+      type: Number,
+      default: null,
+    },
+    sourceType: {
+      type: String,
+      enum: ["warehouse", "branch", "distributor"],
+      default: null,
+    },
+    sourceBranch: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Branch",
+      default: null,
+    },
+    sourceDistributor: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
     expenseDate: {
       type: Date,
       default: Date.now,

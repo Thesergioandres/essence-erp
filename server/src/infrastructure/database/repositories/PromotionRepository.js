@@ -2,8 +2,17 @@ import Promotion from "../../../../models/Promotion.js";
 
 export class PromotionRepository {
   async create(data, businessId) {
+    const normalizedData = { ...data };
+    if (
+      normalizedData.totalStock !== undefined &&
+      normalizedData.totalStock !== null &&
+      (normalizedData.currentStock === undefined ||
+        normalizedData.currentStock === null)
+    ) {
+      normalizedData.currentStock = normalizedData.totalStock;
+    }
     const promotion = await Promotion.create({
-      ...data,
+      ...normalizedData,
       business: businessId,
     });
 
@@ -45,6 +54,8 @@ export class PromotionRepository {
           "name image clientPrice distributorPrice purchasePrice averageCost",
         )
         .populate("branches", "name")
+        .populate("allowedLocations", "name")
+        .populate("allowedDistributors", "name email")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -78,15 +89,27 @@ export class PromotionRepository {
         "name image clientPrice distributorPrice purchasePrice averageCost",
       )
       .populate("branches", "name")
+      .populate("allowedLocations", "name")
+      .populate("allowedDistributors", "name email")
       .lean();
 
     return promotion;
   }
 
   async update(id, businessId, data) {
+    const normalizedData = { ...data };
+    if (
+      normalizedData.totalStock !== undefined &&
+      normalizedData.totalStock !== null &&
+      (normalizedData.currentStock === undefined ||
+        normalizedData.currentStock === null)
+    ) {
+      normalizedData.currentStock = normalizedData.totalStock;
+    }
+
     const promotion = await Promotion.findOneAndUpdate(
       { _id: id, business: businessId },
-      data,
+      normalizedData,
       { new: true },
     );
 
@@ -135,6 +158,8 @@ export class PromotionRepository {
         "name image clientPrice distributorPrice purchasePrice averageCost",
       )
       .populate("branches", "name")
+      .populate("allowedLocations", "name")
+      .populate("allowedDistributors", "name email")
       .lean();
 
     return promotions;
@@ -158,16 +183,37 @@ export class PromotionRepository {
       return { applicable: false, discountAmount: 0, reason: "expired" };
     }
 
-    if (promotion.branches?.length && branchId) {
-      const allowed = promotion.branches.some(
-        (b) => b?.toString() === branchId?.toString(),
-      );
-      if (!allowed) {
+    const locationRestrictionEnabled =
+      promotion.allowAllLocations === false ||
+      (promotion.allowAllLocations === undefined &&
+        ((promotion.allowedLocations?.length ?? 0) > 0 ||
+          (promotion.branches?.length ?? 0) > 0));
+
+    if (locationRestrictionEnabled) {
+      const allowedLocations =
+        promotion.allowedLocations && promotion.allowedLocations.length > 0
+          ? promotion.allowedLocations
+          : promotion.branches || [];
+
+      if (!allowedLocations.length) {
         return {
           applicable: false,
           discountAmount: 0,
           reason: "branch_not_eligible",
         };
+      }
+
+      if (branchId) {
+        const allowed = allowedLocations.some(
+          (b) => b?.toString() === branchId?.toString(),
+        );
+        if (!allowed) {
+          return {
+            applicable: false,
+            discountAmount: 0,
+            reason: "branch_not_eligible",
+          };
+        }
       }
     }
 

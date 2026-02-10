@@ -98,6 +98,24 @@ export default function SaleDetailModal({
     distributor && distributorUnitPrice > 0
       ? distributorUnitPrice * sale.quantity
       : 0;
+  const warrantyLossFromReports = warrantyProducts.reduce(
+    (sum, warranty) => sum + (warranty.lossAmount || 0),
+    0
+  );
+  const warrantyCostInSale = (sale.additionalCosts || []).reduce(
+    (sum, cost) =>
+      cost.type === "warranty" || cost.type === "garantia"
+        ? sum + (cost.amount || 0)
+        : sum,
+    0
+  );
+  const warrantyLossGap = Math.max(
+    0,
+    warrantyLossFromReports - warrantyCostInSale
+  );
+  const netProfitBase =
+    sale.netProfit ?? sale.adminProfit ?? gananciaBruta ?? 0;
+  const netProfitAdjusted = netProfitBase - warrantyLossGap;
   const normalUnitPrice = product?.clientPrice ?? null;
   const hasPromoPriceFallback =
     normalUnitPrice !== null && sale.salePrice < normalUnitPrice;
@@ -354,8 +372,14 @@ export default function SaleDetailModal({
                       Ganancia Neta Admin
                     </p>
                     <p className="text-xl font-bold text-emerald-400">
-                      ${Number(sale.netProfit || 0).toLocaleString()}
+                      ${Number(netProfitAdjusted || 0).toLocaleString()}
                     </p>
+                    {warrantyLossGap > 0 && (
+                      <p className="mt-1 text-xs text-emerald-200/70">
+                        Incluye garantias: -$
+                        {warrantyLossGap.toLocaleString()}
+                      </p>
+                    )}
                   </div>
                 )}
                 {distributor && sale.distributorProfit > 0 && (
@@ -572,6 +596,79 @@ export default function SaleDetailModal({
                 </div>
               </div>
             )}
+
+            {/* Datos de Registro */}
+            <div className="border-b border-gray-800 pb-4">
+              <h3 className="mb-3 text-lg font-semibold text-gray-200">
+                🧾 Datos de registro
+              </h3>
+              <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+                <div className="rounded-lg border border-gray-800 bg-gray-900/40 p-3">
+                  <p className="text-xs text-gray-400">Origen</p>
+                  <p className="text-white">
+                    {sale.sourceLocation === "branch"
+                      ? "Sede"
+                      : sale.sourceLocation === "distributor"
+                        ? "Distribuidor"
+                        : "Bodega"}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-gray-800 bg-gray-900/40 p-3">
+                  <p className="text-xs text-gray-400">Metodo de pago</p>
+                  <p className="text-white">
+                    {sale.paymentMethodCode ||
+                      (typeof sale.paymentMethod === "string"
+                        ? sale.paymentMethod
+                        : "N/A")}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-gray-800 bg-gray-900/40 p-3">
+                  <p className="text-xs text-gray-400">Metodo de entrega</p>
+                  <p className="text-white">
+                    {sale.deliveryMethodCode ||
+                      (typeof sale.deliveryMethod === "string"
+                        ? sale.deliveryMethod
+                        : "N/A")}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-gray-800 bg-gray-900/40 p-3">
+                  <p className="text-xs text-gray-400">Pago real</p>
+                  <p className="text-white">
+                    ${Number(sale.actualPayment || totalVenta).toLocaleString()}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-gray-800 bg-gray-900/40 p-3">
+                  <p className="text-xs text-gray-400">Descuento</p>
+                  <p className="text-white">
+                    ${Number(sale.discount || 0).toLocaleString()}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-gray-800 bg-gray-900/40 p-3">
+                  <p className="text-xs text-gray-400">Envio</p>
+                  <p className="text-white">
+                    ${Number(sale.shippingCost || 0).toLocaleString()}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-gray-800 bg-gray-900/40 p-3">
+                  <p className="text-xs text-gray-400">Comprobante</p>
+                  <p className="text-white">
+                    {sale.paymentProof ? "Adjunto" : "No"}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-gray-800 bg-gray-900/40 p-3">
+                  <p className="text-xs text-gray-400">Notas</p>
+                  <p className="text-white">
+                    {sale.notes?.trim() || "Sin notas"}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-gray-800 bg-gray-900/40 p-3">
+                  <p className="text-xs text-gray-400">Registrado por</p>
+                  <p className="text-white">
+                    {createdBy?.name || "N/A"}
+                  </p>
+                </div>
+              </div>
+            </div>
 
             {/* Estado y Fechas de Pago */}
             <div className="border-b border-gray-800 pb-4">

@@ -102,8 +102,19 @@ export const branchService = {
       lowStockCount: number;
     };
   }> {
-    const response = await api.get(`/branches/${branchId}/stock`, { params });
-    return response.data;
+    const response = await api.get(`/stock/branch/${branchId}`, { params });
+    const payload = response.data?.data ?? response.data;
+    if (Array.isArray(payload)) {
+      return {
+        stock: payload,
+        stats: {
+          totalProducts: payload.length,
+          totalValue: 0,
+          lowStockCount: 0,
+        },
+      };
+    }
+    return payload;
   },
 
   // Alias for getStock (backward compatibility)
@@ -131,7 +142,7 @@ export const branchService = {
     newQuantity: number;
   }> {
     const response = await api.put(
-      `/branches/${branchId}/stock/${productId}`,
+      `/stock/branch/${branchId}/${productId}`,
       data
     );
     return response.data;

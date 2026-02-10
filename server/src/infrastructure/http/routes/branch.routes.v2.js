@@ -6,6 +6,7 @@ import {
   requirePermission,
 } from "../../../../middleware/business.middleware.js";
 import BranchController from "../controllers/BranchController.js";
+import StockController from "../controllers/StockController.js";
 
 const router = express.Router();
 router.use(protect, businessContext, requireFeature("inventory"));
@@ -19,6 +20,11 @@ router.get(
   "/:id",
   requirePermission({ module: "inventory", action: "read" }),
   BranchController.getById.bind(BranchController),
+);
+router.get(
+  "/:branchId/stock",
+  requirePermission({ module: "inventory", action: "read" }),
+  StockController.getBranchStock.bind(StockController),
 );
 router.post(
   "/",

@@ -126,4 +126,19 @@ export class DistributorController {
       res.status(status).json({ success: false, message: error.message });
     }
   }
+
+  async getPublicCatalog(req, res) {
+    try {
+      const { id } = req.params;
+      const result = await repository.getPublicCatalog(id);
+      res.json({
+        success: true,
+        products: result.products,
+        distributor: result.distributor,
+      });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      res.status(status).json({ success: false, message: error.message });
+    }
+  }
 }

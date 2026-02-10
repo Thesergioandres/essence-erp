@@ -384,4 +384,55 @@ export class DistributorRepository {
       },
     };
   }
+
+  async getPublicCatalog(distributorId) {
+    const membership = await Membership.findOne({
+      user: distributorId,
+      role: "distribuidor",
+      status: "active",
+    })
+      .select("business")
+      .lean();
+
+    if (!membership?.business) {
+      const err = new Error("Distribuidor no encontrado en este negocio");
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const distributor = await User.findOne({
+      _id: distributorId,
+      role: "distribuidor",
+    })
+      .select("name email phone")
+      .lean();
+
+    if (!distributor) {
+      const err = new Error("Distribuidor no encontrado");
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const stockEntries = await DistributorStock.find({
+      business: membership.business,
+      distributor: distributorId,
+      quantity: { $gt: 0 },
+    })
+      .populate({
+        path: "product",
+        select: "name description clientPrice distributorPrice image category",
+        populate: { path: "category", select: "name slug" },
+      })
+      .lean();
+
+    const products = stockEntries
+      .filter((entry) => entry.product)
+      .map((entry) => ({
+        ...entry.product,
+        distributorStock: entry.quantity,
+        totalStock: entry.quantity,
+      }));
+
+    return { distributor, products };
+  }
 }

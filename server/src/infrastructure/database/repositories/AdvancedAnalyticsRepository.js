@@ -360,8 +360,8 @@ export class AdvancedAnalyticsRepository {
         {
           $match: {
             business: businessObjectId,
-            status: "confirmado",
-            origin: "order",
+            status: { $in: ["confirmado", "procesado"] },
+            lossAmount: { $gt: 0 },
             ...(dateRange ? { reportDate: dateRange } : {}),
           },
         },
@@ -371,8 +371,8 @@ export class AdvancedAnalyticsRepository {
         {
           $match: {
             business: businessObjectId,
-            status: "confirmado",
-            origin: "order",
+            status: { $in: ["confirmado", "procesado"] },
+            lossAmount: { $gt: 0 },
             reportDate: { $gte: todayStart, $lte: todayEnd },
           },
         },
@@ -382,8 +382,8 @@ export class AdvancedAnalyticsRepository {
         {
           $match: {
             business: businessObjectId,
-            status: "confirmado",
-            origin: "order",
+            status: { $in: ["confirmado", "procesado"] },
+            lossAmount: { $gt: 0 },
             reportDate: { $gte: weekStart, $lte: new Date() },
           },
         },
@@ -393,8 +393,8 @@ export class AdvancedAnalyticsRepository {
         {
           $match: {
             business: businessObjectId,
-            status: "confirmado",
-            origin: "order",
+            status: { $in: ["confirmado", "procesado"] },
+            lossAmount: { $gt: 0 },
             reportDate: { $gte: monthStart, $lte: new Date() },
           },
         },
@@ -467,7 +467,7 @@ export class AdvancedAnalyticsRepository {
         {
           $match: {
             business: businessObjectId,
-            ...(dateRange ? { date: dateRange } : {}),
+            ...(dateRange ? { expenseDate: dateRange } : {}),
           },
         },
         {
@@ -566,8 +566,10 @@ export class AdvancedAnalyticsRepository {
       netProfit: monthly.netProfit + monthlySpecial.netProfit,
     };
 
-    // 🎯 FIX TASK 2: Calculate REAL Net Profit (Gross Profit - Expenses)
-    const netSalesProfit = combinedRange.netProfit - warrantyRange;
+    // 🎯 FIX TASK 2: Calculate REAL Net Profit (Admin Profit - Expenses/Losses)
+    const rangeExpenses = Math.abs(expenses.totalExpenses || 0);
+    const netSalesProfit =
+      combinedRange.netProfit - rangeExpenses - warrantyRange;
     const dailyNetProfit = combinedDaily.netProfit - warrantyDaily;
     const weeklyNetProfit = combinedWeekly.netProfit - warrantyWeekly;
     const monthlyNetProfit = combinedMonthly.netProfit - warrantyMonthly;
@@ -1269,7 +1271,7 @@ export class AdvancedAnalyticsRepository {
 
     const match = {
       business: businessObjectId,
-      ...(dateRange ? { date: dateRange } : {}),
+      ...(dateRange ? { expenseDate: dateRange } : {}),
     };
 
     const summary = await Expense.aggregate([

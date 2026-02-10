@@ -33,10 +33,7 @@ import {
   WarrantySection,
 } from "../components/admin-order";
 import { initialOrderState, orderReducer } from "../reducers/orderReducer";
-import {
-  defectiveProductService,
-  saleService,
-} from "../services/sales.service";
+import { saleService } from "../services/sales.service";
 import type {
   AdminOrderPayload,
   ProductWithStock,
@@ -690,6 +687,12 @@ export default function StandardSalePage() {
           additionalCosts: payload.additionalCosts,
           paymentProof: payload.paymentProof,
           paymentProofMimeType: payload.paymentProofMimeType,
+          warranties: order.warranties.map(warranty => ({
+            productId: warranty.productId,
+            quantity: warranty.quantity,
+            type: warranty.type,
+            reason: warranty.reason,
+          })),
         });
 
         totalProcessedItems = payload.items.reduce(
@@ -705,28 +708,6 @@ export default function StandardSalePage() {
         throw new Error(
           err.response?.data?.message || "Error al procesar el pedido"
         );
-      }
-
-      // Process warranty items as defective products
-      for (const warranty of order.warranties) {
-        try {
-          await defectiveProductService.reportAdmin({
-            productId: warranty.productId,
-            quantity: warranty.quantity,
-            hasWarranty: warranty.type === "supplier_replacement",
-            saleGroupId,
-            origin: "order",
-            reason:
-              warranty.reason ||
-              `${warranty.type === "supplier_replacement" ? "Reemplazo proveedor" : "Pérdida total"} - Orden ${saleGroupId}`,
-          });
-        } catch (err) {
-          console.error(
-            `Error processing warranty for ${warranty.productName}:`,
-            err
-          );
-          // Don't fail the whole order for warranty errors
-        }
       }
 
       // Success!

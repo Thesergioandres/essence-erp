@@ -209,6 +209,12 @@ class StockRepository {
     fromStock.quantity -= quantity;
     await fromStock.save();
 
+    const fromBefore = fromStock.quantity + quantity;
+    const fromAfter = fromStock.quantity;
+
+    let toBefore = 0;
+    let toAfter = 0;
+
     if (redirectToWarehouse) {
       const product = await Product.findOne({
         _id: productId,
@@ -218,8 +224,23 @@ class StockRepository {
         throw new Error("Producto no encontrado");
       }
 
-      product.warehouseStock = (product.warehouseStock || 0) + quantity;
+      toBefore = product.warehouseStock || 0;
+      product.warehouseStock = toBefore + quantity;
+      toAfter = product.warehouseStock;
       await product.save();
+
+      await StockTransfer.create({
+        business: businessId,
+        fromDistributor: fromDistributorId,
+        toBranch: toBranchId,
+        product: productId,
+        quantity,
+        fromStockBefore: fromBefore,
+        fromStockAfter: fromAfter,
+        toStockBefore: toBefore,
+        toStockAfter: toAfter,
+        status: "completed",
+      });
 
       return { fromStock, branchStock: null };
     }
@@ -231,16 +252,33 @@ class StockRepository {
     });
 
     if (!branchStock) {
+      toBefore = 0;
       branchStock = await BranchStock.create({
         business: businessId,
         branch: toBranchId,
         product: productId,
         quantity,
       });
+      toAfter = quantity;
     } else {
+      toBefore = branchStock.quantity;
       branchStock.quantity += quantity;
+      toAfter = branchStock.quantity;
       await branchStock.save();
     }
+
+    await StockTransfer.create({
+      business: businessId,
+      fromDistributor: fromDistributorId,
+      toBranch: toBranchId,
+      product: productId,
+      quantity,
+      fromStockBefore: fromBefore,
+      fromStockAfter: fromAfter,
+      toStockBefore: toBefore,
+      toStockAfter: toAfter,
+      status: "completed",
+    });
 
     return { fromStock, branchStock };
   }
@@ -675,6 +713,7 @@ class StockRepository {
       StockTransfer.find(query)
         .populate("fromDistributor", "name email")
         .populate("toDistributor", "name email")
+        .populate("toBranch", "name")
         .populate("product", "name image")
         .sort({ createdAt: -1 })
         .skip(skip)

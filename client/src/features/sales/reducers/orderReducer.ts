@@ -93,6 +93,13 @@ const recalculateTotals = (state: OrderState): OrderState => {
     0
   );
 
+  const warrantyLoss = state.warranties.reduce((sum, warranty) => {
+    if (warranty.type !== "total_loss") return sum;
+    const unitCost = Number(warranty.unitCost || 0);
+    const quantity = Number(warranty.quantity || 0);
+    return sum + unitCost * quantity;
+  }, 0);
+
   // Calculate discount (use amount or percentage)
   let discountAmount = state.discount;
   if (state.discountPercent > 0 && state.discount === 0) {
@@ -111,11 +118,15 @@ const recalculateTotals = (state: OrderState): OrderState => {
     ? Math.max(0, itemsGrossProfit - discountAmount)
     : itemsGrossProfit;
   const netProfit = state.isDistributorSale
-    ? adjustedGrossProfit - additionalCharges - additionalAdjustments
+    ? adjustedGrossProfit -
+      additionalCharges -
+      additionalAdjustments -
+      warrantyLoss
     : itemsGrossProfit -
       additionalCharges -
       additionalAdjustments -
-      discountAmount;
+      discountAmount -
+      warrantyLoss;
 
   // Total payable = subtotal + shipping + additional costs - discount
   const totalPayable =

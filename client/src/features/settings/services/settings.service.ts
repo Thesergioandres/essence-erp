@@ -269,7 +269,12 @@ export const promotionService = {
     promotion: Promotion;
   }> {
     const response = await api.put(`/promotions/${id}/toggle-status`);
-    return response.data;
+    const apiResponse = response.data;
+    const promotion = apiResponse?.promotion || apiResponse?.data;
+    return {
+      message: apiResponse?.message,
+      promotion,
+    };
   },
 };
 

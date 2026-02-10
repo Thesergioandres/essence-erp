@@ -89,6 +89,11 @@ const saleSchema = new mongoose.Schema(
       default: false,
       index: true,
     },
+    promotionMetricsApplied: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
     // Ganancias calculadas
     distributorProfit: {
       type: Number,
@@ -342,8 +347,21 @@ saleSchema.pre("save", function (next) {
   // El averageCost se debe pasar como this.averageCostAtSale si se calculó antes
   const costBasis = this.averageCostAtSale || this.purchasePrice;
 
-  // Si es venta admin (sin distribuidor)
-  if (!this.distributor) {
+  if (this.isPromotion) {
+    const hasDistributor = Boolean(this.distributor);
+    if (hasDistributor) {
+      const distributorPrice = Number(this.distributorPrice || this.salePrice);
+      this.distributorProfit =
+        (this.salePrice - distributorPrice) * this.quantity;
+      this.adminProfit = (distributorPrice - costBasis) * this.quantity;
+      this.totalProfit = this.distributorProfit + this.adminProfit;
+    } else {
+      this.adminProfit = (this.salePrice - costBasis) * this.quantity;
+      this.distributorProfit = 0;
+      this.distributorProfitPercentage = 0;
+      this.totalProfit = this.adminProfit;
+    }
+  } else if (!this.distributor) {
     // Solo hay ganancia del admin: (precio de venta - costo) * cantidad
     this.adminProfit = (this.salePrice - costBasis) * this.quantity;
     this.distributorProfit = 0;
@@ -353,7 +371,7 @@ saleSchema.pre("save", function (next) {
     // Venta de distribuidor
     // El distribuidor recibe una comisión sobre el precio de venta según su ranking
     // 🥇 1º: 25%, 🥈 2º: 23%, 🥉 3º: 21%, Resto: 20%
-    const profitPercentage = this.distributorProfitPercentage || 20;
+    const profitPercentage = this.distributorProfitPercentage ?? 20;
 
     // PRECIO PARA DISTRIBUIDOR = Lo que el distribuidor PAGA al admin
     // Ejemplo: Venta $22,000 con 20% comisión
@@ -380,7 +398,7 @@ saleSchema.pre("save", function (next) {
   // Calcular total de costos adicionales
   if (this.additionalCosts && this.additionalCosts.length > 0) {
     this.totalAdditionalCosts = this.additionalCosts.reduce(
-      (sum, cost) => sum + Math.abs(cost.amount || 0),
+      (sum, cost) => sum + Number(cost.amount || 0),
       0,
     );
   } else {

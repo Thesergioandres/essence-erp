@@ -36,6 +36,10 @@ export function OrderSummary({
 
   const totalItems = items.reduce((sum, i) => sum + i.quantity, 0);
   const totalWarrantyItems = warranties.reduce((sum, w) => sum + w.quantity, 0);
+  const warrantyLoss = warranties.reduce((sum, warranty) => {
+    if (warranty.type !== "total_loss") return sum;
+    return sum + (warranty.unitCost || 0) * (warranty.quantity || 0);
+  }, 0);
   const additionalCharges = additionalCosts.reduce(
     (sum, c) => sum + (c.amount > 0 ? c.amount : 0),
     0
@@ -91,6 +95,13 @@ export function OrderSummary({
               Descuento {discountPercent > 0 ? `(${discountPercent}%)` : ""}
             </span>
             <span>-${effectiveDiscount.toLocaleString()}</span>
+          </div>
+        )}
+
+        {warrantyLoss > 0 && (
+          <div className="flex justify-between text-red-400">
+            <span>Perdidas por garantia</span>
+            <span>-${warrantyLoss.toLocaleString()}</span>
           </div>
         )}
 
@@ -155,6 +166,11 @@ export function OrderSummary({
             >
               ${netProfit.toLocaleString()}
             </p>
+            {warrantyLoss > 0 && (
+              <p className="text-xs text-red-400">
+                -Costo de perdida: ${warrantyLoss.toLocaleString()}
+              </p>
+            )}
           </div>
         </div>
       </div>

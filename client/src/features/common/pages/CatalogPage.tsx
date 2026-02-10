@@ -11,6 +11,8 @@ import ProductCard from "../../../components/ProductCard";
 import { useDebounce } from "../../../hooks";
 import { LoadingSpinner } from "../../../shared/components/ui";
 import type { Category, Product } from "../../inventory/types/product.types";
+import { promotionService } from "../../settings/services";
+import type { Promotion } from "../../settings/types/promotion.types";
 
 export default function Catalog() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -49,6 +51,8 @@ export default function Catalog() {
     max: 0,
   });
   const [maxPrice, setMaxPrice] = useState(0);
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
+  const [promotionError, setPromotionError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!publicBusinessId) {
@@ -99,6 +103,23 @@ export default function Catalog() {
           setCategories(derivedCategories);
         }
 
+        try {
+          const promoResponse = await promotionService.getAll({
+            status: "active",
+          });
+          const promoList = (promoResponse.promotions || []).filter(
+            promo => promo.showInCatalog !== false
+          );
+          setPromotions(promoList);
+          setPromotionError(null);
+        } catch (promoError) {
+          console.error("Error loading promotions:", promoError);
+          setPromotions([]);
+          setPromotionError(
+            hasToken ? "No se pudieron cargar promociones activas." : null
+          );
+        }
+
         const maxClientPrice = Math.max(
           0,
           ...productsList.map((p: Product) => Number(p.clientPrice) || 0)
@@ -116,6 +137,72 @@ export default function Catalog() {
     };
     loadData();
   }, [publicBusinessId]);
+
+  const activePromotions = useMemo(() => {
+    return (promotions || []).filter(
+      promo => promo.status === "active" || promo.isActive
+    );
+  }, [promotions]);
+
+  const getPromotionPrice = (promo: Promotion) => {
+    if (typeof promo.promotionPrice === "number") return promo.promotionPrice;
+    if (typeof promo.value === "number" && promo.type === "fixed") {
+      return promo.value;
+    }
+    if (
+      promo.discount?.type === "percentage" &&
+      typeof promo.originalPrice === "number"
+    ) {
+      return promo.originalPrice * (1 - promo.discount.value / 100);
+    }
+    if (
+      promo.discount?.type === "amount" &&
+      typeof promo.originalPrice === "number"
+    ) {
+      return promo.originalPrice - promo.discount.value;
+    }
+    if (typeof promo.originalPrice === "number") return promo.originalPrice;
+    return 0;
+  };
+
+  const getPromotionDiscountLabel = (promo: Promotion, price: number) => {
+    const discountType =
+      promo.discount?.type ||
+      (promo.type === "percentage"
+        ? "percentage"
+        : promo.type === "fixed"
+          ? "amount"
+          : null);
+    const rawDiscountValue =
+      typeof promo.discount?.value === "number"
+        ? promo.discount.value
+        : typeof promo.value === "number"
+          ? promo.value
+          : null;
+
+    if (discountType && typeof rawDiscountValue === "number") {
+      if (discountType === "percentage" && rawDiscountValue > 0) {
+        return `-${rawDiscountValue}%`;
+      }
+      if (discountType === "amount" && rawDiscountValue > 0) {
+        return `-$${rawDiscountValue}`;
+      }
+    }
+
+    const savingsPct = Number(promo.savingsPercentage || 0);
+    if (savingsPct > 0) return `-${Math.round(savingsPct)}%`;
+
+    const savings = Number(promo.savings || 0);
+    if (savings > 0) return `-$${Math.round(savings)}`;
+
+    const originalPrice = Number(promo.originalPrice || 0);
+    if (originalPrice > 0 && price > 0 && originalPrice > price) {
+      const pct = Math.round(((originalPrice - price) / originalPrice) * 100);
+      if (pct > 0) return `-${pct}%`;
+    }
+
+    return null;
+  };
 
   const shareLink = useMemo(() => {
     if (typeof window === "undefined") return "";
@@ -317,7 +404,10 @@ export default function Catalog() {
   ]);
 
   return (
-    <div className="min-h-screen bg-[#0f1210] text-slate-100">
+    <div
+      className="min-h-screen bg-[#0f1210] text-slate-100"
+      style={{ fontFamily: "'Poppins', 'Montserrat', sans-serif" }}
+    >
       {!hideChrome && <Navbar />}
 
       {!hideChrome && (
@@ -477,6 +567,87 @@ export default function Catalog() {
             </div>
           )}
         </div>
+
+        {/* Active Promotions */}
+        {(promotionError || activePromotions.length > 0) && (
+          <section className="rounded-3xl border border-emerald-400/20 bg-gradient-to-br from-emerald-500/10 via-transparent to-amber-500/10 p-6 shadow-xl">
+            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-200">
+                  Promociones activas
+                </p>
+                <h2 className="text-2xl font-semibold text-white">
+                  Ahorra con ofertas listas para hoy
+                </h2>
+              </div>
+              <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-emerald-100">
+                {activePromotions.length} disponibles
+              </span>
+            </div>
+
+            {promotionError ? (
+              <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                {promotionError}
+              </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {activePromotions.map(promo => {
+                  const price = getPromotionPrice(promo);
+                  const discountLabel = getPromotionDiscountLabel(promo, price);
+                  return (
+                    <div
+                      key={promo._id}
+                      className="group overflow-hidden rounded-2xl border border-white/10 bg-gray-950/60 p-5 shadow-lg transition hover:-translate-y-1 hover:border-emerald-400/40"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-widest text-emerald-300">
+                            {promo.type === "combo"
+                              ? "Combo"
+                              : promo.type === "percentage"
+                                ? "Descuento"
+                                : "Promo"}
+                          </p>
+                          <h3 className="mt-2 text-lg font-semibold text-white">
+                            {promo.name}
+                          </h3>
+                        </div>
+                        <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-[10px] font-semibold uppercase text-emerald-100">
+                          Activa
+                        </span>
+                      </div>
+                      {promo.description && (
+                        <p className="mt-3 line-clamp-2 text-sm text-gray-300">
+                          {promo.description}
+                        </p>
+                      )}
+                      <div className="mt-4 flex items-center justify-between">
+                        <div>
+                          <p className="text-xs text-gray-400">
+                            Precio cliente
+                          </p>
+                          <p className="text-2xl font-semibold text-emerald-200">
+                            ${price.toFixed(0)}
+                          </p>
+                        </div>
+                        {discountLabel && (
+                          <span className="rounded-full border border-amber-400/40 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-200">
+                            {discountLabel}
+                          </span>
+                        )}
+                      </div>
+                      {promo.comboItems && promo.comboItems.length > 0 && (
+                        <p className="mt-3 text-xs text-gray-400">
+                          Incluye {promo.comboItems.length} producto(s)
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        )}
 
         {/* Category Pills */}
         <div className="scrollbar-hide mb-8 overflow-x-auto">

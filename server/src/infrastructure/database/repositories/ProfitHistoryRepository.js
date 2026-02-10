@@ -486,6 +486,17 @@ class ProfitHistoryRepository {
             },
             isCommissionType: { $eq: ["$type", "commission"] },
             amountSafe: { $ifNull: ["$amount", 0] },
+            isPromotionDistributor: {
+              $and: [
+                { $eq: ["$saleInfo.isPromotion", true] },
+                { $ne: ["$saleInfo.distributor", null] },
+              ],
+            },
+            saleAdminProfit: { $ifNull: ["$saleInfo.adminProfit", null] },
+            saleDistributorProfit: {
+              $ifNull: ["$saleInfo.distributorProfit", null],
+            },
+            saleTotalProfit: { $ifNull: ["$saleInfo.totalProfit", null] },
           },
         },
         {
@@ -533,18 +544,54 @@ class ProfitHistoryRepository {
               },
             },
             productName: { $first: "$productNameField" },
-            distributorProfit: { $sum: "$distributorProfit" },
-            totalProfit: { $sum: "$amountSafe" },
+            distributorProfitSum: { $sum: "$distributorProfit" },
+            totalProfitSum: { $sum: "$amountSafe" },
             hasDistributorContext: { $max: "$hasDistributorContext" },
+            isPromotionDistributor: { $max: "$isPromotionDistributor" },
+            saleAdminProfit: { $first: "$saleAdminProfit" },
+            saleDistributorProfit: { $first: "$saleDistributorProfit" },
+            saleTotalProfit: { $first: "$saleTotalProfit" },
           },
         },
         {
           $addFields: {
+            distributorProfit: {
+              $cond: [
+                "$isPromotionDistributor",
+                {
+                  $ifNull: ["$saleDistributorProfit", "$distributorProfitSum"],
+                },
+                "$distributorProfitSum",
+              ],
+            },
+            totalProfit: {
+              $cond: [
+                "$isPromotionDistributor",
+                {
+                  $ifNull: [
+                    "$saleTotalProfit",
+                    { $add: ["$saleAdminProfit", "$saleDistributorProfit"] },
+                  ],
+                },
+                "$totalProfitSum",
+              ],
+            },
             adminProfit: {
               $cond: [
-                "$hasDistributorContext",
-                { $subtract: ["$totalProfit", "$distributorProfit"] },
-                "$totalProfit",
+                "$isPromotionDistributor",
+                {
+                  $ifNull: [
+                    "$saleAdminProfit",
+                    { $subtract: ["$totalProfit", "$distributorProfit"] },
+                  ],
+                },
+                {
+                  $cond: [
+                    "$hasDistributorContext",
+                    { $subtract: ["$totalProfitSum", "$distributorProfitSum"] },
+                    "$totalProfitSum",
+                  ],
+                },
               ],
             },
           },

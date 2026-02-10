@@ -24,6 +24,7 @@ const buildSaleInput = (req, distributorId) => ({
   shippingCost: req.body.shippingCost,
   discount: req.body.discount,
   additionalCosts: req.body.additionalCosts,
+  warranties: req.body.warranties,
   notes: req.body.notes,
   distributorProfitPercentage: req.body.distributorProfitPercentage,
 });

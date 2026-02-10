@@ -378,6 +378,21 @@ export const expenseService = {
     const response = await api.delete(`/expenses/${id}`);
     return response.data;
   },
+
+  async createInventoryWithdrawal(payload: {
+    productId: string;
+    branchId?: string;
+    distributorId?: string;
+    quantity: number;
+    reason: string;
+    locationType?: "branch" | "warehouse" | "distributor";
+    expenseDate?: string;
+  }): Promise<{ expense: Expense }> {
+    const response = await api.post("/expenses/inventory-withdrawal", payload);
+    const raw = response.data;
+    const expense = raw?.data ?? raw?.expense ?? raw;
+    return { expense };
+  },
 };
 
 // Types for Profit History

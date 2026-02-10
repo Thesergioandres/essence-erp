@@ -66,6 +66,12 @@ const promotionSchema = new mongoose.Schema(
     startDate: { type: Date },
     endDate: { type: Date },
     branches: [{ type: mongoose.Schema.Types.ObjectId, ref: "Branch" }],
+    allowAllLocations: { type: Boolean, default: true },
+    allowedLocations: [{ type: mongoose.Schema.Types.ObjectId, ref: "Branch" }],
+    allowAllDistributors: { type: Boolean, default: true },
+    allowedDistributors: [
+      { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    ],
     segments: [{ type: String, trim: true }],
     customers: [{ type: mongoose.Schema.Types.ObjectId, ref: "Customer" }],
 
@@ -107,6 +113,7 @@ const promotionSchema = new mongoose.Schema(
 
     // Control de stock y límites
     totalStock: { type: Number, default: null }, // null = ilimitado
+    currentStock: { type: Number, default: null },
     usageLimit: { type: Number, default: null }, // Límite total de usos
     usageLimitPerCustomer: { type: Number, default: null }, // Límite por cliente
 

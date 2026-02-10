@@ -68,6 +68,10 @@ export interface Promotion {
   startDate?: string;
   endDate?: string;
   branches?: Array<string | { _id: string; name?: string }>;
+  allowAllLocations?: boolean;
+  allowedLocations?: Array<string | { _id: string; name?: string }>;
+  allowAllDistributors?: boolean;
+  allowedDistributors?: Array<string | { _id: string; name?: string }>;
   segments?: string[];
   customers?: unknown[] | string[];
   buyItems?: PromotionComboItem[];

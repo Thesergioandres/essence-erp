@@ -310,19 +310,8 @@ export default function ProfitHistoryView({
         // 2. Commissions (from backend overview)
         const commissions = overview.totalDistributorCommissions || 0;
 
-        const historyTotalExpensesRaw = overview.totalExpenses ?? 0;
-        const historyTotalExpenses = Math.abs(historyTotalExpensesRaw);
-        const fallbackTotalExpenses = Math.abs(fallbackExpenses);
-        const totalExpenses =
-          historyTotalExpenses > 0
-            ? historyTotalExpenses
-            : fallbackTotalExpenses > 0
-              ? fallbackTotalExpenses
-              : nonDefectiveTotal;
-        const defectiveLosses =
-          historyTotalExpenses > 0 || fallbackTotalExpenses > 0
-            ? 0
-            : defectiveStats?.totalLoss || 0;
+        const totalExpenses = nonDefectiveTotal;
+        const defectiveLosses = defectiveStats?.totalLoss || 0;
 
         const additionalSalesCosts = 0;
 
@@ -335,12 +324,13 @@ export default function ProfitHistoryView({
           additionalSalesCosts;
         const backendNet = overview.netProfit;
         const backendTotal = overview.totalProfit;
-        const netProfit =
-          typeof backendNet === "number" && backendNet !== 0
+        const netProfit = Number.isFinite(computedNet)
+          ? computedNet
+          : typeof backendNet === "number"
             ? backendNet
-            : typeof backendTotal === "number" && backendTotal !== 0
+            : typeof backendTotal === "number"
               ? backendTotal
-              : computedNet;
+              : 0;
 
         // Usar gastos filtrados (sin defectuosos) para evitar doble conteo
         const expensesByType = nonDefectiveExpenses.reduce(
@@ -464,7 +454,9 @@ export default function ProfitHistoryView({
                           {formatCurrency(amount)}
                         </p>
                         <p className="text-xs text-gray-500">
-                          {((amount / totalExpenses) * 100).toFixed(1)}%
+                          {totalExpenses > 0
+                            ? ((amount / totalExpenses) * 100).toFixed(1)
+                            : "0.0"}
                         </p>
                       </div>
                     ))}

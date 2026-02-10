@@ -1,9 +1,24 @@
+import Branch from "../../../../models/Branch.js";
+import BranchStock from "../../../../models/BranchStock.js";
 import DefectiveProduct from "../../../../models/DefectiveProduct.js";
+import DistributorStock from "../../../../models/DistributorStock.js";
 import Expense from "../../../../models/Expense.js";
+import Product from "../../../../models/Product.js";
 import ProfitHistory from "../../../../models/ProfitHistory.js";
 import Sale from "../../../../models/Sale.js";
+import { ProductRepository } from "./ProductRepository.js";
 
 class ExpenseRepository {
+  constructor() {
+    this.productRepository = new ProductRepository();
+  }
+
+  buildError(message, statusCode = 400) {
+    const err = new Error(message);
+    err.statusCode = statusCode;
+    return err;
+  }
+
   async create(businessId, data, userId) {
     const { type, category, amount, description, expenseDate } = data;
 
@@ -37,6 +52,150 @@ class ExpenseRepository {
       metadata: {
         expenseId: expense._id,
         expenseType: resolvedType.trim(),
+      },
+    });
+
+    return Expense.findById(expense._id)
+      .populate("createdBy", "name email")
+      .lean();
+  }
+
+  async createInventoryWithdrawal(businessId, data, userId) {
+    const {
+      productId,
+      branchId,
+      distributorId,
+      quantity,
+      reason,
+      expenseDate,
+      locationType,
+    } = data || {};
+
+    if (!productId) throw this.buildError("Producto requerido");
+
+    const qty = Number(quantity);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      throw this.buildError("Cantidad invalida");
+    }
+
+    let resolvedLocationType =
+      locationType === "branch"
+        ? "branch"
+        : locationType === "distributor"
+          ? "distributor"
+          : locationType === "warehouse"
+            ? "warehouse"
+            : distributorId
+              ? "distributor"
+              : branchId
+                ? "branch"
+                : "warehouse";
+
+    const product = await Product.findOne({
+      _id: productId,
+      business: businessId,
+    });
+    if (!product) throw this.buildError("Producto no encontrado", 404);
+
+    let branch = null;
+    let distributor = null;
+
+    if (resolvedLocationType === "branch") {
+      if (!branchId) throw this.buildError("Sede requerida");
+      branch = await Branch.findOne({ _id: branchId, business: businessId });
+      if (!branch) throw this.buildError("Sede invalida", 404);
+
+      if (branch.isWarehouse) {
+        resolvedLocationType = "warehouse";
+        branch = null;
+      }
+    }
+
+    if (resolvedLocationType === "branch") {
+      const branchStock = await BranchStock.findOneAndUpdate(
+        {
+          business: businessId,
+          branch: branchId,
+          product: productId,
+          quantity: { $gte: qty },
+        },
+        { $inc: { quantity: -qty } },
+        { new: true },
+      );
+
+      if (!branchStock) {
+        throw this.buildError("Stock insuficiente en la sede seleccionada");
+      }
+    } else if (resolvedLocationType === "distributor") {
+      if (!distributorId) throw this.buildError("Distribuidor requerido");
+      const distStock = await DistributorStock.findOneAndUpdate(
+        {
+          business: businessId,
+          distributor: distributorId,
+          product: productId,
+          quantity: { $gte: qty },
+        },
+        { $inc: { quantity: -qty } },
+        { new: true },
+      );
+
+      if (!distStock) {
+        throw this.buildError(
+          "Stock insuficiente en el distribuidor seleccionado",
+        );
+      }
+      distributor = distStock.distributor;
+    } else {
+      const available = product.warehouseStock || 0;
+      if (available < qty) {
+        throw this.buildError("Stock insuficiente en bodega");
+      }
+      await this.productRepository.updateWarehouseStock(productId, -qty);
+    }
+
+    await this.productRepository.updateStock(productId, -qty);
+
+    const unitCost = product.purchasePrice || product.averageCost || 0;
+    const totalCost = unitCost * qty;
+    const safeReason =
+      typeof reason === "string" && reason.trim() ? reason.trim() : "Retiro";
+    const locationLabel = branch
+      ? branch.name
+      : resolvedLocationType === "distributor"
+        ? "Distribuidor"
+        : "Bodega";
+
+    const expense = await Expense.create({
+      type: "Retiro de Inventario",
+      category: "inventario",
+      amount: totalCost,
+      description: `Retiro de Inventario - ${safeReason} - ${product.name} x${qty} (${locationLabel})`,
+      expenseDate: expenseDate ? new Date(expenseDate) : new Date(),
+      createdBy: userId,
+      business: businessId,
+      product: product._id,
+      quantity: qty,
+      sourceType: resolvedLocationType,
+      sourceBranch: branch ? branch._id : null,
+      sourceDistributor: distributor || null,
+    });
+
+    await ProfitHistory.create({
+      business: businessId,
+      user: userId,
+      type: "ajuste",
+      amount: -Math.abs(totalCost),
+      product: product._id,
+      description: `Retiro de Inventario: ${product.name} x${qty} (${safeReason})`,
+      date: expense.expenseDate || new Date(),
+      metadata: {
+        expenseId: expense._id,
+        eventName: "inventory_withdrawal",
+        productId,
+        branchId: branch ? branch._id : null,
+        distributorId: distributor || null,
+        quantity: qty,
+        unitCost,
       },
     });
 
@@ -254,6 +413,45 @@ class ExpenseRepository {
     }).lean();
 
     if (deleted) {
+      if (
+        deleted.type === "Retiro de Inventario" &&
+        deleted.product &&
+        Number(deleted.quantity) > 0
+      ) {
+        const restoreQty = Number(deleted.quantity) || 0;
+        if (deleted.sourceType === "branch" && deleted.sourceBranch) {
+          await BranchStock.findOneAndUpdate(
+            {
+              business: businessId,
+              branch: deleted.sourceBranch,
+              product: deleted.product,
+            },
+            { $inc: { quantity: restoreQty } },
+            { upsert: true, new: true, setDefaultsOnInsert: true },
+          );
+        } else if (
+          deleted.sourceType === "distributor" &&
+          deleted.sourceDistributor
+        ) {
+          await DistributorStock.findOneAndUpdate(
+            {
+              business: businessId,
+              distributor: deleted.sourceDistributor,
+              product: deleted.product,
+            },
+            { $inc: { quantity: restoreQty } },
+            { upsert: true, new: true, setDefaultsOnInsert: true },
+          );
+        } else {
+          await this.productRepository.updateWarehouseStock(
+            deleted.product,
+            restoreQty,
+          );
+        }
+
+        await this.productRepository.updateStock(deleted.product, restoreQty);
+      }
+
       const resolvedType =
         (typeof deleted.type === "string" && deleted.type.trim()) ||
         (typeof deleted.category === "string" && deleted.category.trim()) ||

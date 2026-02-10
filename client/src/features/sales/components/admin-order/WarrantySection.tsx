@@ -42,6 +42,7 @@ export function WarrantySection({
       type,
       reason,
       availableStock: product.warehouseStock,
+      unitCost: product.averageCost || product.purchasePrice || 0,
     });
 
     // Reset form

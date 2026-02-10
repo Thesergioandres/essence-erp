@@ -9,6 +9,10 @@ interface PromotionSelectorProps {
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  getPromotionAvailability?: (promotion: Promotion) => {
+    available: boolean;
+    reason?: string;
+  };
 }
 
 const formatPrice = (promotion: Promotion) => {
@@ -34,6 +38,7 @@ export default function PromotionSelector({
   placeholder = "Seleccionar promocion...",
   disabled = false,
   className = "",
+  getPromotionAvailability,
 }: PromotionSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -93,11 +98,13 @@ export default function PromotionSelector({
 
   const handleSelect = useCallback(
     (promotion: Promotion) => {
+      const availability = getPromotionAvailability?.(promotion);
+      if (availability && !availability.available) return;
       onChange(promotion._id, promotion);
       setIsOpen(false);
       setSearch("");
     },
-    [onChange]
+    [getPromotionAvailability, onChange]
   );
 
   const handleClear = useCallback(
@@ -194,50 +201,66 @@ export default function PromotionSelector({
               </div>
             ) : (
               <div className="py-1">
-                {filteredPromotions.map(promo => (
-                  <button
-                    key={promo._id}
-                    type="button"
-                    onClick={() => handleSelect(promo)}
-                    className={`flex w-full items-center gap-3 px-3 py-2 text-left transition hover:bg-gray-700 ${
-                      value === promo._id ? "bg-purple-500/20" : ""
-                    }`}
-                  >
-                    {promo.image?.url ? (
-                      <img
-                        src={promo.image.url}
-                        alt=""
-                        className="h-8 w-8 rounded object-cover"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="flex h-8 w-8 items-center justify-center rounded bg-gray-700">
-                        <Package className="h-4 w-4 text-gray-500" />
+                {filteredPromotions.map(promo => {
+                  const availability = getPromotionAvailability?.(promo);
+                  const isAvailable = availability?.available !== false;
+                  const reason = availability?.reason || "";
+
+                  return (
+                    <button
+                      key={promo._id}
+                      type="button"
+                      onClick={() => handleSelect(promo)}
+                      disabled={!isAvailable}
+                      className={`flex w-full items-center gap-3 px-3 py-2 text-left transition ${
+                        value === promo._id ? "bg-purple-500/20" : ""
+                      } ${
+                        isAvailable
+                          ? "hover:bg-gray-700"
+                          : "cursor-not-allowed opacity-60"
+                      }`}
+                    >
+                      {promo.image?.url ? (
+                        <img
+                          src={promo.image.url}
+                          alt=""
+                          className="h-8 w-8 rounded object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="flex h-8 w-8 items-center justify-center rounded bg-gray-700">
+                          <Package className="h-4 w-4 text-gray-500" />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate font-medium text-white">
+                            {promo.name}
+                          </span>
+                          {value === promo._id && (
+                            <Check className="h-4 w-4 text-purple-400" />
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="text-gray-400">
+                            {promo.comboItems?.length || 0} productos
+                          </span>
+                          {promo.status && (
+                            <span className="text-gray-500">
+                              {promo.status}
+                            </span>
+                          )}
+                          {!isAvailable && reason && (
+                            <span className="text-amber-300">{reason}</span>
+                          )}
+                        </div>
                       </div>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="truncate font-medium text-white">
-                          {promo.name}
-                        </span>
-                        {value === promo._id && (
-                          <Check className="h-4 w-4 text-purple-400" />
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 text-xs">
-                        <span className="text-gray-400">
-                          {promo.comboItems?.length || 0} productos
-                        </span>
-                        {promo.status && (
-                          <span className="text-gray-500">{promo.status}</span>
-                        )}
-                      </div>
-                    </div>
-                    <span className="text-sm text-gray-400">
-                      ${formatPrice(promo).toLocaleString()}
-                    </span>
-                  </button>
-                ))}
+                      <span className="text-sm text-gray-400">
+                        ${formatPrice(promo).toLocaleString()}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>

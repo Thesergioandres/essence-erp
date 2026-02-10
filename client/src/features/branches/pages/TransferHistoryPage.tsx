@@ -10,7 +10,8 @@ import type { Product } from "../../inventory/types/product.types";
 interface StockTransfer {
   _id: string;
   fromDistributor: User;
-  toDistributor: User;
+  toDistributor?: User | null;
+  toBranch?: { _id: string; name: string } | null;
   product: Product;
   quantity: number;
   fromStockBefore: number;
@@ -125,7 +126,7 @@ export default function TransferHistory() {
           </h1>
           <p className="text-sm text-gray-400 sm:text-base">
             Registro de movimientos de stock: bodega → distribuidor,
-            distribuidor → distribuidor
+            distribuidor → distribuidor, distribuidor → sede
           </p>
         </div>
 
@@ -370,7 +371,9 @@ export default function TransferHistory() {
                         <td className="px-6 py-4">
                           <div>
                             <p className="text-sm font-medium text-white">
-                              {transfer.toDistributor.name}
+                              {transfer.toBranch?.name ||
+                                transfer.toDistributor?.name ||
+                                "Destino"}
                             </p>
                             <p className="text-xs text-gray-400">
                               {transfer.toStockBefore} → {transfer.toStockAfter}{" "}
@@ -459,7 +462,9 @@ export default function TransferHistory() {
                         <span className="text-gray-400">Destino</span>
                         <div className="text-right">
                           <p className="font-semibold text-white">
-                            {transfer.toDistributor.name}
+                            {transfer.toBranch?.name ||
+                              transfer.toDistributor?.name ||
+                              "Destino"}
                           </p>
                           <p className="text-xs text-gray-400">
                             {transfer.toStockBefore} → {transfer.toStockAfter}{" "}

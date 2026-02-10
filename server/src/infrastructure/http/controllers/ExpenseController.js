@@ -41,6 +41,35 @@ class ExpenseController {
     }
   }
 
+  async createInventoryWithdrawal(req, res) {
+    try {
+      const businessId = req.businessId || req.headers["x-business-id"];
+      if (!businessId && req.user.role !== "super_admin") {
+        return res.status(400).json({ message: "Falta x-business-id" });
+      }
+
+      if (!["admin", "super_admin", "god"].includes(req.user.role)) {
+        return res
+          .status(403)
+          .json({ message: "No autorizado para retirar inventario" });
+      }
+
+      const expense = await ExpenseRepository.createInventoryWithdrawal(
+        businessId,
+        req.body,
+        req.user.id,
+      );
+
+      res.status(201).json({ success: true, data: expense });
+    } catch (error) {
+      const statusCode = error?.statusCode || 500;
+      res.status(statusCode).json({
+        success: false,
+        message: error.message || "Error al registrar retiro de inventario",
+      });
+    }
+  }
+
   async update(req, res) {
     try {
       const businessId = req.businessId || req.headers["x-business-id"];

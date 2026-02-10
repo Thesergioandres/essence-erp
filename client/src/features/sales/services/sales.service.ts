@@ -161,6 +161,12 @@ export const saleService = {
     discount?: number;
     saleGroupId?: string;
     locationType?: "warehouse" | "branch" | "distributor";
+    warranties?: Array<{
+      productId: string;
+      quantity: number;
+      type: "supplier_replacement" | "total_loss";
+      reason?: string;
+    }>;
   }): Promise<{
     success: boolean;
     message: string;
@@ -205,6 +211,12 @@ export const saleService = {
     discount?: number;
     saleGroupId?: string;
     locationType?: "warehouse" | "branch" | "distributor";
+    warranties?: Array<{
+      productId: string;
+      quantity: number;
+      type: "supplier_replacement" | "total_loss";
+      reason?: string;
+    }>;
   }): Promise<{
     success: boolean;
     message: string;

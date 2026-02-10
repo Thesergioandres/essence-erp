@@ -1,8 +1,10 @@
 import { Router } from "express";
 import { protect } from "../../../../middleware/auth.middleware.js";
-import { businessContext } from "../../../../middleware/business.middleware.js";
-import { requireFeature } from "../../../../middleware/business.middleware.js";
-import { requirePermission } from "../../../../middleware/business.middleware.js";
+import {
+  businessContext,
+  requireFeature,
+  requirePermission,
+} from "../../../../middleware/business.middleware.js";
 import { PromotionController } from "../controllers/PromotionController.js";
 
 const router = Router();
@@ -34,6 +36,11 @@ router.put(
   "/:id",
   requirePermission({ module: "promotions", action: "update" }),
   (req, res) => controller.update(req, res),
+);
+router.put(
+  "/:id/toggle-status",
+  requirePermission({ module: "promotions", action: "update" }),
+  (req, res) => controller.toggleStatus(req, res),
 );
 router.delete(
   "/:id",

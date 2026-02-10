@@ -1,8 +1,13 @@
 import Membership from "../../../../models/Membership.js";
 import Product from "../../../../models/Product.js";
 import ProfitHistory from "../../../../models/ProfitHistory.js";
+import Promotion from "../../../../models/Promotion.js";
 import Sale from "../../../../models/Sale.js";
 import { applySaleGamification } from "../../../../utils/gamificationEngine.js";
+import {
+  buildPromotionSalesSummary,
+  normalizeId,
+} from "../../../utils/promotionMetrics.js";
 
 export async function confirmSalePayment(req, res) {
   try {
@@ -121,6 +126,61 @@ export async function confirmSalePayment(req, res) {
         sale: updatedSale,
         product,
       });
+    }
+
+    if (updatedSale?.isPromotion && updatedSale?.promotion) {
+      const promotionId = normalizeId(updatedSale.promotion);
+      if (promotionId && !updatedSale.promotionMetricsApplied) {
+        const promotion = await Promotion.findOne({
+          _id: promotionId,
+          business: businessId,
+        })
+          .select("_id totalStock currentStock comboItems")
+          .lean();
+
+        const groupFilter = updatedSale.saleGroupId
+          ? {
+              business: businessId,
+              saleGroupId: updatedSale.saleGroupId,
+              promotion: promotionId,
+            }
+          : { _id: updatedSale._id };
+
+        const promotionSales = await Sale.find(groupFilter).lean();
+        const summary = promotion
+          ? buildPromotionSalesSummary(promotion, promotionSales)
+          : null;
+
+        if (promotion && summary && summary.usageCount > 0) {
+          const update = {
+            $inc: {
+              usageCount: summary.usageCount,
+              totalRevenue: summary.revenue,
+              totalUnitsSold: summary.unitsSold,
+            },
+          };
+
+          const currentStock =
+            promotion.currentStock ?? promotion.totalStock ?? null;
+          if (currentStock !== null) {
+            update.$set = {
+              currentStock: Math.max(
+                0,
+                Number(currentStock) - summary.usageCount,
+              ),
+            };
+          }
+
+          await Promotion.updateOne(
+            { _id: promotionId, business: businessId },
+            update,
+          );
+
+          await Sale.updateMany(groupFilter, {
+            $set: { promotionMetricsApplied: true },
+          });
+        }
+      }
     }
 
     return res.json({

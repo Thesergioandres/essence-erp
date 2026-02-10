@@ -10,7 +10,13 @@ import DefectiveProduct from "../../../../models/DefectiveProduct.js";
 import DistributorStock from "../../../../models/DistributorStock.js";
 import Product from "../../../../models/Product.js";
 import ProfitHistory from "../../../../models/ProfitHistory.js";
+import Promotion from "../../../../models/Promotion.js";
+import Sale from "../../../../models/Sale.js";
 import { rollbackSaleGamification } from "../../../../utils/gamificationEngine.js";
+import {
+  buildPromotionSalesSummary,
+  normalizeId,
+} from "../../../utils/promotionMetrics.js";
 import { SaleRepository } from "../../database/repositories/SaleRepository.js";
 
 const saleRepository = new SaleRepository();
@@ -137,6 +143,126 @@ async function deleteRelatedRecords(sale, session) {
   }
 }
 
+async function rollbackPromotionMetrics({ businessId, sale, session }) {
+  if (!sale?.isPromotion || !sale?.promotion || !sale?.promotionMetricsApplied)
+    return;
+
+  const promotionId = normalizeId(sale.promotion);
+  if (!promotionId) return;
+
+  const promotion = await Promotion.findOne({
+    _id: promotionId,
+    business: businessId,
+  })
+    .select("_id totalStock currentStock comboItems")
+    .lean();
+
+  if (!promotion) return;
+
+  const groupFilter = sale.saleGroupId
+    ? {
+        business: businessId,
+        saleGroupId: sale.saleGroupId,
+        promotion: promotionId,
+      }
+    : { _id: sale._id };
+
+  const remainingSales = sale.saleGroupId
+    ? await Sale.find(groupFilter).lean()
+    : [];
+
+  const fullSales = [...remainingSales, sale];
+  const fullSummary = buildPromotionSalesSummary(promotion, fullSales);
+  const remainingSummary = remainingSales.length
+    ? buildPromotionSalesSummary(promotion, remainingSales)
+    : { usageCount: 0, unitsSold: 0, revenue: 0 };
+
+  const usageDelta = fullSummary.usageCount - remainingSummary.usageCount;
+  const unitsDelta = fullSummary.unitsSold - remainingSummary.unitsSold;
+  const revenueDelta = fullSummary.revenue - remainingSummary.revenue;
+
+  if (usageDelta <= 0 && unitsDelta <= 0 && revenueDelta <= 0) return;
+
+  const update = {
+    $inc: {
+      usageCount: -usageDelta,
+      totalRevenue: -revenueDelta,
+      totalUnitsSold: -unitsDelta,
+    },
+  };
+
+  const currentStock = promotion.currentStock ?? promotion.totalStock ?? null;
+  if (currentStock !== null) {
+    update.$set = {
+      currentStock: Math.max(0, Number(currentStock) + usageDelta),
+    };
+  }
+
+  await Promotion.updateOne(
+    { _id: promotionId, business: businessId },
+    update,
+    session ? { session } : undefined,
+  );
+}
+
+async function rollbackPromotionMetricsForGroup({
+  businessId,
+  sales,
+  session,
+}) {
+  const promotionGroups = new Map();
+
+  sales.forEach((sale) => {
+    if (
+      !sale?.isPromotion ||
+      !sale?.promotion ||
+      !sale?.promotionMetricsApplied
+    )
+      return;
+    const promotionId = normalizeId(sale.promotion);
+    if (!promotionId) return;
+    if (!promotionGroups.has(promotionId)) {
+      promotionGroups.set(promotionId, []);
+    }
+    promotionGroups.get(promotionId).push(sale);
+  });
+
+  for (const [promotionId, promotionSales] of promotionGroups.entries()) {
+    const promotion = await Promotion.findOne({
+      _id: promotionId,
+      business: businessId,
+    })
+      .select("_id totalStock currentStock comboItems")
+      .lean();
+
+    if (!promotion) continue;
+
+    const summary = buildPromotionSalesSummary(promotion, promotionSales);
+    if (summary.usageCount <= 0) continue;
+
+    const update = {
+      $inc: {
+        usageCount: -summary.usageCount,
+        totalRevenue: -summary.revenue,
+        totalUnitsSold: -summary.unitsSold,
+      },
+    };
+
+    const currentStock = promotion.currentStock ?? promotion.totalStock ?? null;
+    if (currentStock !== null) {
+      update.$set = {
+        currentStock: Math.max(0, Number(currentStock) + summary.usageCount),
+      };
+    }
+
+    await Promotion.updateOne(
+      { _id: promotionId, business: businessId },
+      update,
+      session ? { session } : undefined,
+    );
+  }
+}
+
 /**
  * DELETE /api/v2/sales/:saleId
  * Delete a single sale
@@ -183,6 +309,12 @@ export async function deleteSale(req, res) {
 
       // Delete related records
       await deleteRelatedRecords(sale, session || undefined);
+
+      await rollbackPromotionMetrics({
+        businessId,
+        sale,
+        session: session || undefined,
+      });
 
       // Roll back gamification points if they were applied
       await rollbackSaleGamification({ sale });
@@ -285,6 +417,12 @@ export async function deleteSaleGroup(req, res) {
         await deleteRelatedRecords(sale, session || undefined);
         await rollbackSaleGamification({ sale });
       }
+
+      await rollbackPromotionMetricsForGroup({
+        businessId,
+        sales,
+        session: session || undefined,
+      });
 
       const sessionOptions = session ? { session } : undefined;
 

@@ -1,12 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
+import ProductSelector from "../../../components/ProductSelector";
 import { Button } from "../../../shared/components/ui";
 import {
   buildCacheKey,
   readSessionCache,
   writeSessionCache,
 } from "../../../utils/requestCache";
+import { authService } from "../../auth/services";
+import { branchService } from "../../branches/services";
+import type { Branch } from "../../business/types/business.types";
 import { expenseService } from "../../common/services";
 import type { Expense } from "../../common/types/common.types";
+import { distributorService } from "../../distributors/services/distributor.service";
+import { productService } from "../../inventory/services";
+import type { Product } from "../../inventory/types/product.types";
 
 const EXPENSES_CACHE_TTL_MS = 2 * 60 * 1000;
 const EXPENSES_CACHE_KEY = buildCacheKey("expenses:list");
@@ -61,8 +68,17 @@ const EXPENSE_CATEGORIES = [
   { value: "otros", label: "📎 Otros", color: "bg-gray-500/20 text-gray-300" },
 ];
 
+const EXPENSE_CATEGORY_STYLES = [
+  ...EXPENSE_CATEGORIES,
+  {
+    value: "retiro de inventario",
+    label: "📤 Retiro de Inventario",
+    color: "bg-rose-500/20 text-rose-300",
+  },
+];
+
 const getCategoryStyle = (type: string) => {
-  const cat = EXPENSE_CATEGORIES.find(
+  const cat = EXPENSE_CATEGORY_STYLES.find(
     c =>
       type?.toLowerCase().includes(c.value) ||
       c.value.includes(type?.toLowerCase() || "")
@@ -86,6 +102,23 @@ export default function Expenses() {
     amount: "",
     expenseDate: new Date().toISOString().slice(0, 10),
   });
+  const [withdrawalForm, setWithdrawalForm] = useState({
+    productId: "",
+    originType: "warehouse",
+    originId: "",
+    quantity: "",
+    reason: "",
+  });
+  const [withdrawalSaving, setWithdrawalSaving] = useState(false);
+  const [withdrawalLoading, setWithdrawalLoading] = useState(false);
+  const [withdrawalProducts, setWithdrawalProducts] = useState<Product[]>([]);
+  const [withdrawalBranches, setWithdrawalBranches] = useState<Branch[]>([]);
+  const [withdrawalDistributors, setWithdrawalDistributors] = useState<
+    Array<{ _id: string; name: string }>
+  >([]);
+
+  const user = authService.getCurrentUser();
+  const isAdmin = ["admin", "super_admin", "god"].includes(user?.role);
 
   const safeExpenses = useMemo(
     () => expenses.filter((e): e is Expense => Boolean(e && e.expenseDate)),
@@ -198,6 +231,101 @@ export default function Expenses() {
     void load();
   }, []);
 
+  useEffect(() => {
+    if (!isAdmin) return;
+
+    let isActive = true;
+    const loadWithdrawalContext = async () => {
+      try {
+        setWithdrawalLoading(true);
+        const [productsRes, branchesRes, distributorsRes] = await Promise.all([
+          productService.getAll({ limit: 1000 }),
+          branchService.getAll(),
+          distributorService.getAll({ active: true }),
+        ]);
+        if (!isActive) return;
+        setWithdrawalProducts(productsRes.data || []);
+        setWithdrawalBranches(
+          (branchesRes || []).filter(branch => !branch?.isWarehouse)
+        );
+        setWithdrawalDistributors(
+          (distributorsRes.data || []).map((dist: any) => ({
+            _id: dist._id,
+            name: dist.name,
+          }))
+        );
+      } catch (error) {
+        console.error("Error cargando datos de retiro:", error);
+      } finally {
+        if (isActive) setWithdrawalLoading(false);
+      }
+    };
+
+    loadWithdrawalContext();
+    return () => {
+      isActive = false;
+    };
+  }, [isAdmin]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    if (!withdrawalForm.originType) return;
+
+    let isActive = true;
+    const loadOriginInventory = async () => {
+      try {
+        setWithdrawalLoading(true);
+        if (withdrawalForm.originType === "warehouse") {
+          const productsRes = await productService.getAll({ limit: 1000 });
+          if (!isActive) return;
+          setWithdrawalProducts(productsRes.data || []);
+          return;
+        }
+
+        if (withdrawalForm.originType === "branch") {
+          if (!withdrawalForm.originId) return;
+          const stockRes = await branchService.getStock(
+            withdrawalForm.originId
+          );
+          if (!isActive) return;
+          const mapped = (stockRes.stock || []).map(item => ({
+            ...item.product,
+            purchasePrice: item.product?.purchasePrice ?? 0,
+            warehouseStock: item.quantity,
+            totalStock: item.quantity,
+          }));
+          setWithdrawalProducts(mapped);
+          return;
+        }
+
+        if (withdrawalForm.originType === "distributor") {
+          if (!withdrawalForm.originId) return;
+          const distRes = await distributorService.getProducts(
+            withdrawalForm.originId
+          );
+          if (!isActive) return;
+          const mapped = (distRes.products || []).map(item => ({
+            ...item.product,
+            purchasePrice: item.product?.purchasePrice ?? 0,
+            warehouseStock: item.quantity,
+            totalStock: item.quantity,
+            distributorStock: item.quantity,
+          }));
+          setWithdrawalProducts(mapped);
+        }
+      } catch (error) {
+        console.error("Error cargando inventario de origen:", error);
+      } finally {
+        if (isActive) setWithdrawalLoading(false);
+      }
+    };
+
+    loadOriginInventory();
+    return () => {
+      isActive = false;
+    };
+  }, [isAdmin, withdrawalForm.originType, withdrawalForm.originId]);
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("es-CO", {
       style: "currency",
@@ -309,8 +437,76 @@ export default function Expenses() {
     }
   };
 
+  const handleWithdrawalSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!withdrawalForm.productId) {
+      alert("Selecciona un producto");
+      return;
+    }
+
+    const qty = Number(withdrawalForm.quantity);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      alert("Ingresa una cantidad valida");
+      return;
+    }
+
+    const { originType, originId } = withdrawalForm;
+    const locationType = originType as "warehouse" | "branch" | "distributor";
+    const branchId = locationType === "branch" ? originId : undefined;
+    const distributorId = locationType === "distributor" ? originId : undefined;
+
+    if (locationType !== "warehouse" && !originId) {
+      alert("Selecciona el inventario de origen");
+      return;
+    }
+
+    if (!withdrawalForm.reason.trim()) {
+      alert("Escribe el motivo del retiro");
+      return;
+    }
+
+    try {
+      setWithdrawalSaving(true);
+      const created = await expenseService.createInventoryWithdrawal({
+        productId: withdrawalForm.productId,
+        branchId,
+        distributorId,
+        locationType,
+        quantity: qty,
+        reason: withdrawalForm.reason,
+      });
+
+      if (!created?.expense) {
+        throw new Error("Respuesta invalida al registrar retiro");
+      }
+
+      setExpenses(prev => {
+        const next = [created.expense, ...prev];
+        writeSessionCache(EXPENSES_CACHE_KEY, { expenses: next });
+        return next;
+      });
+
+      setWithdrawalForm({
+        productId: "",
+        originType: "warehouse",
+        originId: "",
+        quantity: "",
+        reason: "",
+      });
+    } catch (error) {
+      console.error("Error registrando retiro:", error);
+      const message =
+        (error as any)?.response?.data?.message ||
+        "No se pudo registrar el retiro de inventario";
+      alert(message);
+    } finally {
+      setWithdrawalSaving(false);
+    }
+  };
+
   return (
-    <div className="space-y-6 overflow-hidden">
+    <div className="space-y-6 overflow-visible">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -387,7 +583,7 @@ export default function Expenses() {
 
       {/* Top Categorías */}
       {metrics.topCategories.length > 0 && (
-        <div className="rounded-xl border border-gray-700/50 bg-gray-800/50 p-4 shadow-lg backdrop-blur-sm sm:p-6">
+        <div className="relative z-30 rounded-xl border border-gray-700/50 bg-gray-800/50 p-4 shadow-lg backdrop-blur-sm sm:p-6">
           <h2 className="mb-4 text-lg font-semibold text-white">
             📊 Distribución por Categoría
           </h2>
@@ -512,6 +708,149 @@ export default function Expenses() {
           </div>
         </form>
       </div>
+
+      {isAdmin && (
+        <div className="rounded-xl border border-gray-700/50 bg-gray-800/50 p-4 shadow-lg backdrop-blur-sm sm:p-6">
+          <h2 className="text-lg font-semibold text-white">
+            📤 Retiro de Inventario
+          </h2>
+          <p className="mt-1 text-sm text-gray-400">
+            Registra consumos internos o regalos. Se descuenta stock y se crea
+            el gasto al costo de compra.
+          </p>
+
+          <form onSubmit={handleWithdrawalSubmit} className="mt-4 space-y-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+              <div className="sm:col-span-2 lg:col-span-2">
+                <label className="mb-1 block text-sm font-medium text-gray-300">
+                  Producto
+                </label>
+                <ProductSelector
+                  value={withdrawalForm.productId}
+                  onChange={(productId: string) =>
+                    setWithdrawalForm(prev => ({
+                      ...prev,
+                      productId,
+                    }))
+                  }
+                  placeholder="Buscar producto para retirar..."
+                  showStock
+                  products={withdrawalProducts}
+                  disabled={withdrawalLoading}
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-300">
+                  Inventario de origen
+                </label>
+                <select
+                  className="w-full rounded-lg border border-gray-600 bg-gray-900/50 px-3 py-2.5 text-gray-100 focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                  value={
+                    withdrawalForm.originType === "warehouse"
+                      ? "warehouse"
+                      : `${withdrawalForm.originType}:${withdrawalForm.originId}`
+                  }
+                  onChange={e => {
+                    const value = e.target.value;
+                    if (value === "warehouse") {
+                      setWithdrawalForm(prev => ({
+                        ...prev,
+                        originType: "warehouse",
+                        originId: "",
+                        productId: "",
+                      }));
+                      return;
+                    }
+
+                    const [originType, originId] = value.split(":");
+                    setWithdrawalForm(prev => ({
+                      ...prev,
+                      originType,
+                      originId,
+                      productId: "",
+                    }));
+                  }}
+                  required
+                  disabled={withdrawalLoading}
+                >
+                  <option value="warehouse">Bodega principal</option>
+                  {withdrawalBranches.length > 0 && (
+                    <optgroup label="Sedes">
+                      {withdrawalBranches.map(branch => (
+                        <option key={branch._id} value={`branch:${branch._id}`}>
+                          {branch.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {withdrawalDistributors.length > 0 && (
+                    <optgroup label="Distribuidores">
+                      {withdrawalDistributors.map(dist => (
+                        <option
+                          key={dist._id}
+                          value={`distributor:${dist._id}`}
+                        >
+                          {dist.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-300">
+                  Motivo
+                </label>
+                <input
+                  className="w-full rounded-lg border border-gray-600 bg-gray-900/50 px-3 py-2.5 text-gray-100 placeholder:text-gray-500 focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                  type="text"
+                  value={withdrawalForm.reason}
+                  onChange={e =>
+                    setWithdrawalForm(prev => ({
+                      ...prev,
+                      reason: e.target.value,
+                    }))
+                  }
+                  placeholder="Consumo Admin, Regalo, etc."
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-300">
+                  Cantidad
+                </label>
+                <input
+                  className="w-full rounded-lg border border-gray-600 bg-gray-900/50 px-3 py-2.5 text-gray-100 placeholder:text-gray-500 focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  placeholder="Ej: 2"
+                  value={withdrawalForm.quantity}
+                  onChange={e =>
+                    setWithdrawalForm(prev => ({
+                      ...prev,
+                      quantity: e.target.value,
+                    }))
+                  }
+                  required
+                />
+              </div>
+
+              <div className="flex items-end">
+                <Button
+                  type="submit"
+                  loading={withdrawalSaving}
+                  className="w-full"
+                >
+                  Registrar retiro
+                </Button>
+              </div>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* Lista de Gastos */}
       <div className="rounded-xl border border-gray-700/50 bg-gray-800/50 p-4 shadow-lg backdrop-blur-sm sm:p-6">

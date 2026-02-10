@@ -6,12 +6,14 @@
  * el texto de venta con un solo clic.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useProducts } from "../../inventory/hooks/useProducts";
 import { useBusiness } from "../../../context/BusinessContext";
 import { useBrandLogo } from "../../../hooks/useBrandLogo";
+import { useProducts } from "../../inventory/hooks/useProducts";
+import type { Product } from "../../inventory/types/product.types";
+import { promotionService } from "../../settings/services";
+import type { Promotion } from "../../settings/types/promotion.types";
 import AdCard from "../components/AdCard";
 import type { AdProduct, TemplateType } from "../types/advertising.types";
-import type { Product } from "../../inventory/types/product.types";
 import { templateList } from "../utils/templateThemes";
 
 const TEMPLATES: TemplateType[] = templateList.map(t => t.id);
@@ -43,10 +45,21 @@ function pickRandom<T>(arr: T[], n: number): T[] {
   return result;
 }
 
+const formatCurrency = (value: number) =>
+  new Intl.NumberFormat("es-CO", {
+    style: "currency",
+    currency: "COP",
+    minimumFractionDigits: 0,
+  }).format(value || 0);
+
 export default function AdvertisingPage() {
   const { products, loading, error } = useProducts();
   const { business } = useBusiness();
   const logoUrl = useBrandLogo();
+
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
+  const [promotionsLoading, setPromotionsLoading] = useState(false);
+  const [promotionsError, setPromotionsError] = useState<string | null>(null);
 
   const [selectedTemplate, setSelectedTemplate] = useState<
     TemplateType | "all"
@@ -74,6 +87,44 @@ export default function AdvertisingPage() {
     () => setSuggestionSeed(s => s + 1),
     []
   );
+
+  const loadPromotions = useCallback(async () => {
+    try {
+      setPromotionsLoading(true);
+      setPromotionsError(null);
+      const response = await promotionService.getAll({ status: "active" });
+      const activePromos = (response.promotions || []).filter(
+        promo => promo?.showInCatalog !== false
+      );
+      setPromotions(activePromos);
+    } catch (err) {
+      console.error("Error loading promotions for advertising:", err);
+      setPromotionsError("Error al cargar promociones activas");
+      setPromotions([]);
+    } finally {
+      setPromotionsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadPromotions();
+
+    const handlePromotionsUpdated = () => {
+      void loadPromotions();
+    };
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === "promotions-updated") {
+        void loadPromotions();
+      }
+    };
+
+    window.addEventListener("promotions-updated", handlePromotionsUpdated);
+    window.addEventListener("storage", handleStorage);
+    return () => {
+      window.removeEventListener("promotions-updated", handlePromotionsUpdated);
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, [loadPromotions]);
 
   // Filtrado de la galería completa
   const filteredProducts = useMemo(() => {
@@ -193,6 +244,83 @@ export default function AdvertisingPage() {
           </div>
         </section>
       )}
+
+      {/* ──── Promociones Activas ──── */}
+      <section>
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-800">
+              📣 Promociones activas
+            </h2>
+            <p className="text-sm text-gray-500">
+              Solo promociones activas con visibilidad pública.
+            </p>
+          </div>
+          <button
+            onClick={loadPromotions}
+            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 transition hover:border-indigo-300 hover:text-indigo-600"
+          >
+            Recargar
+          </button>
+        </div>
+
+        {promotionsLoading && (
+          <div className="rounded-xl border border-gray-200 bg-white p-6 text-sm text-gray-500">
+            Cargando promociones...
+          </div>
+        )}
+
+        {!promotionsLoading && promotionsError && (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-sm text-red-600">
+            {promotionsError}
+          </div>
+        )}
+
+        {!promotionsLoading && !promotionsError && promotions.length === 0 && (
+          <div className="rounded-xl border border-gray-200 bg-white p-6 text-sm text-gray-500">
+            No hay promociones activas visibles en el catalogo publico.
+          </div>
+        )}
+
+        {!promotionsLoading && promotions.length > 0 && (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {promotions.map(promo => (
+              <div
+                key={promo._id}
+                className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">
+                      {promo.name}
+                    </p>
+                    {promo.description && (
+                      <p className="mt-1 text-xs text-gray-500">
+                        {promo.description}
+                      </p>
+                    )}
+                  </div>
+                  <span className="rounded-full bg-indigo-50 px-2 py-1 text-[10px] font-semibold uppercase text-indigo-600">
+                    {promo.type}
+                  </span>
+                </div>
+                <div className="mt-3 flex items-center justify-between text-sm">
+                  <span className="text-gray-500">Precio promo</span>
+                  <span className="font-semibold text-gray-900">
+                    {formatCurrency(promo.promotionPrice || 0)}
+                  </span>
+                </div>
+                {promo.endDate && (
+                  <p className="mt-2 text-xs text-gray-400">
+                    Vigente hasta{" "}
+                    {new Date(promo.endDate).toLocaleDateString("es-CO")}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       {/* ──── Filtros ──── */}
       <section>

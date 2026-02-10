@@ -140,6 +140,7 @@ export default function Sales() {
     currentUser?.role === "admin" ||
     currentUser?.role === "super_admin" ||
     currentUser?.role === "god";
+  const showBranchColumn = false;
 
   useEffect(() => {
     if (!showAllSales) {
@@ -300,16 +301,10 @@ export default function Sales() {
 
       // Actualizar la lista sin recargar toda la página
       setSales(prevSales => prevSales.filter(sale => sale._id !== saleId));
-
-      // Recalcular métricas desde backend y limpiar cache del listado actual
-      const params = buildSalesParams();
-      const cacheKey = buildCacheKey("sales:list", params);
-      window.sessionStorage.removeItem(cacheKey);
-      if (showAllSales) {
-        await handleShowAllSales();
-      } else {
-        await loadSales();
-      }
+      setPagination(prev => ({
+        ...prev,
+        total: Math.max(0, prev.total - 1),
+      }));
     } catch (error) {
       console.error("Error al eliminar la venta:", error);
       alert("Error al eliminar la venta");
@@ -338,16 +333,10 @@ export default function Sales() {
       setSales(prevSales =>
         prevSales.filter(sale => sale.saleGroupId !== saleGroupId)
       );
-
-      // Recalcular métricas desde backend y limpiar cache del listado actual
-      const params = buildSalesParams();
-      const cacheKey = buildCacheKey("sales:list", params);
-      window.sessionStorage.removeItem(cacheKey);
-      if (showAllSales) {
-        await handleShowAllSales();
-      } else {
-        await loadSales();
-      }
+      setPagination(prev => ({
+        ...prev,
+        total: Math.max(0, prev.total - salesCount),
+      }));
     } catch (error) {
       console.error("Error al eliminar el grupo de ventas:", error);
       alert("Error al eliminar el grupo de ventas");
@@ -473,6 +462,37 @@ export default function Sales() {
     return true; // Si tiene crédito pero no sabemos el estado, asumimos activo
   };
 
+  const getSaleSourceLabel = (sale: Sale) => {
+    const source = sale.sourceLocation;
+    if (source === "distributor") return "Inventario distribuidor";
+    if (source === "branch") {
+      const branchName =
+        sale.branchName ||
+        (typeof sale.branch === "object" ? sale.branch?.name : null);
+      return branchName ? `Sede: ${branchName}` : "Sede";
+    }
+    if (source === "warehouse") return "Bodega central";
+
+    if (sale.branchName) return `Sede: ${sale.branchName}`;
+    if (typeof sale.branch === "object" && sale.branch?.name)
+      return `Sede: ${sale.branch.name}`;
+    if (sale.distributor) return "Inventario distribuidor";
+    return "Bodega central";
+  };
+
+  const getGroupSourceLabel = (groupSales: Sale[]) => {
+    const labels = new Set(groupSales.map(getSaleSourceLabel));
+    if (labels.size === 1) return Array.from(labels)[0];
+    return "Mixto";
+  };
+
+  const getGroupSaleTypeLabel = (groupSales: Sale[]) => {
+    const hasPromotion = groupSales.some(sale => sale.isPromotion);
+    const hasNormal = groupSales.some(sale => !sale.isPromotion);
+    if (hasPromotion && hasNormal) return "Mixto";
+    return hasPromotion ? "Promocion" : "Normal";
+  };
+
   // Agrupar ventas por saleGroupId
   type SaleGroup = {
     id: string;
@@ -531,7 +551,10 @@ export default function Sales() {
           const baseAdminProfit = s.adminProfit ?? 0;
           const deductions =
             (s.totalAdditionalCosts || 0) + (s.shippingCost || 0);
-          return sum + (baseAdminProfit - deductions);
+          const netFromSale = Number.isFinite(s.netProfit)
+            ? s.netProfit
+            : baseAdminProfit - deductions;
+          return sum + netFromSale;
         }, 0),
         totalDistributorProfit: groupSales.reduce(
           (sum, s) => sum + (s.distributorProfit || 0),
@@ -557,7 +580,9 @@ export default function Sales() {
       const baseAdminProfit = sale.adminProfit ?? 0;
       const deductions =
         (sale.totalAdditionalCosts || 0) + (sale.shippingCost || 0);
-      const adminNetProfit = baseAdminProfit - deductions;
+      const adminNetProfit = Number.isFinite(sale.netProfit)
+        ? sale.netProfit
+        : baseAdminProfit - deductions;
 
       result.push({
         id: sale._id,
@@ -654,7 +679,10 @@ export default function Sales() {
         const baseAdminProfit = s.adminProfit ?? 0;
         const deductions =
           (s.totalAdditionalCosts || 0) + (s.shippingCost || 0);
-        return sum + (baseAdminProfit - deductions);
+        const netFromSale = Number.isFinite(s.netProfit)
+          ? s.netProfit
+          : baseAdminProfit - deductions;
+        return sum + netFromSale;
       }, 0),
       // Total de costos adicionales
       totalAdditionalCosts: sales.reduce(
@@ -915,11 +943,14 @@ export default function Sales() {
                     <th className="px-6 py-3 text-left text-xs font-medium uppercase text-gray-400">
                       Fecha
                     </th>
-                    {branchesEnabled && (
+                    {showBranchColumn && (
                       <th className="px-6 py-3 text-left text-xs font-medium uppercase text-gray-400">
                         Sede
                       </th>
                     )}
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase text-gray-400">
+                      Origen
+                    </th>
                     {distributorsEnabled && (
                       <th className="px-6 py-3 text-left text-xs font-medium uppercase text-gray-400">
                         Responsable
@@ -937,6 +968,9 @@ export default function Sales() {
                     )}
                     <th className="px-6 py-3 text-left text-xs font-medium uppercase text-gray-400">
                       Producto
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase text-gray-400">
+                      Tipo
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium uppercase text-gray-400">
                       Cliente
@@ -1055,11 +1089,14 @@ export default function Sales() {
                               day: "numeric",
                             })}
                           </td>
-                          {branchesEnabled && (
+                          {showBranchColumn && (
                             <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-300">
                               {branchName || "General"}
                             </td>
                           )}
+                          <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-300">
+                            {getGroupSourceLabel(group.sales)}
+                          </td>
                           {distributorsEnabled && (
                             <td className="whitespace-nowrap px-6 py-4">
                               <div className="text-sm font-medium text-gray-200">
@@ -1124,6 +1161,13 @@ export default function Sales() {
                                 </span>
                               </div>
                             )}
+                          </td>
+                          <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-200">
+                            {group.isGroup
+                              ? getGroupSaleTypeLabel(group.sales)
+                              : firstSale.isPromotion
+                                ? "Promocion"
+                                : "Normal"}
                           </td>
                           <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-200">
                             {firstSale.customerName || "-"}
@@ -1293,11 +1337,14 @@ export default function Sales() {
                                 <td className="whitespace-nowrap px-6 py-3 pl-12 text-sm text-gray-400">
                                   {/* Vacío - fecha ya mostrada */}
                                 </td>
-                                {branchesEnabled && (
+                                {showBranchColumn && (
                                   <td className="whitespace-nowrap px-6 py-3 text-sm text-gray-400">
                                     {/* Vacío */}
                                   </td>
                                 )}
+                                <td className="whitespace-nowrap px-6 py-3 text-sm text-gray-400">
+                                  {getSaleSourceLabel(sale)}
+                                </td>
                                 {distributorsEnabled && (
                                   <td className="whitespace-nowrap px-6 py-3 text-sm text-gray-400">
                                     {/* Vacío */}
@@ -1330,6 +1377,9 @@ export default function Sales() {
                                   </div>
                                 </td>
                                 <td className="whitespace-nowrap px-6 py-3 text-sm text-gray-400">
+                                  {sale.isPromotion ? "Promocion" : "Normal"}
+                                </td>
+                                <td className="whitespace-nowrap px-6 py-3 text-sm text-gray-400">
                                   {/* Vacío */}
                                 </td>
                                 {creditsEnabled && (
@@ -1349,9 +1399,11 @@ export default function Sales() {
                                 <td className="whitespace-nowrap px-6 py-3 text-sm text-green-400">
                                   $
                                   {(
-                                    (sale.adminProfit ?? 0) -
-                                    (sale.totalAdditionalCosts || 0) -
-                                    (sale.shippingCost || 0)
+                                    Number.isFinite(sale.netProfit)
+                                      ? sale.netProfit
+                                      : (sale.adminProfit ?? 0) -
+                                        (sale.totalAdditionalCosts || 0) -
+                                        (sale.shippingCost || 0)
                                   ).toLocaleString()}
                                 </td>
                                 {distributorsEnabled && (

@@ -10,6 +10,11 @@ export interface Expense {
   amount: number;
   description?: string;
   expenseDate: string;
+  product?: string | { _id: string; name?: string } | null;
+  quantity?: number | null;
+  sourceType?: "warehouse" | "branch" | "distributor" | null;
+  sourceBranch?: string | { _id: string; name?: string } | null;
+  sourceDistributor?: string | { _id: string; name?: string } | null;
   createdBy?: unknown | string;
   createdAt?: string;
   updatedAt?: string;

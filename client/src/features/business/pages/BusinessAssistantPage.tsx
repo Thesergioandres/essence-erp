@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
+import { useNavigate } from "react-router-dom";
 import { useFeatures } from "../../../components/FeatureSection";
 import { businessAssistantService } from "../../business/services";
 import { creditService } from "../../credits/services";
@@ -200,6 +201,129 @@ const formatAnalysisMarkdown = (raw: any) => {
   return lines.join("\n");
 };
 
+const baseRecommendations: BusinessAssistantRecommendationItem[] = [
+  {
+    productId: "base-review-costs",
+    productName: "Revision de costos",
+    categoryId: null,
+    categoryName: "Base",
+    abcClass: "C",
+    stock: {
+      warehouseStock: 0,
+      totalStock: 0,
+      lowStockAlert: 0,
+    },
+    metrics: {
+      recentDays: 0,
+      horizonDays: null,
+      recentUnits: 0,
+      prevUnits: 0,
+      unitsGrowthPct: 0,
+      recentRevenue: 0,
+      recentProfit: 0,
+      recentMarginPct: 0,
+      avgDailyUnits: 0,
+      daysCover: null,
+      recentAvgPrice: 0,
+      categoryAvgPrice: 0,
+      priceVsCategoryPct: 0,
+    },
+    recommendation: {
+      primary: {
+        action: "review_margin",
+        title: "Revision de costos",
+        confidence: 0.5,
+        category: "margen",
+        severity: "info",
+      },
+      actions: [],
+      justification: [
+        "Actualiza costos y margenes para asegurar precios sostenibles.",
+      ],
+    },
+  },
+  {
+    productId: "base-first-promo",
+    productName: "Guia de primera promo",
+    categoryId: null,
+    categoryName: "Base",
+    abcClass: "C",
+    stock: {
+      warehouseStock: 0,
+      totalStock: 0,
+      lowStockAlert: 0,
+    },
+    metrics: {
+      recentDays: 0,
+      horizonDays: null,
+      recentUnits: 0,
+      prevUnits: 0,
+      unitsGrowthPct: 0,
+      recentRevenue: 0,
+      recentProfit: 0,
+      recentMarginPct: 0,
+      avgDailyUnits: 0,
+      daysCover: null,
+      recentAvgPrice: 0,
+      categoryAvgPrice: 0,
+      priceVsCategoryPct: 0,
+    },
+    recommendation: {
+      primary: {
+        action: "run_promotion",
+        title: "Guia de primera promo",
+        confidence: 0.45,
+        category: "demanda",
+        severity: "info",
+      },
+      actions: [],
+      justification: [
+        "Crea una promo simple para reactivar la demanda y medir respuesta.",
+      ],
+    },
+  },
+  {
+    productId: "base-stock-optimization",
+    productName: "Optimizacion de stock",
+    categoryId: null,
+    categoryName: "Base",
+    abcClass: "C",
+    stock: {
+      warehouseStock: 0,
+      totalStock: 0,
+      lowStockAlert: 0,
+    },
+    metrics: {
+      recentDays: 0,
+      horizonDays: null,
+      recentUnits: 0,
+      prevUnits: 0,
+      unitsGrowthPct: 0,
+      recentRevenue: 0,
+      recentProfit: 0,
+      recentMarginPct: 0,
+      avgDailyUnits: 0,
+      daysCover: null,
+      recentAvgPrice: 0,
+      categoryAvgPrice: 0,
+      priceVsCategoryPct: 0,
+    },
+    recommendation: {
+      primary: {
+        action: "buy_more_inventory",
+        title: "Optimizacion de stock",
+        confidence: 0.4,
+        category: "inventario",
+        severity: "info",
+      },
+      actions: [],
+      justification: [
+        "Revisa rotacion y ajusta niveles de stock para evitar quiebres.",
+      ],
+    },
+  },
+];
+
 export default function BusinessAssistant() {
   // Feature flags
   const features = useFeatures([
@@ -215,6 +339,7 @@ export default function BusinessAssistant() {
   const [error, setError] = useState<string | null>(null);
   const [data, setData] =
     useState<BusinessAssistantRecommendationsResponse | null>(null);
+  const navigate = useNavigate();
 
   // --- STATE PROJECT CEO (Estratega Virtual) ---
   const [analystQuestion, setAnalystQuestion] = useState("");
@@ -370,6 +495,15 @@ export default function BusinessAssistant() {
   // Estado para creación de promos desde AI
   const [creatingPromoIdx, setCreatingPromoIdx] = useState<number | null>(null);
   const [promoSuccessMsg, setPromoSuccessMsg] = useState<string | null>(null);
+  const [selectedPromoIdx, setSelectedPromoIdx] = useState(0);
+
+  useEffect(() => {
+    const total = data?.promotions?.length || 0;
+    if (!total) return;
+    if (selectedPromoIdx >= total) {
+      setSelectedPromoIdx(0);
+    }
+  }, [data?.promotions?.length, selectedPromoIdx]);
 
   // Handler para crear promo desde sugerencia AI
   const handleCreatePromoFromAI = async (
@@ -416,6 +550,29 @@ export default function BusinessAssistant() {
     }
   };
 
+  const handleOpenPromoModal = useCallback(() => {
+    const promos = data?.promotions || [];
+    const promo = promos[selectedPromoIdx] || promos[0];
+    if (!promo) return;
+    const cleanName = promo.title.replace("📦 ", "").replace("🔥 ", "").trim();
+
+    navigate("/admin/promotions", {
+      state: {
+        prefillPromotion: {
+          name: cleanName || "Promo sugerida",
+          description: promo.description || "",
+          type: promo.type || "combo",
+          products: promo.products || [],
+        },
+      },
+    });
+  }, [data?.promotions, navigate, selectedPromoIdx]);
+
+  const effectiveRecommendations = useMemo(() => {
+    const recs = data?.recommendations || [];
+    return recs.length > 0 ? recs : baseRecommendations;
+  }, [data?.recommendations, baseRecommendations]);
+
   // Cargar memoria del CEO al iniciar
   useEffect(() => {
     const loadMemory = async () => {
@@ -424,7 +581,7 @@ export default function BusinessAssistant() {
         if (res.analysis) {
           const analysis = isEmptyStrategicAnalysis(res.analysis)
             ? buildLocalStrategicAnalysis(
-                data?.recommendations || [],
+                effectiveRecommendations,
                 creditMetrics
               ).analysis
             : res.analysis;
@@ -441,7 +598,7 @@ export default function BusinessAssistant() {
       }
     };
     loadMemory();
-  }, [buildLocalStrategicAnalysis, creditMetrics, data?.recommendations]);
+  }, [buildLocalStrategicAnalysis, creditMetrics, effectiveRecommendations]);
 
   const getAbcBadgeColor = (abcClass?: string) => {
     switch (abcClass) {
@@ -470,10 +627,8 @@ export default function BusinessAssistant() {
 
       if (res.analysis) {
         const analysis = isEmptyStrategicAnalysis(res.analysis)
-          ? buildLocalStrategicAnalysis(
-              data?.recommendations || [],
-              creditMetrics
-            ).analysis
+          ? buildLocalStrategicAnalysis(effectiveRecommendations, creditMetrics)
+              .analysis
           : res.analysis;
         setAnalysisResult(formatAnalysisMarkdown(analysis));
         setLastAnalysisDate(
@@ -730,7 +885,7 @@ export default function BusinessAssistant() {
   }, [job?.jobId, job?.status, pollJob]);
 
   const visibleRecommendations = useMemo(() => {
-    const raw = data?.recommendations || [];
+    const raw = effectiveRecommendations || [];
     const q = search.trim().toLowerCase();
 
     const filtered = raw.filter(item => {
@@ -775,7 +930,7 @@ export default function BusinessAssistant() {
     });
   }, [
     actionFilter,
-    data?.recommendations,
+    effectiveRecommendations,
     onlyActionable,
     search,
     sortBy,
@@ -783,7 +938,7 @@ export default function BusinessAssistant() {
   ]);
 
   const assistantStats = useMemo(() => {
-    const recs = data?.recommendations || [];
+    const recs = effectiveRecommendations || [];
     const primary = recs
       .map(item => item.recommendation.primary)
       .filter(Boolean) as BusinessAssistantRecommendationAction[];
@@ -810,10 +965,10 @@ export default function BusinessAssistant() {
       priceAdjust,
       avgConfidence: avgConfidence ? Math.round(avgConfidence * 100) : 0,
     };
-  }, [data?.recommendations]);
+  }, [effectiveRecommendations]);
 
   const actionPlan = useMemo(() => {
-    const recs = data?.recommendations || [];
+    const recs = effectiveRecommendations || [];
     const primary = recs
       .map(item => item.recommendation.primary)
       .filter(Boolean) as BusinessAssistantRecommendationAction[];
@@ -850,10 +1005,10 @@ export default function BusinessAssistant() {
     return plan.length > 0
       ? plan
       : ["No hay acciones urgentes. Mantener monitoreo diario."];
-  }, [creditMetrics?.overdue?.count, data?.recommendations]);
+  }, [creditMetrics?.overdue?.count, effectiveRecommendations]);
 
   const criticalItems = useMemo(() => {
-    const recs = data?.recommendations || [];
+    const recs = effectiveRecommendations || [];
     const scored = recs.map(item => {
       const primary = item.recommendation.primary;
       let score = 0;
@@ -877,14 +1032,14 @@ export default function BusinessAssistant() {
       .sort((a, b) => b.score - a.score)
       .slice(0, 5)
       .map(({ item, score }) => ({ item, score }));
-  }, [data?.recommendations]);
+  }, [effectiveRecommendations]);
 
   const smartAlerts = useMemo(() => {
     const alerts: Array<{ title: string; detail: string; tone: string }> = [];
-    const lowStock = (data?.recommendations || []).filter(
+    const lowStock = (effectiveRecommendations || []).filter(
       item => item.recommendation.primary?.action === "buy_more_inventory"
     ).length;
-    const pricing = (data?.recommendations || []).filter(item =>
+    const pricing = (effectiveRecommendations || []).filter(item =>
       ["increase_price", "decrease_price"].includes(
         item.recommendation.primary?.action || ""
       )
@@ -916,7 +1071,7 @@ export default function BusinessAssistant() {
     }
 
     return alerts;
-  }, [creditMetrics?.overdue?.count, data?.recommendations]);
+  }, [creditMetrics?.overdue?.count, effectiveRecommendations]);
 
   const renderPrimary = (item: BusinessAssistantRecommendationItem) => {
     const primary = item.recommendation.primary;
@@ -1247,6 +1402,30 @@ export default function BusinessAssistant() {
                 </button>
               </div>
             </div>
+
+            {features.promotions && (data?.promotions?.length || 0) > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={String(selectedPromoIdx)}
+                  onChange={e => setSelectedPromoIdx(Number(e.target.value))}
+                  className="rounded-lg border border-indigo-500/30 bg-gray-950 px-3 py-2 text-xs font-semibold text-indigo-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                >
+                  {data?.promotions?.map((promo, index) => (
+                    <option key={`${promo.title}-${index}`} value={index}>
+                      {promo.title?.replace("📦 ", "").replace("🔥 ", "") ||
+                        `Promo ${index + 1}`}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={handleOpenPromoModal}
+                  className="inline-flex items-center gap-2 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-3 py-2 text-xs font-semibold text-indigo-200 transition hover:bg-indigo-500/20"
+                >
+                  ⚡ Abrir promo sugerida
+                </button>
+              </div>
+            )}
 
             {/* Response Area */}
             <div className="min-h-[120px] rounded-xl border border-gray-800/50 bg-gray-950/50 p-6 shadow-inner">
