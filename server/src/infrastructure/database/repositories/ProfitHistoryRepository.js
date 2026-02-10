@@ -6,6 +6,8 @@
 import mongoose from "mongoose";
 import Membership from "../../../../models/Membership.js";
 import ProfitHistory from "../../../../models/ProfitHistory.js";
+import Sale from "../../../../models/Sale.js";
+import SpecialSale from "../../../../models/SpecialSale.js";
 import User from "../../../../models/User.js";
 
 class ProfitHistoryRepository {
@@ -259,6 +261,7 @@ class ProfitHistoryRepository {
           },
         },
         { $sort: { total: -1 } },
+        { $limit: 10 },
       ]),
     ]);
 
@@ -292,6 +295,10 @@ class ProfitHistoryRepository {
     const filter = {
       business: businessObjectId,
       ...(dateRange ? { date: dateRange } : {}),
+    };
+    const recentEntriesFilter = {
+      ...filter,
+      "metadata.eventName": { $ne: "defective_loss" },
     };
 
     // Get distributor user IDs for this business
@@ -332,6 +339,8 @@ class ProfitHistoryRepository {
       byUser,
       distributorCommissions,
       distributorBreakdown,
+      salesNetProfit,
+      specialSalesNetProfit,
     ] = await Promise.all([
       // Total overview
       ProfitHistory.aggregate([
@@ -356,7 +365,7 @@ class ProfitHistoryRepository {
       ]),
       // Recent entries (grouped by sale)
       ProfitHistory.aggregate([
-        { $match: filter },
+        { $match: recentEntriesFilter },
         { $sort: { date: -1, createdAt: -1 } },
         {
           $lookup: {
@@ -497,6 +506,12 @@ class ProfitHistoryRepository {
               $ifNull: ["$saleInfo.distributorProfit", null],
             },
             saleTotalProfit: { $ifNull: ["$saleInfo.totalProfit", null] },
+            saleNetProfit: { $ifNull: ["$saleInfo.netProfit", null] },
+            saleAdditionalCosts: {
+              $ifNull: ["$saleInfo.totalAdditionalCosts", 0],
+            },
+            saleDiscount: { $ifNull: ["$saleInfo.discount", 0] },
+            saleShippingCost: { $ifNull: ["$saleInfo.shippingCost", 0] },
           },
         },
         {
@@ -551,6 +566,10 @@ class ProfitHistoryRepository {
             saleAdminProfit: { $first: "$saleAdminProfit" },
             saleDistributorProfit: { $first: "$saleDistributorProfit" },
             saleTotalProfit: { $first: "$saleTotalProfit" },
+            saleNetProfit: { $first: "$saleNetProfit" },
+            saleAdditionalCosts: { $first: "$saleAdditionalCosts" },
+            saleDiscount: { $first: "$saleDiscount" },
+            saleShippingCost: { $first: "$saleShippingCost" },
           },
         },
         {
@@ -564,32 +583,96 @@ class ProfitHistoryRepository {
                 "$distributorProfitSum",
               ],
             },
-            totalProfit: {
+            saleAdminNetProfit: {
               $cond: [
-                "$isPromotionDistributor",
+                { $ne: ["$saleAdminProfit", null] },
                 {
-                  $ifNull: [
-                    "$saleTotalProfit",
-                    { $add: ["$saleAdminProfit", "$saleDistributorProfit"] },
-                  ],
-                },
-                "$totalProfitSum",
-              ],
-            },
-            adminProfit: {
-              $cond: [
-                "$isPromotionDistributor",
-                {
-                  $ifNull: [
-                    "$saleAdminProfit",
-                    { $subtract: ["$totalProfit", "$distributorProfit"] },
+                  $subtract: [
+                    {
+                      $subtract: [
+                        {
+                          $subtract: [
+                            "$saleAdminProfit",
+                            "$saleAdditionalCosts",
+                          ],
+                        },
+                        "$saleDiscount",
+                      ],
+                    },
+                    "$saleShippingCost",
                   ],
                 },
                 {
                   $cond: [
-                    "$hasDistributorContext",
-                    { $subtract: ["$totalProfitSum", "$distributorProfitSum"] },
-                    "$totalProfitSum",
+                    { $ne: ["$saleNetProfit", null] },
+                    "$saleNetProfit",
+                    null,
+                  ],
+                },
+              ],
+            },
+            totalProfit: {
+              $cond: [
+                { $ne: ["$saleAdminProfit", null] },
+                { $add: ["$saleAdminNetProfit", "$distributorProfit"] },
+                {
+                  $cond: [
+                    { $ne: ["$saleNetProfit", null] },
+                    "$saleNetProfit",
+                    {
+                      $cond: [
+                        "$isPromotionDistributor",
+                        {
+                          $ifNull: [
+                            "$saleTotalProfit",
+                            {
+                              $add: [
+                                "$saleAdminProfit",
+                                "$saleDistributorProfit",
+                              ],
+                            },
+                          ],
+                        },
+                        "$totalProfitSum",
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+            adminProfit: {
+              $cond: [
+                { $ne: ["$saleAdminProfit", null] },
+                "$saleAdminNetProfit",
+                {
+                  $cond: [
+                    { $ne: ["$saleNetProfit", null] },
+                    "$saleNetProfit",
+                    {
+                      $cond: [
+                        "$isPromotionDistributor",
+                        {
+                          $ifNull: [
+                            "$saleAdminProfit",
+                            {
+                              $subtract: ["$totalProfit", "$distributorProfit"],
+                            },
+                          ],
+                        },
+                        {
+                          $cond: [
+                            "$hasDistributorContext",
+                            {
+                              $subtract: [
+                                "$totalProfitSum",
+                                "$distributorProfitSum",
+                              ],
+                            },
+                            "$totalProfitSum",
+                          ],
+                        },
+                      ],
+                    },
                   ],
                 },
               ],
@@ -710,6 +793,56 @@ class ProfitHistoryRepository {
         { $sort: { distributorProfit: -1 } },
         { $limit: 10 },
       ]),
+      Sale.aggregate([
+        {
+          $match: {
+            business: businessObjectId,
+            paymentStatus: "confirmado",
+            ...(dateRange ? { saleDate: dateRange } : {}),
+          },
+        },
+        {
+          $addFields: {
+            adminNetProfit: {
+              $subtract: [
+                {
+                  $subtract: [
+                    {
+                      $subtract: [
+                        { $ifNull: ["$adminProfit", 0] },
+                        { $ifNull: ["$totalAdditionalCosts", 0] },
+                      ],
+                    },
+                    { $ifNull: ["$discount", 0] },
+                  ],
+                },
+                { $ifNull: ["$shippingCost", 0] },
+              ],
+            },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: "$adminNetProfit" },
+          },
+        },
+      ]),
+      SpecialSale.aggregate([
+        {
+          $match: {
+            business: businessObjectId,
+            status: "active",
+            ...(dateRange ? { saleDate: dateRange } : {}),
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: { $ifNull: ["$totalProfit", 0] } },
+          },
+        },
+      ]),
     ]);
 
     const totals = overview[0] || {
@@ -724,8 +857,10 @@ class ProfitHistoryRepository {
       return acc;
     }, {});
 
-    const netProfitAdjusted = totals.netProfit - commissions.total;
-    const totalAdminProfit = netProfitAdjusted;
+    const salesNetTotal = salesNetProfit?.[0]?.total || 0;
+    const specialNetTotal = specialSalesNetProfit?.[0]?.total || 0;
+    const adminNetFromSales = salesNetTotal + specialNetTotal;
+    const totalAdminProfit = adminNetFromSales;
 
     const distributorsWithAdmin = [
       ...distributorBreakdown,
@@ -738,22 +873,11 @@ class ProfitHistoryRepository {
       },
     ];
 
-    const debugSale = recentEntries.find(
-      (entry) => entry?.saleId === "SALE-ZP1P80",
-    );
-    if (debugSale) {
-      console.log("[ProfitHistory] Sale SALE-ZP1P80", {
-        distributorProfit: debugSale.distributorProfit,
-        adminProfit: debugSale.adminProfit,
-        totalProfit: debugSale.totalProfit,
-      });
-    }
-
     return {
-      totalProfit: netProfitAdjusted,
+      totalProfit: totalAdminProfit,
       grossProfit: totals.grossProfit,
       totalExpenses: totals.totalExpenses,
-      netProfit: netProfitAdjusted,
+      netProfit: totalAdminProfit,
       totalAdminProfit,
       totalDistributorProfit: commissions.total,
       totalEntries: recentEntries.length,

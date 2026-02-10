@@ -663,9 +663,7 @@ export default function SaleDetailModal({
                 </div>
                 <div className="rounded-lg border border-gray-800 bg-gray-900/40 p-3">
                   <p className="text-xs text-gray-400">Registrado por</p>
-                  <p className="text-white">
-                    {createdBy?.name || "N/A"}
-                  </p>
+                  <p className="text-white">{createdBy?.name || "N/A"}</p>
                 </div>
               </div>
             </div>

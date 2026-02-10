@@ -36,10 +36,12 @@ export function OrderSummary({
 
   const totalItems = items.reduce((sum, i) => sum + i.quantity, 0);
   const totalWarrantyItems = warranties.reduce((sum, w) => sum + w.quantity, 0);
-  const warrantyLoss = warranties.reduce((sum, warranty) => {
-    if (warranty.type !== "total_loss") return sum;
-    return sum + (warranty.unitCost || 0) * (warranty.quantity || 0);
-  }, 0);
+  const warrantyLoss = isDistributorSale
+    ? 0
+    : warranties.reduce((sum, warranty) => {
+        if (warranty.type !== "total_loss") return sum;
+        return sum + (warranty.unitCost || 0) * (warranty.quantity || 0);
+      }, 0);
   const additionalCharges = additionalCosts.reduce(
     (sum, c) => sum + (c.amount > 0 ? c.amount : 0),
     0

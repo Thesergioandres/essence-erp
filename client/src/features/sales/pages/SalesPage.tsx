@@ -1398,12 +1398,11 @@ export default function Sales() {
                                 </td>
                                 <td className="whitespace-nowrap px-6 py-3 text-sm text-green-400">
                                   $
-                                  {(
-                                    Number.isFinite(sale.netProfit)
-                                      ? sale.netProfit
-                                      : (sale.adminProfit ?? 0) -
-                                        (sale.totalAdditionalCosts || 0) -
-                                        (sale.shippingCost || 0)
+                                  {(Number.isFinite(sale.netProfit)
+                                    ? sale.netProfit
+                                    : (sale.adminProfit ?? 0) -
+                                      (sale.totalAdditionalCosts || 0) -
+                                      (sale.shippingCost || 0)
                                   ).toLocaleString()}
                                 </td>
                                 {distributorsEnabled && (

@@ -306,7 +306,11 @@ export default function Expenses() {
           if (!isActive) return;
           const mapped = (distRes.products || []).map(item => ({
             ...item.product,
-            purchasePrice: item.product?.purchasePrice ?? 0,
+            purchasePrice:
+              item.product?.averageCost ??
+              item.product?.purchasePrice ??
+              item.product?.basePrice ??
+              0,
             warehouseStock: item.quantity,
             totalStock: item.quantity,
             distributorStock: item.quantity,

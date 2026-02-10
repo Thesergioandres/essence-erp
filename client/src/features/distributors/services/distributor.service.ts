@@ -143,6 +143,8 @@ export const distributorService = {
           name: string;
         };
         basePrice: number;
+        purchasePrice?: number;
+        averageCost?: number;
         distributorPrice: number;
         clientPrice?: number;
         sku?: string;

@@ -143,6 +143,53 @@ async function deleteRelatedRecords(sale, session) {
   }
 }
 
+async function restoreDefectiveStock(reports, session) {
+  if (!reports || reports.length === 0) return;
+
+  for (const report of reports) {
+    const productId = report.product;
+    const quantity = Number(report.quantity) || 0;
+
+    if (!productId || !mongoose.isValidObjectId(productId) || quantity <= 0) {
+      continue;
+    }
+
+    if (report.stockOrigin === "distributor" && report.distributor) {
+      await DistributorStock.findOneAndUpdate(
+        {
+          distributor: report.distributor,
+          product: productId,
+          ...(report.business ? { business: report.business } : {}),
+        },
+        { $inc: { quantity } },
+        { session, upsert: true },
+      );
+    } else if (report.stockOrigin === "branch" && report.branch) {
+      await BranchStock.findOneAndUpdate(
+        {
+          branch: report.branch,
+          product: productId,
+          ...(report.business ? { business: report.business } : {}),
+        },
+        { $inc: { quantity } },
+        { session, upsert: true },
+      );
+    } else {
+      await Product.findByIdAndUpdate(
+        productId,
+        { $inc: { warehouseStock: quantity } },
+        { session },
+      );
+    }
+
+    await Product.findByIdAndUpdate(
+      productId,
+      { $inc: { totalStock: quantity } },
+      { session },
+    );
+  }
+}
+
 async function rollbackPromotionMetrics({ businessId, sale, session }) {
   if (!sale?.isPromotion || !sale?.promotion || !sale?.promotionMetricsApplied)
     return;
@@ -310,6 +357,34 @@ export async function deleteSale(req, res) {
       // Delete related records
       await deleteRelatedRecords(sale, session || undefined);
 
+      if (sale.saleGroupId) {
+        const remainingSales = await Sale.find({
+          business: businessId,
+          saleGroupId: sale.saleGroupId,
+          _id: { $ne: sale._id },
+        })
+          .select("_id")
+          .lean();
+
+        if (!remainingSales || remainingSales.length === 0) {
+          const defectiveReports = await DefectiveProduct.find({
+            business: businessId,
+            saleGroupId: sale.saleGroupId,
+          }).lean();
+
+          await restoreDefectiveStock(defectiveReports, session || undefined);
+
+          const sessionOptions = session ? { session } : undefined;
+          await DefectiveProduct.deleteMany(
+            {
+              business: businessId,
+              saleGroupId: sale.saleGroupId,
+            },
+            sessionOptions,
+          );
+        }
+      }
+
       await rollbackPromotionMetrics({
         businessId,
         sale,
@@ -425,6 +500,13 @@ export async function deleteSaleGroup(req, res) {
       });
 
       const sessionOptions = session ? { session } : undefined;
+
+      const defectiveReports = await DefectiveProduct.find({
+        business: businessId,
+        saleGroupId,
+      }).lean();
+
+      await restoreDefectiveStock(defectiveReports, session || undefined);
 
       // Delete defective products linked to this group
       await DefectiveProduct.deleteMany(

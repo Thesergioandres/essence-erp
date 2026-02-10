@@ -93,12 +93,14 @@ const recalculateTotals = (state: OrderState): OrderState => {
     0
   );
 
-  const warrantyLoss = state.warranties.reduce((sum, warranty) => {
-    if (warranty.type !== "total_loss") return sum;
-    const unitCost = Number(warranty.unitCost || 0);
-    const quantity = Number(warranty.quantity || 0);
-    return sum + unitCost * quantity;
-  }, 0);
+  const warrantyLoss = state.isDistributorSale
+    ? 0
+    : state.warranties.reduce((sum, warranty) => {
+        if (warranty.type !== "total_loss") return sum;
+        const unitCost = Number(warranty.unitCost || 0);
+        const quantity = Number(warranty.quantity || 0);
+        return sum + unitCost * quantity;
+      }, 0);
 
   // Calculate discount (use amount or percentage)
   let discountAmount = state.discount;

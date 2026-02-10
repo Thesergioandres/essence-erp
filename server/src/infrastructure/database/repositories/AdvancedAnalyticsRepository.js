@@ -136,14 +136,19 @@ export class AdvancedAnalyticsRepository {
             },
             netProfit: {
               $sum: {
-                $ifNull: [
+                $subtract: [
                   {
                     $subtract: [
-                      { $ifNull: ["$netProfit", "$totalProfit"] },
-                      { $ifNull: ["$distributorProfit", 0] },
+                      {
+                        $subtract: [
+                          { $ifNull: ["$adminProfit", 0] },
+                          { $ifNull: ["$totalAdditionalCosts", 0] },
+                        ],
+                      },
+                      { $ifNull: ["$discount", 0] },
                     ],
                   },
-                  { $ifNull: ["$adminProfit", 0] },
+                  { $ifNull: ["$shippingCost", 0] },
                 ],
               },
             },
@@ -200,14 +205,19 @@ export class AdvancedAnalyticsRepository {
             },
             netProfit: {
               $sum: {
-                $ifNull: [
+                $subtract: [
                   {
                     $subtract: [
-                      { $ifNull: ["$netProfit", "$totalProfit"] },
-                      { $ifNull: ["$distributorProfit", 0] },
+                      {
+                        $subtract: [
+                          { $ifNull: ["$adminProfit", 0] },
+                          { $ifNull: ["$totalAdditionalCosts", 0] },
+                        ],
+                      },
+                      { $ifNull: ["$discount", 0] },
                     ],
                   },
-                  { $ifNull: ["$adminProfit", 0] },
+                  { $ifNull: ["$shippingCost", 0] },
                 ],
               },
             },
@@ -262,14 +272,19 @@ export class AdvancedAnalyticsRepository {
             },
             netProfit: {
               $sum: {
-                $ifNull: [
+                $subtract: [
                   {
                     $subtract: [
-                      { $ifNull: ["$netProfit", "$totalProfit"] },
-                      { $ifNull: ["$distributorProfit", 0] },
+                      {
+                        $subtract: [
+                          { $ifNull: ["$adminProfit", 0] },
+                          { $ifNull: ["$totalAdditionalCosts", 0] },
+                        ],
+                      },
+                      { $ifNull: ["$discount", 0] },
                     ],
                   },
-                  { $ifNull: ["$adminProfit", 0] },
+                  { $ifNull: ["$shippingCost", 0] },
                 ],
               },
             },
@@ -324,14 +339,19 @@ export class AdvancedAnalyticsRepository {
             },
             netProfit: {
               $sum: {
-                $ifNull: [
+                $subtract: [
                   {
                     $subtract: [
-                      { $ifNull: ["$netProfit", "$totalProfit"] },
-                      { $ifNull: ["$distributorProfit", 0] },
+                      {
+                        $subtract: [
+                          { $ifNull: ["$adminProfit", 0] },
+                          { $ifNull: ["$totalAdditionalCosts", 0] },
+                        ],
+                      },
+                      { $ifNull: ["$discount", 0] },
                     ],
                   },
-                  { $ifNull: ["$adminProfit", 0] },
+                  { $ifNull: ["$shippingCost", 0] },
                 ],
               },
             },
@@ -362,6 +382,7 @@ export class AdvancedAnalyticsRepository {
             business: businessObjectId,
             status: { $in: ["confirmado", "procesado"] },
             lossAmount: { $gt: 0 },
+            origin: { $ne: "order" },
             ...(dateRange ? { reportDate: dateRange } : {}),
           },
         },
@@ -373,6 +394,7 @@ export class AdvancedAnalyticsRepository {
             business: businessObjectId,
             status: { $in: ["confirmado", "procesado"] },
             lossAmount: { $gt: 0 },
+            origin: { $ne: "order" },
             reportDate: { $gte: todayStart, $lte: todayEnd },
           },
         },
@@ -384,6 +406,7 @@ export class AdvancedAnalyticsRepository {
             business: businessObjectId,
             status: { $in: ["confirmado", "procesado"] },
             lossAmount: { $gt: 0 },
+            origin: { $ne: "order" },
             reportDate: { $gte: weekStart, $lte: new Date() },
           },
         },
@@ -395,6 +418,7 @@ export class AdvancedAnalyticsRepository {
             business: businessObjectId,
             status: { $in: ["confirmado", "procesado"] },
             lossAmount: { $gt: 0 },
+            origin: { $ne: "order" },
             reportDate: { $gte: monthStart, $lte: new Date() },
           },
         },
@@ -722,14 +746,19 @@ export class AdvancedAnalyticsRepository {
             ],
           },
           netProfit: {
-            $ifNull: [
+            $subtract: [
               {
                 $subtract: [
-                  { $ifNull: ["$netProfit", "$totalProfit"] },
-                  { $ifNull: ["$distributorProfit", 0] },
+                  {
+                    $subtract: [
+                      { $ifNull: ["$adminProfit", 0] },
+                      { $ifNull: ["$totalAdditionalCosts", 0] },
+                    ],
+                  },
+                  { $ifNull: ["$discount", 0] },
                 ],
               },
-              { $ifNull: ["$adminProfit", 0] },
+              { $ifNull: ["$shippingCost", 0] },
             ],
           },
           quantity: "$quantity",
@@ -782,7 +811,7 @@ export class AdvancedAnalyticsRepository {
         $match: {
           business: businessObjectId,
           status: "confirmado",
-          origin: "order",
+          origin: { $ne: "order" },
           ...(dateRange ? { reportDate: dateRange } : {}),
         },
       },
