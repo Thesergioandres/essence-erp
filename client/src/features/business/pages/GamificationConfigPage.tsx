@@ -34,6 +34,9 @@ const GamificationConfigPage = () => {
   const [pointsBase, setPointsBase] = useState<"sale" | "commission">("sale");
   const [baseCommissionPercentage, setBaseCommissionPercentage] =
     useState<number>(20);
+  const [baseCommissionInitial, setBaseCommissionInitial] = useState<
+    number | null
+  >(null);
   const [levels, setLevels] = useState<LevelConfig[]>([]);
   const [activeMultipliers, setActiveMultipliers] = useState<
     ActiveMultiplier[]
@@ -99,6 +102,14 @@ const GamificationConfigPage = () => {
   if ((baseCommissionPercentage || 0) > 50) {
     warnings.push("Comision base alta: revisa la rentabilidad.");
   }
+  if (
+    baseCommissionInitial !== null &&
+    baseCommissionPercentage !== baseCommissionInitial
+  ) {
+    warnings.push(
+      "Comision base cambiada: el precio distribuidor se recalcula por precio cliente si no hay override manual."
+    );
+  }
   for (let i = 1; i < sortedLevels.length; i += 1) {
     if (
       (sortedLevels[i].minPoints || 0) <= (sortedLevels[i - 1].minPoints || 0)
@@ -141,7 +152,9 @@ const GamificationConfigPage = () => {
       );
       setPenaltyPerDayLate(data.generalRules?.penaltyPerDayLate ?? 5);
       setPointsBase(data.generalRules?.pointsBase || "sale");
-      setBaseCommissionPercentage(data.baseCommissionPercentage ?? 20);
+      const baseCommission = data.baseCommissionPercentage ?? 20;
+      setBaseCommissionPercentage(baseCommission);
+      setBaseCommissionInitial(baseCommission);
       setLevels(data.levels || []);
       setActiveMultipliers(data.activeMultipliers || []);
       setCycleDuration(data.cycle?.duration || "monthly");
@@ -159,6 +172,9 @@ const GamificationConfigPage = () => {
   const handleSaveConfig = async () => {
     try {
       setSaving(true);
+      const baseCommissionChanged =
+        baseCommissionInitial !== null &&
+        baseCommissionPercentage !== baseCommissionInitial;
       await gamificationService.updateConfig({
         generalRules: {
           pointsPerCurrencyUnit,
@@ -204,7 +220,13 @@ const GamificationConfigPage = () => {
         salesTargets,
       });
       await gamificationService.recalculatePoints();
-      alert("Configuración guardada correctamente");
+      if (baseCommissionChanged) {
+        alert(
+          "Comision base cambiada: el precio distribuidor se recalcula por precio cliente si no hay override manual."
+        );
+      } else {
+        alert("Configuración guardada correctamente");
+      }
       loadConfig();
     } catch (error) {
       console.error("Error saving config:", error);

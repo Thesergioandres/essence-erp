@@ -17,6 +17,7 @@ import { Fragment, useCallback, useEffect, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import ProductSelector from "../../../components/ProductSelector";
 import { branchService } from "../../branches/services";
+import { gamificationService } from "../../common/services";
 import {
   categoryService,
   inventoryService,
@@ -129,6 +130,8 @@ export default function InventoryEntries() {
     benefits: "",
   });
   const [distributorManual, setDistributorManual] = useState(false);
+  const [baseCommissionPercentage, setBaseCommissionPercentage] =
+    useState<number>(20);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
@@ -181,6 +184,36 @@ export default function InventoryEntries() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    let isActive = true;
+    const loadConfig = async () => {
+      try {
+        const config = await gamificationService.getConfig();
+        if (!isActive) return;
+        setBaseCommissionPercentage(config.baseCommissionPercentage ?? 20);
+      } catch (err) {
+        console.error("Error al cargar comision base:", err);
+      }
+    };
+    loadConfig();
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (distributorManual || !newProductData.clientPrice) return;
+    const client = Number(newProductData.clientPrice);
+    if (Number.isNaN(client)) return;
+    const autoPrice = Math.round(
+      client * (1 - (baseCommissionPercentage || 0) / 100)
+    );
+    setNewProductData(current => ({
+      ...current,
+      distributorPrice: autoPrice.toString(),
+    }));
+  }, [baseCommissionPercentage, distributorManual, newProductData.clientPrice]);
 
   const handleAddToCart = () => {
     if (!formData.product || !formData.quantity) {
@@ -319,6 +352,7 @@ export default function InventoryEntries() {
         suggestedPrice:
           Number(newProductData.suggestedPrice) || purchasePrice * 1.3,
         distributorPrice,
+        distributorPriceManual: distributorManual,
         clientPrice,
         category: newProductData.category,
         totalStock,
@@ -1308,8 +1342,8 @@ export default function InventoryEntries() {
                                 placeholder="Se calcula automáticamente (editable)"
                               />
                               <p className="mt-1 text-xs text-gray-500">
-                                Se calcula como 80% del precio cliente, pero
-                                puedes ajustarlo
+                                Se calcula segun la comision base, pero puedes
+                                ajustarlo
                               </p>
                             </div>
 
@@ -1329,7 +1363,9 @@ export default function InventoryEntries() {
                                   };
                                   if (!distributorManual && !isNaN(client)) {
                                     updates.distributorPrice = Math.round(
-                                      client * 0.8
+                                      client *
+                                        (1 -
+                                          (baseCommissionPercentage || 0) / 100)
                                     ).toString();
                                   }
                                   setNewProductData({

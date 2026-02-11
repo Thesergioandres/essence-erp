@@ -27,6 +27,7 @@ export interface Product {
   purchasePrice: number;
   suggestedPrice?: number;
   distributorPrice: number;
+  distributorPriceManual?: boolean;
   clientPrice?: number;
   distributorCommission?: number;
   category?: Category | string;
@@ -139,6 +140,7 @@ export interface ProductPayload {
   purchasePrice: number;
   suggestedPrice?: number;
   distributorPrice: number;
+  distributorPriceManual?: boolean;
   clientPrice?: number;
   distributorCommission?: number;
   category: string;

@@ -1,6 +1,7 @@
 import type { ChangeEvent, FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { gamificationService } from "../../common/services";
 import {
   categoryService,
   productService,
@@ -35,6 +36,9 @@ export default function EditProduct() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [distributorManual, setDistributorManual] = useState(false);
+  const [baseCommissionPercentage, setBaseCommissionPercentage] =
+    useState<number>(20);
 
   useEffect(() => {
     return () => {
@@ -57,16 +61,52 @@ export default function EditProduct() {
   }, []);
 
   useEffect(() => {
+    let isActive = true;
+    const loadConfig = async () => {
+      try {
+        const config = await gamificationService.getConfig();
+        if (!isActive) return;
+        setBaseCommissionPercentage(config.baseCommissionPercentage ?? 20);
+      } catch (err) {
+        console.error("Error al cargar comision base:", err);
+      }
+    };
+    loadConfig();
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  useEffect(() => {
     if (id) {
       void loadProduct(id);
     }
   }, [id]);
+
+  useEffect(() => {
+    if (!formData || distributorManual) return;
+    const client = Number(formData.clientPrice);
+    if (Number.isNaN(client)) return;
+    const autoPrice = Math.round(
+      client * (1 - (baseCommissionPercentage || 0) / 100)
+    );
+    if (autoPrice.toString() === formData.distributorPrice) return;
+    setFormData(current =>
+      current
+        ? {
+            ...current,
+            distributorPrice: autoPrice.toString(),
+          }
+        : current
+    );
+  }, [baseCommissionPercentage, distributorManual, formData]);
 
   const loadProduct = async (productId: string) => {
     try {
       setLoading(true);
       const response = await productService.getById(productId);
       setProduct(response);
+      setDistributorManual(Boolean(response.distributorPriceManual));
       setFormData({
         name: response.name,
         description: response.description,
@@ -136,10 +176,15 @@ export default function EditProduct() {
           : current
       );
     }
-    // Auto-calcular distributorPrice cuando cambia clientPrice (80%)
-    else if (name === "clientPrice") {
+    if (name === "distributorPrice") {
+      setDistributorManual(true);
+    }
+    // Auto-calcular distributorPrice cuando cambia clientPrice segun comision base
+    else if (name === "clientPrice" && !distributorManual) {
       const clientPrice = Number(value) || 0;
-      const distributorPrice = Math.round(clientPrice * 0.8);
+      const distributorPrice = Math.round(
+        clientPrice * (1 - (baseCommissionPercentage || 0) / 100)
+      );
       setFormData(current =>
         current
           ? {
@@ -218,6 +263,7 @@ export default function EditProduct() {
         purchasePrice,
         suggestedPrice,
         distributorPrice,
+        distributorPriceManual: distributorManual,
         clientPrice,
         totalStock,
         warehouseStock,

@@ -33,6 +33,10 @@ const productSchema = new mongoose.Schema(
       required: [true, "El precio para distribuidor es obligatorio"],
       min: [0, "El precio para distribuidor no puede ser negativo"],
     },
+    distributorPriceManual: {
+      type: Boolean,
+      default: false,
+    },
     clientPrice: {
       type: Number,
       min: [0, "El precio para cliente no puede ser negativo"],

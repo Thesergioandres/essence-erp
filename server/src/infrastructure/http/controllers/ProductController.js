@@ -282,6 +282,10 @@ export const createProduct = async (req, res, next) => {
     // Parse booleans
     if (productData.featured === "true") productData.featured = true;
     if (productData.featured === "false") productData.featured = false;
+    if (productData.distributorPriceManual === "true")
+      productData.distributorPriceManual = true;
+    if (productData.distributorPriceManual === "false")
+      productData.distributorPriceManual = false;
 
     // Parse arrays
     if (typeof productData.ingredients === "string") {
@@ -383,6 +387,10 @@ export const updateProduct = async (req, res, next) => {
     // Parse booleans
     if (updateData.featured === "true") updateData.featured = true;
     if (updateData.featured === "false") updateData.featured = false;
+    if (updateData.distributorPriceManual === "true")
+      updateData.distributorPriceManual = true;
+    if (updateData.distributorPriceManual === "false")
+      updateData.distributorPriceManual = false;
 
     // Parse arrays
     if (typeof updateData.ingredients === "string") {

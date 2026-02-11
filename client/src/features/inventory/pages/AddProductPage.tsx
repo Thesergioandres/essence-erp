@@ -1,6 +1,7 @@
 import type { ChangeEvent, FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { gamificationService } from "../../common/services";
 import {
   categoryService,
   productService,
@@ -41,6 +42,8 @@ export default function AddProduct() {
     benefits: "",
   });
   const [distributorManual, setDistributorManual] = useState(false);
+  const [baseCommissionPercentage, setBaseCommissionPercentage] =
+    useState<number>(20);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -67,12 +70,42 @@ export default function AddProduct() {
   }, []);
 
   useEffect(() => {
+    let isActive = true;
+    const loadConfig = async () => {
+      try {
+        const config = await gamificationService.getConfig();
+        if (!isActive) return;
+        setBaseCommissionPercentage(config.baseCommissionPercentage ?? 20);
+      } catch (err) {
+        console.error("Error al cargar comision base:", err);
+      }
+    };
+    loadConfig();
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  useEffect(() => {
     return () => {
       if (imagePreview?.startsWith("blob:")) {
         URL.revokeObjectURL(imagePreview);
       }
     };
   }, [imagePreview]);
+
+  useEffect(() => {
+    if (distributorManual || !formData.clientPrice) return;
+    const client = Number(formData.clientPrice);
+    if (Number.isNaN(client)) return;
+    const autoPrice = Math.round(
+      client * (1 - (baseCommissionPercentage || 0) / 100)
+    );
+    setFormData(current => ({
+      ...current,
+      distributorPrice: autoPrice.toString(),
+    }));
+  }, [baseCommissionPercentage, distributorManual, formData.clientPrice]);
 
   const handleChange = (
     event: ChangeEvent<
@@ -110,11 +143,13 @@ export default function AddProduct() {
         }
       }
 
-      // Calcular precio distribuidor automáticamente (80% del precio cliente)
+      // Calcular precio distribuidor automáticamente segun comision base
       if (name === "clientPrice" && value && !distributorManual) {
         const client = Number(value);
         if (!isNaN(client)) {
-          updated.distributorPrice = Math.round(client * 0.8).toString();
+          updated.distributorPrice = Math.round(
+            client * (1 - (baseCommissionPercentage || 0) / 100)
+          ).toString();
         }
       }
 
@@ -199,6 +234,7 @@ export default function AddProduct() {
         purchasePrice,
         suggestedPrice: Number(formData.suggestedPrice) || purchasePrice * 1.3,
         distributorPrice,
+        distributorPriceManual: distributorManual,
         clientPrice,
         category: formData.category,
         totalStock,
@@ -340,8 +376,7 @@ export default function AddProduct() {
                       placeholder="Se calcula automáticamente (editable)"
                     />
                     <p className="mt-1 text-xs text-gray-500">
-                      Se calcula como 80% del precio cliente, pero puedes
-                      ajustarlo
+                      Se calcula segun la comision base, pero puedes ajustarlo
                     </p>
                   </div>
 
