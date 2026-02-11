@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import BusinessGate from "../../../components/BusinessGate";
 import BusinessSelector from "../../../components/BusinessSelector";
 import FeatureNavLink from "../../../components/FeatureNavLink";
 import ReportIssueButton from "../../../components/ReportIssueButton";
+import type { DistributorStats } from "../../analytics/types/gamification.types";
 import { authService } from "../../auth/services";
+import { gamificationService } from "../../common/services";
 
 const navLinkClasses = (isActive: boolean): string =>
   [
@@ -18,6 +20,8 @@ export default function DistributorDashboardLayout() {
   const navigate = useNavigate();
   const user = authService.getCurrentUser();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [distributorStats, setDistributorStats] =
+    useState<DistributorStats | null>(null);
 
   const handleLogout = () => {
     authService.logout();
@@ -27,6 +31,32 @@ export default function DistributorDashboardLayout() {
   if (!user) {
     return null;
   }
+
+  useEffect(() => {
+    if (!user?._id) return;
+    let isActive = true;
+
+    const loadGamification = async () => {
+      try {
+        const statsRes = await gamificationService
+          .getDistributorStats(user._id, { recalculate: true })
+          .catch(() => null);
+
+        if (!isActive) return;
+        setDistributorStats(statsRes?.stats ?? null);
+      } catch (error) {
+        console.error("Error loading gamification widget:", error);
+      }
+    };
+
+    loadGamification();
+    return () => {
+      isActive = false;
+    };
+  }, [user?._id]);
+
+  const totalPoints = distributorStats?.totalPoints || 0;
+  const currentLevel = distributorStats?.currentLevel || "Sin rango";
 
   return (
     <div className="bg-linear-to-br max-w-screen min-h-screen overflow-x-hidden from-gray-900 via-blue-900 to-gray-900">
@@ -312,6 +342,26 @@ export default function DistributorDashboardLayout() {
               Estadísticas
             </NavLink>
 
+            <NavLink
+              to="/distributor/level"
+              className={({ isActive }): string => navLinkClasses(isActive)}
+            >
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 4l3 3 3-3m-6 5h6m-6 4h6m-6 4h6"
+                />
+              </svg>
+              🏆 Mi Nivel
+            </NavLink>
+
             <FeatureNavLink
               to="/distributor/defective-reports"
               feature="defectiveProducts"
@@ -352,6 +402,14 @@ export default function DistributorDashboardLayout() {
                   Distribuidor
                 </p>
               </div>
+            </div>
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <span className="rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-1 text-[10px] font-semibold text-blue-200">
+                {currentLevel}
+              </span>
+              <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2 py-1 text-[10px] font-semibold text-cyan-200">
+                {totalPoints.toLocaleString()} pts
+              </span>
             </div>
             <button
               onClick={handleLogout}

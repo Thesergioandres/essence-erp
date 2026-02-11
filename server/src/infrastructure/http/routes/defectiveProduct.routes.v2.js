@@ -18,6 +18,11 @@ router.post(
   (req, res) => controller.reportAdmin(req, res),
 );
 router.post(
+  "/branch",
+  requirePermission({ module: "defectiveProducts", action: "create" }),
+  (req, res) => controller.reportFromBranch(req, res),
+);
+router.post(
   "/",
   requirePermission({ module: "defectiveProducts", action: "create" }),
   (req, res) => controller.reportDistributor(req, res),

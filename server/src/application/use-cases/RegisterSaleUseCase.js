@@ -3,6 +3,7 @@ import Branch from "../../../models/Branch.js";
 import BranchStock from "../../../models/BranchStock.js";
 import DefectiveProduct from "../../../models/DefectiveProduct.js";
 import DistributorStock from "../../../models/DistributorStock.js";
+import GamificationConfig from "../../../models/GamificationConfig.js";
 import Membership from "../../../models/Membership.js";
 import PaymentMethod from "../../../models/PaymentMethod.js";
 import {
@@ -142,7 +143,13 @@ export class RegisterSaleUseCase {
     // 2. PHASE 1: Validate ALL items BEFORE making any changes
     const validatedItems = [];
     let distributorCommissionBonus = 0;
+    let baseCommissionPercentage = distributorProfitPercentage;
     if (distributorId) {
+      const config = await GamificationConfig.findOne().lean();
+      baseCommissionPercentage = FinanceService.resolveBaseCommissionPercentage(
+        config,
+        distributorProfitPercentage,
+      );
       const bonusInfo = await getCommissionBonusForDistributor(distributorId);
       distributorCommissionBonus = bonusInfo.bonusCommission || 0;
     }
@@ -353,7 +360,7 @@ export class RegisterSaleUseCase {
       const costBasis = product.averageCost || product.purchasePrice || 0;
       const isDistributorSale = Boolean(distributorId);
       const effectiveDistributorProfitPercentage = isDistributorSale
-        ? distributorProfitPercentage + distributorCommissionBonus
+        ? baseCommissionPercentage + distributorCommissionBonus
         : 0;
       let distributorPrice = salePrice;
       if (isDistributorSale) {

@@ -88,6 +88,12 @@ export class GamificationController {
   async getDistributorStats(req, res) {
     try {
       const { distributorId } = req.params;
+      const { recalculate } = req.query;
+      const businessId = req.businessId;
+
+      if (recalculate === "true" && businessId) {
+        await repository.recalculatePoints(businessId, distributorId);
+      }
       const stats = await repository.getDistributorStats(distributorId);
       res.json({ success: true, data: stats });
     } catch (error) {

@@ -132,6 +132,9 @@ export class BusinessController {
       const memberships = await repository.getUserMemberships(req.user.id);
       res.json({ success: true, data: { memberships } });
     } catch (error) {
+      console.error("❌ CRITICAL ERROR in getMyMemberships:", error);
+      console.error("User ID:", req.user?._id);
+      console.error("Stack:", error.stack);
       res.status(500).json({ success: false, message: error.message });
     }
   }

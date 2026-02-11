@@ -99,6 +99,78 @@ export class DefectiveProductRepository {
     return defectiveReport;
   }
 
+  async reportFromBranch(data, businessId, userId, options = {}) {
+    const branchId = data.branchId;
+    if (!branchId) {
+      const err = new Error("Falta branchId");
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const product = await Product.findOne({
+      _id: data.productId,
+      business: businessId,
+    });
+
+    if (!product) {
+      const err = new Error("Producto no encontrado");
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const branchStock = await BranchStock.findOne({
+      branch: branchId,
+      product: data.productId,
+      business: businessId,
+    });
+
+    if (!branchStock || branchStock.quantity < data.quantity) {
+      const err = new Error(
+        `Stock insuficiente en la sede. Disponible: ${branchStock?.quantity || 0}`,
+      );
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const isDistributor = Boolean(options?.isDistributor);
+    const hasWarranty = Boolean(data.hasWarranty);
+    const unitCost = product.averageCost || product.purchasePrice || 0;
+    const lossAmount = hasWarranty ? 0 : unitCost * data.quantity;
+
+    const defectiveReport = await DefectiveProduct.create({
+      distributor: isDistributor ? userId : data.distributorId || null,
+      product: data.productId,
+      business: businessId,
+      branch: branchId,
+      quantity: data.quantity,
+      reason: data.reason,
+      images: data.images || [],
+      hasWarranty,
+      warrantyStatus: hasWarranty ? "pending" : "not_applicable",
+      lossAmount: isDistributor ? 0 : lossAmount,
+      stockOrigin: "branch",
+      status: isDistributor ? "pendiente" : "confirmado",
+      confirmedAt: isDistributor ? null : Date.now(),
+      confirmedBy: isDistributor ? null : userId,
+      adminNotes: isDistributor
+        ? undefined
+        : hasWarranty
+          ? "Reporte con garantía - pendiente reposición de stock"
+          : "Reporte sin garantía - pérdida registrada",
+    });
+
+    if (!isDistributor) {
+      branchStock.quantity -= data.quantity;
+      await branchStock.save();
+
+      await Product.findByIdAndUpdate(product._id, {
+        $inc: { totalStock: -data.quantity },
+      });
+    }
+
+    return defectiveReport;
+  }
+
   async findByBusiness(businessId, filters = {}) {
     const query = { business: businessId };
 

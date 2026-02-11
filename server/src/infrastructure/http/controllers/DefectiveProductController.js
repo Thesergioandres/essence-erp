@@ -45,6 +45,44 @@ export class DefectiveProductController {
     }
   }
 
+  async reportFromBranch(req, res) {
+    try {
+      const businessId = req.businessId;
+      if (!businessId) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Falta x-business-id" });
+      }
+
+      const role = req.membership?.role || req.user?.role;
+      const isDistributor = role === "distribuidor";
+
+      if (isDistributor) {
+        const allowedBranches = Array.isArray(req.membership?.allowedBranches)
+          ? req.membership.allowedBranches.map((id) => id.toString())
+          : [];
+        const branchId = req.body?.branchId;
+        if (!branchId || !allowedBranches.includes(branchId.toString())) {
+          return res.status(403).json({
+            success: false,
+            message: "No tienes acceso a esta sede",
+          });
+        }
+      }
+
+      const report = await repository.reportFromBranch(
+        req.body,
+        businessId,
+        req.user._id,
+        { isDistributor },
+      );
+      res.status(201).json({ success: true, data: report });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      res.status(status).json({ success: false, message: error.message });
+    }
+  }
+
   async getDistributorReports(req, res) {
     try {
       const businessId = req.businessId;

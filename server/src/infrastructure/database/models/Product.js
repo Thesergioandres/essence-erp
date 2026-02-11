@@ -112,5 +112,6 @@ productSchema.index({ featured: 1 });
 productSchema.index({ name: "text", description: "text" });
 productSchema.index({ warehouseStock: 1 });
 
+export { productSchema };
 export default mongoose.models.Product ||
   mongoose.model("Product", productSchema);

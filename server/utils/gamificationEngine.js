@@ -55,12 +55,25 @@ export const computePointsForSale = (config, sale, product) => {
   const rules = config?.generalRules || {};
   const pointsPerCurrencyUnit = Number(rules.pointsPerCurrencyUnit || 0);
   const pointsPerSaleConfirmed = Number(rules.pointsPerSaleConfirmed || 0);
+  const pointsBase = rules.pointsBase || "sale";
 
   const saleAmount =
     sale.actualPayment !== null && sale.actualPayment !== undefined
       ? Number(sale.actualPayment || 0)
       : (sale.salePrice || 0) * (sale.quantity || 0);
-  let points = saleAmount * pointsPerCurrencyUnit + pointsPerSaleConfirmed;
+
+  let pointsAmount = saleAmount;
+  if (pointsBase === "commission") {
+    const distributorProfit = Number(sale.distributorProfit || 0);
+    if (distributorProfit > 0) {
+      pointsAmount = distributorProfit;
+    } else if (sale.distributorProfitPercentage) {
+      pointsAmount =
+        saleAmount * (Number(sale.distributorProfitPercentage) / 100);
+    }
+  }
+
+  let points = pointsAmount * pointsPerCurrencyUnit + pointsPerSaleConfirmed;
 
   const multipliers = Array.isArray(config?.activeMultipliers)
     ? config.activeMultipliers

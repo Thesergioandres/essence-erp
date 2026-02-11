@@ -122,6 +122,9 @@ const DistributorCredits = lazy(
 const DistributorStats = lazy(
   () => import("./features/distributors/pages/DistributorStatsPage")
 );
+const DistributorLevel = lazy(
+  () => import("./features/distributors/pages/DistributorLevelPage")
+);
 const DistributorCatalog = lazy(
   () => import("./features/distributors/pages/DistributorCatalogPage")
 );
@@ -633,6 +636,14 @@ export default function App() {
             element={
               <BusinessGate requiredFeature="reports">
                 <DistributorStats />
+              </BusinessGate>
+            }
+          />
+          <Route
+            path="level"
+            element={
+              <BusinessGate requiredFeature="gamification">
+                <DistributorLevel />
               </BusinessGate>
             }
           />

@@ -14,6 +14,7 @@ export interface GeneralRules {
   pointsPerCurrencyUnit: number;
   pointsPerSaleConfirmed: number;
   penaltyPerDayLate: number;
+  pointsBase?: "sale" | "commission";
 }
 
 export interface LevelBenefits {
@@ -68,6 +69,7 @@ export interface GamificationConfig {
   top2CommissionBonus?: number;
   top3CommissionBonus?: number;
   minAdminProfitForRanking?: number;
+  baseCommissionPercentage?: number;
   currentPeriodStart?: string;
   salesTargets: SalesTarget[];
   productBonuses: ProductBonus[];

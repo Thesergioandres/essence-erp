@@ -15,6 +15,8 @@ export const getProfile = async (req, res) => {
     }
     res.json({ success: true, data: user });
   } catch (error) {
+    console.error("❌ CRITICAL ERROR in getProfile:", error);
+    console.error("Stack:", error.stack);
     res.status(500).json({ success: false, message: error.message });
   }
 };

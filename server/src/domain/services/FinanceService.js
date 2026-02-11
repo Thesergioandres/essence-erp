@@ -7,6 +7,22 @@
 
 export class FinanceService {
   /**
+   * Resolves base commission percentage from config or fallback value.
+   * @param {object | number | null} configOrValue
+   * @param {number} fallback
+   * @returns {number}
+   */
+  static resolveBaseCommissionPercentage(configOrValue, fallback = 20) {
+    if (typeof configOrValue === "number") {
+      return Number.isFinite(configOrValue) ? configOrValue : fallback;
+    }
+    const configValue = configOrValue?.baseCommissionPercentage;
+    if (typeof configValue === "number" && Number.isFinite(configValue)) {
+      return configValue;
+    }
+    return fallback;
+  }
+  /**
    * Calculates the price meant for the distributor (what they pay to admin).
    * @param {number} salePrice - The final public price
    * @param {number} profitPercentage - The distributor's commission % (e.g. 20)

@@ -57,7 +57,9 @@ export class DistributorRepository {
       status: "active",
     }).select("user");
 
-    const membershipDistributorIds = memberships.map((m) => m.user);
+    const membershipDistributorIds = memberships
+      .map((m) => m.user)
+      .filter((id) => id && mongoose.isValidObjectId(id));
 
     if (membershipDistributorIds.length === 0) {
       return {
@@ -92,7 +94,23 @@ export class DistributorRepository {
       User.countDocuments(filter),
     ]);
 
-    const distributorIds = distributors.map((d) => d._id);
+    const distributorIds = distributors
+      .map((d) => d._id)
+      .filter((id) => id && mongoose.isValidObjectId(id));
+
+    if (distributorIds.length === 0) {
+      return {
+        distributors: [],
+        pagination: {
+          page,
+          limit,
+          total,
+          pages: Math.ceil(total / limit),
+          hasMore: false,
+        },
+      };
+    }
+
     const businessObjectId = new mongoose.Types.ObjectId(businessId);
     const objectIds = distributorIds.map(
       (id) => new mongoose.Types.ObjectId(id),

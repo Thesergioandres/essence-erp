@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { creditService } from "../../credits/services";
 import type { Credit } from "../../credits/types/credit.types";
 import type { Customer } from "../../customers/types/customer.types";
+import { saleService } from "../../sales/services";
 
 export default function DistributorCredits() {
   const [credits, setCredits] = useState<Credit[]>([]);
@@ -35,24 +36,78 @@ export default function DistributorCredits() {
     type: "success" | "error";
     text: string;
   } | null>(null);
+  const syncedSalesRef = useRef<Set<string>>(new Set());
 
   const loadCredits = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await creditService.getDistributorCredits();
-      setCredits(response?.credits || []);
-      setStats(response?.stats ?? null);
+      const statusFilter =
+        filterStatus === "all"
+          ? undefined
+          : filterStatus === "paid"
+            ? "paid"
+            : "pending";
+      const response = await creditService.getAll({ status: statusFilter });
+      const list = response?.credits || [];
+      setCredits(list);
+
+      const totalDebt = list.reduce(
+        (sum, credit) => sum + (credit.remainingAmount || 0),
+        0
+      );
+      const totalCollected = list.reduce(
+        (sum, credit) => sum + (credit.paidAmount || 0),
+        0
+      );
+      const overdueCount = list.filter(
+        credit => credit.status === "overdue"
+      ).length;
+      const pendingCount = list.filter(credit =>
+        ["pending", "partial", "overdue"].includes(credit.status)
+      ).length;
+
+      setStats(
+        response?.stats ?? {
+          totalCredits: list.length,
+          totalDebt,
+          overdue: overdueCount,
+          pendingCount,
+          totalPending: totalDebt,
+          totalCollected,
+        }
+      );
     } catch (error) {
       console.error("Error al cargar créditos:", error);
       setCredits([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [filterStatus]);
 
   useEffect(() => {
     void loadCredits();
   }, [loadCredits]);
+
+  useEffect(() => {
+    const syncPaidSales = async () => {
+      const candidates = credits.filter(
+        credit => (credit.remainingAmount || 0) <= 0 && credit.sale
+      );
+
+      for (const credit of candidates) {
+        const saleId = String(credit.sale || "");
+        if (!saleId || syncedSalesRef.current.has(saleId)) continue;
+        syncedSalesRef.current.add(saleId);
+        try {
+          await saleService.confirmPayment(saleId);
+        } catch (error) {
+          console.error("Error syncing paid sale:", error);
+        }
+      }
+    };
+
+    void syncPaidSales();
+  }, [credits]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("es-CO", {

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { authService } from "../../auth/services";
 import { gamificationService } from "../../common/services";
-import { creditService } from "../../credits/services";
 import type { Credit } from "../../credits/types/credit.types";
 import { stockService } from "../../inventory/services/inventory.service";
 import type { DistributorStock } from "../../inventory/types/product.types";
@@ -63,22 +63,16 @@ export default function DistributorDashboard() {
         return;
       }
 
-      const userId = localStorage.getItem("userId");
-      const [salesData, stockData, commissionData, creditsData] =
-        await Promise.all([
-          saleService
-            .getDistributorSales(undefined, { limit: 50 })
-            .catch(() => ({ sales: [] })),
-          stockService.getDistributorStock("me").catch(() => []),
-          userId
-            ? gamificationService
-                .getAdjustedCommission(userId)
-                .catch(() => null)
-            : Promise.resolve(null),
-          creditService
-            .getAll({ status: "pending", limit: 100 })
-            .catch(() => ({ credits: [] })),
-        ]);
+      const userId = authService.getCurrentUser()?._id || "";
+      const [salesData, stockData, commissionData] = await Promise.all([
+        saleService
+          .getDistributorSales(undefined, { limit: 50 })
+          .catch(() => ({ sales: [] })),
+        stockService.getDistributorStock("me").catch(() => []),
+        userId
+          ? gamificationService.getAdjustedCommission(userId).catch(() => null)
+          : Promise.resolve(null),
+      ]);
 
       // Filter out promotions from stock data
       const filteredStockData = (stockData || []).filter(item => {
@@ -87,14 +81,27 @@ export default function DistributorDashboard() {
       });
 
       // Filtrar créditos pendientes y vencidos
-      const myPendingCredits = creditsData?.credits || [];
       const now = new Date();
-      const overdueCredits = myPendingCredits.filter(
-        (c: Credit) => c.dueDate && new Date(c.dueDate) < now
-      );
+      const salesList = salesData?.sales || [];
+      const creditSales = salesList.filter(sale => {
+        if (sale.isCredit || sale.paymentMethodCode === "credit") return true;
+        const credit = sale.credit || sale.creditId;
+        return Boolean(credit);
+      });
+
+      const pendingCreditSales = creditSales.filter(sale => {
+        const credit = (sale.credit || sale.creditId) as Credit | null;
+        if (!credit) return true;
+        return ["pending", "partial", "overdue"].includes(credit.status);
+      });
+
+      const overdueCredits = pendingCreditSales.filter(sale => {
+        const credit = (sale.credit || sale.creditId) as Credit | null;
+        if (!credit?.dueDate) return false;
+        return new Date(credit.dueDate) < now;
+      });
 
       // Calcular estadísticas
-      const salesList = salesData?.sales || [];
       const totalSales = salesList.length;
       const totalRevenue = salesList.reduce(
         (sum, sale) => sum + sale.salePrice * sale.quantity,
@@ -109,16 +116,20 @@ export default function DistributorDashboard() {
       ).length;
 
       // Calcular créditos pendientes
-      const pendingCreditsAmount = myPendingCredits.reduce(
-        (sum: number, c: Credit) =>
-          sum + ((c.originalAmount || 0) - (c.paidAmount || 0)),
-        0
-      );
-      const overdueCreditsAmount = overdueCredits.reduce(
-        (sum: number, c: Credit) =>
-          sum + ((c.originalAmount || 0) - (c.paidAmount || 0)),
-        0
-      );
+      const pendingCreditsAmount = pendingCreditSales.reduce((sum, sale) => {
+        const credit = (sale.credit || sale.creditId) as Credit | null;
+        if (credit) {
+          return sum + (credit.remainingAmount || 0);
+        }
+        return sum + sale.salePrice * sale.quantity;
+      }, 0);
+      const overdueCreditsAmount = overdueCredits.reduce((sum, sale) => {
+        const credit = (sale.credit || sale.creditId) as Credit | null;
+        if (credit) {
+          return sum + (credit.remainingAmount || 0);
+        }
+        return sum + sale.salePrice * sale.quantity;
+      }, 0);
 
       setStats({
         totalSales,
@@ -127,13 +138,18 @@ export default function DistributorDashboard() {
         productsCount: filteredStockData.length,
         lowStockCount,
         pendingCreditsAmount,
-        pendingCreditsCount: myPendingCredits.length,
+        pendingCreditsCount: pendingCreditSales.length,
         overdueCreditsAmount,
         overdueCreditsCount: overdueCredits.length,
       });
 
       setRecentSales(salesList.slice(0, 5));
-      setPendingCredits(myPendingCredits.slice(0, 5));
+      setPendingCredits(
+        pendingCreditSales
+          .slice(0, 5)
+          .map(sale => (sale.credit || sale.creditId) as Credit)
+          .filter(Boolean)
+      );
       setMyStock(filteredStockData.slice(0, 6));
 
       if (commissionData) {

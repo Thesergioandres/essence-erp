@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { saleService } from "../../sales/services";
 import type { Sale } from "../../sales/types/sales.types";
@@ -412,7 +412,7 @@ export default function DistributorSales() {
                   // Si es un grupo, mostrar fila de resumen
                   if (isGroup) {
                     return (
-                      <>
+                      <Fragment key={group.groupId}>
                         <tr
                           key={group.groupId}
                           className="cursor-pointer bg-purple-900/10 hover:bg-purple-900/20"
@@ -591,7 +591,7 @@ export default function DistributorSales() {
                               </tr>
                             );
                           })}
-                      </>
+                      </Fragment>
                     );
                   }
 

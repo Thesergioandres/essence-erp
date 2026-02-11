@@ -3,7 +3,7 @@ import GamificationConfig from "../models/GamificationConfig.js";
 import Sale from "../models/Sale.js";
 import { resolveLevelForPoints } from "./gamificationEngine.js";
 
-const BASE_PROFIT_PERCENTAGE = 20;
+const DEFAULT_BASE_COMMISSION = 20;
 
 const getPeriodRange = (config) => {
   const now = new Date();
@@ -81,12 +81,17 @@ export const getDistributorCommissionInfo = async (
       return {
         position: null,
         bonusCommission: 0,
-        profitPercentage: BASE_PROFIT_PERCENTAGE,
+        profitPercentage: DEFAULT_BASE_COMMISSION,
         periodStart: null,
         periodEnd: null,
         totalDistributors: 0,
       };
     }
+
+    const baseCommissionPercentage =
+      typeof config.baseCommissionPercentage === "number"
+        ? config.baseCommissionPercentage
+        : DEFAULT_BASE_COMMISSION;
 
     const { startDate, endDate } = getPeriodRange(config);
 
@@ -139,7 +144,7 @@ export const getDistributorCommissionInfo = async (
     return {
       position: position || null,
       bonusCommission,
-      profitPercentage: BASE_PROFIT_PERCENTAGE + bonusCommission,
+      profitPercentage: baseCommissionPercentage + bonusCommission,
       level: level?.name || null,
       periodStart: startDate,
       periodEnd: endDate,
@@ -150,7 +155,7 @@ export const getDistributorCommissionInfo = async (
     return {
       position: null,
       bonusCommission: 0,
-      profitPercentage: BASE_PROFIT_PERCENTAGE,
+      profitPercentage: DEFAULT_BASE_COMMISSION,
       periodStart: null,
       periodEnd: null,
       totalDistributors: 0,
@@ -172,7 +177,7 @@ export const getDistributorProfitPercentage = async (
     return info.profitPercentage;
   } catch (error) {
     console.error("Error calculando porcentaje distribuidor:", error);
-    return BASE_PROFIT_PERCENTAGE; // En caso de error, retornar base
+    return DEFAULT_BASE_COMMISSION; // En caso de error, retornar base
   }
 };
 

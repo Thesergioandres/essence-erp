@@ -3,6 +3,7 @@ import Branch from "../../../models/Branch.js";
 import BranchStock from "../../../models/BranchStock.js";
 import DefectiveProduct from "../../../models/DefectiveProduct.js";
 import DistributorStock from "../../../models/DistributorStock.js";
+import GamificationConfig from "../../../models/GamificationConfig.js";
 import Membership from "../../../models/Membership.js";
 import PaymentMethod from "../../../models/PaymentMethod.js";
 import Promotion from "../../../models/Promotion.js";
@@ -145,6 +146,14 @@ export class RegisterPromotionSaleUseCase {
     // 2. PHASE 1: Validate ALL items BEFORE making any changes
     const validatedItems = [];
     const distributorCommissionBonus = 0;
+    let baseCommissionPercentage = distributorProfitPercentage;
+    if (distributorId) {
+      const config = await GamificationConfig.findOne().lean();
+      baseCommissionPercentage = FinanceService.resolveBaseCommissionPercentage(
+        config,
+        distributorProfitPercentage,
+      );
+    }
 
     const discountTotal = Math.max(0, Number(discount || 0));
     const additionalChargesTotal = (additionalCosts || []).reduce(
@@ -535,7 +544,9 @@ export class RegisterPromotionSaleUseCase {
       // Calculate financials
       const costBasis = product.averageCost || product.purchasePrice || 0;
       const isDistributorSale = Boolean(distributorId);
-      const effectiveDistributorProfitPercentage = 0;
+      const effectiveDistributorProfitPercentage = isDistributorSale
+        ? baseCommissionPercentage + distributorCommissionBonus
+        : 0;
       const promotionKey = promotionId
         ? String(
             typeof promotionId === "object"

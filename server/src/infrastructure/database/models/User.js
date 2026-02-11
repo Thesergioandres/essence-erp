@@ -68,4 +68,5 @@ userSchema.index({ role: 1, status: 1 });
 userSchema.index({ status: 1, subscriptionExpiresAt: 1 });
 userSchema.index({ role: 1, active: 1 });
 
+export { userSchema };
 export default mongoose.models.User || mongoose.model("User", userSchema);

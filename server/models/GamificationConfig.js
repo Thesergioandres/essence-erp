@@ -19,6 +19,11 @@ const gamificationConfigSchema = new mongoose.Schema(
         default: 5,
         min: 0,
       },
+      pointsBase: {
+        type: String,
+        enum: ["sale", "commission"],
+        default: "sale",
+      },
     },
     levels: [
       {
@@ -127,6 +132,14 @@ const gamificationConfigSchema = new mongoose.Schema(
       type: Number,
       default: 100000, // $100,000 COP mínimo en ganancia para el admin
       min: 0,
+    },
+
+    // Comision base global para distribuidores
+    baseCommissionPercentage: {
+      type: Number,
+      default: 20,
+      min: 0,
+      max: 100,
     },
 
     // Metas de ventas

@@ -1,7 +1,13 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { analyticsService } from "../../analytics/services";
+import type {
+  GamificationConfig,
+  RankingEntry,
+} from "../../analytics/types/gamification.types";
+import { gamificationService } from "../../common/services";
 import { saleService } from "../../sales/services";
 import type { Sale } from "../../sales/types/sales.types";
+import LeaderboardTable from "../components/LeaderboardTable";
 
 interface EstimatedProfitProduct {
   productId: string;
@@ -31,38 +37,85 @@ interface DistributorEstimate {
 export default function DistributorStats() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState<"week" | "month" | "all">("month");
+  const [dateRange, setDateRange] = useState(() => {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(end.getDate() - 29);
+    return {
+      startDate: start.toISOString().slice(0, 10),
+      endDate: end.toISOString().slice(0, 10),
+    };
+  });
+  const [chartRange, setChartRange] = useState<"7d" | "30d" | "90d">("30d");
+  const [previousStats, setPreviousStats] = useState({
+    totalSales: 0,
+    totalRevenue: 0,
+    totalProfit: 0,
+  });
   const [estimatedProfit, setEstimatedProfit] =
     useState<DistributorEstimate | null>(null);
   const [loadingEstimated, setLoadingEstimated] = useState(true);
   const [showEstimatedProducts, setShowEstimatedProducts] = useState(false);
+  const [rankingData, setRankingData] = useState<RankingEntry[]>([]);
+  const [gamificationConfig, setGamificationConfig] =
+    useState<GamificationConfig | null>(null);
 
   const loadStats = React.useCallback(async () => {
     try {
       setLoading(true);
-      const now = new Date();
-      let startDate = "";
 
-      if (period === "week") {
-        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        startDate = weekAgo.toISOString().split("T")[0];
-      } else if (period === "month") {
-        const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        startDate = monthAgo.toISOString().split("T")[0];
-      }
+      const startDate = dateRange.startDate;
+      const endDate = dateRange.endDate;
+      const rangeStart = new Date(`${startDate}T00:00:00`);
+      const rangeEnd = new Date(`${endDate}T23:59:59`);
+      const dayMs = 24 * 60 * 60 * 1000;
+      const rangeDays = Math.max(
+        1,
+        Math.round((rangeEnd.getTime() - rangeStart.getTime()) / dayMs) + 1
+      );
+      const prevEnd = new Date(rangeStart.getTime() - dayMs);
+      const prevStart = new Date(prevEnd.getTime() - (rangeDays - 1) * dayMs);
 
-      const response = await saleService.getDistributorSales(undefined, {
-        ...(startDate && { startDate }),
-        limit: 200,
+      const [currentRes, previousRes] = await Promise.all([
+        saleService.getDistributorSales(undefined, {
+          startDate,
+          endDate,
+          limit: 500,
+        }),
+        saleService.getDistributorSales(undefined, {
+          startDate: prevStart.toISOString().slice(0, 10),
+          endDate: prevEnd.toISOString().slice(0, 10),
+          limit: 500,
+        }),
+      ]);
+
+      const currentSales = currentRes?.sales || [];
+      const previousSales = previousRes?.sales || [];
+      setSales(currentSales);
+
+      const prevStats = previousRes?.stats || {
+        totalSales: previousSales.length,
+        totalRevenue: previousSales.reduce(
+          (sum, sale) => sum + sale.salePrice * sale.quantity,
+          0
+        ),
+        totalDistributorProfit: previousSales.reduce(
+          (sum, sale) => sum + (sale.distributorProfit || 0),
+          0
+        ),
+      };
+
+      setPreviousStats({
+        totalSales: prevStats.totalSales || 0,
+        totalRevenue: prevStats.totalRevenue || 0,
+        totalProfit: prevStats.totalDistributorProfit || 0,
       });
-
-      setSales(response?.sales || []);
     } catch (error) {
       console.error("Error al cargar estadísticas:", error);
     } finally {
       setLoading(false);
     }
-  }, [period]);
+  }, [dateRange.endDate, dateRange.startDate]);
 
   const loadEstimatedProfit = React.useCallback(async () => {
     try {
@@ -76,13 +129,33 @@ export default function DistributorStats() {
     }
   }, []);
 
+  const loadRanking = React.useCallback(async () => {
+    try {
+      const businessId = localStorage.getItem("businessId") || undefined;
+      const [configRes, rankingRes] = await Promise.all([
+        gamificationService.getConfig().catch(() => null),
+        gamificationService
+          .getRanking({ period: "current", businessId })
+          .catch(() => null),
+      ]);
+      setGamificationConfig(configRes as GamificationConfig | null);
+      setRankingData(rankingRes?.rankings || []);
+    } catch (error) {
+      console.error("Error al cargar ranking:", error);
+    }
+  }, []);
+
   useEffect(() => {
     loadStats();
-  }, [period, loadStats]);
+  }, [dateRange.endDate, dateRange.startDate, loadStats]);
 
   useEffect(() => {
     loadEstimatedProfit();
   }, [loadEstimatedProfit]);
+
+  useEffect(() => {
+    loadRanking();
+  }, [loadRanking]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("es-CO", {
@@ -92,6 +165,26 @@ export default function DistributorStats() {
     }).format(value);
   };
 
+  const formatPercent = (value: number) =>
+    `${value.toFixed(1).replace("-0.0", "0.0")}%`;
+
+  const calculateDelta = (current: number, previous: number) => {
+    if (!previous) {
+      return current > 0 ? 100 : 0;
+    }
+    return ((current - previous) / Math.abs(previous)) * 100;
+  };
+
+  const setPresetRange = (days: number) => {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(end.getDate() - (days - 1));
+    setDateRange({
+      startDate: start.toISOString().slice(0, 10),
+      endDate: end.toISOString().slice(0, 10),
+    });
+  };
+
   // Calcular estadísticas
   const totalSales = sales.length;
   const totalRevenue = sales.reduce(
@@ -99,11 +192,26 @@ export default function DistributorStats() {
     0
   );
   const totalProfit = sales.reduce(
-    (sum, sale) => sum + sale.distributorProfit,
+    (sum, sale) => sum + (sale.distributorProfit || 0),
     0
   );
   const avgSaleValue = totalSales > 0 ? totalRevenue / totalSales : 0;
   const avgProfit = totalSales > 0 ? totalProfit / totalSales : 0;
+  const adminDue = sales.reduce((sum, sale) => {
+    const pct = sale.distributorProfitPercentage ?? 0;
+    const fallbackDistributorPrice = sale.salePrice * ((100 - pct) / 100);
+    const unitPrice = sale.distributorPrice ?? fallbackDistributorPrice;
+    return sum + unitPrice * sale.quantity;
+  }, 0);
+  const netCommission = totalProfit;
+
+  const deltaSales = calculateDelta(totalSales, previousStats.totalSales);
+  const deltaRevenue = calculateDelta(totalRevenue, previousStats.totalRevenue);
+  const deltaProfit = calculateDelta(totalProfit, previousStats.totalProfit);
+  const previousAvgSale = previousStats.totalSales
+    ? previousStats.totalRevenue / previousStats.totalSales
+    : 0;
+  const deltaAvgSale = calculateDelta(avgSaleValue, previousAvgSale);
 
   // Productos más vendidos
   const productSales = sales.reduce(
@@ -142,15 +250,128 @@ export default function DistributorStats() {
     .sort((a, b) => b.quantity - a.quantity)
     .slice(0, 5);
 
-  // Ventas por día
-  const salesByDay = sales.reduce(
-    (acc, sale) => {
-      const date = new Date(sale.saleDate).toLocaleDateString("es-CO");
-      acc[date] = (acc[date] || 0) + 1;
-      return acc;
-    },
-    {} as Record<string, number>
+  const topProductsByProfit = [...productSales]
+    .sort((a, b) => b.profit - a.profit)
+    .slice(0, 5);
+
+  const paymentBreakdown = useMemo(() => {
+    const map = new Map<string, { count: number; revenue: number }>();
+    sales.forEach(sale => {
+      const key = sale.paymentMethodCode || "sin_metodo";
+      const current = map.get(key) || { count: 0, revenue: 0 };
+      map.set(key, {
+        count: current.count + 1,
+        revenue: current.revenue + sale.salePrice * sale.quantity,
+      });
+    });
+    return Array.from(map.entries()).map(([key, value]) => ({
+      key,
+      label:
+        key === "cash"
+          ? "Efectivo"
+          : key === "transfer"
+            ? "Transferencia"
+            : key === "credit"
+              ? "Credito"
+              : "Otro",
+      ...value,
+    }));
+  }, [sales]);
+
+  const deliveryBreakdown = useMemo(() => {
+    const map = new Map<string, number>();
+    sales.forEach(sale => {
+      const key = sale.deliveryMethodCode || "sin_entrega";
+      map.set(key, (map.get(key) || 0) + 1);
+    });
+    return Array.from(map.entries()).map(([key, count]) => ({
+      key,
+      label: key === "delivery" ? "Domicilio" : "Retiro",
+      count,
+    }));
+  }, [sales]);
+
+  const topCustomers = useMemo(() => {
+    const map = new Map<
+      string,
+      { name: string; count: number; revenue: number }
+    >();
+    sales.forEach(sale => {
+      const customerName =
+        sale.customerName ||
+        (typeof sale.customer === "object" ? sale.customer?.name : "") ||
+        "Sin cliente";
+      const current = map.get(customerName) || {
+        name: customerName,
+        count: 0,
+        revenue: 0,
+      };
+      map.set(customerName, {
+        name: customerName,
+        count: current.count + 1,
+        revenue: current.revenue + sale.salePrice * sale.quantity,
+      });
+    });
+    return Array.from(map.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 6);
+  }, [sales]);
+
+  const chartData = useMemo(() => {
+    const end = new Date(`${dateRange.endDate}T00:00:00`);
+    const days = chartRange === "7d" ? 7 : chartRange === "30d" ? 30 : 90;
+    const start = new Date(end);
+    start.setDate(end.getDate() - (days - 1));
+    const dayMs = 24 * 60 * 60 * 1000;
+    const buckets: Array<{ date: string; revenue: number; profit: number }> =
+      [];
+    for (let i = 0; i < days; i += 1) {
+      const current = new Date(start.getTime() + i * dayMs);
+      const key = current.toISOString().slice(0, 10);
+      buckets.push({ date: key, revenue: 0, profit: 0 });
+    }
+    const bucketMap = new Map(buckets.map(item => [item.date, item]));
+    sales.forEach(sale => {
+      const key = sale.saleDate?.slice(0, 10);
+      const bucket = bucketMap.get(key);
+      if (!bucket) return;
+      bucket.revenue += sale.salePrice * sale.quantity;
+      bucket.profit += sale.distributorProfit || 0;
+    });
+    return buckets;
+  }, [chartRange, dateRange.endDate, sales]);
+
+  const chartWidth = 640;
+  const chartHeight = 160;
+  const chartMax = Math.max(
+    1,
+    ...chartData.map(item => Math.max(item.revenue, item.profit))
   );
+
+  const buildLinePath = (values: number[]) => {
+    if (values.length === 0) return "";
+    const step = chartWidth / Math.max(values.length - 1, 1);
+    return values
+      .map((value, index) => {
+        const x = index * step;
+        const y = chartHeight - (value / chartMax) * chartHeight;
+        return `${index === 0 ? "M" : "L"} ${x} ${y}`;
+      })
+      .join(" ");
+  };
+
+  const buildAreaPath = (values: number[]) => {
+    if (values.length === 0) return "";
+    const step = chartWidth / Math.max(values.length - 1, 1);
+    const line = values
+      .map((value, index) => {
+        const x = index * step;
+        const y = chartHeight - (value / chartMax) * chartHeight;
+        return `${index === 0 ? "M" : "L"} ${x} ${y}`;
+      })
+      .join(" ");
+    return `${line} L ${chartWidth} ${chartHeight} L 0 ${chartHeight} Z`;
+  };
 
   if (loading) {
     return (
@@ -163,69 +384,127 @@ export default function DistributorStats() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-4xl font-bold text-white">Estadísticas</h1>
           <p className="mt-2 text-gray-400">Análisis de tu desempeño</p>
         </div>
 
-        {/* Period Selector */}
-        <div className="flex gap-2">
-          <button
-            onClick={() => setPeriod("week")}
-            className={`rounded-lg px-4 py-2 font-medium transition ${
-              period === "week"
-                ? "bg-blue-600 text-white"
-                : "bg-gray-800 text-gray-400 hover:bg-gray-700"
-            }`}
-          >
-            Semana
-          </button>
-          <button
-            onClick={() => setPeriod("month")}
-            className={`rounded-lg px-4 py-2 font-medium transition ${
-              period === "month"
-                ? "bg-blue-600 text-white"
-                : "bg-gray-800 text-gray-400 hover:bg-gray-700"
-            }`}
-          >
-            Mes
-          </button>
-          <button
-            onClick={() => setPeriod("all")}
-            className={`rounded-lg px-4 py-2 font-medium transition ${
-              period === "all"
-                ? "bg-blue-600 text-white"
-                : "bg-gray-800 text-gray-400 hover:bg-gray-700"
-            }`}
-          >
-            Todo
-          </button>
+        {/* Date Range Picker */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-800/60 px-3 py-2">
+            <label className="text-xs text-gray-400">Inicio</label>
+            <input
+              type="date"
+              value={dateRange.startDate}
+              onChange={e =>
+                setDateRange({ ...dateRange, startDate: e.target.value })
+              }
+              className="rounded-md border border-gray-700 bg-gray-900 px-2 py-1 text-xs text-gray-100"
+            />
+          </div>
+          <div className="flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-800/60 px-3 py-2">
+            <label className="text-xs text-gray-400">Fin</label>
+            <input
+              type="date"
+              value={dateRange.endDate}
+              onChange={e =>
+                setDateRange({ ...dateRange, endDate: e.target.value })
+              }
+              className="rounded-md border border-gray-700 bg-gray-900 px-2 py-1 text-xs text-gray-100"
+            />
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setPresetRange(1)}
+              className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-xs font-medium text-gray-300 transition hover:border-blue-500 hover:text-white"
+            >
+              Hoy
+            </button>
+            <button
+              onClick={() => setPresetRange(7)}
+              className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-xs font-medium text-gray-300 transition hover:border-blue-500 hover:text-white"
+            >
+              Semana
+            </button>
+            <button
+              onClick={() => setPresetRange(30)}
+              className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-xs font-medium text-gray-300 transition hover:border-blue-500 hover:text-white"
+            >
+              Mes
+            </button>
+            <button
+              onClick={() => setPresetRange(90)}
+              className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-xs font-medium text-gray-300 transition hover:border-blue-500 hover:text-white"
+            >
+              90d
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Main Stats */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <div className="bg-linear-to-br rounded-xl border border-gray-700 from-blue-900/50 to-gray-800/50 p-6">
           <p className="text-sm text-gray-400">Total Ventas</p>
           <p className="mt-2 text-3xl font-bold text-white">{totalSales}</p>
+          <p
+            className={`mt-1 text-xs ${
+              deltaSales >= 0 ? "text-emerald-300" : "text-red-300"
+            }`}
+          >
+            {deltaSales >= 0 ? "▲" : "▼"} {formatPercent(deltaSales)}
+          </p>
         </div>
         <div className="bg-linear-to-br rounded-xl border border-gray-700 from-green-900/50 to-gray-800/50 p-6">
           <p className="text-sm text-gray-400">Ingresos Totales</p>
           <p className="mt-2 text-2xl font-bold text-white">
             {formatCurrency(totalRevenue)}
           </p>
+          <p
+            className={`mt-1 text-xs ${
+              deltaRevenue >= 0 ? "text-emerald-300" : "text-red-300"
+            }`}
+          >
+            {deltaRevenue >= 0 ? "▲" : "▼"} {formatPercent(deltaRevenue)}
+          </p>
         </div>
         <div className="bg-linear-to-br rounded-xl border border-gray-700 from-purple-900/50 to-gray-800/50 p-6">
-          <p className="text-sm text-gray-400">Ganancias Totales</p>
+          <p className="text-sm text-gray-400">Comision Neta</p>
           <p className="mt-2 text-2xl font-bold text-white">
-            {formatCurrency(totalProfit)}
+            {formatCurrency(netCommission)}
+          </p>
+          <p
+            className={`mt-1 text-xs ${
+              deltaProfit >= 0 ? "text-emerald-300" : "text-red-300"
+            }`}
+          >
+            {deltaProfit >= 0 ? "▲" : "▼"} {formatPercent(deltaProfit)}
           </p>
         </div>
         <div className="bg-linear-to-br rounded-xl border border-gray-700 from-yellow-900/50 to-gray-800/50 p-6">
-          <p className="text-sm text-gray-400">Promedio por Venta</p>
+          <p className="text-sm text-gray-400">Ticket Promedio</p>
           <p className="mt-2 text-2xl font-bold text-white">
             {formatCurrency(avgSaleValue)}
+          </p>
+          <p
+            className={`mt-1 text-xs ${
+              deltaAvgSale >= 0 ? "text-emerald-300" : "text-red-300"
+            }`}
+          >
+            {deltaAvgSale >= 0 ? "▲" : "▼"} {formatPercent(deltaAvgSale)}
+          </p>
+        </div>
+        <div className="bg-linear-to-br rounded-xl border border-gray-700 from-cyan-900/50 to-gray-800/50 p-6">
+          <p className="text-sm text-gray-400">Saldo a entregar al Admin</p>
+          <p className="mt-2 text-2xl font-bold text-white">
+            {formatCurrency(adminDue)}
+          </p>
+        </div>
+        <div className="bg-linear-to-br rounded-xl border border-gray-700 from-emerald-900/40 to-gray-800/50 p-6">
+          <p className="text-sm text-gray-400">Ganancia Promedio</p>
+          <p className="mt-2 text-2xl font-bold text-white">
+            {formatCurrency(avgProfit)}
           </p>
         </div>
       </div>
@@ -403,38 +682,158 @@ export default function DistributorStats() {
         </div>
 
         <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-6">
-          <h2 className="mb-4 text-lg font-semibold text-white">
-            Actividad Diaria
-          </h2>
-          {Object.keys(salesByDay).length === 0 ? (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-white">Actividad</h2>
+            <div className="flex gap-2">
+              {["7d", "30d", "90d"].map(range => (
+                <button
+                  key={range}
+                  onClick={() => setChartRange(range as "7d" | "30d" | "90d")}
+                  className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                    chartRange === range
+                      ? "bg-cyan-500/20 text-cyan-200"
+                      : "bg-gray-900/60 text-gray-400 hover:text-white"
+                  }`}
+                >
+                  {range.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          </div>
+          {chartData.length === 0 ? (
             <p className="py-8 text-center text-gray-400">
               No hay datos de ventas
             </p>
           ) : (
             <div className="space-y-3">
-              {Object.entries(salesByDay)
-                .sort(
-                  (a, b) => new Date(b[0]).getTime() - new Date(a[0]).getTime()
-                )
-                .slice(0, 7)
-                .map(([date, count]) => (
-                  <div key={date} className="flex items-center justify-between">
-                    <span className="text-sm text-gray-400">{date}</span>
-                    <div className="flex items-center gap-3">
-                      <div className="h-2 w-32 overflow-hidden rounded-full bg-gray-700">
-                        <div
-                          className="bg-linear-to-r h-full from-blue-600 to-cyan-600"
-                          style={{
-                            width: `${(count / Math.max(...Object.values(salesByDay))) * 100}%`,
-                          }}
-                        />
-                      </div>
-                      <span className="w-8 text-right text-sm font-semibold text-white">
-                        {count}
-                      </span>
-                    </div>
+              <div className="h-44 w-full rounded-lg border border-gray-700 bg-gray-900/60 p-3">
+                <svg
+                  viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+                  className="h-full w-full"
+                >
+                  <defs>
+                    <linearGradient
+                      id="areaRevenue"
+                      x1="0"
+                      y1="0"
+                      x2="0"
+                      y2="1"
+                    >
+                      <stop offset="0%" stopColor="#22d3ee" stopOpacity="0.4" />
+                      <stop offset="100%" stopColor="#0f172a" stopOpacity="0" />
+                    </linearGradient>
+                  </defs>
+                  <path
+                    d={buildAreaPath(chartData.map(item => item.revenue))}
+                    fill="url(#areaRevenue)"
+                  />
+                  <path
+                    d={buildLinePath(chartData.map(item => item.revenue))}
+                    fill="none"
+                    stroke="#22d3ee"
+                    strokeWidth="2"
+                  />
+                  <path
+                    d={buildLinePath(chartData.map(item => item.profit))}
+                    fill="none"
+                    stroke="#a855f7"
+                    strokeWidth="2"
+                    strokeDasharray="4 4"
+                  />
+                </svg>
+              </div>
+              <div className="flex flex-wrap items-center justify-between text-xs text-gray-400">
+                <span>{chartData[0]?.date}</span>
+                <span>{chartData[chartData.length - 1]?.date}</span>
+              </div>
+              <div className="flex flex-wrap gap-4 text-xs text-gray-300">
+                <span className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-cyan-400" />
+                  Ingresos
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-purple-400" />
+                  Comision
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Payment / Delivery / Customers */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-6">
+          <h2 className="mb-4 text-lg font-semibold text-white">
+            Metodos de Pago
+          </h2>
+          {paymentBreakdown.length === 0 ? (
+            <p className="py-6 text-center text-gray-400">Sin datos</p>
+          ) : (
+            <div className="space-y-3">
+              {paymentBreakdown.map(item => (
+                <div
+                  key={item.key}
+                  className="flex items-center justify-between text-sm"
+                >
+                  <span className="text-gray-300">{item.label}</span>
+                  <div className="text-right">
+                    <p className="font-semibold text-white">{item.count}</p>
+                    <p className="text-xs text-gray-400">
+                      {formatCurrency(item.revenue)}
+                    </p>
                   </div>
-                ))}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-6">
+          <h2 className="mb-4 text-lg font-semibold text-white">
+            Metodos de Entrega
+          </h2>
+          {deliveryBreakdown.length === 0 ? (
+            <p className="py-6 text-center text-gray-400">Sin datos</p>
+          ) : (
+            <div className="space-y-3">
+              {deliveryBreakdown.map(item => (
+                <div
+                  key={item.key}
+                  className="flex items-center justify-between text-sm"
+                >
+                  <span className="text-gray-300">{item.label}</span>
+                  <span className="font-semibold text-white">{item.count}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-6">
+          <h2 className="mb-4 text-lg font-semibold text-white">
+            Top Clientes
+          </h2>
+          {topCustomers.length === 0 ? (
+            <p className="py-6 text-center text-gray-400">Sin datos</p>
+          ) : (
+            <div className="space-y-3">
+              {topCustomers.map(customer => (
+                <div
+                  key={customer.name}
+                  className="flex items-center justify-between text-sm"
+                >
+                  <div>
+                    <p className="font-semibold text-white">{customer.name}</p>
+                    <p className="text-xs text-gray-400">
+                      {customer.count} compras
+                    </p>
+                  </div>
+                  <span className="font-semibold text-emerald-300">
+                    {formatCurrency(customer.revenue)}
+                  </span>
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -492,6 +891,66 @@ export default function DistributorStats() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Top Products by Profit */}
+      <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-6">
+        <h2 className="mb-4 text-lg font-semibold text-white">
+          Top Productos por Utilidad
+        </h2>
+        {topProductsByProfit.length === 0 ? (
+          <p className="py-8 text-center text-gray-400">
+            No hay datos de productos
+          </p>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {topProductsByProfit.map((product, index) => (
+              <div
+                key={`${product.productId}-profit`}
+                className="rounded-lg border border-gray-700 bg-gray-900/50 p-4"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="bg-linear-to-r flex h-10 w-10 items-center justify-center rounded-full from-purple-600 to-indigo-600 font-bold text-white">
+                    {index + 1}
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-white">
+                      {product.productName}
+                    </h3>
+                    <div className="mt-2 space-y-1 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Unidades:</span>
+                        <span className="font-semibold text-blue-400">
+                          {product.quantity}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Ingresos:</span>
+                        <span className="font-semibold text-green-400">
+                          {formatCurrency(product.revenue)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Utilidad:</span>
+                        <span className="font-semibold text-purple-400">
+                          {formatCurrency(product.profit)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Leaderboard */}
+      <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-6">
+        <h2 className="mb-4 text-lg font-semibold text-white">
+          Ranking Distribuidores
+        </h2>
+        <LeaderboardTable rankings={rankingData} config={gamificationConfig} />
       </div>
     </div>
   );

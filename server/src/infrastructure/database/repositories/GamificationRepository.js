@@ -247,6 +247,7 @@ export class GamificationRepository {
           pointsPerCurrencyUnit: 0.001,
           pointsPerSaleConfirmed: 10,
           penaltyPerDayLate: 5,
+          pointsBase: "sale",
         },
         levels: [
           {
@@ -279,6 +280,7 @@ export class GamificationRepository {
         top1CommissionBonus: 5,
         top2CommissionBonus: 3,
         top3CommissionBonus: 2,
+        baseCommissionPercentage: 20,
         autoEvaluate: true,
         currentPeriodStart: new Date(),
         salesTargets: [
@@ -295,7 +297,11 @@ export class GamificationRepository {
           pointsPerCurrencyUnit: 0.001,
           pointsPerSaleConfirmed: 10,
           penaltyPerDayLate: 5,
+          pointsBase: "sale",
         };
+        shouldSave = true;
+      } else if (!config.generalRules.pointsBase) {
+        config.generalRules.pointsBase = "sale";
         shouldSave = true;
       }
       if (!config.levels || config.levels.length === 0) {
@@ -331,6 +337,10 @@ export class GamificationRepository {
       }
       if (!config.resetPolicy) {
         config.resetPolicy = { type: "reset", carryPercent: 0 };
+        shouldSave = true;
+      }
+      if (typeof config.baseCommissionPercentage !== "number") {
+        config.baseCommissionPercentage = 20;
         shouldSave = true;
       }
       if (shouldSave) {

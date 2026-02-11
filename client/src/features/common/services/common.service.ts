@@ -280,11 +280,25 @@ export const gamificationService = {
   },
 
   async getDistributorStats(
-    distributorId: string
+    distributorId: string,
+    params?: { recalculate?: boolean }
   ): Promise<DistributorStatsResponse> {
     const response = await api.get<DistributorStatsResponse>(
-      `/gamification/stats/${distributorId}`
+      `/gamification/stats/${distributorId}`,
+      {
+        params: params?.recalculate ? { recalculate: "true" } : undefined,
+      }
     );
+    return (response.data as any)?.data ?? response.data;
+  },
+
+  async recalculatePoints(distributorId?: string): Promise<{
+    updatedDistributors: number;
+    updatedSales: number;
+  }> {
+    const response = await api.post("/gamification/recalculate-points", {
+      distributorId: distributorId || null,
+    });
     return (response.data as any)?.data ?? response.data;
   },
 

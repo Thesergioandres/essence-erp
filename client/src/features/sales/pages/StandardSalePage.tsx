@@ -76,6 +76,7 @@ export default function StandardSalePage() {
     useState<GamificationConfig | null>(null);
   const [distributorStats, setDistributorStats] =
     useState<DistributorStats | null>(null);
+  const [baseCommissionPercentage, setBaseCommissionPercentage] = useState(20);
   const [rankingInfo, setRankingInfo] = useState<{
     position: number | null;
     totalDistributors: number;
@@ -323,7 +324,10 @@ export default function StandardSalePage() {
 
         if (!isActive) return;
         setGamificationConfig(configRes as GamificationConfig);
-        setDistributorStats(statsRes?.stats ?? null);
+        setBaseCommissionPercentage(
+          (configRes as GamificationConfig)?.baseCommissionPercentage ?? 20
+        );
+        setDistributorStats((statsRes as any)?.stats ?? statsRes ?? null);
         setRankingInfo({
           position: rankingRes?.position ?? null,
           totalDistributors: rankingRes?.totalDistributors ?? 0,
@@ -344,13 +348,13 @@ export default function StandardSalePage() {
 
   useEffect(() => {
     const bonus = rankingInfo?.bonusCommission || 0;
-    const profitPercentage = 20 + bonus;
+    const profitPercentage = baseCommissionPercentage + bonus;
     dispatch({
       type: "SET_DISTRIBUTOR_PROFIT",
       isDistributorSale: isDistributor,
       profitPercentage,
     });
-  }, [isDistributor, rankingInfo?.bonusCommission]);
+  }, [isDistributor, rankingInfo?.bonusCommission, baseCommissionPercentage]);
 
   // Fetch branch stock when branch location is selected
   useEffect(() => {

@@ -98,7 +98,7 @@ export class SaleRepository {
     }
 
     const statsAggregation = await Sale.aggregate([
-      { $match: matchFilter },
+      { $match: { ...matchFilter, paymentStatus: "confirmado" } },
       {
         $group: {
           _id: null,

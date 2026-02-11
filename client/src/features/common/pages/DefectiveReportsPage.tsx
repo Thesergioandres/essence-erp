@@ -10,6 +10,18 @@ import { defectiveProductService } from "../../sales/services";
 export default function DefectiveReports() {
   const [reports, setReports] = useState<DefectiveProduct[]>([]);
   const [stock, setStock] = useState<DistributorStock[]>([]);
+  const [allowedBranches, setAllowedBranches] = useState<
+    Array<{
+      _id: string;
+      name: string;
+      stock: Array<{
+        product: { _id: string; name: string; image?: any };
+        quantity: number;
+      }>;
+    }>
+  >([]);
+  const [origin, setOrigin] = useState<"distributor" | "branch">("distributor");
+  const [selectedBranchId, setSelectedBranchId] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [filter, setFilter] = useState<
@@ -37,10 +49,15 @@ export default function DefectiveReports() {
       ]);
       setReports(reportsData || []);
       setStock(stockData || []);
+      const branchesResponse = await stockService
+        .getMyAllowedBranches()
+        .catch(() => ({ branches: [] }));
+      setAllowedBranches(branchesResponse.branches || []);
     } catch (error) {
       console.error("Error al cargar datos:", error);
       setReports([]);
       setStock([]);
+      setAllowedBranches([]);
     } finally {
       setLoading(false);
     }
@@ -54,9 +71,23 @@ export default function DefectiveReports() {
       return;
     }
 
+    if (origin === "branch" && !selectedBranchId) {
+      alert("Selecciona la sede desde donde reportas");
+      return;
+    }
+
     try {
       setSubmitting(true);
-      await defectiveProductService.report(formData);
+      if (origin === "branch") {
+        await defectiveProductService.reportFromBranch({
+          branchId: selectedBranchId,
+          productId: formData.productId,
+          quantity: formData.quantity,
+          reason: formData.reason,
+        });
+      } else {
+        await defectiveProductService.report(formData);
+      }
       alert("Reporte enviado exitosamente");
       setShowModal(false);
       setFormData({ productId: "", quantity: 1, reason: "" });
@@ -81,11 +112,19 @@ export default function DefectiveReports() {
     rechazado: reports.filter(r => r.status === "rechazado").length,
   };
 
+  const selectedBranch = allowedBranches.find(b => b._id === selectedBranchId);
   const selectedStock = stock.find(s => {
     const product = typeof s.product === "object" ? s.product : null;
     return product?._id === formData.productId;
   });
-  const maxQuantity = selectedStock?.quantity || 0;
+  const selectedBranchStock = selectedBranch?.stock?.find(item => {
+    const product = item.product;
+    return product?._id === formData.productId;
+  });
+  const maxQuantity =
+    origin === "branch"
+      ? selectedBranchStock?.quantity || 0
+      : selectedStock?.quantity || 0;
 
   const distributorProducts = stock
     .map(item => {
@@ -96,6 +135,13 @@ export default function DefectiveReports() {
         totalStock: item.quantity,
       };
     })
+    .filter(Boolean);
+
+  const branchProducts = (selectedBranch?.stock || [])
+    .map(item => ({
+      ...item.product,
+      totalStock: item.quantity,
+    }))
     .filter(Boolean);
 
   if (loading) {
@@ -293,6 +339,62 @@ export default function DefectiveReports() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="mb-2 block text-sm font-medium text-gray-300">
+                  Origen del reporte
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setOrigin("distributor")}
+                    className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
+                      origin === "distributor"
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-800 text-gray-200 hover:bg-white/5"
+                    }`}
+                  >
+                    Mi inventario
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOrigin("branch")}
+                    className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
+                      origin === "branch"
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-800 text-gray-200 hover:bg-white/5"
+                    }`}
+                  >
+                    Sede autorizada
+                  </button>
+                </div>
+                <p className="mt-1 text-xs text-gray-400">
+                  Selecciona desde donde saldra el stock defectuoso.
+                </p>
+              </div>
+
+              {origin === "branch" && (
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-300">
+                    Sede autorizada
+                  </label>
+                  <select
+                    value={selectedBranchId}
+                    onChange={e => {
+                      setSelectedBranchId(e.target.value);
+                      setFormData({ ...formData, productId: "", quantity: 1 });
+                    }}
+                    className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-white focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Selecciona una sede</option>
+                    {allowedBranches.map(branch => (
+                      <option key={branch._id} value={branch._id}>
+                        {branch.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-300">
                   Producto *
                 </label>
                 <ProductSelector
@@ -306,7 +408,11 @@ export default function DefectiveReports() {
                   }}
                   placeholder="Buscar y seleccionar producto..."
                   showStock={true}
-                  products={distributorProducts as any}
+                  products={
+                    (origin === "branch"
+                      ? branchProducts
+                      : distributorProducts) as any
+                  }
                 />
               </div>
 
@@ -352,6 +458,8 @@ export default function DefectiveReports() {
                   onClick={() => {
                     setShowModal(false);
                     setFormData({ productId: "", quantity: 1, reason: "" });
+                    setOrigin("distributor");
+                    setSelectedBranchId("");
                   }}
                   className="flex-1 rounded-lg border border-gray-700 px-4 py-2 text-gray-200 transition hover:bg-white/5"
                   disabled={submitting}
