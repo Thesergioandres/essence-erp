@@ -25,10 +25,11 @@ export const LoginForm = ({ onSubmit, isLoading }: LoginFormProps) => {
         label="Email"
         type="email"
         name="email"
+        id="email"
         value={formData.email}
         onChange={e => setFormData({ ...formData, email: e.target.value })}
         required
-        autoComplete="email"
+        autoComplete="username"
         placeholder="tu@email.com"
       />
 
@@ -36,6 +37,7 @@ export const LoginForm = ({ onSubmit, isLoading }: LoginFormProps) => {
         label="Contraseña"
         type="password"
         name="password"
+        id="password"
         value={formData.password}
         onChange={e => setFormData({ ...formData, password: e.target.value })}
         required

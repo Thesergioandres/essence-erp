@@ -9,6 +9,7 @@ import type { User } from "../../auth/types/auth.types";
 import type {
   Business,
   BusinessAssistantActionType,
+  BusinessAssistantConfig,
   BusinessAssistantRecommendationsResponse,
   BusinessMembership,
 } from "../types/business.types";
@@ -433,35 +434,14 @@ export const businessAssistantService = {
     return businessAssistantService.mapLegacyRecommendations(payload);
   },
 
-  async getConfig(): Promise<{
-    config: {
-      enabled: boolean;
-      analysisFrequency: "daily" | "weekly" | "monthly";
-      enabledRecommendations: string[];
-      thresholds: {
-        lowStockDays: number;
-        slowMovingDays: number;
-        profitMarginAlert: number;
-      };
-    };
-  }> {
+  async getConfig(): Promise<BusinessAssistantConfig> {
     const response = await api.get("/business-assistant/config");
     return businessAssistantService.normalizeResponse(response);
   },
 
-  async updateConfig(config: {
-    enabled?: boolean;
-    analysisFrequency?: "daily" | "weekly" | "monthly";
-    enabledRecommendations?: string[];
-    thresholds?: {
-      lowStockDays?: number;
-      slowMovingDays?: number;
-      profitMarginAlert?: number;
-    };
-  }): Promise<{
-    message: string;
-    config: Record<string, any>;
-  }> {
+  async updateConfig(
+    config: Partial<BusinessAssistantConfig>
+  ): Promise<BusinessAssistantConfig> {
     const response = await api.put("/business-assistant/config", config);
     return businessAssistantService.normalizeResponse(response);
   },

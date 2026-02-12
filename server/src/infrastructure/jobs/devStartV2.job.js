@@ -39,8 +39,8 @@ const CONFIG = {
     "mongodb://localhost:27017/essence_local",
   SKIP_SYNC: process.env.DEV_SKIP_SYNC === "true",
   SKIP_VALIDATION: process.env.DEV_SKIP_VALIDATION === "true",
-  FORCE_SYNC: process.env.DEV_FORCE_SYNC === "true",
-  FAST_START_MINUTES: parseInt(process.env.DEV_FAST_START_MINUTES, 10) || 2,
+  FORCE_SYNC: process.env.DEV_FORCE_SYNC !== "false",
+  FAST_START_MINUTES: parseInt(process.env.DEV_FAST_START_MINUTES, 10) || 0,
   NODE_ENV: "development",
 };
 

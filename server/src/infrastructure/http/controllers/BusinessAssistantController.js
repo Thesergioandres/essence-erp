@@ -47,13 +47,14 @@ export class BusinessAssistantController {
           .json({ success: false, message: "Falta x-business-id" });
       }
 
-      const { horizonDays, recentDays, startDate, endDate } = req.query;
+      const { horizonDays, recentDays, startDate, endDate, force } = req.query;
 
       const result = await repository.generateRecommendations(businessId, {
         horizonDays: horizonDays ? parseInt(horizonDays) : undefined,
         recentDays: recentDays ? parseInt(recentDays) : undefined,
         startDate,
         endDate,
+        force: force === "1" || force === "true",
       });
 
       res.json({ success: true, data: result });

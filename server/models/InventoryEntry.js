@@ -63,5 +63,7 @@ const inventoryEntrySchema = new mongoose.Schema(
 
 inventoryEntrySchema.index({ business: 1, createdAt: -1 });
 inventoryEntrySchema.index({ business: 1, purchaseOrder: 1 });
+inventoryEntrySchema.index({ business: 1, branch: 1, createdAt: -1 });
+inventoryEntrySchema.index({ business: 1, product: 1, createdAt: -1 });
 
 export default mongoose.model("InventoryEntry", inventoryEntrySchema);

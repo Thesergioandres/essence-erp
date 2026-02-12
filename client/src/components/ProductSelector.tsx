@@ -15,6 +15,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import { useDebounce } from "../hooks";
 import { useProductCache } from "../hooks/useProductCache";
 
@@ -99,18 +100,33 @@ export default function ProductSelector({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Mantener el dropdown anclado al contenedor
+  const updateDropdownPosition = useCallback(() => {
+    if (!buttonRef.current) return;
+    const rect = buttonRef.current.getBoundingClientRect();
+    const maxHeight = Math.max(180, window.innerHeight - rect.bottom - 12);
+    setDropdownStyle({
+      position: "fixed",
+      top: rect.bottom + 4,
+      left: rect.left,
+      width: rect.width,
+      maxHeight,
+      zIndex: 9999,
+    });
+  }, []);
+
+  // Mantener el dropdown anclado al boton (portal)
   useEffect(() => {
-    if (isOpen) {
-      setDropdownStyle({
-        position: "absolute",
-        top: "calc(100% + 4px)",
-        left: 0,
-        width: "100%",
-        zIndex: 9999,
-      });
-    }
-  }, [isOpen]);
+    if (!isOpen) return;
+    updateDropdownPosition();
+    const handleScroll = () => updateDropdownPosition();
+    const handleResize = () => updateDropdownPosition();
+    window.addEventListener("scroll", handleScroll, true);
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("scroll", handleScroll, true);
+      window.removeEventListener("resize", handleResize);
+    };
+  }, [isOpen, updateDropdownPosition]);
 
   // Enfocar búsqueda al abrir
   useEffect(() => {
@@ -297,220 +313,226 @@ export default function ProductSelector({
       </button>
 
       {/* Dropdown */}
-      {isOpen && (
-        <div
-          ref={dropdownRef}
-          style={dropdownStyle}
-          className="rounded-lg border border-gray-600 bg-gray-800 shadow-2xl"
-        >
-          {/* Search */}
-          <div className="border-b border-gray-700 p-2">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-              <input
-                ref={searchInputRef}
-                type="search"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Buscar producto..."
-                className="w-full rounded-lg border border-gray-600 bg-gray-700 py-2 pl-9 pr-4 text-sm text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none"
-              />
-            </div>
-          </div>
-
-          {/* Filters Toggle */}
-          <div className="flex items-center justify-between border-b border-gray-700 px-3 py-2">
-            <button
-              type="button"
-              onClick={() => setShowFilters(!showFilters)}
-              className="flex items-center gap-1 text-xs text-gray-400 hover:text-white"
-            >
-              {showFilters ? "Ocultar filtros" : "Mostrar filtros"}
-              <ChevronDown
-                className={`h-3 w-3 transition ${showFilters ? "rotate-180" : ""}`}
-              />
-            </button>
-            <span className="text-xs text-gray-500">
-              {filteredProducts.length} productos
-            </span>
-          </div>
-
-          {/* Filters */}
-          {showFilters && (
-            <div className="space-y-2 border-b border-gray-700 p-2">
-              {/* Category Filter */}
-              <div>
-                <label className="mb-1 block text-xs text-gray-400">
-                  Categoría
-                </label>
-                <select
-                  value={selectedCategory}
-                  onChange={e => setSelectedCategory(e.target.value)}
-                  className="w-full rounded border border-gray-600 bg-gray-700 px-2 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none"
-                >
-                  <option value="">Todas las categorías</option>
-                  {categories.map(cat => (
-                    <option key={cat._id} value={cat._id}>
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
+      {isOpen &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            ref={dropdownRef}
+            style={dropdownStyle}
+            className="rounded-lg border border-gray-600 bg-gray-800 shadow-2xl"
+          >
+            {/* Search */}
+            <div className="border-b border-gray-700 p-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <input
+                  ref={searchInputRef}
+                  type="search"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Buscar producto..."
+                  className="w-full rounded-lg border border-gray-600 bg-gray-700 py-2 pl-9 pr-4 text-sm text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none"
+                />
               </div>
+            </div>
 
-              {/* Sort */}
-              <div>
-                <label className="mb-1 block text-xs text-gray-400">
-                  Ordenar por
-                </label>
-                <div className="grid grid-cols-3 gap-1">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setSortBy(
-                        sortBy === "name-asc" ? "name-desc" : "name-asc"
-                      )
-                    }
-                    className={`flex items-center justify-center gap-1 rounded border px-2 py-1.5 text-xs transition ${
-                      sortBy.startsWith("name")
-                        ? "border-purple-500 bg-purple-500/20 text-purple-300"
-                        : "border-gray-600 text-gray-400 hover:border-gray-500"
-                    }`}
+            {/* Filters Toggle */}
+            <div className="flex items-center justify-between border-b border-gray-700 px-3 py-2">
+              <button
+                type="button"
+                onClick={() => setShowFilters(!showFilters)}
+                className="flex items-center gap-1 text-xs text-gray-400 hover:text-white"
+              >
+                {showFilters ? "Ocultar filtros" : "Mostrar filtros"}
+                <ChevronDown
+                  className={`h-3 w-3 transition ${showFilters ? "rotate-180" : ""}`}
+                />
+              </button>
+              <span className="text-xs text-gray-500">
+                {filteredProducts.length} productos
+              </span>
+            </div>
+
+            {/* Filters */}
+            {showFilters && (
+              <div className="space-y-2 border-b border-gray-700 p-2">
+                {/* Category Filter */}
+                <div>
+                  <label className="mb-1 block text-xs text-gray-400">
+                    Categoría
+                  </label>
+                  <select
+                    value={selectedCategory}
+                    onChange={e => setSelectedCategory(e.target.value)}
+                    className="w-full rounded border border-gray-600 bg-gray-700 px-2 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none"
                   >
-                    Nombre
-                    {sortBy === "name-asc" ? (
-                      <SortAsc className="h-3 w-3" />
-                    ) : sortBy === "name-desc" ? (
-                      <SortDesc className="h-3 w-3" />
-                    ) : null}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setSortBy(
-                        sortBy === "stock-desc" ? "stock-asc" : "stock-desc"
-                      )
-                    }
-                    className={`flex items-center justify-center gap-1 rounded border px-2 py-1.5 text-xs transition ${
-                      sortBy.startsWith("stock")
-                        ? "border-purple-500 bg-purple-500/20 text-purple-300"
-                        : "border-gray-600 text-gray-400 hover:border-gray-500"
-                    }`}
-                  >
-                    Stock
-                    {sortBy === "stock-asc" ? (
-                      <SortAsc className="h-3 w-3" />
-                    ) : sortBy === "stock-desc" ? (
-                      <SortDesc className="h-3 w-3" />
-                    ) : null}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setSortBy(
-                        sortBy === "price-asc" ? "price-desc" : "price-asc"
-                      )
-                    }
-                    className={`flex items-center justify-center gap-1 rounded border px-2 py-1.5 text-xs transition ${
-                      sortBy.startsWith("price")
-                        ? "border-purple-500 bg-purple-500/20 text-purple-300"
-                        : "border-gray-600 text-gray-400 hover:border-gray-500"
-                    }`}
-                  >
-                    Precio
-                    {sortBy === "price-asc" ? (
-                      <SortAsc className="h-3 w-3" />
-                    ) : sortBy === "price-desc" ? (
-                      <SortDesc className="h-3 w-3" />
-                    ) : null}
-                  </button>
+                    <option value="">Todas las categorías</option>
+                    {categories.map(cat => (
+                      <option key={cat._id} value={cat._id}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Sort */}
+                <div>
+                  <label className="mb-1 block text-xs text-gray-400">
+                    Ordenar por
+                  </label>
+                  <div className="grid grid-cols-3 gap-1">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSortBy(
+                          sortBy === "name-asc" ? "name-desc" : "name-asc"
+                        )
+                      }
+                      className={`flex items-center justify-center gap-1 rounded border px-2 py-1.5 text-xs transition ${
+                        sortBy.startsWith("name")
+                          ? "border-purple-500 bg-purple-500/20 text-purple-300"
+                          : "border-gray-600 text-gray-400 hover:border-gray-500"
+                      }`}
+                    >
+                      Nombre
+                      {sortBy === "name-asc" ? (
+                        <SortAsc className="h-3 w-3" />
+                      ) : sortBy === "name-desc" ? (
+                        <SortDesc className="h-3 w-3" />
+                      ) : null}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSortBy(
+                          sortBy === "stock-desc" ? "stock-asc" : "stock-desc"
+                        )
+                      }
+                      className={`flex items-center justify-center gap-1 rounded border px-2 py-1.5 text-xs transition ${
+                        sortBy.startsWith("stock")
+                          ? "border-purple-500 bg-purple-500/20 text-purple-300"
+                          : "border-gray-600 text-gray-400 hover:border-gray-500"
+                      }`}
+                    >
+                      Stock
+                      {sortBy === "stock-asc" ? (
+                        <SortAsc className="h-3 w-3" />
+                      ) : sortBy === "stock-desc" ? (
+                        <SortDesc className="h-3 w-3" />
+                      ) : null}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSortBy(
+                          sortBy === "price-asc" ? "price-desc" : "price-asc"
+                        )
+                      }
+                      className={`flex items-center justify-center gap-1 rounded border px-2 py-1.5 text-xs transition ${
+                        sortBy.startsWith("price")
+                          ? "border-purple-500 bg-purple-500/20 text-purple-300"
+                          : "border-gray-600 text-gray-400 hover:border-gray-500"
+                      }`}
+                    >
+                      Precio
+                      {sortBy === "price-asc" ? (
+                        <SortAsc className="h-3 w-3" />
+                      ) : sortBy === "price-desc" ? (
+                        <SortDesc className="h-3 w-3" />
+                      ) : null}
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-
-          {/* Products List - Con lazy loading de imágenes */}
-          <div className="scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800 max-h-96 overflow-y-auto">
-            {loading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-purple-500" />
-              </div>
-            ) : filteredProducts.length === 0 ? (
-              <div className="py-8 text-center text-sm text-gray-400">
-                No se encontraron productos
-              </div>
-            ) : (
-              <div className="py-1">
-                {filteredProducts.map(product => (
-                  <button
-                    key={product._id}
-                    type="button"
-                    onClick={() => handleSelect(product)}
-                    className={`flex w-full items-center gap-3 px-3 py-2 text-left transition hover:bg-gray-700 ${
-                      value === product._id ? "bg-purple-500/20" : ""
-                    }`}
-                  >
-                    {product.image?.url ? (
-                      <img
-                        src={product.image.url}
-                        alt=""
-                        className="h-8 w-8 rounded object-cover"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="flex h-8 w-8 items-center justify-center rounded bg-gray-700">
-                        <Package className="h-4 w-4 text-gray-500" />
-                      </div>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        {product.isPromotion && (
-                          <span className="shrink-0 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-bold text-amber-400">
-                            📦 PROMO
-                          </span>
-                        )}
-                        <span className="truncate font-medium text-white">
-                          {product.name}
-                        </span>
-                        {value === product._id && (
-                          <Check className="h-4 w-4 text-purple-400" />
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 text-xs">
-                        {getCategoryName(product) && (
-                          <span className="text-gray-400">
-                            {getCategoryName(product)}
-                          </span>
-                        )}
-                        {showStock && (
-                          <span
-                            className={
-                              (product.totalStock || 0) > 0
-                                ? "text-green-400"
-                                : "text-red-400"
-                            }
-                          >
-                            Stock: {product.totalStock || 0}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    {(product.averageCost || product.purchasePrice) && (
-                      <span className="text-sm text-gray-400">
-                        $
-                        {(
-                          product.averageCost ||
-                          product.purchasePrice ||
-                          0
-                        ).toLocaleString()}
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
             )}
-          </div>
-        </div>
-      )}
+
+            {/* Products List - Con lazy loading de imágenes */}
+            <div
+              className="scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800 overflow-y-auto"
+              style={{ maxHeight: dropdownStyle.maxHeight }}
+            >
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-purple-500" />
+                </div>
+              ) : filteredProducts.length === 0 ? (
+                <div className="py-8 text-center text-sm text-gray-400">
+                  No se encontraron productos
+                </div>
+              ) : (
+                <div className="py-1">
+                  {filteredProducts.map(product => (
+                    <button
+                      key={product._id}
+                      type="button"
+                      onClick={() => handleSelect(product)}
+                      className={`flex w-full items-center gap-3 px-3 py-2 text-left transition hover:bg-gray-700 ${
+                        value === product._id ? "bg-purple-500/20" : ""
+                      }`}
+                    >
+                      {product.image?.url ? (
+                        <img
+                          src={product.image.url}
+                          alt=""
+                          className="h-8 w-8 rounded object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="flex h-8 w-8 items-center justify-center rounded bg-gray-700">
+                          <Package className="h-4 w-4 text-gray-500" />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          {product.isPromotion && (
+                            <span className="shrink-0 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-bold text-amber-400">
+                              📦 PROMO
+                            </span>
+                          )}
+                          <span className="truncate font-medium text-white">
+                            {product.name}
+                          </span>
+                          {value === product._id && (
+                            <Check className="h-4 w-4 text-purple-400" />
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 text-xs">
+                          {getCategoryName(product) && (
+                            <span className="text-gray-400">
+                              {getCategoryName(product)}
+                            </span>
+                          )}
+                          {showStock && (
+                            <span
+                              className={
+                                (product.totalStock || 0) > 0
+                                  ? "text-green-400"
+                                  : "text-red-400"
+                              }
+                            >
+                              Stock: {product.totalStock || 0}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {(product.averageCost || product.purchasePrice) && (
+                        <span className="text-sm text-gray-400">
+                          $
+                          {(
+                            product.averageCost ||
+                            product.purchasePrice ||
+                            0
+                          ).toLocaleString()}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

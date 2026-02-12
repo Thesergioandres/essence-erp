@@ -53,6 +53,13 @@ export default function Catalog() {
   const [maxPrice, setMaxPrice] = useState(0);
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [promotionError, setPromotionError] = useState<string | null>(null);
+  const [selectedPromotion, setSelectedPromotion] = useState<Promotion | null>(
+    null
+  );
+  const productIndex = useMemo(
+    () => new Map(products.map(product => [product._id, product])),
+    [products]
+  );
 
   useEffect(() => {
     if (!publicBusinessId) {
@@ -203,6 +210,30 @@ export default function Catalog() {
 
     return null;
   };
+
+  const getPromotionProducts = (promo: Promotion) => {
+    if (promo.comboItems && promo.comboItems.length > 0) {
+      return promo.comboItems
+        .map(item =>
+          typeof item.product === "string"
+            ? productIndex.get(item.product)
+            : item.product
+        )
+        .filter(Boolean);
+    }
+
+    if (promo.applicableProducts && promo.applicableProducts.length > 0) {
+      return promo.applicableProducts
+        .map(productId => productIndex.get(productId))
+        .filter(Boolean);
+    }
+
+    return [] as Product[];
+  };
+
+  const selectedPromotionProducts = selectedPromotion
+    ? getPromotionProducts(selectedPromotion)
+    : [];
 
   const shareLink = useMemo(() => {
     if (typeof window === "undefined") return "";
@@ -458,7 +489,7 @@ export default function Catalog() {
                       {products.length}
                     </p>
                   </div>
-                  <div className="rounded-full bg-gradient-to-r from-amber-500 to-emerald-500 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white">
+                  <div className="bg-linear-to-r rounded-full from-amber-500 to-emerald-500 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white">
                     Actualizado
                   </div>
                 </div>
@@ -497,7 +528,7 @@ export default function Catalog() {
           </div>
         )}
 
-        <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-5 shadow-2xl backdrop-blur-xl">
+        <div className="bg-linear-to-br rounded-2xl border border-white/10 from-white/10 via-white/5 to-white/0 p-5 shadow-2xl backdrop-blur-xl">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <p className="text-sm font-semibold text-white">
@@ -570,7 +601,7 @@ export default function Catalog() {
 
         {/* Active Promotions */}
         {(promotionError || activePromotions.length > 0) && (
-          <section className="rounded-3xl border border-emerald-400/20 bg-gradient-to-br from-emerald-500/10 via-transparent to-amber-500/10 p-6 shadow-xl">
+          <section className="bg-linear-to-br rounded-3xl border border-emerald-400/20 from-emerald-500/10 via-transparent to-amber-500/10 p-6 shadow-xl">
             <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-200">
@@ -594,10 +625,20 @@ export default function Catalog() {
                 {activePromotions.map(promo => {
                   const price = getPromotionPrice(promo);
                   const discountLabel = getPromotionDiscountLabel(promo, price);
+                  const promoProducts = getPromotionProducts(promo);
                   return (
                     <div
                       key={promo._id}
                       className="group overflow-hidden rounded-2xl border border-white/10 bg-gray-950/60 p-5 shadow-lg transition hover:-translate-y-1 hover:border-emerald-400/40"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setSelectedPromotion(promo)}
+                      onKeyDown={event => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setSelectedPromotion(promo);
+                        }
+                      }}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div>
@@ -620,6 +661,31 @@ export default function Catalog() {
                         <p className="mt-3 line-clamp-2 text-sm text-gray-300">
                           {promo.description}
                         </p>
+                      )}
+                      {promoProducts.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {promoProducts.slice(0, 4).map(product => (
+                            <span
+                              key={product._id}
+                              className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold text-white"
+                            >
+                              {product.image?.url ? (
+                                <img
+                                  src={product.image.url}
+                                  alt={product.name}
+                                  className="h-5 w-5 rounded-full object-cover"
+                                  loading="lazy"
+                                />
+                              ) : null}
+                              {product.name}
+                            </span>
+                          ))}
+                          {promoProducts.length > 4 && (
+                            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold text-white">
+                              +{promoProducts.length - 4} mas
+                            </span>
+                          )}
+                        </div>
                       )}
                       <div className="mt-4 flex items-center justify-between">
                         <div>
@@ -656,7 +722,7 @@ export default function Catalog() {
               onClick={() => setSelectedCategory("all")}
               className={`whitespace-nowrap rounded-full px-4 py-2.5 text-sm font-medium transition-all duration-300 sm:px-6 sm:py-3 sm:text-base ${
                 selectedCategory === "all"
-                  ? "scale-105 bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/40"
+                  ? "bg-linear-to-r scale-105 from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/40"
                   : "border border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white"
               }`}
             >
@@ -668,7 +734,7 @@ export default function Catalog() {
                 onClick={() => setSelectedCategory(cat._id)}
                 className={`whitespace-nowrap rounded-full px-4 py-2.5 text-sm font-medium transition-all duration-300 sm:px-6 sm:py-3 sm:text-base ${
                   selectedCategory === cat._id
-                    ? "scale-105 bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/40"
+                    ? "bg-linear-to-r scale-105 from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/40"
                     : "border border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white"
                 }`}
                 style={{ animationDelay: `${index * 50}ms` }}
@@ -946,13 +1012,141 @@ export default function Catalog() {
                 setFeaturedOnly(false);
                 setPriceRange({ min: 0, max: maxPrice });
               }}
-              className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-3 font-medium text-white transition-all hover:shadow-lg hover:shadow-amber-500/40"
+              className="bg-linear-to-r rounded-xl from-amber-500 to-orange-500 px-6 py-3 font-medium text-white transition-all hover:shadow-lg hover:shadow-amber-500/40"
             >
               Ver todos los productos
             </button>
           </div>
         )}
       </div>
+
+      {selectedPromotion && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <button
+            type="button"
+            onClick={() => setSelectedPromotion(null)}
+            className="absolute inset-0 bg-black/70"
+            aria-label="Cerrar detalle de promocion"
+          />
+          <div className="relative w-full max-w-3xl overflow-hidden rounded-3xl border border-white/10 bg-gray-950/95 p-6 text-left shadow-2xl">
+            <button
+              type="button"
+              onClick={() => setSelectedPromotion(null)}
+              className="absolute right-4 top-4 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white"
+            >
+              Cerrar
+            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full border border-emerald-400/40 bg-emerald-500/10 px-3 py-1 text-[11px] font-semibold uppercase text-emerald-200">
+                {selectedPromotion.type}
+              </span>
+              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold text-white">
+                Promocion activa
+              </span>
+            </div>
+            <h3 className="mt-3 text-2xl font-semibold text-white">
+              {selectedPromotion.name}
+            </h3>
+            {selectedPromotion.description && (
+              <p className="mt-2 text-sm text-gray-300">
+                {selectedPromotion.description}
+              </p>
+            )}
+
+            <div className="mt-5 grid gap-4 md:grid-cols-[1fr,1.1fr]">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-200">
+                  Productos incluidos
+                </p>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  {selectedPromotionProducts.length > 0 ? (
+                    selectedPromotionProducts.slice(0, 6).map(product => (
+                      <div
+                        key={product._id}
+                        className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-2 py-2"
+                      >
+                        {product.image?.url ? (
+                          <img
+                            src={product.image.url}
+                            alt={product.name}
+                            className="h-10 w-10 rounded-lg object-cover"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="h-10 w-10 rounded-lg bg-white/10" />
+                        )}
+                        <span className="text-xs font-semibold text-white">
+                          {product.name}
+                        </span>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-xs text-gray-400">
+                      No hay productos asociados a esta promocion.
+                    </p>
+                  )}
+                </div>
+                {selectedPromotionProducts.length > 6 && (
+                  <p className="mt-2 text-xs text-gray-400">
+                    +{selectedPromotionProducts.length - 6} productos mas
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-200">
+                  Collage
+                </p>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  {selectedPromotionProducts.slice(0, 4).map(product => (
+                    <div
+                      key={product._id}
+                      className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/5"
+                    >
+                      {product.image?.url ? (
+                        <img
+                          src={product.image.url}
+                          alt={product.name}
+                          className="h-32 w-full bg-white/5 object-contain p-2"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="flex h-32 items-center justify-center text-xs text-gray-400">
+                          Sin imagen
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 grid gap-4 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-gray-200 sm:grid-cols-3">
+              <div>
+                <p className="text-xs text-gray-400">Precio promocional</p>
+                <p className="text-lg font-semibold text-white">
+                  {getPromotionPrice(selectedPromotion).toFixed(0)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400">Descuento</p>
+                <p className="text-lg font-semibold text-emerald-200">
+                  {getPromotionDiscountLabel(
+                    selectedPromotion,
+                    getPromotionPrice(selectedPromotion)
+                  ) || "-"}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400">Productos</p>
+                <p className="text-lg font-semibold text-white">
+                  {selectedPromotionProducts.length}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {!hideChrome && <Footer />}
     </div>

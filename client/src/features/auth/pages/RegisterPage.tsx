@@ -77,14 +77,13 @@ export default function RegisterPage() {
 
       await authService.register(payload);
 
-      setSuccess("✅ Registro completado. Tu cuenta está en revisión...");
+      setSuccess("✅ Registro completado. Tienes 7 días gratis para probar.");
       setLoading(false);
 
       // Redirigir después de 2 segundos para que el usuario vea el mensaje
       setTimeout(() => {
-        navigate("/account-hold", {
+        navigate("/admin/create-business", {
           replace: true,
-          state: { reason: "pending" },
         });
       }, 2000);
     } catch (err) {

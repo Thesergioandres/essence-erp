@@ -137,6 +137,7 @@ const PublicDistributorCatalog = lazy(
 const DistributorAdvertising = lazy(
   () => import("./features/advertising/pages/DistributorAdvertisingPage")
 );
+const DemoPage = lazy(() => import("./features/demo/DemoPage"));
 
 // Customers pages
 const Customers = lazy(
@@ -216,6 +217,7 @@ export default function App() {
       <Routes>
         {/* Public Routes */}
         <Route path="/" element={<Home />} />
+        <Route path="/demo" element={<DemoPage />} />
         <Route path="/account-hold" element={<AccountHold />} />
         <Route path="/productos" element={<Catalog />} />
         <Route path="/producto/:id" element={<ProductDetail />} />

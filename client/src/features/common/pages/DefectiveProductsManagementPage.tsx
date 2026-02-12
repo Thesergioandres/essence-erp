@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import ProductSelector from "../../../components/ProductSelector";
 import { branchService } from "../../branches/services";
 import {
   productService,
@@ -335,6 +336,46 @@ export default function DefectiveProductsManagement() {
   const selectedWarehouseProduct = products.find(
     p => p._id === reportForm.productId
   );
+
+  const warehouseProducts = products
+    .filter(p => !p.isPromotion && (p.warehouseStock || 0) > 0)
+    .map(product => ({
+      _id: product._id,
+      name: product.name,
+      category: product.category,
+      totalStock: product.warehouseStock,
+      warehouseStock: product.warehouseStock,
+      purchasePrice: product.purchasePrice,
+      averageCost: product.averageCost,
+      suggestedPrice: product.clientPrice,
+      clientPrice: product.clientPrice,
+      image: product.image,
+    }));
+
+  const branchProducts = (branchStock || [])
+    .filter(stockItem => (stockItem.quantity || 0) > 0)
+    .map(stockItem => {
+      const product =
+        typeof stockItem.product === "object" ? stockItem.product : null;
+      if (!product) return null;
+      return {
+        _id: product._id,
+        name: product.name,
+        category: product.category,
+        totalStock: stockItem.quantity,
+        warehouseStock: product.warehouseStock,
+        purchasePrice: product.purchasePrice,
+        averageCost: product.averageCost,
+        suggestedPrice: product.clientPrice,
+        clientPrice: product.clientPrice,
+        image: product.image,
+      };
+    })
+    .filter(Boolean);
+
+  const availableProducts =
+    reportOrigin === "branch" ? branchProducts : warehouseProducts;
+  const selectorDisabled = reportOrigin === "branch" && !selectedBranchId;
 
   const maxQuantity =
     reportOrigin === "branch"
@@ -991,44 +1032,31 @@ export default function DefectiveProductsManagement() {
                   <label className="mb-2 block text-sm font-medium text-gray-300">
                     Producto *
                   </label>
-                  <select
+                  <ProductSelector
                     value={reportForm.productId}
-                    onChange={e =>
+                    onChange={productId =>
                       setReportForm({
                         ...reportForm,
-                        productId: e.target.value,
+                        productId,
                         quantity: 1,
                       })
                     }
-                    className="w-full rounded-lg border border-gray-600 bg-gray-900/50 px-4 py-3 text-white focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    disabled={reportOrigin === "branch" && !selectedBranchId}
-                    required
-                  >
-                    <option value="">Selecciona un producto</option>
-                    {reportOrigin === "branch"
-                      ? branchStock
-                          .filter(s => s.quantity > 0)
-                          .map(s => {
-                            const product =
-                              typeof s.product === "object" ? s.product : null;
-                            return (
-                              <option key={s._id} value={product?._id}>
-                                {product?.name} | Stock sede: {s.quantity} |
-                                Cliente: ${product?.clientPrice || 0}
-                              </option>
-                            );
-                          })
-                      : products
-                          .filter(p => !p.isPromotion)
-                          .map(product => (
-                            <option key={product._id} value={product._id}>
-                              {product.name} | Stock bodega:{" "}
-                              {product.warehouseStock} | Compra: $
-                              {product.purchasePrice} | Cliente: $
-                              {product.clientPrice || 0}
-                            </option>
-                          ))}
-                  </select>
+                    placeholder="Buscar producto para reportar..."
+                    showStock={true}
+                    products={availableProducts as any}
+                    disabled={
+                      selectorDisabled || availableProducts.length === 0
+                    }
+                  />
+                  {selectorDisabled ? (
+                    <p className="mt-2 text-xs text-gray-500">
+                      Selecciona una sede para ver su inventario.
+                    </p>
+                  ) : availableProducts.length === 0 ? (
+                    <p className="mt-2 text-xs text-gray-500">
+                      No hay stock disponible para reportar en este origen.
+                    </p>
+                  ) : null}
                 </div>
 
                 <div>

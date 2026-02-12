@@ -8,6 +8,7 @@ import ReportIssueButton from "../../../components/ReportIssueButton";
 import { useBusiness } from "../../../context/BusinessContext";
 import { useBrandLogo } from "../../../hooks/useBrandLogo";
 import { authService } from "../../auth/services";
+import DemoModeTour from "../../demo/DemoModeTour";
 
 const navLinkClasses = (isActive: boolean): string =>
   [
@@ -47,6 +48,7 @@ export default function DashboardLayout() {
 
   return (
     <div className="max-w-screen min-h-screen overflow-x-hidden bg-[#0b0b11]">
+      <DemoModeTour />
       {/* Mobile Overlay */}
       {sidebarOpen && (
         <div
@@ -241,6 +243,7 @@ export default function DashboardLayout() {
             <NavLink
               to="/admin/business-assistant"
               className={({ isActive }): string => navLinkClasses(isActive)}
+              id="demo-business-assistant"
             >
               <svg
                 className="h-5 w-5"
@@ -263,9 +266,33 @@ export default function DashboardLayout() {
               className={(isActive: boolean): string =>
                 navLinkClasses(isActive)
               }
+              id="demo-global-inventory"
             >
               <BarChart3 className="h-5 w-5" />
               Inventario Global
+            </FeatureNavLink>
+            <FeatureNavLink
+              to="/admin/gamification-config"
+              feature="gamification"
+              className={(isActive: boolean): string =>
+                navLinkClasses(isActive)
+              }
+              id="demo-gamification"
+            >
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 11l3 3L22 4M2 20h20"
+                />
+              </svg>
+              Gamificacion
             </FeatureNavLink>
 
             <SectionTitle label="Productos" />
@@ -524,6 +551,7 @@ export default function DashboardLayout() {
               className={(isActive: boolean): string =>
                 navLinkClasses(isActive)
               }
+              id="demo-dashboard"
             >
               <svg
                 className="h-5 w-5"

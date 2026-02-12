@@ -11,7 +11,7 @@ interface SessionState {
 
 export function useSession() {
   // Inicializar loading: true si hay token, para esperar sincronización con servidor
-  const hasToken = !!localStorage.getItem("token");
+  const hasToken = authService.hasToken();
   const [state, setState] = useState<SessionState>({
     user: authService.getCurrentUser(),
     loading: hasToken, // Esperar sincronización si hay token
@@ -36,11 +36,14 @@ export function useSession() {
 
       setState(prev => ({ ...prev, loading: true, error: null }));
       try {
-        const profile = await authService.getProfile();
+        const profile = await authService.syncSession();
+        if (!profile) {
+          setState({ user: null, loading: false, error: null });
+          return;
+        }
         if (!mounted) return;
         setState(() => {
           const merged = { ...profile } as User;
-          localStorage.setItem("user", JSON.stringify(merged));
           return { user: merged, loading: false, error: null };
         });
 

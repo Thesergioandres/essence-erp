@@ -315,7 +315,16 @@ async function syncCollection(collectionConfig, state) {
     const localCollection = localConnection.db.collection(name);
 
     // Obtener fecha de última sincronización
-    const lastSyncDate = getLastSyncDate(state, name);
+    let lastSyncDate = getLastSyncDate(state, name);
+    if (lastSyncDate && !CONFIG.FORCE_FULL_SYNC) {
+      const localCount = await localCollection.estimatedDocumentCount();
+      if (localCount === 0) {
+        syncLogger.warn(
+          `${name}: colección local vacía, forzando sync completa`,
+        );
+        lastSyncDate = null;
+      }
+    }
 
     // Construir query basado en timestamp
     let query = {};
@@ -625,9 +634,9 @@ if (isMainModule) {
 // ============================================================================
 
 export {
+  closeConnections,
   COLLECTIONS_TO_SYNC,
   CONFIG,
-  closeConnections,
   connectToLocal,
   connectToProd,
   loadSyncState,

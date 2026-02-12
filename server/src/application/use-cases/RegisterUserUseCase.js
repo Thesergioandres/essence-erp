@@ -23,6 +23,8 @@ export class RegisterUserUseCase {
     // 2. Hash Password (Domain Service)
     const hashedPassword = await AuthService.hashPassword(password);
 
+    const trialExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
     // 3. Create User (Identity)
     // We assume Business check happens in Controller or Request Validation
     const newUser = await this.userRepository.createUser({
@@ -30,7 +32,10 @@ export class RegisterUserUseCase {
       email,
       password: hashedPassword, // Store hash!
       role: role || "super_admin", // Default role for new registrations
-      status: "pending", // Usuarios nuevos requieren activación manual
+      status: "active", // Usuarios nuevos tienen 7 dias de prueba
+      active: true,
+      subscriptionExpiresAt: trialExpiresAt,
+      pausedRemainingMs: 0,
       business: businessId,
       phone: phone || undefined,
       address: address || undefined,
@@ -49,6 +54,9 @@ export class RegisterUserUseCase {
       name: newUser.name,
       email: newUser.email,
       role: newUser.role,
+      status: newUser.status,
+      active: newUser.active,
+      subscriptionExpiresAt: newUser.subscriptionExpiresAt,
       business: newUser.business,
       token,
     };

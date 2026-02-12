@@ -179,6 +179,9 @@ export interface BusinessAssistantRecommendationItem {
   abcClass?: "A" | "B" | "C";
   stock: {
     warehouseStock: number;
+    branchesStock?: number;
+    distributorsStock?: number;
+    unassignedStock?: number;
     totalStock: number;
     lowStockAlert: number;
   };
@@ -198,6 +201,9 @@ export interface BusinessAssistantRecommendationItem {
     categoryAvgPrice: number;
     priceVsCategoryPct: number;
     inventoryValueCop?: number;
+    lastSaleDate?: string | null;
+    daysSinceLastSale?: number | null;
+    recentSalesCount?: number;
   };
   recommendation: {
     primary: BusinessAssistantRecommendationAction | null;
@@ -211,10 +217,15 @@ export interface BusinessAssistantRecommendationItem {
 }
 
 export interface BusinessAssistantPromotion {
-  type: "combo" | "volume";
+  type: "combo" | "volume" | "bundle" | "discount" | "percentage";
   title: string;
   description: string;
   products: string[];
+  strategy?: "reactivation" | "clearance" | "cross_sell" | "volume";
+  priority?: "high" | "medium" | "low";
+  discountPct?: number;
+  reason?: string;
+  insights?: string[];
 }
 
 export interface BusinessAssistantRecommendationsResponse {
@@ -251,6 +262,29 @@ export interface BusinessAssistantConfig {
   decreasePricePct: number;
   promotionDiscountPct: number;
   increasePricePct: number;
+  newProductGraceDays?: number;
+  minRecentUnitsForPriceChange?: number;
+  minRecentUnitsForDemandSignal?: number;
+  priceElasticity?: number;
+  clearanceDiscountPct?: number;
+  abcClassAThreshold?: number;
+  abcClassBThreshold?: number;
+  categoryOverrides?: Array<{
+    categoryId: string;
+    targetMarginPct?: number;
+    daysCoverLowThreshold?: number;
+    buyTargetDays?: number;
+    priceHighVsCategoryThresholdPct?: number;
+    priceLowVsCategoryThresholdPct?: number;
+  }>;
+  productOverrides?: Array<{
+    productId: string;
+    targetMarginPct?: number;
+    daysCoverLowThreshold?: number;
+    buyTargetDays?: number;
+    priceHighVsCategoryThresholdPct?: number;
+    priceLowVsCategoryThresholdPct?: number;
+  }>;
   createdAt?: string;
   updatedAt?: string;
 }

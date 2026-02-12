@@ -38,18 +38,57 @@ const businessAssistantConfigSchema = new mongoose.Schema(
     decreasePricePct: { type: Number, default: -5 },
     promotionDiscountPct: { type: Number, default: -10 },
     increasePricePct: { type: Number, default: 5 },
+
+    // Señales y ajustes avanzados
+    newProductGraceDays: { type: Number, default: 14, min: 0 },
+    minRecentUnitsForPriceChange: { type: Number, default: 3, min: 0 },
+    minRecentUnitsForDemandSignal: { type: Number, default: 5, min: 0 },
+    priceElasticity: { type: Number, default: 0.25, min: 0 },
+    clearanceDiscountPct: { type: Number, default: -20 },
+
+    // Clasificacion ABC (porcentaje acumulado)
+    abcClassAThreshold: { type: Number, default: 0.8, min: 0, max: 1 },
+    abcClassBThreshold: { type: Number, default: 0.95, min: 0, max: 1 },
+
+    // Overrides por categoria o producto
+    categoryOverrides: {
+      type: [
+        {
+          categoryId: { type: mongoose.Schema.Types.ObjectId, ref: "Category" },
+          targetMarginPct: Number,
+          daysCoverLowThreshold: Number,
+          buyTargetDays: Number,
+          priceHighVsCategoryThresholdPct: Number,
+          priceLowVsCategoryThresholdPct: Number,
+        },
+      ],
+      default: [],
+    },
+    productOverrides: {
+      type: [
+        {
+          productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product" },
+          targetMarginPct: Number,
+          daysCoverLowThreshold: Number,
+          buyTargetDays: Number,
+          priceHighVsCategoryThresholdPct: Number,
+          priceLowVsCategoryThresholdPct: Number,
+        },
+      ],
+      default: [],
+    },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 businessAssistantConfigSchema.index(
   { business: 1 },
-  { unique: true, sparse: true }
+  { unique: true, sparse: true },
 );
 
 const BusinessAssistantConfig = mongoose.model(
   "BusinessAssistantConfig",
-  businessAssistantConfigSchema
+  businessAssistantConfigSchema,
 );
 
 export default BusinessAssistantConfig;

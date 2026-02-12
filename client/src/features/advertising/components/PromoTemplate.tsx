@@ -14,6 +14,7 @@ const PromoTemplate = forwardRef<HTMLDivElement, TemplateProps>(
             100
         )
       : 0;
+    const collageImages = (product.images || []).filter(Boolean).slice(0, 4);
 
     return (
       <div
@@ -108,7 +109,27 @@ const PromoTemplate = forwardRef<HTMLDivElement, TemplateProps>(
                 boxShadow: "0 30px 70px rgba(0,0,0,0.35)",
               }}
             >
-              {product.image ? (
+              {collageImages.length > 0 ? (
+                <div className="grid h-[440px] w-[440px] grid-cols-2 gap-3">
+                  {collageImages.map((image, idx) => (
+                    <div
+                      key={`${image}-${idx}`}
+                      className="flex items-center justify-center rounded-3xl"
+                      style={{ backgroundColor: "rgba(255, 255, 255, 0.1)" }}
+                    >
+                      <img
+                        src={image}
+                        alt={product.name}
+                        crossOrigin="anonymous"
+                        className="h-[190px] w-[190px] object-contain"
+                        style={{
+                          filter: "drop-shadow(0 14px 28px rgba(0,0,0,0.35))",
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : product.image ? (
                 <img
                   src={product.image}
                   alt={product.name}

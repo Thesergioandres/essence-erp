@@ -4,6 +4,7 @@ import { stockService } from "../../inventory/services/inventory.service";
 import type {
   DefectiveProduct,
   DistributorStock,
+  Product,
 } from "../../inventory/types/product.types";
 import { defectiveProductService } from "../../sales/services";
 
@@ -15,7 +16,7 @@ export default function DefectiveReports() {
       _id: string;
       name: string;
       stock: Array<{
-        product: { _id: string; name: string; image?: any };
+        product: Product;
         quantity: number;
       }>;
     }>
@@ -131,18 +132,41 @@ export default function DefectiveReports() {
       const product = typeof item.product === "object" ? item.product : null;
       if (!product) return null;
       return {
-        ...product,
+        _id: product._id,
+        name: product.name,
+        category: product.category,
         totalStock: item.quantity,
+        warehouseStock: product.warehouseStock,
+        purchasePrice: product.purchasePrice,
+        averageCost: product.averageCost,
+        suggestedPrice: product.clientPrice,
+        clientPrice: product.clientPrice,
+        image: product.image,
       };
     })
-    .filter(Boolean);
+    .filter(item => item && (item.totalStock || 0) > 0);
 
   const branchProducts = (selectedBranch?.stock || [])
-    .map(item => ({
-      ...item.product,
-      totalStock: item.quantity,
-    }))
-    .filter(Boolean);
+    .map(item => {
+      if (!item.product) return null;
+      return {
+        _id: item.product._id,
+        name: item.product.name,
+        category: item.product.category,
+        totalStock: item.quantity,
+        warehouseStock: item.product.warehouseStock,
+        purchasePrice: item.product.purchasePrice,
+        averageCost: item.product.averageCost,
+        suggestedPrice: item.product.clientPrice,
+        clientPrice: item.product.clientPrice,
+        image: item.product.image,
+      };
+    })
+    .filter(item => item && (item.totalStock || 0) > 0);
+
+  const availableProducts =
+    origin === "branch" ? branchProducts : distributorProducts;
+  const selectorDisabled = origin === "branch" ? !selectedBranchId : false;
 
   if (loading) {
     return (
@@ -408,12 +432,18 @@ export default function DefectiveReports() {
                   }}
                   placeholder="Buscar y seleccionar producto..."
                   showStock={true}
-                  products={
-                    (origin === "branch"
-                      ? branchProducts
-                      : distributorProducts) as any
-                  }
+                  products={availableProducts as any}
+                  disabled={selectorDisabled || availableProducts.length === 0}
                 />
+                {selectorDisabled ? (
+                  <p className="mt-2 text-xs text-gray-500">
+                    Selecciona una sede para ver sus productos disponibles.
+                  </p>
+                ) : availableProducts.length === 0 ? (
+                  <p className="mt-2 text-xs text-gray-500">
+                    No hay stock disponible para reportar en este origen.
+                  </p>
+                ) : null}
               </div>
 
               <div>

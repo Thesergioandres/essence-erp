@@ -32,6 +32,20 @@ async function trySetBusinessForGod(role: string): Promise<void> {
 }
 
 export const authService = {
+  hasToken: (): boolean => !!localStorage.getItem("token"),
+
+  syncSession: async (): Promise<User | null> => {
+    const token = localStorage.getItem("token");
+    if (!token) return null;
+
+    const response = await api.get<{ success: boolean; data: User }>(
+      "/auth/profile"
+    );
+    const user = response.data.data;
+    localStorage.setItem("user", JSON.stringify(user));
+    return user;
+  },
+
   async register(payload: RegisterCredentials): Promise<AuthResponse> {
     const response = await api.post<AuthResponse>("/auth/register", payload);
 

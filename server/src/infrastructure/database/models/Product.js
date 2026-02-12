@@ -12,6 +12,11 @@ const productSchema = new mongoose.Schema(
       required: [true, "El nombre del producto es obligatorio"],
       trim: true,
     },
+    sku: {
+      type: String,
+      trim: true,
+      index: true,
+    },
     description: {
       type: String,
       required: [true, "La descripción es obligatoria"],
@@ -112,6 +117,7 @@ const productSchema = new mongoose.Schema(
 // Índices para optimizar consultas
 productSchema.index({ category: 1, createdAt: -1 });
 productSchema.index({ business: 1, createdAt: -1 });
+productSchema.index({ business: 1, sku: 1 });
 productSchema.index({ featured: 1 });
 productSchema.index({ name: "text", description: "text" });
 productSchema.index({ warehouseStock: 1 });
