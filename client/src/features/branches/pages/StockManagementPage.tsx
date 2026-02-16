@@ -462,7 +462,10 @@ const StockManagement = () => {
     distributorStockByProduct.values()
   )
     .filter(entry => entry.quantity > 0)
-    .map(entry => entry.product);
+    .map(entry => ({
+      ...entry.product,
+      totalStock: entry.quantity,
+    }));
 
   const selectorProducts =
     operation === "withdraw" ? withdrawSelectableProducts : products;
