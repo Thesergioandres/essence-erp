@@ -485,6 +485,7 @@ const StockManagement = () => {
       return {
         ...p,
         branchStock: stockItem?.quantity || 0,
+        totalStock: stockItem?.quantity || 0,
       };
     })
     .filter(p => p.branchStock > 0);
@@ -1110,6 +1111,7 @@ const StockManagement = () => {
                     disabled={!originBranchId || loadingOriginStock}
                     showStock={true}
                     excludeProductIds={branchItems.map(item => item.productId)}
+                    products={availableBranchProducts}
                   />
                 )}
               </div>
