@@ -444,7 +444,29 @@ const StockManagement = () => {
   };
 
   // Filtrar productos disponibles (no agregados aún)
-  const availableProducts = products.filter(
+  const distributorStockByProduct = new Map(
+    distributorStock
+      .map(stock => {
+        const product =
+          typeof stock.product === "object" ? stock.product : null;
+        if (!product) return null;
+        return [product._id, { product, quantity: stock.quantity || 0 }];
+      })
+      .filter((entry): entry is [string, { product: Product; quantity: number }] =>
+        Boolean(entry)
+      )
+  );
+
+  const withdrawSelectableProducts = Array.from(
+    distributorStockByProduct.values()
+  )
+    .filter(entry => entry.quantity > 0)
+    .map(entry => entry.product);
+
+  const selectorProducts =
+    operation === "withdraw" ? withdrawSelectableProducts : products;
+
+  const availableProducts = selectorProducts.filter(
     p => !items.some(item => item.productId === p._id)
   );
 
@@ -760,10 +782,14 @@ const StockManagement = () => {
                     <ProductSelector
                       value={selectedProductId}
                       onChange={id => setSelectedProductId(id)}
-                      placeholder="Buscar y seleccionar producto..."
+                      placeholder={
+                        operation === "withdraw"
+                          ? "Selecciona un producto del distribuidor"
+                          : "Buscar y seleccionar producto..."
+                      }
                       showStock={true}
                       excludeProductIds={items.map(item => item.productId)}
-                      products={products}
+                      products={selectorProducts}
                     />
                   )}
                 </div>
@@ -797,7 +823,9 @@ const StockManagement = () => {
                               {item.product.name}
                             </h3>
                             <span className="rounded-full bg-green-500/20 px-3 py-1 text-xs font-bold text-green-400">
-                              Bodega: {item.warehouseStock}
+                              {operation === "assign"
+                                ? `Bodega: ${item.warehouseStock}`
+                                : `Distribuidor: ${distributorStockByProduct.get(item.productId)?.quantity || 0}`}
                             </span>
                           </div>
 
@@ -814,7 +842,8 @@ const StockManagement = () => {
                                 max={
                                   operation === "assign"
                                     ? item.warehouseStock
-                                    : undefined
+                                    : distributorStockByProduct.get(item.productId)
+                                        ?.quantity
                                 }
                                 value={item.quantity === 0 ? "" : item.quantity}
                                 onChange={e => {
@@ -836,6 +865,14 @@ const StockManagement = () => {
                                       item.productId,
                                       item.warehouseStock
                                     );
+                                  } else if (operation === "withdraw") {
+                                    const maxQty =
+                                      distributorStockByProduct.get(
+                                        item.productId
+                                      )?.quantity ?? 0;
+                                    if (val > maxQty && maxQty > 0) {
+                                      updateItemQuantity(item.productId, maxQty);
+                                    }
                                   }
                                 }}
                                 className="w-full rounded-lg border border-gray-600 bg-gray-900/50 px-3 py-2 text-white focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -859,8 +896,15 @@ const StockManagement = () => {
 
                           {operation === "assign" && (
                             <div className="mt-2 text-xs text-gray-400">
-                              Quedará en bodega:{" "}
+                              Quedará en bodega: {" "}
                               {item.warehouseStock - item.quantity} unidades
+                            </div>
+                          )}
+                          {operation === "withdraw" && (
+                            <div className="mt-2 text-xs text-gray-400">
+                              Quedará en distribuidor: {" "}
+                              {(distributorStockByProduct.get(item.productId)
+                                ?.quantity || 0) - item.quantity} unidades
                             </div>
                           )}
                         </div>

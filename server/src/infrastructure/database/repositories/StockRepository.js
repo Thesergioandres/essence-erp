@@ -95,9 +95,19 @@ class StockRepository {
     productId,
     quantity,
   ) {
+    const normalizedQty = Number(quantity);
+    if (!normalizedQty || normalizedQty <= 0) {
+      throw new Error("Cantidad inválida");
+    }
+
     const stockUpdate = await DistributorStock.findOneAndUpdate(
-      { _id: distributorId, quantity: { $gte: quantity } },
-      { $inc: { quantity: -quantity } },
+      {
+        business: businessId,
+        distributor: distributorId,
+        product: productId,
+        quantity: { $gte: normalizedQty },
+      },
+      { $inc: { quantity: -normalizedQty } },
       { new: true },
     );
 
@@ -105,7 +115,7 @@ class StockRepository {
 
     const product = await Product.findOneAndUpdate(
       { _id: productId, business: businessId },
-      { $inc: { warehouseStock: quantity } },
+      { $inc: { warehouseStock: normalizedQty } },
       { new: true },
     );
 
