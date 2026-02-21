@@ -2,17 +2,20 @@ import mongoose from "mongoose";
 import Membership from "../models/Membership.js";
 import User from "../models/User.js";
 
-const uri =
-  process.env.MONGODB_URI ||
-  "mongodb+srv://sergio:sergio123@cluster0.ztdix.mongodb.net/essence?retryWrites=true&w=majority&appName=essence";
+const uri = process.env.MONGODB_URI || process.env.MONGO_URI;
 
 const businessId = process.argv[2];
 const expiresAt = process.argv[3] || "2026-12-31T00:00:00Z";
 
 if (!businessId) {
   console.error(
-    "Uso: node scripts/activateBusinessDistributors.js <businessId> [ISO_expiration]"
+    "Uso: node scripts/activateBusinessDistributors.js <businessId> [ISO_expiration]",
   );
+  process.exit(1);
+}
+
+if (!uri) {
+  console.error("Falta MONGODB_URI (o MONGO_URI) en variables de entorno");
   process.exit(1);
 }
 
@@ -40,11 +43,11 @@ async function main() {
         active: true,
         subscriptionExpiresAt: new Date(expiresAt),
       },
-    }
+    },
   );
 
   console.log(
-    `Actualizados ${res.modifiedCount} usuarios (de ${userIds.length}) con status active y expiración ${expiresAt}`
+    `Actualizados ${res.modifiedCount} usuarios (de ${userIds.length}) con status active y expiración ${expiresAt}`,
   );
 
   const updated = await User.find({ _id: { $in: userIds } })

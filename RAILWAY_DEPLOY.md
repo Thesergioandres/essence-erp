@@ -39,7 +39,7 @@ You can get each deploy hook from Railway service settings.
 
 Example production values:
 
-- `MONGODB_URI=mongodb+srv://sergio:sergio@cluster0.ztdix.mongodb.net/?appName=Cluster0`
+- `MONGODB_URI=mongodb+srv://<db_user>:<db_password>@<cluster-host>/<database>?retryWrites=true&w=majority`
 - `NODE_ENV=production`
 - `BACKUP_WORKER_DISABLED=true`
 

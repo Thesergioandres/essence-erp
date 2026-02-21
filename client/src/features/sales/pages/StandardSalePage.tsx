@@ -33,7 +33,10 @@ import {
   WarrantySection,
 } from "../components/admin-order";
 import { initialOrderState, orderReducer } from "../reducers/orderReducer";
-import { saleService } from "../services/sales.service";
+import {
+  defectiveProductService,
+  saleService,
+} from "../services/sales.service";
 import type {
   AdminOrderPayload,
   ProductWithStock,
@@ -63,8 +66,6 @@ export default function StandardSalePage() {
   const [branchStock, setBranchStock] = useState<Map<string, number>>(
     new Map()
   );
-  const [allowWarehouse, setAllowWarehouse] = useState(true);
-  const [hasAuthorizedLocations, setHasAuthorizedLocations] = useState(true);
   const [productSelectorId, setProductSelectorId] = useState("");
 
   // State: Loading/Error/Success
@@ -76,7 +77,6 @@ export default function StandardSalePage() {
     useState<GamificationConfig | null>(null);
   const [distributorStats, setDistributorStats] =
     useState<DistributorStats | null>(null);
-  const [baseCommissionPercentage, setBaseCommissionPercentage] = useState(20);
   const [rankingInfo, setRankingInfo] = useState<{
     position: number | null;
     totalDistributors: number;
@@ -128,75 +128,20 @@ export default function StandardSalePage() {
           console.log("✅ Distributor Products Res:", distProductsRes);
 
           const activeMembership = membershipsRes.activeMembership;
-          const userAllowedBranches = (
-            user as { allowedBranches?: string[] } | null
-          )?.allowedBranches;
-          const memberships = membershipsRes.memberships || [];
-          const storedBusinessId = localStorage.getItem("businessId");
-          const userBusinessId = (
-            user as { business?: string | { _id?: string } } | null
-          )?.business;
-          const resolvedBusinessId =
-            storedBusinessId ||
-            (typeof userBusinessId === "object"
-              ? userBusinessId?._id
-              : userBusinessId);
-          const resolvedMembership = resolvedBusinessId
-            ? memberships.find(m => {
-                const membershipBusinessId =
-                  typeof m.business === "object" ? m.business?._id : m.business;
-                return (
-                  String(membershipBusinessId) === String(resolvedBusinessId)
-                );
-              })
-            : memberships[0];
-          const rawAllowedBranches =
-            resolvedMembership?.allowedBranches ??
-            activeMembership?.allowedBranches ??
-            userAllowedBranches;
-          console.log("🔐 Allowed branches (raw):", rawAllowedBranches);
-          console.log("🔐 Membership for business:", {
-            resolvedBusinessId,
-            membershipId: resolvedMembership?._id,
-          });
-          const hasAllowedBranchList = Array.isArray(rawAllowedBranches);
-          const allowedBranchIds = hasAllowedBranchList
-            ? rawAllowedBranches.map(id => String(id))
-            : [];
-          console.log("🔐 Allowed branch IDs:", allowedBranchIds);
-          const allowAnyBranches =
-            hasAllowedBranchList && allowedBranchIds.length > 0;
+          const userAllowedBranches =
+            (user as { allowedBranches?: string[] } | null)?.allowedBranches ||
+            [];
+          const allowedBranchIds = (
+            activeMembership?.allowedBranches ||
+            userAllowedBranches ||
+            []
+          ).map(id => String(id));
           const activeBranches = allBranches.filter(b => b.active !== false);
-          console.log(
-            "🏢 Active branches:",
-            activeBranches.map(b => ({
-              id: b._id,
-              name: b.name,
-              isWarehouse: b.isWarehouse,
-            }))
-          );
-          const distributorBranches = allowAnyBranches
-            ? activeBranches.filter(b => allowedBranchIds.includes(b._id))
-            : [];
-          const warehouseBranchIds = activeBranches
-            .filter(b => b.isWarehouse)
-            .map(b => b._id);
-          const canUseWarehouse =
-            allowAnyBranches &&
-            warehouseBranchIds.some(id => allowedBranchIds.includes(id));
-          const visibleBranches = canUseWarehouse
-            ? distributorBranches
-            : distributorBranches.filter(b => !b.isWarehouse);
-          console.log(
-            "✅ Visible branches:",
-            visibleBranches.map(b => ({
-              id: b._id,
-              name: b.name,
-              isWarehouse: b.isWarehouse,
-            }))
-          );
-          setAllowWarehouse(canUseWarehouse);
-          setBranches(visibleBranches);
+          const distributorBranches =
+            allowedBranchIds.length > 0
+              ? activeBranches.filter(b => allowedBranchIds.includes(b._id))
+              : activeBranches;
+          setBranches(distributorBranches);
 
           const allProducts = await productsService.getProducts();
           const distStockMap = new Map<string, number>();
@@ -212,8 +157,6 @@ export default function StandardSalePage() {
           const hasStock =
             distStockMap.size > 0 &&
             Array.from(distStockMap.values()).some(qty => qty > 0);
-          const hasLocations = hasStock || visibleBranches.length > 0;
-          setHasAuthorizedLocations(hasLocations);
 
           // Auto-seleccionar: si tiene stock -> "Mi Inventario", si no -> primera sede
           if (hasStock) {
@@ -226,13 +169,13 @@ export default function StandardSalePage() {
               locationId: user?._id || "",
               locationName: "Mi Inventario",
             });
-          } else if (visibleBranches.length > 0) {
-            const firstBranch = visibleBranches[0];
+          } else if (distributorBranches.length > 0) {
+            const firstBranch = distributorBranches[0];
             console.log(
               "📍 Distribuidor sin stock, seleccionando sede:",
               firstBranch.name
             );
-            if (firstBranch.isWarehouse && canUseWarehouse) {
+            if (firstBranch.isWarehouse) {
               dispatch({
                 type: "SET_LOCATION",
                 locationType: "warehouse",
@@ -247,13 +190,6 @@ export default function StandardSalePage() {
                 locationName: firstBranch.name,
               });
             }
-          } else if (!hasLocations) {
-            dispatch({
-              type: "SET_LOCATION",
-              locationType: "distributor",
-              locationId: "",
-              locationName: "Mi Inventario",
-            });
           }
 
           const mappedProducts: ProductWithStock[] = (
@@ -281,7 +217,6 @@ export default function StandardSalePage() {
             productsService.getProducts(),
           ]);
           setBranches(branchesData.filter(b => b.active !== false));
-          setAllowWarehouse(true);
 
           const productsWithStock: ProductWithStock[] = (
             productsData as Product[]
@@ -324,10 +259,7 @@ export default function StandardSalePage() {
 
         if (!isActive) return;
         setGamificationConfig(configRes as GamificationConfig);
-        setBaseCommissionPercentage(
-          (configRes as GamificationConfig)?.baseCommissionPercentage ?? 20
-        );
-        setDistributorStats((statsRes as any)?.stats ?? statsRes ?? null);
+        setDistributorStats(statsRes?.stats ?? null);
         setRankingInfo({
           position: rankingRes?.position ?? null,
           totalDistributors: rankingRes?.totalDistributors ?? 0,
@@ -348,13 +280,13 @@ export default function StandardSalePage() {
 
   useEffect(() => {
     const bonus = rankingInfo?.bonusCommission || 0;
-    const profitPercentage = baseCommissionPercentage + bonus;
+    const profitPercentage = 20 + bonus;
     dispatch({
       type: "SET_DISTRIBUTOR_PROFIT",
       isDistributorSale: isDistributor,
       profitPercentage,
     });
-  }, [isDistributor, rankingInfo?.bonusCommission, baseCommissionPercentage]);
+  }, [isDistributor, rankingInfo?.bonusCommission]);
 
   // Fetch branch stock when branch location is selected
   useEffect(() => {
@@ -411,39 +343,21 @@ export default function StandardSalePage() {
     });
   }, [products, order.locationType, branchStock]);
 
-  const getLocationStock = useCallback(
-    (product: ProductWithStock) => {
-      if (order.locationType === "warehouse")
-        return product.warehouseStock ?? 0;
-      if (order.locationType === "branch") return product.branchStock ?? 0;
-      return product.distributorStock ?? 0;
-    },
-    [order.locationType]
-  );
-
-  const productsInSelectedInventory = useMemo(
-    () => productsWithLocationStock.filter(p => getLocationStock(p) > 0),
-    [productsWithLocationStock, getLocationStock]
-  );
-
   const selectorProducts = useMemo(
     () =>
-      productsInSelectedInventory.map(product => {
-        const stock = getLocationStock(product);
-        return {
-          _id: product._id,
-          name: product.name,
-          category: product.category,
-          totalStock: stock,
-          warehouseStock: product.warehouseStock,
-          purchasePrice: product.purchasePrice,
-          averageCost: product.averageCost,
-          suggestedPrice: product.clientPrice,
-          clientPrice: product.clientPrice,
-          image: product.image,
-        };
-      }),
-    [productsInSelectedInventory, getLocationStock]
+      productsWithLocationStock.map(product => ({
+        _id: product._id,
+        name: product.name,
+        category: product.category,
+        totalStock: product.totalStock,
+        warehouseStock: product.warehouseStock,
+        purchasePrice: product.purchasePrice,
+        averageCost: product.averageCost,
+        suggestedPrice: product.clientPrice,
+        clientPrice: product.clientPrice,
+        image: product.image,
+      })),
+    [productsWithLocationStock]
   );
 
   const gamificationSummary = useMemo(() => {
@@ -502,10 +416,6 @@ export default function StandardSalePage() {
       id: string,
       name: string
     ) => {
-      if (isDistributor && type === "warehouse" && !allowWarehouse) {
-        setSubmitError("No tienes permiso para vender desde bodega.");
-        return;
-      }
       // Allow Distributors to switch between "distributor" (My Inventory) and "branch" (Allowed Warehouse)
       // They cannot select "warehouse" (Main Warehouse) usually, unless its a branch?
       // LocationSelector sends "warehouse" type for the main button.
@@ -519,7 +429,7 @@ export default function StandardSalePage() {
         locationName: name,
       });
     },
-    [allowWarehouse, isDistributor]
+    []
   );
 
   const handleAddProduct = useCallback(
@@ -677,7 +587,6 @@ export default function StandardSalePage() {
         await saleService.registerStandardBulk({
           items: payload.items,
           branchId: payload.branchId,
-          locationType: order.locationType,
           paymentMethodId: payload.paymentMethodId,
           paymentType: payload.paymentType,
           customerId: payload.customerId,
@@ -691,12 +600,6 @@ export default function StandardSalePage() {
           additionalCosts: payload.additionalCosts,
           paymentProof: payload.paymentProof,
           paymentProofMimeType: payload.paymentProofMimeType,
-          warranties: order.warranties.map(warranty => ({
-            productId: warranty.productId,
-            quantity: warranty.quantity,
-            type: warranty.type,
-            reason: warranty.reason,
-          })),
         });
 
         totalProcessedItems = payload.items.reduce(
@@ -712,6 +615,25 @@ export default function StandardSalePage() {
         throw new Error(
           err.response?.data?.message || "Error al procesar el pedido"
         );
+      }
+
+      // Process warranty items as defective products
+      for (const warranty of order.warranties) {
+        try {
+          await defectiveProductService.reportAdmin({
+            productId: warranty.productId,
+            quantity: warranty.quantity,
+            reason:
+              warranty.reason ||
+              `${warranty.type === "supplier_replacement" ? "Reemplazo proveedor" : "Pérdida total"} - Orden ${saleGroupId}`,
+          });
+        } catch (err) {
+          console.error(
+            `Error processing warranty for ${warranty.productName}:`,
+            err
+          );
+          // Don't fail the whole order for warranty errors
+        }
       }
 
       // Success!
@@ -965,92 +887,76 @@ export default function StandardSalePage() {
             <p className="text-sm opacity-80">{submitError}</p>
           </div>
         )}
-        {isDistributor && !hasAuthorizedLocations && !dataLoading && (
-          <div className="mb-4 animate-fade-in rounded-2xl border border-amber-500/40 bg-amber-950/40 p-4 text-amber-200 shadow-[0_20px_40px_-30px_rgba(251,191,36,0.6)]">
-            <p className="font-semibold">Acceso restringido</p>
-            <p className="text-sm opacity-80">
-              No tienes ubicaciones de stock autorizadas para vender
-            </p>
-          </div>
-        )}
 
         {/* NEW LAYOUT: Two Main Columns */}
         <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
           {/* ============ LEFT COLUMN: Products & Cart ============ */}
           <div className="space-y-5">
             {/* Location Selector - Compact */}
-            {!(!hasAuthorizedLocations && isDistributor) && (
-              <LocationSelector
-                locationType={order.locationType}
-                locationId={order.locationId}
-                branches={branches}
-                allowWarehouse={!isDistributor || allowWarehouse}
-                isDistributor={isDistributor}
-                onLocationChange={handleLocationChange}
-              />
-            )}
+            <LocationSelector
+              locationType={order.locationType}
+              locationId={order.locationId}
+              branches={branches}
+              onLocationChange={handleLocationChange}
+            />
 
             {/* Quick Selectors */}
-            {!(!hasAuthorizedLocations && isDistributor) && (
-              <div className="animate-fade-in-up rounded-2xl border border-white/10 bg-slate-900/70 p-5 shadow-[0_18px_50px_-35px_rgba(15,23,42,0.9)]">
-                <h3 className="mb-4 text-lg font-semibold text-white">
-                  Selectores rapidos
-                </h3>
-                <div className="grid gap-4 lg:grid-cols-2">
-                  <div className="rounded-xl border border-slate-700/60 bg-slate-900/60 p-3">
-                    <p className="mb-2 text-xs uppercase tracking-wide text-slate-400">
-                      Productos
-                    </p>
-                    <ProductSelector
-                      value={productSelectorId}
-                      onChange={productId => {
-                        setProductSelectorId(productId);
-                        if (!productId) return;
-                        const product = productsWithLocationStock.find(
-                          p => p._id === productId
+            <div className="animate-fade-in-up rounded-2xl border border-white/10 bg-slate-900/70 p-5 shadow-[0_18px_50px_-35px_rgba(15,23,42,0.9)]">
+              <h3 className="mb-4 text-lg font-semibold text-white">
+                Selectores rapidos
+              </h3>
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div className="rounded-xl border border-slate-700/60 bg-slate-900/60 p-3">
+                  <p className="mb-2 text-xs uppercase tracking-wide text-slate-400">
+                    Productos
+                  </p>
+                  <ProductSelector
+                    value={productSelectorId}
+                    onChange={productId => {
+                      setProductSelectorId(productId);
+                      if (!productId) return;
+                      const product = productsWithLocationStock.find(
+                        p => p._id === productId
+                      );
+                      if (!product) return;
+
+                      const stock =
+                        order.locationType === "warehouse"
+                          ? (product.warehouseStock ?? 0)
+                          : order.locationType === "branch"
+                            ? (product.branchStock ?? 0)
+                            : (product.distributorStock ?? 0);
+
+                      if (stock <= 0) {
+                        setSubmitError(
+                          `Sin stock disponible para ${product.name}.`
                         );
-                        if (!product) return;
+                        return;
+                      }
 
-                        const stock =
-                          order.locationType === "warehouse"
-                            ? (product.warehouseStock ?? 0)
-                            : order.locationType === "branch"
-                              ? (product.branchStock ?? 0)
-                              : (product.distributorStock ?? 0);
-
-                        if (stock <= 0) {
-                          setSubmitError(
-                            `Sin stock disponible para ${product.name}.`
-                          );
-                          return;
-                        }
-
-                        handleAddProduct(product, 1);
-                        setProductSelectorId("");
-                      }}
-                      placeholder="Buscar producto para agregar..."
-                      showStock={true}
-                      products={selectorProducts}
-                    />
-                  </div>
+                      handleAddProduct(product, 1);
+                      setProductSelectorId("");
+                    }}
+                    placeholder="Buscar producto para agregar..."
+                    showStock={true}
+                    products={selectorProducts}
+                  />
                 </div>
               </div>
-            )}
+            </div>
 
             {/* Inventory Grid - Main Focus */}
-            {!(!hasAuthorizedLocations && isDistributor) && (
-              <div
-                className="animate-fade-in-up"
-                style={{ animationDelay: "120ms" }}
-              >
-                <InventoryGrid
-                  products={productsInSelectedInventory}
-                  locationType={order.locationType}
-                  loading={dataLoading}
-                  onAddProduct={handleAddProduct}
-                />
-              </div>
-            )}
+            <div
+              className="animate-fade-in-up"
+              style={{ animationDelay: "120ms" }}
+            >
+              <InventoryGrid
+                products={productsWithLocationStock}
+                locationType={order.locationType}
+                loading={dataLoading}
+                onAddProduct={handleAddProduct}
+              />
+            </div>
 
             {/* Cart - Below Inventory */}
             <div

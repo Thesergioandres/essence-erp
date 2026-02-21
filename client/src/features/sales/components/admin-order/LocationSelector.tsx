@@ -12,8 +12,6 @@ interface LocationSelectorProps {
   locationId: string | null;
   branches: Branch[];
   loading?: boolean;
-  allowWarehouse?: boolean;
-  isDistributor?: boolean;
   onLocationChange: (type: LocationType, id: string, name: string) => void;
 }
 
@@ -22,8 +20,6 @@ export function LocationSelector({
   locationId,
   branches,
   loading,
-  allowWarehouse = true,
-  isDistributor = false,
   onLocationChange,
 }: LocationSelectorProps) {
   const activeBranches = branches.filter(
@@ -43,22 +39,21 @@ export function LocationSelector({
       </h3>
 
       <div className="flex gap-2">
-        {isDistributor && (
-          <button
-            type="button"
-            onClick={() =>
-              onLocationChange("distributor", "distributor", "Mi Inventario")
-            }
-            className={`flex flex-1 items-center justify-center gap-2 rounded-lg border px-4 py-3 font-medium transition ${
-              locationType === "distributor"
-                ? "border-blue-500 bg-blue-500/20 text-blue-300"
-                : "border-gray-600 bg-gray-800/50 text-gray-400 hover:border-gray-500 hover:text-gray-300"
-            }`}
-          >
-            <WarehouseIcon className="h-5 w-5" />
-            Mi Inventario
-          </button>
-        )}
+        {/* DISTRIBUTOR: My Inventory Button */}
+        <button
+          type="button"
+          onClick={() =>
+            onLocationChange("distributor", "distributor", "Mi Inventario")
+          }
+          className={`flex flex-1 items-center justify-center gap-2 rounded-lg border px-4 py-3 font-medium transition ${
+            locationType === "distributor"
+              ? "border-blue-500 bg-blue-500/20 text-blue-300"
+              : "border-gray-600 bg-gray-800/50 text-gray-400 hover:border-gray-500 hover:text-gray-300"
+          }`}
+        >
+          <WarehouseIcon className="h-5 w-5" />
+          Mi Inventario
+        </button>
 
         {/* WAREHOUSE Button (Only for Admin - or hidden for distributor?) 
             Actually Plan said Distributors sell from Allowed Warehouse.
@@ -98,23 +93,21 @@ export function LocationSelector({
             If locationType is 'distributor' OR 'branch' OR 'warehouse' we need to support switching.
         */}
 
-        {allowWarehouse && (
-          <button
-            type="button"
-            onClick={() => {
-              // HYBRID MODEL: "Bodega Central" = warehouse stock for dropshipping
-              onLocationChange("warehouse", "warehouse", "Bodega Central");
-            }}
-            className={`flex flex-1 items-center justify-center gap-2 rounded-lg border px-4 py-3 font-medium transition ${
-              locationType === "warehouse"
-                ? "border-purple-500 bg-purple-500/20 text-purple-300"
-                : "border-gray-600 bg-gray-800/50 text-gray-400 hover:border-gray-500 hover:text-gray-300"
-            }`}
-          >
-            <Building2 className="h-5 w-5" />
-            Bodega Central
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => {
+            // HYBRID MODEL: "Bodega Central" = warehouse stock for dropshipping
+            onLocationChange("warehouse", "warehouse", "Bodega Central");
+          }}
+          className={`flex flex-1 items-center justify-center gap-2 rounded-lg border px-4 py-3 font-medium transition ${
+            locationType === "warehouse"
+              ? "border-purple-500 bg-purple-500/20 text-purple-300"
+              : "border-gray-600 bg-gray-800/50 text-gray-400 hover:border-gray-500 hover:text-gray-300"
+          }`}
+        >
+          <Building2 className="h-5 w-5" />
+          Bodega Central
+        </button>
 
         {/* Branch Selector */}
         <div className="flex-1">
