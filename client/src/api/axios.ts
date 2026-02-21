@@ -1,7 +1,19 @@
 import type { AxiosError, InternalAxiosRequestConfig } from "axios";
 import axios from "axios";
 
-const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://localhost:5000/api";
+const getApiBaseUrl = () => {
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+
+  if (typeof window !== "undefined" && window.location.hostname.includes("railway.app")) {
+    return "https://essence-backend-production-25b3.up.railway.app/api/v2";
+  }
+
+  return "http://localhost:5000/api";
+};
+
+const apiBaseUrl = getApiBaseUrl();
 
 const api = axios.create({
   baseURL: apiBaseUrl,
