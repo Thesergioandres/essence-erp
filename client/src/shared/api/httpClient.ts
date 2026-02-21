@@ -6,7 +6,10 @@ const getApiBaseUrl = () => {
     return import.meta.env.VITE_API_URL;
   }
 
-  if (typeof window !== "undefined" && window.location.hostname.includes("railway.app")) {
+  if (
+    typeof window !== "undefined" &&
+    window.location.hostname.includes("railway.app")
+  ) {
     return "https://essence-backend-production-25b3.up.railway.app/api/v2";
   }
 
