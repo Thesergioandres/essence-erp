@@ -36,6 +36,7 @@ export default function DashboardLayout() {
   ).trim();
   const brandName = business?.name || "Selecciona un negocio";
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
 
   const handleLogout = () => {
     authService.logout();
@@ -59,9 +60,9 @@ export default function DashboardLayout() {
 
       {/* Sidebar */}
       <aside
-        className={`fixed left-0 top-0 z-50 h-screen w-72 border-r border-gray-800 bg-[#0f1018]/95 backdrop-blur-xl transition-transform duration-300 lg:translate-x-0 ${
+        className={`fixed left-0 top-0 z-50 h-screen w-72 border-r border-gray-800 bg-[#0f1018]/95 backdrop-blur-xl transition-transform duration-300 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
+        } ${desktopSidebarOpen ? "lg:translate-x-0" : "lg:-translate-x-full"}`}
       >
         <div className="flex h-full flex-col overflow-hidden">
           {/* Logo */}
@@ -742,7 +743,11 @@ export default function DashboardLayout() {
 
       {/* Header (mobile + desktop) */}
       <div className="mobile-header-safe fixed left-0 right-0 top-0 z-30 border-b border-gray-800 bg-[#0d0e16]/80 backdrop-blur-lg lg:h-16">
-        <div className="safe-x flex h-full items-center justify-between px-3 sm:px-5 lg:ml-72 lg:px-8">
+        <div
+          className={`safe-x flex h-full items-center justify-between px-3 sm:px-5 lg:px-8 ${
+            desktopSidebarOpen ? "lg:ml-72" : "lg:ml-0"
+          }`}
+        >
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen(true)}
@@ -784,6 +789,12 @@ export default function DashboardLayout() {
               Multi-negocio activo
             </div>
             <button
+              onClick={() => setDesktopSidebarOpen(prev => !prev)}
+              className="hidden rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-gray-200 transition hover:border-purple-400/60 hover:text-white lg:block"
+            >
+              {desktopSidebarOpen ? "Ocultar menú" : "Mostrar menú"}
+            </button>
+            <button
               onClick={() => setSidebarOpen(true)}
               className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-gray-200 transition hover:border-purple-400/60 hover:text-white lg:hidden"
             >
@@ -794,7 +805,11 @@ export default function DashboardLayout() {
       </div>
 
       {/* Main Content */}
-      <main className="content-with-safe-header min-h-screen overflow-x-hidden lg:ml-72 lg:pt-20">
+      <main
+        className={`content-with-safe-header min-h-screen overflow-x-hidden transition-all duration-300 lg:pt-20 ${
+          desktopSidebarOpen ? "lg:ml-72" : "lg:ml-0"
+        }`}
+      >
         <div className="mx-auto w-full max-w-screen-2xl p-4 md:p-6 lg:p-8">
           <BusinessGate>
             <Outlet />

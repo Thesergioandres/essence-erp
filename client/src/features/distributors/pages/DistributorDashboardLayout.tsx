@@ -20,6 +20,7 @@ export default function DistributorDashboardLayout() {
   const navigate = useNavigate();
   const user = authService.getCurrentUser();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
   const [distributorStats, setDistributorStats] =
     useState<DistributorStats | null>(null);
 
@@ -70,9 +71,9 @@ export default function DistributorDashboardLayout() {
 
       {/* Sidebar */}
       <aside
-        className={`fixed left-0 top-0 z-40 h-screen w-72 border-r border-gray-700 bg-gray-800/95 backdrop-blur-lg transition-transform duration-300 lg:translate-x-0 ${
+        className={`fixed left-0 top-0 z-40 h-screen w-72 border-r border-gray-700 bg-gray-800/95 backdrop-blur-lg transition-transform duration-300 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
+        } ${desktopSidebarOpen ? "lg:translate-x-0" : "lg:-translate-x-full"}`}
       >
         <div className="flex h-full flex-col overflow-hidden">
           {/* Logo */}
@@ -486,8 +487,33 @@ export default function DistributorDashboardLayout() {
       </div>
 
       {/* Main Content */}
-      <main className="content-with-safe-header min-h-screen overflow-x-hidden lg:ml-72 lg:pt-0">
+      <main
+        className={`content-with-safe-header min-h-screen overflow-x-hidden transition-all duration-300 lg:pt-0 ${
+          desktopSidebarOpen ? "lg:ml-72" : "lg:ml-0"
+        }`}
+      >
         <div className="safe-x p-4 sm:p-6 md:p-8 lg:p-10">
+          <div className="mb-4 hidden lg:block">
+            <button
+              onClick={() => setDesktopSidebarOpen(prev => !prev)}
+              className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-gray-700 bg-gray-800/60 px-4 py-2 text-sm font-medium text-gray-200 transition hover:border-blue-500/40 hover:bg-blue-600/10 hover:text-blue-300"
+            >
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 6h16M4 12h16M4 18h16"
+                />
+              </svg>
+              {desktopSidebarOpen ? "Ocultar menú" : "Mostrar menú"}
+            </button>
+          </div>
           <BusinessGate>
             <Outlet />
           </BusinessGate>
