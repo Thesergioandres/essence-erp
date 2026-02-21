@@ -1,8 +1,10 @@
 import { motion } from "framer-motion";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Footer from "../../../components/Footer";
 import Navbar from "../../../components/Navbar";
 import { Button } from "../../../shared/components/ui";
+import { globalSettingsService } from "../services";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 24 },
@@ -108,6 +110,65 @@ const testimonials = [
 
 export default function Home() {
   const navigate = useNavigate();
+  const [maintenanceMode, setMaintenanceMode] = useState(false);
+  const [plans, setPlans] = useState<
+    Array<{
+      id: "starter" | "pro" | "enterprise";
+      name: string;
+      description?: string;
+      monthlyPrice: number;
+      yearlyPrice: number;
+      currency: string;
+      limits: { branches: number; distributors: number };
+    }>
+  >([]);
+
+  useEffect(() => {
+    globalSettingsService
+      .getPublicSettings()
+      .then(settings => {
+        setMaintenanceMode(Boolean(settings.maintenanceMode));
+        setPlans([
+          settings.plans.starter,
+          settings.plans.pro,
+          settings.plans.enterprise,
+        ]);
+      })
+      .catch(() => null);
+  }, []);
+
+  const pricingCards = useMemo(() => {
+    if (plans.length > 0) return plans;
+    return [
+      {
+        id: "starter" as const,
+        name: "Starter",
+        description: "Para negocios en etapa inicial",
+        monthlyPrice: 19,
+        yearlyPrice: 190,
+        currency: "USD",
+        limits: { branches: 1, distributors: 2 },
+      },
+      {
+        id: "pro" as const,
+        name: "Pro",
+        description: "Para equipos que escalan ventas",
+        monthlyPrice: 49,
+        yearlyPrice: 490,
+        currency: "USD",
+        limits: { branches: 3, distributors: 10 },
+      },
+      {
+        id: "enterprise" as const,
+        name: "Enterprise",
+        description: "Para operaciones multi-sede avanzadas",
+        monthlyPrice: 99,
+        yearlyPrice: 990,
+        currency: "USD",
+        limits: { branches: 10, distributors: 50 },
+      },
+    ];
+  }, [plans]);
 
   const handleDemoClick = () => {
     if (typeof window !== "undefined") {
@@ -119,6 +180,14 @@ export default function Home() {
   return (
     <div className="bg-app-base min-h-screen">
       <Navbar />
+
+      {maintenanceMode && (
+        <div className="border-y border-amber-300/30 bg-amber-500/10 px-4 py-2 text-center text-sm text-amber-100">
+          Estamos en modo mantenimiento programado. Puedes explorar planes y
+          solicitar acceso, pero algunos módulos pueden estar temporalmente
+          limitados.
+        </div>
+      )}
 
       <section className="relative overflow-hidden border-b border-white/5">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(236,72,153,0.15),transparent_35%),radial-gradient(circle_at_80%_0%,rgba(56,189,248,0.18),transparent_40%),radial-gradient(circle_at_50%_80%,rgba(16,185,129,0.12),transparent_45%)]" />
@@ -221,6 +290,67 @@ export default function Home() {
           </div>
         </motion.div>
       </section>
+
+      <motion.section
+        id="pricing"
+        variants={staggerContainer}
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true, amount: 0.2 }}
+        className="mx-auto max-w-7xl px-3 py-12 sm:px-5 sm:py-14 md:px-8 md:py-16"
+      >
+        <motion.div variants={fadeUp} className="text-center">
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-fuchsia-200">
+            Planes SaaS
+          </p>
+          <h2 className="mt-2 text-3xl font-bold text-white sm:text-4xl">
+            Precios transparentes para crecer sin fricción
+          </h2>
+          <p className="mt-2 text-sm text-gray-300 sm:text-base">
+            Elige el plan según tu operación y amplíalo cuando tu negocio lo
+            necesite.
+          </p>
+        </motion.div>
+
+        <motion.div
+          variants={staggerContainer}
+          className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+        >
+          {pricingCards.map(plan => (
+            <motion.div
+              key={plan.id}
+              variants={fadeUp}
+              whileHover={{ y: -4 }}
+              transition={{ type: "spring", stiffness: 220, damping: 20 }}
+              className="rounded-2xl border border-white/10 bg-white/5 p-5 text-left"
+            >
+              <p className="text-xs uppercase tracking-[0.2em] text-fuchsia-200">
+                {plan.name}
+              </p>
+              <p className="mt-2 text-3xl font-bold text-white">
+                {plan.currency} {plan.monthlyPrice}
+                <span className="text-sm font-medium text-gray-300">/mes</span>
+              </p>
+              <p className="mt-1 text-xs text-gray-400">
+                {plan.currency} {plan.yearlyPrice} /año
+              </p>
+              <p className="mt-3 text-sm text-gray-300">{plan.description}</p>
+              <ul className="mt-4 space-y-2 text-sm text-gray-200">
+                <li>• {plan.limits.branches} sedes incluidas</li>
+                <li>• {plan.limits.distributors} distribuidores incluidos</li>
+                <li>• Inventario, ventas y comisiones en tiempo real</li>
+              </ul>
+              <Button
+                type="button"
+                onClick={() => navigate("/register")}
+                className="mt-5 w-full rounded-full bg-fuchsia-500 text-sm font-semibold text-white hover:bg-fuchsia-400"
+              >
+                Empezar con {plan.name}
+              </Button>
+            </motion.div>
+          ))}
+        </motion.div>
+      </motion.section>
 
       <motion.section
         variants={staggerContainer}

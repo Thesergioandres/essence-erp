@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useBusiness } from "../../../context/BusinessContext";
-import { LoadingSpinner } from "../../../shared/components/ui";
+import { LoadingSpinner, PlanLimitModal } from "../../../shared/components/ui";
 import {
   buildCacheKey,
   readSessionCache,
   writeSessionCache,
 } from "../../../utils/requestCache";
 import type { User } from "../../auth/types/auth.types";
+import type { BusinessPlanSnapshot } from "../../business/types/business.types";
+import { globalSettingsService } from "../../common/services";
 import { distributorService } from "../../distributors/services";
 
 const DISTRIBUTORS_CACHE_TTL_MS = 60 * 1000;
@@ -26,6 +28,10 @@ export default function Distributors() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<"all" | "active" | "inactive">("all");
+  const [planSnapshot, setPlanSnapshot] = useState<BusinessPlanSnapshot | null>(
+    null
+  );
+  const [showLimitModal, setShowLimitModal] = useState(false);
 
   const loadDistributors = useCallback(async () => {
     try {
@@ -58,6 +64,9 @@ export default function Distributors() {
       }
 
       const response = await distributorService.getAll(params);
+      const limits = await globalSettingsService
+        .getBusinessLimits()
+        .catch(() => null);
 
       if (Array.isArray(response)) {
         setDistributors(response);
@@ -69,6 +78,10 @@ export default function Distributors() {
           data: response.data,
           pagination: response.pagination,
         });
+      }
+
+      if (limits) {
+        setPlanSnapshot(limits);
       }
     } catch (err) {
       setError("Error al cargar distribuidores");
@@ -90,6 +103,14 @@ export default function Distributors() {
       setError("Error al cambiar estado del distribuidor");
       console.error(err);
     }
+  };
+
+  const handleNewDistributor = () => {
+    if (planSnapshot && planSnapshot.remaining.distributors <= 0) {
+      setShowLimitModal(true);
+      return;
+    }
+    navigate("/admin/distributors/add");
   };
 
   const handleDelete = async (id: string, name: string) => {
@@ -122,7 +143,7 @@ export default function Distributors() {
           </p>
         </div>
         <button
-          onClick={() => navigate("/admin/distributors/add")}
+          onClick={handleNewDistributor}
           className="bg-linear-to-r inline-flex items-center gap-2 rounded-lg from-purple-600 to-pink-600 px-5 py-3 font-semibold text-white transition hover:from-purple-700 hover:to-pink-700"
         >
           <span className="text-2xl leading-none">＋</span>
@@ -299,6 +320,16 @@ export default function Distributors() {
           </div>
         </div>
       )}
+
+      <PlanLimitModal
+        open={showLimitModal}
+        onClose={() => setShowLimitModal(false)}
+        title="Límite de distribuidores alcanzado"
+        description="Tu plan actual alcanzó el máximo de distribuidores. Sube de plan para crear nuevos usuarios distribuidores."
+        plan={planSnapshot?.plan}
+        currentUsage={planSnapshot?.usage.distributors}
+        currentLimit={planSnapshot?.limits.distributors}
+      />
     </div>
   );
 }

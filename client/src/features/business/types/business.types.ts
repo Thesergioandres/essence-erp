@@ -26,6 +26,19 @@ export interface BusinessConfig {
   features?: BusinessFeatures;
 }
 
+export interface PlanLimits {
+  branches: number;
+  distributors: number;
+}
+
+export interface BusinessPlanSnapshot {
+  plan: "starter" | "pro" | "enterprise";
+  source: "plan" | "custom" | "default";
+  limits: PlanLimits;
+  usage: PlanLimits;
+  remaining: PlanLimits;
+}
+
 export interface Business {
   _id: string;
   name: string;
@@ -37,6 +50,8 @@ export interface Business {
   logoUrl?: string;
   logoPublicId?: string;
   status?: "active" | "archived";
+  plan?: "starter" | "pro" | "enterprise";
+  customLimits?: Partial<PlanLimits>;
   config?: BusinessConfig;
   createdAt?: string;
   updatedAt?: string;

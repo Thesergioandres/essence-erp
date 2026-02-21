@@ -4,6 +4,7 @@
 export {
   expenseService,
   gamificationService,
+  globalSettingsService,
   issueService,
   profitHistoryService,
   uploadService,

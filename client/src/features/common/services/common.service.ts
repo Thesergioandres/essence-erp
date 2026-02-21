@@ -16,6 +16,10 @@ import type {
   WinnersResponse,
 } from "../../analytics/types/gamification.types";
 import type { User } from "../../auth/types/auth.types";
+import type {
+  BusinessPlanSnapshot,
+  PlanLimits,
+} from "../../business/types/business.types";
 import type { ProductImage } from "../../inventory/types/product.types";
 import type { Expense } from "../types/common.types";
 
@@ -60,6 +64,38 @@ interface IssueReport {
   status: "open" | "reviewing" | "closed";
   createdAt: Date;
   updatedAt: Date;
+}
+
+interface PublicPlan {
+  id: "starter" | "pro" | "enterprise";
+  name: string;
+  description?: string;
+  monthlyPrice: number;
+  yearlyPrice: number;
+  currency: string;
+  limits: PlanLimits;
+}
+
+interface PublicGlobalSettingsResponse {
+  maintenanceMode: boolean;
+  defaultPlan: "starter" | "pro" | "enterprise";
+  plans: Record<"starter" | "pro" | "enterprise", PublicPlan>;
+}
+
+interface BusinessSubscriptionRow {
+  _id: string;
+  name: string;
+  status?: string;
+  createdAt?: string;
+  owner?: {
+    _id: string;
+    name: string;
+    email: string;
+    status?: string;
+  } | null;
+  plan: "starter" | "pro" | "enterprise";
+  customLimits?: Partial<PlanLimits> | null;
+  limits: BusinessPlanSnapshot | null;
 }
 
 // ==================== UPLOAD SERVICE ====================
@@ -218,6 +254,61 @@ export const userAccessService = {
     const response =
       await api.get<SubscriptionsSummaryResponse>("/god/subscriptions");
     return response.data;
+  },
+};
+
+export const globalSettingsService = {
+  async getPublicSettings(): Promise<PublicGlobalSettingsResponse> {
+    const response = await api.get<{
+      success: boolean;
+      data: PublicGlobalSettingsResponse;
+    }>("/global-settings/public");
+    return response.data.data;
+  },
+
+  async getBusinessLimits(): Promise<BusinessPlanSnapshot> {
+    const response = await api.get<{
+      success: boolean;
+      data: BusinessPlanSnapshot;
+    }>("/global-settings/business-limits");
+    return response.data.data;
+  },
+
+  async listBusinessSubscriptions(): Promise<BusinessSubscriptionRow[]> {
+    const response = await api.get<{
+      success: boolean;
+      data: BusinessSubscriptionRow[];
+    }>("/global-settings/businesses");
+    return response.data.data || [];
+  },
+
+  async updateBusinessSubscription(
+    businessId: string,
+    payload: {
+      plan?: "starter" | "pro" | "enterprise";
+      customLimits?: Partial<PlanLimits>;
+    }
+  ) {
+    const response = await api.patch<{
+      success: boolean;
+      data: BusinessSubscriptionRow;
+      message?: string;
+    }>(`/global-settings/businesses/${businessId}`, payload);
+    return response.data;
+  },
+
+  async updateGlobalSettings(payload: {
+    maintenanceMode?: boolean;
+    defaultPlan?: "starter" | "pro" | "enterprise";
+    plans?: Partial<
+      Record<"starter" | "pro" | "enterprise", Partial<PublicPlan>>
+    >;
+  }) {
+    const response = await api.put<{
+      success: boolean;
+      data: PublicGlobalSettingsResponse;
+    }>("/global-settings", payload);
+    return response.data.data;
   },
 };
 

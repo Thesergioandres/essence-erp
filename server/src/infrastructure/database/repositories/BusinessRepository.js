@@ -21,6 +21,8 @@ export class BusinessRepository {
       contactLocation: data.contactLocation,
       config: { features: { ...(data.features || {}) } },
       createdBy: creatorId,
+      plan: data.plan || "starter",
+      customLimits: data.customLimits,
     });
 
     await Membership.create({
@@ -72,6 +74,9 @@ export class BusinessRepository {
     if (data.logoUrl !== undefined) business.logoUrl = data.logoUrl;
     if (data.logoPublicId !== undefined)
       business.logoPublicId = data.logoPublicId;
+    if (data.plan !== undefined) business.plan = data.plan;
+    if (data.customLimits !== undefined)
+      business.customLimits = data.customLimits;
 
     await business.save();
     return business;

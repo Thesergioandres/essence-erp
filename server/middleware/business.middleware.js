@@ -1,6 +1,10 @@
 import Business from "../models/Business.js";
 import Membership from "../models/Membership.js";
 import User from "../models/User.js";
+import {
+  getBusinessUsage,
+  resolveBusinessLimits,
+} from "../src/infrastructure/services/planLimits.service.js";
 import { logAuthError } from "../utils/logger.js";
 import {
   buildEffectivePermissions,
@@ -413,5 +417,63 @@ export const requireFeature = (featureKey) => {
       message: "Funcionalidad desactivada para este negocio",
       debug: debugLogs,
     });
+  };
+};
+
+export const checkPlanLimits = (resourceKey) => {
+  return async (req, res, next) => {
+    try {
+      const isGod = req.user?.role === "god";
+      if (isGod) {
+        return next();
+      }
+
+      const businessId = req.businessId || req.business?._id?.toString();
+      if (!businessId) {
+        return res.status(400).json({
+          success: false,
+          message: "Falta contexto de negocio para validar límites",
+        });
+      }
+
+      if (!["branches", "distributors"].includes(resourceKey)) {
+        return res.status(500).json({
+          success: false,
+          message: "Recurso de límite inválido",
+        });
+      }
+
+      const [{ limits, plan }, usage] = await Promise.all([
+        resolveBusinessLimits(req.business || businessId),
+        getBusinessUsage(businessId),
+      ]);
+
+      const currentUsage = usage[resourceKey] || 0;
+      const currentLimit = limits[resourceKey];
+
+      if (!currentLimit || currentUsage < currentLimit) {
+        return next();
+      }
+
+      return res.status(403).json({
+        success: false,
+        code: "PLAN_LIMIT_REACHED",
+        resource: resourceKey,
+        message:
+          resourceKey === "branches"
+            ? "Has alcanzado el límite de sedes de tu plan"
+            : "Has alcanzado el límite de distribuidores de tu plan",
+        plan,
+        limits,
+        usage,
+        upgradeSuggestion: plan === "starter" ? "pro" : "enterprise",
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error validando límites del plan",
+        error: error.message,
+      });
+    }
   };
 };

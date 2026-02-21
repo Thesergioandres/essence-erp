@@ -390,6 +390,25 @@ export default function DashboardLayout() {
               Productos
             </NavLink>
             <NavLink
+              to="/admin/price-list"
+              className={({ isActive }): string => navLinkClasses(isActive)}
+            >
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 14l2 2 4-4m5 0a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              Lista de Precios
+            </NavLink>
+            <NavLink
               to="/admin/add-product"
               className={({ isActive }): string => navLinkClasses(isActive)}
             >

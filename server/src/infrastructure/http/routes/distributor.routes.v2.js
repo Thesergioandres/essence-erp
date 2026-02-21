@@ -2,6 +2,7 @@ import { Router } from "express";
 import { protect } from "../../../../middleware/auth.middleware.js";
 import {
   businessContext,
+  checkPlanLimits,
   requireFeature,
   requirePermission,
 } from "../../../../middleware/business.middleware.js";
@@ -18,6 +19,7 @@ router.get("/me/products", (req, res) => controller.getProducts(req, res));
 router.post(
   "/",
   requirePermission({ module: "distributors", action: "create" }),
+  checkPlanLimits("distributors"),
   (req, res) => controller.create(req, res),
 );
 router.get(

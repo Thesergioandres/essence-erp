@@ -31,6 +31,7 @@ const AccountHold = lazy(() => import("./features/auth/pages/AccountHoldPage"));
 
 // Common / Public pages
 const Home = lazy(() => import("./features/common/pages/HomePage"));
+const Manual = lazy(() => import("./features/common/pages/ManualPage"));
 const Catalog = lazy(() => import("./features/common/pages/CatalogPage"));
 const GodPanel = lazy(() => import("./features/common/pages/GodPanelPage"));
 const DefectiveReports = lazy(
@@ -71,6 +72,9 @@ const GlobalInventory = lazy(
 );
 const InventoryEntries = lazy(
   () => import("./features/inventory/pages/InventoryEntriesPage")
+);
+const PriceList = lazy(
+  () => import("./features/inventory/pages/PriceListPage")
 );
 
 // Analytics pages
@@ -257,6 +261,7 @@ export default function App() {
               <Routes location={location}>
                 {/* Public Routes */}
                 <Route path="/" element={<Home />} />
+                <Route path="/manual" element={<Manual />} />
                 <Route path="/demo" element={<DemoPage />} />
                 <Route path="/account-hold" element={<AccountHold />} />
                 <Route path="/productos" element={<Catalog />} />
@@ -357,6 +362,14 @@ export default function App() {
                     element={
                       <BusinessGate requiredFeature="products">
                         <EditProduct />
+                      </BusinessGate>
+                    }
+                  />
+                  <Route
+                    path="price-list"
+                    element={
+                      <BusinessGate requiredFeature="products">
+                        <PriceList />
                       </BusinessGate>
                     }
                   />

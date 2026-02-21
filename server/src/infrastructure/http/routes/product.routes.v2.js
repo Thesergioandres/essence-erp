@@ -15,6 +15,7 @@ import {
   getProductHistory,
   getPublicCatalog,
   updateProduct,
+  updateProductPrices,
   updateStock,
 } from "../controllers/ProductController.js";
 
@@ -65,6 +66,15 @@ router.put(
 );
 
 // Update Stock (Dedicated endpoint)
+router.patch(
+  "/:id/prices",
+  protect,
+  businessContext,
+  requireFeature("inventory"),
+  requirePermission({ module: "inventory", action: "update" }),
+  updateProductPrices,
+);
+
 router.patch(
   "/:id/stock",
   protect,

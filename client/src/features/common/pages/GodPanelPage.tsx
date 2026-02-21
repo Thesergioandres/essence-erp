@@ -2,13 +2,51 @@ import { useEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { authService } from "../../auth/services";
 import type { User } from "../../auth/types/auth.types";
-import { issueService, userAccessService } from "../../common/services";
+import {
+  globalSettingsService,
+  issueService,
+  userAccessService,
+} from "../../common/services";
 import type { IssueReport } from "../types/common.types";
 
 interface DurationForm {
   days: number;
   months: number;
   years: number;
+}
+
+interface PlanCardConfig {
+  id: "starter" | "pro" | "enterprise";
+  name: string;
+  description?: string;
+  monthlyPrice: number;
+  yearlyPrice: number;
+  currency: string;
+  limits: {
+    branches: number;
+    distributors: number;
+  };
+}
+
+interface SubscriptionBusinessRow {
+  _id: string;
+  name: string;
+  status?: string;
+  owner?: {
+    _id: string;
+    name: string;
+    email: string;
+    status?: string;
+  } | null;
+  plan: "starter" | "pro" | "enterprise";
+  customLimits?: {
+    branches?: number;
+    distributors?: number;
+  } | null;
+  limits?: {
+    limits: { branches: number; distributors: number };
+    usage: { branches: number; distributors: number };
+  } | null;
 }
 
 type ActionKey =
@@ -61,7 +99,45 @@ export default function GodPanel() {
   const [issueAction, setIssueAction] = useState<string | null>(null);
   const [confirmUser, setConfirmUser] = useState<User | null>(null);
 
-  const [activeTab, setActiveTab] = useState<"users" | "issues">("users");
+  const [activeTab, setActiveTab] = useState<
+    "users" | "issues" | "subscriptions"
+  >("users");
+  const [subscriptionsLoading, setSubscriptionsLoading] = useState(false);
+  const [subscriptionRows, setSubscriptionRows] = useState<
+    SubscriptionBusinessRow[]
+  >([]);
+  const [maintenanceMode, setMaintenanceMode] = useState(false);
+  const [planConfigs, setPlanConfigs] = useState<
+    Record<"starter" | "pro" | "enterprise", PlanCardConfig>
+  >({
+    starter: {
+      id: "starter",
+      name: "Starter",
+      description: "",
+      monthlyPrice: 19,
+      yearlyPrice: 190,
+      currency: "USD",
+      limits: { branches: 1, distributors: 2 },
+    },
+    pro: {
+      id: "pro",
+      name: "Pro",
+      description: "",
+      monthlyPrice: 49,
+      yearlyPrice: 490,
+      currency: "USD",
+      limits: { branches: 3, distributors: 10 },
+    },
+    enterprise: {
+      id: "enterprise",
+      name: "Enterprise",
+      description: "",
+      monthlyPrice: 99,
+      yearlyPrice: 990,
+      currency: "USD",
+      limits: { branches: 10, distributors: 50 },
+    },
+  });
 
   const loadIssues = async (
     status: "all" | "open" | "reviewing" | "closed" = "open"
@@ -119,6 +195,70 @@ export default function GodPanel() {
   useEffect(() => {
     void loadIssues(issueStatus);
   }, [issueStatus]);
+
+  const loadSubscriptions = async () => {
+    setSubscriptionsLoading(true);
+    try {
+      const [rows, settings] = await Promise.all([
+        globalSettingsService.listBusinessSubscriptions(),
+        globalSettingsService.getPublicSettings(),
+      ]);
+      setSubscriptionRows(rows as any);
+      setMaintenanceMode(Boolean(settings.maintenanceMode));
+      setPlanConfigs(settings.plans as any);
+    } catch (err) {
+      console.error("god panel subscriptions error", err);
+      setError("No se pudo cargar gestión de suscripciones");
+    } finally {
+      setSubscriptionsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "subscriptions") {
+      void loadSubscriptions();
+    }
+  }, [activeTab]);
+
+  const updateBusinessPlan = async (
+    businessId: string,
+    payload: {
+      plan?: "starter" | "pro" | "enterprise";
+      customLimits?: { branches?: number; distributors?: number };
+    }
+  ) => {
+    setIssueAction(`subscription-${businessId}`);
+    try {
+      await globalSettingsService.updateBusinessSubscription(
+        businessId,
+        payload
+      );
+      await loadSubscriptions();
+      setFeedback("Suscripción de negocio actualizada");
+    } catch (err) {
+      console.error("update business subscription error", err);
+      setError("No se pudo actualizar la suscripción del negocio");
+    } finally {
+      setIssueAction(null);
+    }
+  };
+
+  const saveGlobalPlans = async () => {
+    setIssueAction("global-settings");
+    try {
+      await globalSettingsService.updateGlobalSettings({
+        maintenanceMode,
+        plans: planConfigs,
+      });
+      setFeedback("Planes globales actualizados");
+      await loadSubscriptions();
+    } catch (err) {
+      console.error("save global settings error", err);
+      setError("No se pudieron guardar los planes globales");
+    } finally {
+      setIssueAction(null);
+    }
+  };
 
   const updateIssueStatus = async (
     id: string,
@@ -231,7 +371,7 @@ export default function GodPanel() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-slate-900 px-4 py-10 text-white">
+    <div className="bg-linear-to-br min-h-screen from-gray-950 via-gray-900 to-slate-900 px-4 py-10 text-white">
       <div className="mx-auto max-w-6xl space-y-8">
         <header className="flex flex-col justify-between gap-4 rounded-2xl border border-white/10 bg-white/5 px-6 py-5 shadow-xl shadow-purple-900/20 backdrop-blur lg:flex-row lg:items-center">
           <div>
@@ -291,6 +431,7 @@ export default function GodPanel() {
           {[
             { key: "users", label: "👥 Usuarios" },
             { key: "issues", label: "🐛 Reportes de Fallos" },
+            { key: "subscriptions", label: "💳 Suscripciones" },
           ].map(tab => (
             <button
               key={tab.key}
@@ -339,7 +480,7 @@ export default function GodPanel() {
               ].map(card => (
                 <div
                   key={card.label}
-                  className={`rounded-xl border border-white/10 bg-gradient-to-br ${card.tone} px-4 py-4 shadow-lg shadow-black/20`}
+                  className={`bg-linear-to-br rounded-xl border border-white/10 ${card.tone} px-4 py-4 shadow-lg shadow-black/20`}
                 >
                   <p className="text-xs uppercase tracking-[0.22em] text-gray-200/80">
                     {card.label}
@@ -539,6 +680,247 @@ export default function GodPanel() {
                   );
                 })}
               </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "subscriptions" && (
+          <div className="space-y-5">
+            <div className="rounded-2xl border border-white/10 bg-gray-900/70 p-5">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-purple-200/80">
+                    Configuración SaaS
+                  </p>
+                  <h2 className="text-xl font-bold">Planes globales</h2>
+                </div>
+                <label className="inline-flex items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-gray-200">
+                  <input
+                    type="checkbox"
+                    checked={maintenanceMode}
+                    onChange={e => setMaintenanceMode(e.target.checked)}
+                  />
+                  Modo mantenimiento
+                </label>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-3">
+                {(["starter", "pro", "enterprise"] as const).map(planKey => {
+                  const plan = planConfigs[planKey];
+                  return (
+                    <div
+                      key={planKey}
+                      className="rounded-xl border border-white/10 bg-white/5 p-3"
+                    >
+                      <p className="text-sm font-semibold text-white">
+                        {plan.name}
+                      </p>
+                      <div className="mt-3 space-y-2 text-xs">
+                        <input
+                          type="number"
+                          min={0}
+                          value={plan.monthlyPrice}
+                          onChange={e =>
+                            setPlanConfigs(prev => ({
+                              ...prev,
+                              [planKey]: {
+                                ...prev[planKey],
+                                monthlyPrice: Number(e.target.value) || 0,
+                              },
+                            }))
+                          }
+                          className="w-full rounded border border-white/15 bg-black/20 px-2 py-1 text-white"
+                          placeholder="Precio mensual"
+                        />
+                        <input
+                          type="number"
+                          min={0}
+                          value={plan.limits.branches}
+                          onChange={e =>
+                            setPlanConfigs(prev => ({
+                              ...prev,
+                              [planKey]: {
+                                ...prev[planKey],
+                                limits: {
+                                  ...prev[planKey].limits,
+                                  branches: Math.max(
+                                    1,
+                                    Number(e.target.value) || 1
+                                  ),
+                                },
+                              },
+                            }))
+                          }
+                          className="w-full rounded border border-white/15 bg-black/20 px-2 py-1 text-white"
+                          placeholder="Límite sedes"
+                        />
+                        <input
+                          type="number"
+                          min={1}
+                          value={plan.limits.distributors}
+                          onChange={e =>
+                            setPlanConfigs(prev => ({
+                              ...prev,
+                              [planKey]: {
+                                ...prev[planKey],
+                                limits: {
+                                  ...prev[planKey].limits,
+                                  distributors: Math.max(
+                                    1,
+                                    Number(e.target.value) || 1
+                                  ),
+                                },
+                              },
+                            }))
+                          }
+                          className="w-full rounded border border-white/15 bg-black/20 px-2 py-1 text-white"
+                          placeholder="Límite distribuidores"
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="mt-4 flex justify-end">
+                <button
+                  disabled={issueAction === "global-settings"}
+                  onClick={saveGlobalPlans}
+                  className="rounded-lg border border-purple-500/40 bg-purple-600/30 px-4 py-2 text-sm font-semibold text-white transition hover:bg-purple-600/40 disabled:opacity-50"
+                >
+                  Guardar planes
+                </button>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-gray-900/70 p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-lg font-bold text-white">
+                  Clientes y plan
+                </h3>
+                <button
+                  onClick={() => void loadSubscriptions()}
+                  className="rounded-lg border border-white/20 bg-white/5 px-3 py-1.5 text-xs font-semibold text-gray-100 hover:bg-white/10"
+                >
+                  Refrescar
+                </button>
+              </div>
+
+              {subscriptionsLoading ? (
+                <div className="py-8 text-center text-sm text-gray-300">
+                  Cargando suscripciones...
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {subscriptionRows.map(row => (
+                    <div
+                      key={row._id}
+                      className="rounded-xl border border-white/10 bg-white/5 p-3"
+                    >
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p className="font-semibold text-white">{row.name}</p>
+                          <p className="text-xs text-gray-400">
+                            {row.owner?.email || "Sin owner"}
+                          </p>
+                        </div>
+                        <div className="text-xs text-gray-300">
+                          Uso sedes: {row.limits?.usage?.branches || 0}/
+                          {row.limits?.limits?.branches || 0} · Dist:{" "}
+                          {row.limits?.usage?.distributors || 0}/
+                          {row.limits?.limits?.distributors || 0}
+                        </div>
+                      </div>
+
+                      <div className="grid gap-2 sm:grid-cols-3">
+                        <select
+                          value={row.plan}
+                          onChange={e =>
+                            setSubscriptionRows(prev =>
+                              prev.map(item =>
+                                item._id === row._id
+                                  ? {
+                                      ...item,
+                                      plan: e.target.value as
+                                        | "starter"
+                                        | "pro"
+                                        | "enterprise",
+                                    }
+                                  : item
+                              )
+                            )
+                          }
+                          className="rounded-lg border border-white/15 bg-black/20 px-3 py-2 text-sm text-white"
+                        >
+                          <option value="starter">Starter</option>
+                          <option value="pro">Pro</option>
+                          <option value="enterprise">Enterprise</option>
+                        </select>
+                        <input
+                          type="number"
+                          min={1}
+                          placeholder="Override sedes"
+                          value={row.customLimits?.branches ?? ""}
+                          onChange={e =>
+                            setSubscriptionRows(prev =>
+                              prev.map(item =>
+                                item._id === row._id
+                                  ? {
+                                      ...item,
+                                      customLimits: {
+                                        ...(item.customLimits || {}),
+                                        branches:
+                                          Number(e.target.value) || undefined,
+                                      },
+                                    }
+                                  : item
+                              )
+                            )
+                          }
+                          className="rounded-lg border border-white/15 bg-black/20 px-3 py-2 text-sm text-white"
+                        />
+                        <div className="flex gap-2">
+                          <input
+                            type="number"
+                            min={1}
+                            placeholder="Override dist"
+                            value={row.customLimits?.distributors ?? ""}
+                            onChange={e =>
+                              setSubscriptionRows(prev =>
+                                prev.map(item =>
+                                  item._id === row._id
+                                    ? {
+                                        ...item,
+                                        customLimits: {
+                                          ...(item.customLimits || {}),
+                                          distributors:
+                                            Number(e.target.value) || undefined,
+                                        },
+                                      }
+                                    : item
+                                )
+                              )
+                            }
+                            className="w-full rounded-lg border border-white/15 bg-black/20 px-3 py-2 text-sm text-white"
+                          />
+                          <button
+                            disabled={issueAction === `subscription-${row._id}`}
+                            onClick={() =>
+                              updateBusinessPlan(row._id, {
+                                plan: row.plan,
+                                customLimits: row.customLimits || {},
+                              })
+                            }
+                            className="rounded-lg border border-emerald-500/40 bg-emerald-600/20 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-600/30 disabled:opacity-50"
+                          >
+                            Guardar
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}

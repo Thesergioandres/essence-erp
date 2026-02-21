@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button } from "../../../shared/components/ui";
+import { Button, PlanLimitModal } from "../../../shared/components/ui";
 import { branchService } from "../../branches/services";
-import type { Branch, BranchStock } from "../../business/types/business.types";
+import type {
+  Branch,
+  BranchStock,
+  BusinessPlanSnapshot,
+} from "../../business/types/business.types";
+import { globalSettingsService } from "../../common/services";
 import {
   productService,
   stockService,
@@ -41,6 +46,17 @@ export default function Branches() {
   const [branchStock, setBranchStock] = useState<BranchStock[]>([]);
   const [loadingStock, setLoadingStock] = useState(false);
   const [searchStock, setSearchStock] = useState("");
+  const [planSnapshot, setPlanSnapshot] = useState<BusinessPlanSnapshot | null>(
+    null
+  );
+  const [showLimitModal, setShowLimitModal] = useState(false);
+  const [limitDetails, setLimitDetails] = useState({
+    title: "Límite de sedes alcanzado",
+    description:
+      "Tu plan actual ya alcanzó el máximo de sedes permitidas. Actualiza tu plan para crear nuevas sedes.",
+    usage: 0,
+    limit: 0,
+  });
 
   const activeCount = useMemo(
     () => branches.filter(b => b.active !== false).length,
@@ -54,8 +70,14 @@ export default function Branches() {
   const loadBranches = async () => {
     try {
       setLoading(true);
-      const data = await branchService.list();
+      const [data, limits] = await Promise.all([
+        branchService.list(),
+        globalSettingsService.getBusinessLimits().catch(() => null),
+      ]);
       setBranches(data || []);
+      if (limits) {
+        setPlanSnapshot(limits);
+      }
     } catch (err) {
       console.error("loadBranches", err);
       setError("No se pudieron cargar las sedes");
@@ -80,6 +102,19 @@ export default function Branches() {
       setError("El nombre es obligatorio");
       return;
     }
+
+    if (planSnapshot && planSnapshot.remaining.branches <= 0) {
+      setLimitDetails({
+        title: "Límite de sedes alcanzado",
+        description:
+          "Tu plan actual ya alcanzó el máximo de sedes permitidas. Actualiza tu plan para crear nuevas sedes.",
+        usage: planSnapshot.usage.branches,
+        limit: planSnapshot.limits.branches,
+      });
+      setShowLimitModal(true);
+      return;
+    }
+
     try {
       setSaving(true);
       const response = await branchService.create({
@@ -93,9 +128,49 @@ export default function Branches() {
       setBranches(prev => [branch, ...prev]);
       setForm(DEFAULT_FORM);
       setSuccess("Sede creada correctamente");
+      setPlanSnapshot(prev =>
+        prev
+          ? {
+              ...prev,
+              usage: {
+                ...prev.usage,
+                branches: prev.usage.branches + 1,
+              },
+              remaining: {
+                ...prev.remaining,
+                branches: Math.max(0, prev.remaining.branches - 1),
+              },
+            }
+          : prev
+      );
     } catch (err) {
       console.error("createBranch", err);
-      setError("No se pudo crear la sede");
+      const apiError = err as {
+        response?: {
+          data?: {
+            code?: string;
+            usage?: { branches?: number };
+            limits?: { branches?: number };
+            plan?: string;
+            message?: string;
+          };
+        };
+      };
+      if (apiError.response?.data?.code === "PLAN_LIMIT_REACHED") {
+        const usage = apiError.response?.data?.usage?.branches ?? 0;
+        const limit = apiError.response?.data?.limits?.branches ?? 0;
+        setLimitDetails({
+          title: "Límite de sedes alcanzado",
+          description:
+            apiError.response?.data?.message ||
+            "Tu plan actual alcanzó su límite de sedes.",
+          usage,
+          limit,
+        });
+        setShowLimitModal(true);
+      } else {
+        setError("No se pudo crear la sede");
+      }
     } finally {
       setSaving(false);
     }
@@ -232,6 +307,16 @@ export default function Branches() {
           {error}
         </div>
       )}
+
+      <PlanLimitModal
+        open={showLimitModal}
+        onClose={() => setShowLimitModal(false)}
+        title={limitDetails.title}
+        description={limitDetails.description}
+        plan={planSnapshot?.plan}
+        currentUsage={limitDetails.usage}
+        currentLimit={limitDetails.limit}
+      />
       {success && (
         <div className="rounded-lg border border-green-500 bg-green-500/10 px-4 py-3 text-sm text-green-300">
           {success}

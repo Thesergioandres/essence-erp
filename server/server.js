@@ -49,6 +49,7 @@ import customerRoutesV2 from "./src/infrastructure/http/routes/customer.routes.v
 import distributorRoutesV2 from "./src/infrastructure/http/routes/distributor.routes.v2.js";
 import expenseRoutesV2 from "./src/infrastructure/http/routes/expense.routes.v2.js";
 import gamificationRoutesV2 from "./src/infrastructure/http/routes/gamification.routes.v2.js";
+import globalSettingsRoutesV2 from "./src/infrastructure/http/routes/globalSettings.routes.v2.js";
 import inventoryRoutesV2 from "./src/infrastructure/http/routes/inventory.routes.v2.js";
 import productRoutesV2 from "./src/infrastructure/http/routes/product.routes.v2.js";
 import providerRoutesV2 from "./src/infrastructure/http/routes/provider.routes.v2.js";
@@ -270,6 +271,7 @@ app.use("/api/v2/distributors", publicDistributorRoutesV2);
 app.use("/api/v2/distributors", distributorRoutesV2);
 app.use("/api/v2/expenses", expenseRoutesV2);
 app.use("/api/v2/gamification", gamificationRoutesV2);
+app.use("/api/v2/global-settings", globalSettingsRoutesV2);
 app.use("/api/v2/inventory", inventoryRoutesV2);
 app.use("/api/v2/products", productRoutesV2);
 app.use("/api/v2/providers", providerRoutesV2);

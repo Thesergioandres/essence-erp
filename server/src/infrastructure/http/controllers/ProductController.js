@@ -504,6 +504,82 @@ export const updateStock = async (req, res, next) => {
 };
 
 /**
+ * Update Product Prices (Public + Wholesale)
+ */
+export const updateProductPrices = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const businessId = req.headers["x-business-id"] || req.businessId;
+    const { price, wholesalePrice } = req.body || {};
+
+    if (!businessId) {
+      return res.status(400).json({
+        success: false,
+        message: "Business ID required",
+      });
+    }
+
+    const hasPrice = price !== undefined && price !== null;
+    const hasWholesale =
+      wholesalePrice !== undefined && wholesalePrice !== null;
+
+    if (!hasPrice && !hasWholesale) {
+      return res.status(400).json({
+        success: false,
+        message: "Debes enviar al menos price o wholesalePrice",
+      });
+    }
+
+    const parsedPrice = hasPrice ? Number(price) : undefined;
+    const parsedWholesale = hasWholesale ? Number(wholesalePrice) : undefined;
+
+    if (hasPrice && (!Number.isFinite(parsedPrice) || parsedPrice < 0)) {
+      return res.status(400).json({
+        success: false,
+        message: "price debe ser un número válido mayor o igual a 0",
+      });
+    }
+
+    if (
+      hasWholesale &&
+      (!Number.isFinite(parsedWholesale) || parsedWholesale < 0)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "wholesalePrice debe ser un número válido mayor o igual a 0",
+      });
+    }
+
+    const updatedProduct = await productRepository.updatePrices(
+      id,
+      businessId,
+      {
+        clientPrice: parsedPrice,
+        distributorPrice: parsedWholesale,
+      },
+    );
+
+    if (!updatedProduct) {
+      return res.status(404).json({
+        success: false,
+        message: "Producto no encontrado",
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "Precios actualizados correctamente",
+      data: updatedProduct,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Error al actualizar precios",
+    });
+  }
+};
+
+/**
  * Delete Product
  */
 export const deleteProduct = async (req, res, next) => {

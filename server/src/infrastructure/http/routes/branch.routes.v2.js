@@ -2,6 +2,7 @@ import express from "express";
 import { protect } from "../../../../middleware/auth.middleware.js";
 import {
   businessContext,
+  checkPlanLimits,
   requireFeature,
   requirePermission,
 } from "../../../../middleware/business.middleware.js";
@@ -29,6 +30,7 @@ router.get(
 router.post(
   "/",
   requirePermission({ module: "inventory", action: "create" }),
+  checkPlanLimits("branches"),
   BranchController.create.bind(BranchController),
 );
 router.put(

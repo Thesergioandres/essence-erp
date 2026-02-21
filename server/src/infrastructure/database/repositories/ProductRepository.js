@@ -228,6 +228,36 @@ export class ProductRepository {
   }
 
   /**
+   * Update product public/distributor prices.
+   * @param {string} id
+   * @param {string} businessId
+   * @param {{ clientPrice?: number, distributorPrice?: number }} priceData
+   * @returns {Promise<Object|null>}
+   */
+  async updatePrices(id, businessId, priceData) {
+    const updateData = {};
+
+    if (typeof priceData.clientPrice === "number") {
+      updateData.clientPrice = priceData.clientPrice;
+    }
+
+    if (typeof priceData.distributorPrice === "number") {
+      updateData.distributorPrice = priceData.distributorPrice;
+      updateData.distributorPriceManual = true;
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      throw new Error("No se enviaron precios para actualizar");
+    }
+
+    return Product.findOneAndUpdate(
+      { _id: id, business: businessId },
+      { $set: updateData },
+      { new: true, runValidators: true },
+    );
+  }
+
+  /**
    * Delete a product by ID
    * @param {string} id
    * @param {string} businessId

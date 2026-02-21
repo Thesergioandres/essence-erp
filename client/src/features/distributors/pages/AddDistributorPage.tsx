@@ -1,6 +1,9 @@
 import type { ChangeEvent, FormEvent } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { PlanLimitModal } from "../../../shared/components/ui";
+import type { BusinessPlanSnapshot } from "../../business/types/business.types";
+import { globalSettingsService } from "../../common/services";
 import { distributorService } from "../../distributors/services";
 
 interface FormState {
@@ -24,6 +27,17 @@ export default function AddDistributor() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [planSnapshot, setPlanSnapshot] = useState<BusinessPlanSnapshot | null>(
+    null
+  );
+  const [showLimitModal, setShowLimitModal] = useState(false);
+
+  useEffect(() => {
+    globalSettingsService
+      .getBusinessLimits()
+      .then(setPlanSnapshot)
+      .catch(() => null);
+  }, []);
 
   const handleChange = (
     event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -49,6 +63,11 @@ export default function AddDistributor() {
       return;
     }
 
+    if (planSnapshot && planSnapshot.remaining.distributors <= 0) {
+      setShowLimitModal(true);
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -62,10 +81,23 @@ export default function AddDistributor() {
 
       navigate("/admin/distributors");
     } catch (err) {
-      const message =
-        (err as { response?: { data?: { message?: string } } })?.response?.data
-          ?.message || "Error al crear distribuidor";
-      setError(message);
+      const apiError = err as {
+        response?: {
+          data?: {
+            code?: string;
+            message?: string;
+            usage?: { distributors?: number };
+            limits?: { distributors?: number };
+          };
+        };
+      };
+      if (apiError.response?.data?.code === "PLAN_LIMIT_REACHED") {
+        setShowLimitModal(true);
+      } else {
+        const message =
+          apiError?.response?.data?.message || "Error al crear distribuidor";
+        setError(message);
+      }
     } finally {
       setLoading(false);
     }
@@ -217,6 +249,16 @@ export default function AddDistributor() {
           </button>
         </div>
       </form>
+
+      <PlanLimitModal
+        open={showLimitModal}
+        onClose={() => setShowLimitModal(false)}
+        title="Límite de distribuidores alcanzado"
+        description="Tu plan actual alcanzó el máximo de distribuidores permitidos. Actualiza tu plan para seguir creando distribuidores."
+        plan={planSnapshot?.plan}
+        currentUsage={planSnapshot?.usage.distributors}
+        currentLimit={planSnapshot?.limits.distributors}
+      />
     </div>
   );
 }

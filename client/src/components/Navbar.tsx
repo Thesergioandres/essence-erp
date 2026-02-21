@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
+import { BookOpen } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useBrandLogo } from "../hooks/useBrandLogo";
@@ -35,6 +36,16 @@ export default function Navbar() {
             >
               Inicio
             </Link>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => navigate("/manual")}
+              className="rounded-lg border-cyan-500/60 bg-cyan-500/10 text-xs text-cyan-100 hover:bg-cyan-500/20 lg:text-sm"
+            >
+              <BookOpen className="mr-2 h-4 w-4" />
+              📘 Manual de Usuario
+            </Button>
             <Button
               type="button"
               variant="outline"
@@ -107,6 +118,19 @@ export default function Navbar() {
                 >
                   Inicio
                 </Link>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="md"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    navigate("/manual");
+                  }}
+                  className="mx-3 w-[calc(100%-1.5rem)] justify-center rounded-lg border-cyan-500/60 bg-cyan-500/10 text-base text-cyan-100 hover:bg-cyan-500/20"
+                >
+                  <BookOpen className="mr-2 h-4 w-4" />
+                  📘 Manual de Usuario
+                </Button>
                 <Button
                   type="button"
                   variant="outline"

@@ -130,6 +130,18 @@ export const productService = {
     return response.data;
   },
 
+  async updatePrices(
+    id: string,
+    data: { price?: number; wholesalePrice?: number }
+  ): Promise<Product> {
+    const response = await api.patch(`/products/${id}/prices`, data);
+    invalidateProductCache();
+    if ((response.data as any)?.success && (response.data as any)?.data) {
+      return (response.data as any).data as Product;
+    }
+    return response.data as Product;
+  },
+
   async delete(id: string): Promise<{ message: string }> {
     const response = await api.delete<{ message: string }>(`/products/${id}`);
     invalidateProductCache();

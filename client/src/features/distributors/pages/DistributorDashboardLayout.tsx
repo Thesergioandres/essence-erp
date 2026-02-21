@@ -8,6 +8,7 @@ import { Button } from "../../../shared/components/ui";
 import type { DistributorStats } from "../../analytics/types/gamification.types";
 import { authService } from "../../auth/services";
 import { gamificationService } from "../../common/services";
+import PriceCatalogModal from "../components/PriceCatalogModal";
 
 const navLinkClasses = (isActive: boolean): string =>
   [
@@ -546,6 +547,9 @@ export default function DistributorDashboardLayout() {
               </button>
             </div>
           )}
+          <div className="mb-4 flex justify-end">
+            <PriceCatalogModal />
+          </div>
           <BusinessGate>
             <Outlet />
           </BusinessGate>
