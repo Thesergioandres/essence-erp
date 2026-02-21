@@ -1,3 +1,4 @@
+import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import type { DefectiveProduct } from "../features/common/types/common.types";
 import { defectiveProductService } from "../features/sales/services";
@@ -133,8 +134,20 @@ export default function SaleDetailModal({
       : "bg-gray-500/15 text-gray-300";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-lg border border-gray-800 bg-gray-900">
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96, y: 18 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.98, y: 10 }}
+        transition={{ type: "spring", stiffness: 340, damping: 28, mass: 0.6 }}
+        className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-lg border border-gray-800 bg-gray-900"
+      >
         <div className="p-6">
           {/* Header */}
           <div className="mb-4 flex items-start justify-between">
@@ -757,7 +770,7 @@ export default function SaleDetailModal({
             </button>
           </div>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

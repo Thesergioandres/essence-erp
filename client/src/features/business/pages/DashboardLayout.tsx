@@ -7,6 +7,7 @@ import FeatureNavLink from "../../../components/FeatureNavLink";
 import ReportIssueButton from "../../../components/ReportIssueButton";
 import { useBusiness } from "../../../context/BusinessContext";
 import { useBrandLogo } from "../../../hooks/useBrandLogo";
+import { Button } from "../../../shared/components/ui";
 import { authService } from "../../auth/services";
 import type { User } from "../../auth/types/auth.types";
 import DemoModeTour from "../../demo/DemoModeTour";
@@ -96,7 +97,7 @@ export default function DashboardLayout() {
   }
 
   return (
-    <div className="max-w-screen min-h-screen overflow-x-hidden bg-[#0b0b11]">
+    <div className="bg-app-admin-shell max-w-screen min-h-screen overflow-x-hidden">
       <DemoModeTour />
       {/* Mobile Overlay */}
       {sidebarOpen && (
@@ -108,7 +109,7 @@ export default function DashboardLayout() {
 
       {/* Sidebar */}
       <aside
-        className={`fixed left-0 z-50 w-72 border-r border-gray-800 bg-[#0f1018]/95 backdrop-blur-xl transition-transform duration-300 ${
+        className={`bg-app-admin-sidebar fixed left-0 z-50 w-72 border-r border-gray-800 backdrop-blur-xl transition-transform duration-300 ${
           isImpersonating ? "top-10 h-[calc(100vh-2.5rem)]" : "top-0 h-screen"
         } ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
@@ -143,9 +144,12 @@ export default function DashboardLayout() {
               WebkitOverflowScrolling: "touch",
             }}
           >
-            <button
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
               onClick={() => setDesktopSidebarOpen(false)}
-              className="mb-2 hidden min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm font-medium text-gray-300 transition-colors hover:border-purple-400/60 hover:text-purple-200 lg:inline-flex"
+              className="mb-2 hidden w-full items-center justify-center gap-2 rounded-xl border-white/10 bg-white/5 text-gray-300 hover:border-purple-400/60 hover:text-purple-200 lg:inline-flex"
             >
               <svg
                 className="h-5 w-5"
@@ -161,7 +165,7 @@ export default function DashboardLayout() {
                 />
               </svg>
               Ocultar menú
-            </button>
+            </Button>
             <SectionTitle label="Ventas" />
             <NavLink
               to="/admin/register-sale"
@@ -812,7 +816,7 @@ export default function DashboardLayout() {
 
       {/* Header (mobile + desktop) */}
       <div
-        className={`mobile-header-safe fixed left-0 right-0 z-30 border-b border-gray-800 bg-[#0d0e16]/80 backdrop-blur-lg lg:h-16 ${
+        className={`bg-app-admin-header mobile-header-safe fixed left-0 right-0 z-30 border-b border-gray-800 backdrop-blur-lg lg:h-16 ${
           isImpersonating ? "top-10" : "top-0"
         }`}
       >

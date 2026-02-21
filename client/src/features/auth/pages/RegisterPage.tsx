@@ -2,6 +2,7 @@ import type { ChangeEvent, FormEvent } from "react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useBrandLogo } from "../../../hooks/useBrandLogo";
+import { Button, Input } from "../../../shared/components/ui";
 import { authService } from "../services";
 
 export default function RegisterPage() {
@@ -96,7 +97,7 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#070910] px-4 py-10 text-white sm:px-6 lg:px-12">
+    <div className="bg-app-base min-h-screen px-4 py-10 text-white sm:px-6 lg:px-12">
       <div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-2 lg:items-center">
         <div className="space-y-6">
           <div className="flex items-center gap-3">
@@ -174,107 +175,89 @@ export default function RegisterPage() {
           <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2">
-                <label className="mb-2 block text-sm font-medium text-gray-200">
-                  Nombre completo
-                </label>
-                <input
+                <Input
+                  label="Nombre completo"
                   type="text"
                   name="name"
                   value={formData.name}
                   onChange={handleChange}
                   required
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-base text-white placeholder-gray-500 transition focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
                   placeholder="Tu nombre"
                 />
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-gray-200">
-                  Correo electrónico
-                </label>
-                <input
+                <Input
+                  label="Correo electrónico"
                   type="email"
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
                   required
                   autoComplete="email"
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-base text-white placeholder-gray-500 transition focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
                   placeholder="tu@email.com"
                 />
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-gray-200">
-                  Número de teléfono
-                </label>
-                <input
+                <Input
+                  label="Número de teléfono"
                   type="tel"
                   name="phone"
                   value={formData.phone}
                   onChange={handleChange}
                   required
                   inputMode="tel"
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-base text-white placeholder-gray-500 transition focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
                   placeholder="Ej: +57 300 000 0000"
                 />
               </div>
 
               <div className="sm:col-span-2">
-                <label className="mb-2 block text-sm font-medium text-gray-200">
-                  Lugar / Dirección
-                </label>
-                <input
+                <Input
+                  label="Lugar / Dirección"
                   type="text"
                   name="address"
                   value={formData.address}
                   onChange={handleChange}
                   required
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-base text-white placeholder-gray-500 transition focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
                   placeholder="Ciudad, país o dirección completa"
                 />
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-gray-200">
-                  Contraseña
-                </label>
-                <input
+                <Input
+                  label="Contraseña"
                   type="password"
                   name="password"
                   value={formData.password}
                   onChange={handleChange}
                   required
                   autoComplete="new-password"
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-base text-white placeholder-gray-500 transition focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
                   placeholder="••••••••"
                 />
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-gray-200">
-                  Confirmar contraseña
-                </label>
-                <input
+                <Input
+                  label="Confirmar contraseña"
                   type="password"
                   name="confirmPassword"
                   value={formData.confirmPassword}
                   onChange={handleChange}
                   required
                   autoComplete="new-password"
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-base text-white placeholder-gray-500 transition focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
                   placeholder="••••••••"
                 />
               </div>
             </div>
 
-            <button
+            <Button
               type="submit"
-              disabled={loading}
-              className="bg-linear-to-r mt-2 w-full rounded-lg from-purple-600 to-fuchsia-600 px-4 py-3 text-base font-semibold text-white transition hover:from-purple-700 hover:to-fuchsia-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-[#070910] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+              loading={loading}
+              className="bg-linear-to-r mt-2 w-full from-purple-600 to-fuchsia-600 text-base font-semibold text-white hover:from-purple-700 hover:to-fuchsia-700 focus:ring-purple-500"
             >
               {loading ? "Creando cuenta..." : "Registrarme"}
-            </button>
+            </Button>
           </form>
 
           <p className="mt-4 text-center text-sm text-gray-400">

@@ -1,3 +1,4 @@
+import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { authService } from "../features/auth/services";
 
@@ -59,22 +60,35 @@ export default function ImpersonationBanner() {
     }
   };
 
-  if (!isImpersonating) return null;
-
   return (
-    <div className="z-100 fixed top-0 flex w-full items-center justify-between bg-orange-600/90 px-4 py-2 font-bold text-white">
-      <div className="mx-auto flex w-full max-w-screen-2xl items-center justify-between gap-3">
-        <p className="truncate text-xs sm:text-sm">
-          ⚠️ MODO SOPORTE: Operando en la cuenta de {currentName}
-        </p>
-        <button
-          onClick={handleRevert}
-          disabled={isReverting}
-          className="shrink-0 rounded border border-white/30 bg-black/15 px-3 py-1 text-xs font-bold text-white transition hover:bg-black/25 disabled:cursor-not-allowed disabled:opacity-70"
+    <AnimatePresence>
+      {isImpersonating && (
+        <motion.div
+          initial={{ y: -50, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: -30, opacity: 0 }}
+          transition={{
+            type: "spring",
+            stiffness: 360,
+            damping: 28,
+            mass: 0.55,
+          }}
+          className="z-100 fixed top-0 flex w-full items-center justify-between bg-orange-600/90 px-4 py-2 font-bold text-white"
         >
-          {isReverting ? "Restaurando..." : "Volver a Admin"}
-        </button>
-      </div>
-    </div>
+          <div className="mx-auto flex w-full max-w-screen-2xl items-center justify-between gap-3">
+            <p className="truncate text-xs sm:text-sm">
+              ⚠️ MODO SOPORTE: Operando en la cuenta de {currentName}
+            </p>
+            <button
+              onClick={handleRevert}
+              disabled={isReverting}
+              className="shrink-0 rounded border border-white/30 bg-black/15 px-3 py-1 text-xs font-bold text-white transition hover:bg-black/25 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {isReverting ? "Restaurando..." : "Volver a Admin"}
+            </button>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

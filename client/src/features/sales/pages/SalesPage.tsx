@@ -1,3 +1,4 @@
+import { motion } from "framer-motion";
 import { FileSpreadsheet, FileText } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { useFeature } from "../../../components/FeatureSection";
@@ -1109,7 +1110,7 @@ export default function Sales() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-700">
-                  {saleGroups.map(group => {
+                  {saleGroups.map((group, index) => {
                     const isExpanded = expandedGroups.has(group.id);
                     const firstSale = group.sales[0];
                     const distributor =
@@ -1176,7 +1177,15 @@ export default function Sales() {
                     return (
                       <React.Fragment key={group.id}>
                         {/* Fila principal del grupo o venta individual */}
-                        <tr
+                        <motion.tr
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{
+                            type: "spring",
+                            stiffness: 320,
+                            damping: 26,
+                            delay: Math.min(index * 0.03, 0.3),
+                          }}
                           className={`cursor-pointer hover:bg-gray-900/30 ${group.isGroup ? "bg-purple-900/10 font-semibold" : ""}`}
                           onClick={e => {
                             if ((e.target as HTMLElement).closest("button"))
@@ -1432,7 +1441,7 @@ export default function Sales() {
                               )}
                             </div>
                           </td>
-                        </tr>
+                        </motion.tr>
 
                         {/* Filas expandidas para grupos */}
                         {group.isGroup &&

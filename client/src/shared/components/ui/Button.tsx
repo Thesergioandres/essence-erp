@@ -1,7 +1,9 @@
+import type { HTMLMotionProps } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import React from "react";
 import { cn } from "../../../utils/cn";
 
-interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+interface ButtonProps extends HTMLMotionProps<"button"> {
   variant?: "primary" | "secondary" | "destructive" | "outline" | "ghost";
   size?: "sm" | "md" | "lg";
   loading?: boolean;
@@ -32,14 +34,24 @@ export const Button: React.FC<ButtonProps> = ({
   children,
   ...props
 }) => {
+  const shouldReduceMotion = useReducedMotion();
+  const interactive = !(disabled || loading);
+
   return (
-    <button
+    <motion.button
       className={cn(
         "inline-flex items-center justify-center rounded-md font-medium transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50",
         buttonVariants[variant],
         buttonSizes[size],
         className
       )}
+      whileHover={
+        interactive && !shouldReduceMotion ? { scale: 1.02 } : undefined
+      }
+      whileTap={
+        interactive && !shouldReduceMotion ? { scale: 0.98 } : undefined
+      }
+      transition={{ type: "spring", stiffness: 380, damping: 24, mass: 0.5 }}
       disabled={disabled || loading}
       {...props}
     >
@@ -66,7 +78,7 @@ export const Button: React.FC<ButtonProps> = ({
         </svg>
       )}
       {children}
-    </button>
+    </motion.button>
   );
 };
 

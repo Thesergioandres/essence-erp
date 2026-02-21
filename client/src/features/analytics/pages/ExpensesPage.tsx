@@ -12,7 +12,7 @@ import type { Branch } from "../../business/types/business.types";
 import { expenseService } from "../../common/services";
 import type { Expense } from "../../common/types/common.types";
 import { distributorService } from "../../distributors/services/distributor.service";
-import { productService } from "../../inventory/services";
+import { productService } from "../../inventory/services/inventory.service";
 import type { Product } from "../../inventory/types/product.types";
 
 const EXPENSES_CACHE_TTL_MS = 2 * 60 * 1000;

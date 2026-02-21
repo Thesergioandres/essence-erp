@@ -1,3 +1,4 @@
+import { motion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
@@ -15,6 +16,29 @@ import { promotionService } from "../../settings/services";
 import type { Promotion } from "../../settings/types/promotion.types";
 
 export default function Catalog() {
+  const staggerContainer = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.05,
+      },
+    },
+  };
+
+  const staggerItem = {
+    hidden: { opacity: 0, y: 10 },
+    show: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        type: "spring" as const,
+        stiffness: 300,
+        damping: 26,
+      },
+    },
+  };
+
   const [searchParams, setSearchParams] = useSearchParams();
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -960,26 +984,22 @@ export default function Catalog() {
             <LoadingSpinner size="lg" message="Cargando productos..." />
           </div>
         ) : filteredProducts.length > 0 ? (
-          <div
+          <motion.div
             className={
               viewMode === "grid"
                 ? "grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
                 : "flex flex-col gap-4"
             }
+            variants={staggerContainer}
+            initial="hidden"
+            animate="show"
           >
-            {filteredProducts.map((product, index) => (
-              <div
-                key={product._id}
-                className="animate-fade-in-up"
-                style={{
-                  animationDelay: `${index * 50}ms`,
-                  animationFillMode: "both",
-                }}
-              >
+            {filteredProducts.map(product => (
+              <motion.div key={product._id} variants={staggerItem}>
                 <ProductCard product={product} viewMode={viewMode} />
-              </div>
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         ) : (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <div className="mb-4 rounded-full border border-white/10 bg-white/5 p-6">

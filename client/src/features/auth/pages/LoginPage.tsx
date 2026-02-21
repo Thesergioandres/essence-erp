@@ -7,7 +7,7 @@ export default function LoginPage() {
   const { login, isLoading, error } = useAuth();
 
   return (
-    <div className="min-h-screen bg-[#070910] px-4 py-10 text-white sm:px-6 lg:px-12">
+    <div className="bg-app-base min-h-screen px-4 py-10 text-white sm:px-6 lg:px-12">
       <div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-2 lg:items-center">
         {/* Info column */}
         <div className="space-y-6">

@@ -4,6 +4,7 @@ import BusinessGate from "../../../components/BusinessGate";
 import BusinessSelector from "../../../components/BusinessSelector";
 import FeatureNavLink from "../../../components/FeatureNavLink";
 import ReportIssueButton from "../../../components/ReportIssueButton";
+import { Button } from "../../../shared/components/ui";
 import type { DistributorStats } from "../../analytics/types/gamification.types";
 import { authService } from "../../auth/services";
 import { gamificationService } from "../../common/services";
@@ -61,7 +62,7 @@ export default function DistributorDashboardLayout() {
   const currentLevel = distributorStats?.currentLevel || "Sin rango";
 
   return (
-    <div className="bg-linear-to-br max-w-screen min-h-screen overflow-x-hidden from-gray-900 via-blue-900 to-gray-900">
+    <div className="bg-app-distributor-shell max-w-screen min-h-screen overflow-x-hidden">
       {/* Mobile Overlay */}
       {sidebarOpen && (
         <div
@@ -107,9 +108,12 @@ export default function DistributorDashboardLayout() {
               WebkitOverflowScrolling: "touch",
             }}
           >
-            <button
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
               onClick={() => setDesktopSidebarOpen(false)}
-              className="mb-2 hidden min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-gray-700 bg-gray-800/60 px-4 py-2 text-xs font-medium text-gray-200 transition hover:border-blue-500/40 hover:bg-blue-600/10 hover:text-blue-300 lg:inline-flex"
+              className="mb-2 hidden w-full items-center justify-center gap-2 rounded-lg border-gray-700 bg-gray-800/60 text-gray-200 hover:border-blue-500/40 hover:bg-blue-600/10 hover:text-blue-300 lg:inline-flex"
             >
               <svg
                 className="h-5 w-5"
@@ -125,7 +129,7 @@ export default function DistributorDashboardLayout() {
                 />
               </svg>
               Ocultar menú
-            </button>
+            </Button>
             <NavLink
               to="/distributor/dashboard"
               className={({ isActive }): string => navLinkClasses(isActive)}

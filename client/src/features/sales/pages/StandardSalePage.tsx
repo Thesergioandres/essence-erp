@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import ProductSelector from "../../../components/ProductSelector";
 import { useSession } from "../../../hooks/useSession";
+import { Button, Card } from "../../../shared/components/ui";
 import LoadingSpinner from "../../../shared/components/ui/LoadingSpinner";
 import type {
   DistributorStats,
@@ -777,7 +778,7 @@ export default function StandardSalePage() {
   // ==================== LOADING STATE ====================
   if (dataLoading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-[#070910]">
+      <div className="bg-app-sales-state flex h-screen items-center justify-center">
         <LoadingSpinner />
       </div>
     );
@@ -786,7 +787,7 @@ export default function StandardSalePage() {
   // ==================== SUCCESS STATE ====================
   if (saleResult?.success) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-[#070910] p-6 text-white">
+      <div className="bg-app-sales-state flex min-h-screen flex-col items-center justify-center p-6 text-white">
         <div className="mb-6 rounded-full bg-green-500/10 p-6">
           <CheckCircle className="h-20 w-20 text-green-500" />
         </div>
@@ -795,7 +796,7 @@ export default function StandardSalePage() {
           La transacción ha sido procesada exitosamente.
         </p>
 
-        <div className="w-full max-w-md space-y-4 rounded-2xl border border-gray-700 bg-gray-800/50 p-6">
+        <Card className="w-full max-w-md space-y-4 rounded-2xl border-gray-700 bg-gray-800/50 p-6">
           <div className="flex justify-between">
             <span className="text-gray-400">Total Pagado:</span>
             <span className="text-2xl font-bold text-white">
@@ -811,26 +812,29 @@ export default function StandardSalePage() {
               ID del Pedido: {saleResult.saleGroupId}
             </p>
           </div>
-        </div>
+        </Card>
 
         <div className="mt-8 flex gap-4">
-          <button
+          <Button
             onClick={handleNewOrder}
-            className="flex items-center gap-2 rounded-xl bg-purple-600 px-8 py-4 font-bold text-white transition hover:bg-purple-700"
+            size="lg"
+            className="flex items-center gap-2 rounded-xl bg-purple-600 font-bold text-white hover:bg-purple-700"
           >
             <RefreshCcw className="h-5 w-5" />
             Nuevo Pedido
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="outline"
+            size="lg"
             onClick={() => {
               // Could navigate to sales history or print receipt
               window.print();
             }}
-            className="flex items-center gap-2 rounded-xl border border-gray-600 px-8 py-4 font-medium text-gray-300 transition hover:bg-gray-800"
+            className="flex items-center gap-2 rounded-xl border-gray-600 font-medium text-gray-300 hover:bg-gray-800"
           >
             <FileText className="h-5 w-5" />
             Imprimir
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -838,7 +842,7 @@ export default function StandardSalePage() {
 
   // ==================== MAIN VIEW ====================
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#05060b] text-white">
+    <div className="bg-app-sales-shell relative min-h-screen overflow-hidden text-white">
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute -left-40 top-0 h-[420px] w-[420px] rounded-full bg-teal-500/10 blur-[120px]" />
         <div className="absolute -right-40 top-20 h-[480px] w-[480px] rounded-full bg-amber-400/10 blur-[140px]" />

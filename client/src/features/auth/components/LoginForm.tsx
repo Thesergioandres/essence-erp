@@ -1,5 +1,6 @@
 import type { FormEvent } from "react";
 import { useState } from "react";
+import { Button } from "../../../shared/components/ui/Button";
 import { Input } from "../../../shared/components/ui/Input";
 import type { LoginCredentials } from "../types/auth.types";
 
@@ -45,13 +46,13 @@ export const LoginForm = ({ onSubmit, isLoading }: LoginFormProps) => {
         placeholder="••••••••"
       />
 
-      <button
+      <Button
         type="submit"
-        disabled={isLoading}
-        className="bg-linear-to-r w-full transform rounded-lg from-purple-600 to-pink-600 py-3 font-bold text-white transition hover:from-purple-700 hover:to-pink-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-[#070910] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+        loading={isLoading}
+        className="bg-linear-to-r w-full from-purple-600 to-pink-600 font-bold text-white hover:from-purple-700 hover:to-pink-700 focus:ring-purple-500"
       >
         {isLoading ? "Ingresando..." : "Iniciar sesión"}
-      </button>
+      </Button>
     </form>
   );
 };

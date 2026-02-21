@@ -1,25 +1,28 @@
+import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useBrandLogo } from "../hooks/useBrandLogo";
+import { Button } from "../shared/components/ui";
 
 export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const brandLogo = useBrandLogo();
+  const navigate = useNavigate();
 
   return (
     <nav className="safe-top sticky top-0 z-50 border-b border-gray-700 bg-gray-900/95 backdrop-blur-lg">
       <div className="safe-x mx-auto max-w-7xl px-3 sm:px-6 lg:px-8">
-        <div className="flex min-h-[3.5rem] items-center justify-between sm:min-h-[5rem]">
+        <div className="flex min-h-14 items-center justify-between sm:min-h-20">
           {/* Logo */}
           <Link
             to="/"
-            className="flex items-center"
+            className="flex items-center rounded-md"
             onClick={() => setMobileMenuOpen(false)}
           >
             <img
               src={brandLogo}
               alt="Essence ERP"
-              className="sm:h-18 h-16 w-auto"
+              className="h-16 w-auto sm:h-20"
               loading="lazy"
             />
           </Link>
@@ -28,22 +31,25 @@ export default function Navbar() {
           <div className="hidden items-center gap-3 md:flex lg:gap-4">
             <Link
               to="/"
-              className="text-sm text-gray-300 transition hover:text-purple-400 lg:text-base"
+              className="rounded-md text-sm text-gray-300 transition hover:text-purple-400 lg:text-base"
             >
               Inicio
             </Link>
-            <Link
-              to="/login"
-              className="rounded-lg border border-purple-500 px-3 py-2 text-xs font-medium text-purple-100 transition hover:bg-purple-500/10 lg:px-4 lg:text-sm"
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => navigate("/login")}
+              className="rounded-lg border-purple-500 text-xs text-purple-100 hover:bg-purple-500/10 lg:text-sm"
             >
               Iniciar sesión
-            </Link>
+            </Button>
           </div>
 
           {/* Mobile menu button */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="-mr-2 p-2 text-gray-300 hover:text-purple-400 md:hidden"
+            className="-mr-2 rounded-md p-2 text-gray-300 hover:text-purple-400 md:hidden"
             aria-label="Toggle menu"
           >
             {mobileMenuOpen ? (
@@ -79,28 +85,44 @@ export default function Navbar() {
         </div>
 
         {/* Mobile Menu */}
-        <div
-          className={`overflow-hidden transition-all duration-300 ease-in-out md:hidden ${
-            mobileMenuOpen ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
-          }`}
-        >
-          <div className="space-y-1 pb-3 pt-2">
-            <Link
-              to="/"
-              onClick={() => setMobileMenuOpen(false)}
-              className="flex min-h-12 items-center rounded-lg px-3 py-3 text-base text-gray-300 transition hover:bg-purple-600/10 hover:text-purple-400 active:scale-[0.98]"
+        <AnimatePresence>
+          {mobileMenuOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{
+                type: "spring",
+                stiffness: 360,
+                damping: 28,
+                mass: 0.55,
+              }}
+              className="overflow-hidden md:hidden"
             >
-              Inicio
-            </Link>
-            <Link
-              to="/login"
-              onClick={() => setMobileMenuOpen(false)}
-              className="mx-3 flex min-h-12 items-center justify-center rounded-lg border border-purple-500 px-4 py-3 text-center text-base font-medium text-purple-100 transition hover:bg-purple-500/10 active:scale-[0.98]"
-            >
-              Iniciar sesión
-            </Link>
-          </div>
-        </div>
+              <div className="space-y-1 pb-3 pt-2">
+                <Link
+                  to="/"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex min-h-12 items-center rounded-lg px-3 py-3 text-base text-gray-300 transition hover:bg-purple-600/10 hover:text-purple-400 active:scale-[0.98]"
+                >
+                  Inicio
+                </Link>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="md"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    navigate("/login");
+                  }}
+                  className="mx-3 w-[calc(100%-1.5rem)] justify-center rounded-lg border-purple-500 text-base text-purple-100 hover:bg-purple-500/10"
+                >
+                  Iniciar sesión
+                </Button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </nav>
   );

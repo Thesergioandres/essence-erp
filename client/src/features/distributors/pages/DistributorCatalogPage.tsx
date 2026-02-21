@@ -1,3 +1,4 @@
+import { motion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import Footer from "../../../components/Footer";
@@ -15,6 +16,29 @@ interface ProductWithStock extends Product {
 }
 
 export default function DistributorCatalog() {
+  const staggerContainer = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.05,
+      },
+    },
+  };
+
+  const staggerItem = {
+    hidden: { opacity: 0, y: 10 },
+    show: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        type: "spring" as const,
+        stiffness: 300,
+        damping: 26,
+      },
+    },
+  };
+
   const [searchParams, setSearchParams] = useSearchParams();
   const [products, setProducts] = useState<ProductWithStock[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
@@ -847,22 +871,26 @@ export default function DistributorCatalog() {
             </p>
           </div>
         ) : (
-          <div
+          <motion.div
             className={`grid gap-6 ${
               viewMode === "grid"
                 ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
                 : "grid-cols-1"
             }`}
+            variants={staggerContainer}
+            initial="hidden"
+            animate="show"
           >
             {filteredProducts.map(product => (
-              <ProductCard
-                key={product._id}
-                product={product}
-                viewMode={viewMode}
-                showDistributorPrice={false}
-              />
+              <motion.div key={product._id} variants={staggerItem}>
+                <ProductCard
+                  product={product}
+                  viewMode={viewMode}
+                  showDistributorPrice={false}
+                />
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         )}
       </main>
 

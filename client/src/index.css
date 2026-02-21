@@ -16,6 +16,46 @@
   --mobile-header-height: calc(3.5rem + var(--safe-area-inset-top));
   /* Altura base del header desktop (64px) */
   --desktop-header-height: 4rem;
+
+  --app-bg-base: #070910;
+  --app-bg-elevated: #0c0d15;
+  --app-bg-admin-shell: #0b0b11;
+  --app-bg-admin-sidebar: rgba(15, 16, 24, 0.95);
+  --app-bg-admin-header: rgba(13, 14, 22, 0.8);
+  --app-bg-sales-shell: #05060b;
+  --app-bg-sales-state: #070910;
+}
+
+.bg-app-base {
+  background-color: var(--app-bg-base);
+}
+
+.bg-app-elevated {
+  background-color: var(--app-bg-elevated);
+}
+
+.bg-app-admin-shell {
+  background-color: var(--app-bg-admin-shell);
+}
+
+.bg-app-admin-sidebar {
+  background-color: var(--app-bg-admin-sidebar);
+}
+
+.bg-app-admin-header {
+  background-color: var(--app-bg-admin-header);
+}
+
+.bg-app-distributor-shell {
+  background: linear-gradient(135deg, #111827 0%, #1e3a8a 50%, #111827 100%);
+}
+
+.bg-app-sales-shell {
+  background-color: var(--app-bg-sales-shell);
+}
+
+.bg-app-sales-state {
+  background-color: var(--app-bg-sales-state);
 }
 
 /* Animaciones globales optimizadas */
@@ -182,8 +222,8 @@ a,
 }
 
 /* Focus visible mejorado */
-.focus-visible:focus-visible {
-  outline: 2px solid theme("colors.blue.500");
+:where(a, button, input, select, textarea, [role="button"]):focus-visible {
+  outline: 2px solid theme("colors.purple.400");
   outline-offset: 2px;
 }
 
@@ -220,25 +260,13 @@ a,
   select,
   textarea {
     min-height: 44px;
-    min-width: 44px;
-  }
-
-  /* Optimize font sizes for mobile */
-  html {
-    font-size: 14px;
+    min-width: auto;
   }
 
   /* Better spacing on mobile */
   .container {
     padding-left: 1rem;
     padding-right: 1rem;
-  }
-}
-
-/* Tablet optimizations */
-@media (min-width: 768px) and (max-width: 1024px) {
-  html {
-    font-size: 15px;
   }
 }
 

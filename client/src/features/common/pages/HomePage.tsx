@@ -1,5 +1,7 @@
+import { useNavigate } from "react-router-dom";
 import Footer from "../../../components/Footer";
 import Navbar from "../../../components/Navbar";
+import { Button } from "../../../shared/components/ui";
 
 const modules = [
   {
@@ -69,8 +71,17 @@ const testimonials = [
 ];
 
 export default function Home() {
+  const navigate = useNavigate();
+
+  const handleDemoClick = () => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("demo-mode", "1");
+    }
+    navigate("/demo?demo=1");
+  };
+
   return (
-    <div className="min-h-screen bg-[#080910]">
+    <div className="bg-app-base min-h-screen">
       <Navbar />
 
       {/* Hero Section */}
@@ -93,29 +104,29 @@ export default function Home() {
                 Menos fugas, mas pedidos, mas margen.
               </p>
               <div className="mt-6 flex flex-wrap gap-3">
-                <a
-                  href="/register"
-                  className="rounded-full bg-fuchsia-500 px-6 py-3 text-sm font-semibold text-white transition hover:bg-fuchsia-400"
+                <Button
+                  type="button"
+                  onClick={() => navigate("/register")}
+                  className="rounded-full bg-fuchsia-500 px-6 text-sm font-semibold text-white hover:bg-fuchsia-400"
                 >
                   Solicitar demo
-                </a>
-                <a
-                  href="/demo?demo=1"
-                  onClick={() => {
-                    if (typeof window !== "undefined") {
-                      localStorage.setItem("demo-mode", "1");
-                    }
-                  }}
-                  className="rounded-full border border-emerald-400/50 bg-emerald-500/10 px-6 py-3 text-sm font-semibold text-emerald-200 transition hover:border-emerald-300 hover:bg-emerald-500/20"
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleDemoClick}
+                  className="rounded-full border-emerald-400/50 bg-emerald-500/10 px-6 text-sm font-semibold text-emerald-200 hover:border-emerald-300 hover:bg-emerald-500/20"
                 >
                   🚀 Ver Demo Interactiva
-                </a>
-                <a
-                  href="/login"
-                  className="rounded-full border border-white/20 px-6 py-3 text-sm font-semibold text-gray-100 transition hover:border-fuchsia-300"
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => navigate("/login")}
+                  className="rounded-full border-white/20 px-6 text-sm font-semibold text-gray-100 hover:border-fuchsia-300"
                 >
                   Ver precios
-                </a>
+                </Button>
               </div>
             </div>
             <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-xl shadow-purple-900/30">
@@ -169,18 +180,23 @@ export default function Home() {
               dice que reponer, que promocionar y donde ganar mas.
             </p>
             <div className="mt-5 flex flex-wrap gap-3">
-              <a
-                href="/register"
-                className="rounded-full bg-emerald-500 px-5 py-2 text-xs font-semibold text-white"
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => navigate("/register")}
+                className="rounded-full bg-emerald-500 px-5 text-xs font-semibold text-white hover:bg-emerald-600"
               >
                 Solicitar demo
-              </a>
-              <a
-                href="/login"
-                className="rounded-full border border-white/20 px-5 py-2 text-xs font-semibold text-gray-100"
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => navigate("/login")}
+                className="rounded-full border-white/20 px-5 text-xs font-semibold text-gray-100 hover:border-fuchsia-300"
               >
                 Ver precios
-              </a>
+              </Button>
             </div>
           </div>
         </div>
@@ -199,7 +215,7 @@ export default function Home() {
             <h2 className="bg-linear-to-r from-purple-200 to-pink-200 bg-clip-text text-3xl font-bold text-transparent sm:text-4xl">
               Cada modulo empuja ingresos
             </h2>
-            <p className="mt-2 max-w-3xl text-sm text-gray-400 sm:text-base">
+            <p className="mt-2 max-w-3xl text-sm text-gray-300 sm:text-base">
               Diseñados para vender mas y gastar menos: desde inventario hasta
               promociones, todo trabaja para tu margen.
             </p>
@@ -224,7 +240,7 @@ export default function Home() {
                     {mod.title}
                   </h3>
                 </div>
-                <span className="rounded-full border border-white/10 px-3 py-1 text-[11px] font-semibold text-gray-200 group-hover:border-purple-300/50">
+                <span className="rounded-full border border-white/10 px-3 py-1 text-xs font-semibold text-gray-200 group-hover:border-purple-300/50">
                   Actívalo
                 </span>
               </div>
@@ -245,7 +261,7 @@ export default function Home() {
       </section>
 
       {/* Social Proof */}
-      <section className="border-t border-white/5 bg-[#0c0d15] py-12 sm:py-14 md:py-16">
+      <section className="bg-app-elevated border-t border-white/5 py-12 sm:py-14 md:py-16">
         <div className="mx-auto max-w-6xl px-3 sm:px-5 md:px-8">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -255,7 +271,7 @@ export default function Home() {
               <h2 className="bg-linear-to-r from-emerald-200 to-cyan-200 bg-clip-text text-3xl font-bold text-transparent sm:text-4xl">
                 Negocios que venden mas con Essence
               </h2>
-              <p className="mt-2 max-w-3xl text-sm text-gray-400 sm:text-base">
+              <p className="mt-2 max-w-3xl text-sm text-gray-300 sm:text-base">
                 Historias reales de equipos que ordenaron su operacion y
                 recuperaron ingresos en semanas.
               </p>
@@ -277,7 +293,7 @@ export default function Home() {
                     <p className="text-sm font-semibold text-white">
                       {item.name}
                     </p>
-                    <p className="text-xs text-gray-400">{item.role}</p>
+                    <p className="text-xs text-gray-300">{item.role}</p>
                   </div>
                   <span className="rounded-full border border-white/10 bg-black/30 px-3 py-1 text-xs font-semibold text-emerald-200">
                     {item.metric}
@@ -331,18 +347,21 @@ export default function Home() {
             Agenda una demo personalizada o revisa planes en segundos.
           </p>
           <div className="mt-5 flex flex-wrap justify-center gap-3">
-            <a
-              href="/register"
-              className="rounded-full bg-fuchsia-500 px-6 py-3 text-sm font-semibold text-white transition hover:bg-fuchsia-400"
+            <Button
+              type="button"
+              onClick={() => navigate("/register")}
+              className="rounded-full bg-fuchsia-500 px-6 text-sm font-semibold text-white hover:bg-fuchsia-400"
             >
               Solicitar demo
-            </a>
-            <a
-              href="/login"
-              className="rounded-full border border-white/20 px-6 py-3 text-sm font-semibold text-gray-100 transition hover:border-fuchsia-300"
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => navigate("/login")}
+              className="rounded-full border-white/20 px-6 text-sm font-semibold text-gray-100 hover:border-fuchsia-300"
             >
               Ver precios
-            </a>
+            </Button>
           </div>
         </div>
       </section>
