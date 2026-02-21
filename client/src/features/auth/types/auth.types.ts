@@ -11,6 +11,8 @@ export interface User {
   business?: string;
   memberships?: Membership[];
   assignedProducts?: string[];
+  selectedPlan?: "starter" | "pro" | "enterprise" | null;
+  selectedPlanAt?: string | null;
   token?: string;
 }
 
@@ -47,6 +49,8 @@ export interface AuthResponse {
   subscriptionExpiresAt?: string;
   business?: string;
   memberships?: Membership[];
+  selectedPlan?: User["selectedPlan"];
+  selectedPlanAt?: User["selectedPlanAt"];
   token: string;
   refreshToken?: string;
   refreshExpiresAt?: string;

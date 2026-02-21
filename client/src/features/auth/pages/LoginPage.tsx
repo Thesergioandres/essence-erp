@@ -63,6 +63,14 @@ export default function LoginPage() {
                 Regístrate
               </button>
             </div>
+
+            <button
+              type="button"
+              onClick={() => navigate("/")}
+              className="w-full rounded-lg border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold text-gray-100 transition hover:border-purple-400/60 hover:bg-white/10"
+            >
+              Ir a la landing
+            </button>
           </div>
 
           <div className="mt-6 space-y-2 text-center text-sm text-gray-400">

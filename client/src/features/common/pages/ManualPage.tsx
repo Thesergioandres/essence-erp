@@ -1,6 +1,8 @@
 import { AnimatePresence, m as motion } from "framer-motion";
 import {
   BookOpen,
+  ChevronLeft,
+  ChevronRight,
   HelpCircle,
   Package,
   ShieldCheck,
@@ -155,26 +157,46 @@ export default function ManualPage() {
   const progressPercentage = Math.round(
     ((activeIndex + 1) / sections.length) * 100
   );
+  const isFirstSection = activeIndex <= 0;
+  const isLastSection = activeIndex >= sections.length - 1;
+
+  const goToRelativeSection = (direction: -1 | 1) => {
+    const targetIndex = activeIndex + direction;
+    if (targetIndex < 0 || targetIndex >= sections.length) return;
+    setActiveId(sections[targetIndex].id);
+  };
 
   return (
-    <div className="bg-app-base min-h-screen px-3 py-6 sm:px-5 md:px-8">
+    <div className="bg-app-base min-h-screen px-3 py-6 text-gray-100 sm:px-5 md:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
-        <header className="bg-linear-to-br overflow-hidden rounded-3xl border border-fuchsia-400/25 from-fuchsia-500/15 via-white/5 to-transparent p-5 sm:p-7">
+        <header className="bg-linear-to-br overflow-hidden rounded-3xl border border-fuchsia-400/35 from-fuchsia-500/20 via-slate-900/70 to-slate-900/40 p-5 sm:p-7">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <p className="text-xs font-medium uppercase tracking-[0.2em] text-fuchsia-200/90">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-fuchsia-100">
                 Centro de ayuda
               </p>
               <h1 className="mt-2 text-2xl font-bold text-white sm:text-3xl">
                 📘 Manual de Usuario
               </h1>
-              <p className="mt-2 max-w-2xl text-sm text-gray-200 sm:text-base">
+              <p className="mt-2 max-w-2xl text-sm text-gray-100 sm:text-base">
                 Guía práctica para operar Essence ERP con menos errores y más
                 control en ventas, inventario y garantías.
               </p>
+
+              <div className="mt-4 flex flex-wrap gap-2 text-xs">
+                <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-gray-100">
+                  {sections.length} secciones
+                </span>
+                <span className="rounded-full border border-fuchsia-300/35 bg-fuchsia-500/15 px-3 py-1 text-fuchsia-100">
+                  Paso {activeIndex + 1} de {sections.length}
+                </span>
+                <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-gray-100">
+                  {activeSection.readingTime} aprox.
+                </span>
+              </div>
             </div>
 
-            <div className="rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-sm text-gray-200">
+            <div className="rounded-2xl border border-white/20 bg-slate-900/70 px-4 py-3 text-sm text-gray-100">
               <p className="font-medium text-white">Progreso de lectura</p>
               <p className="mt-1">{progressPercentage}% completado</p>
               <div className="mt-3 h-2 w-44 overflow-hidden rounded-full bg-white/10">
@@ -188,7 +210,15 @@ export default function ManualPage() {
         </header>
 
         <div className="grid gap-6 lg:grid-cols-[300px,1fr]">
-          <aside className="rounded-2xl border border-white/10 bg-white/5 p-3 lg:sticky lg:top-24 lg:h-fit">
+          <aside className="rounded-2xl border border-white/15 bg-slate-900/70 p-3 lg:sticky lg:top-24 lg:h-fit">
+            <div className="mb-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+              <p className="text-xs uppercase tracking-[0.18em] text-fuchsia-100">
+                Secciones
+              </p>
+              <p className="mt-1 text-xs text-gray-200">
+                Selecciona un tema para ver la guía paso a paso.
+              </p>
+            </div>
             <nav className="space-y-2">
               {sections.map(section => {
                 const Icon = section.icon;
@@ -201,8 +231,8 @@ export default function ManualPage() {
                     onClick={() => setActiveId(section.id)}
                     className={`w-full rounded-xl border px-3 py-3 text-left transition ${
                       isActive
-                        ? "border-fuchsia-400/40 bg-fuchsia-500/20 text-white"
-                        : "border-transparent text-gray-300 hover:border-white/10 hover:bg-white/10 hover:text-white"
+                        ? "border-fuchsia-300/50 bg-fuchsia-500/25 text-white"
+                        : "border-transparent text-gray-100 hover:border-white/15 hover:bg-white/10 hover:text-white"
                     }`}
                   >
                     <div className="flex items-start gap-3">
@@ -215,11 +245,11 @@ export default function ManualPage() {
                       </span>
 
                       <div className="min-w-0">
-                        <p className="font-medium">{section.title}</p>
-                        <p className="mt-1 text-xs text-gray-300">
+                        <p className="font-semibold">{section.title}</p>
+                        <p className="mt-1 text-xs text-gray-200">
                           {section.description}
                         </p>
-                        <p className="mt-2 text-[11px] uppercase tracking-wide text-fuchsia-200/90">
+                        <p className="mt-2 text-[11px] uppercase tracking-wide text-fuchsia-100">
                           {section.readingTime}
                         </p>
                       </div>
@@ -230,10 +260,10 @@ export default function ManualPage() {
             </nav>
           </aside>
 
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-5 sm:p-7 lg:p-8">
+          <div className="rounded-3xl border border-white/15 bg-slate-900/70 p-5 sm:p-7 lg:p-8">
             <div className="mb-5 flex items-center justify-between border-b border-white/10 pb-4">
               <div>
-                <p className="text-xs uppercase tracking-wide text-gray-400">
+                <p className="text-xs uppercase tracking-wide text-gray-300">
                   Sección activa
                 </p>
                 <h2 className="text-xl font-semibold text-white">
@@ -252,13 +282,39 @@ export default function ManualPage() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.28 }}
-                className="prose prose-invert prose-headings:mb-3 prose-headings:text-white prose-h2:text-2xl prose-h3:text-lg prose-p:leading-relaxed prose-p:text-gray-200 prose-strong:text-white prose-li:text-gray-200 prose-li:marker:text-fuchsia-300 max-w-none"
+                className="prose prose-invert prose-headings:mb-3 prose-headings:font-semibold prose-headings:text-white prose-h2:text-2xl prose-h3:text-lg prose-p:leading-relaxed prose-p:text-gray-100 prose-strong:text-white prose-em:text-fuchsia-100 prose-ul:text-gray-100 prose-ol:text-gray-100 prose-li:text-gray-100 prose-li:marker:text-fuchsia-300 prose-a:text-fuchsia-200 prose-a:no-underline hover:prose-a:text-fuchsia-100 prose-code:text-fuchsia-100 prose-pre:border prose-pre:border-white/15 prose-pre:bg-black/40 prose-blockquote:border-fuchsia-300/40 prose-blockquote:text-gray-100 max-w-none"
               >
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
                   {activeSection.markdown}
                 </ReactMarkdown>
               </motion.article>
             </AnimatePresence>
+
+            <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
+              <button
+                type="button"
+                onClick={() => goToRelativeSection(-1)}
+                disabled={isFirstSection}
+                className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-white/5 px-4 py-2 text-sm font-medium text-gray-100 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Anterior
+              </button>
+
+              <p className="text-xs text-gray-300">
+                Tip: usa el menú lateral para saltar entre temas.
+              </p>
+
+              <button
+                type="button"
+                onClick={() => goToRelativeSection(1)}
+                disabled={isLastSection}
+                className="inline-flex items-center gap-2 rounded-lg border border-fuchsia-400/40 bg-fuchsia-500/20 px-4 py-2 text-sm font-medium text-fuchsia-100 transition hover:bg-fuchsia-500/30 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Siguiente
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         </div>
       </div>

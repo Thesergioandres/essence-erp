@@ -49,6 +49,12 @@ const logApiError = (error: AxiosError) => {
   const status = error.response?.status;
   const url = error.config?.url;
   const method = error.config?.method;
+  const isPublicSettingsEndpoint =
+    typeof url === "string" && url.includes("/global-settings/public");
+
+  if (status === 401 && isPublicSettingsEndpoint) {
+    return;
+  }
   //   const requestId =
   //     (error.response?.headers?.["x-request-id"] as string | undefined) ||
   //     (error.response?.data as { requestId?: string } | undefined)?.requestId;
@@ -72,6 +78,12 @@ httpClient.interceptors.request.use(
     const businessId = localStorage.getItem("businessId");
 
     const url = config.url || "";
+    const isPublicSettingsEndpoint = url.startsWith("/global-settings/public");
+    const isAuthEndpoint =
+      url.startsWith("/auth/login") ||
+      url.startsWith("/auth/register") ||
+      url.startsWith("/auth/refresh");
+
     // Allow public or generic routes without strict business check
     const allowsWithoutBusiness =
       url.startsWith("/auth") ||
@@ -79,9 +91,10 @@ httpClient.interceptors.request.use(
       url.startsWith("/upload") ||
       url.startsWith("/users/god") ||
       url.startsWith("/issues") ||
+      isPublicSettingsEndpoint ||
       (config.method === "post" && url === "/business");
 
-    if (token) {
+    if (token && !isPublicSettingsEndpoint && !isAuthEndpoint) {
       config.headers.Authorization = `Bearer ${token}`;
     }
 
@@ -121,10 +134,15 @@ httpClient.interceptors.response.use(
     }
 
     // Handle 401 Refresh
+    const isPublicSettings401 = originalRequest.url?.includes(
+      "/global-settings/public"
+    );
+
     if (
       error.response?.status === 401 &&
       !originalRequest._retry &&
-      !originalRequest.url?.includes("/auth") // works for /auth and /v2/auth checks
+      !originalRequest.url?.includes("/auth") &&
+      !isPublicSettings401 // works for /auth and /v2/auth checks
     ) {
       const refreshToken = localStorage.getItem("refreshToken");
 

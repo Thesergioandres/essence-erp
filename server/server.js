@@ -19,6 +19,7 @@ import {
 } from "./middleware/requestId.middleware.js";
 import { requestLogger } from "./middleware/requestLogger.middleware.js";
 import { connectDB } from "./src/infrastructure/database/connection.js";
+import { listPublicPlans } from "./src/infrastructure/services/planLimits.service.js";
 
 // ============================================================================
 // 🛡️ MIDDLEWARE IMPORTS
@@ -256,6 +257,16 @@ app.get("/api-docs.json", (_req, res) => {
 
 // Aplicar rate limiting global a la API (excepto auth que tiene su propio limiter)
 app.use("/api", apiLimiter);
+
+// Endpoint público de configuración SaaS (sin autenticación)
+app.get("/api/v2/global-settings/public", async (_req, res) => {
+  try {
+    const data = await listPublicPlans();
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
 
 // ============================================================================
 //  V2 ROUTES (Hexagonal Architecture - Production Ready)

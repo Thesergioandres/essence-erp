@@ -74,6 +74,9 @@ interface PublicPlan {
   yearlyPrice: number;
   currency: string;
   limits: PlanLimits;
+  features: {
+    businessAssistant: boolean;
+  };
 }
 
 interface PublicGlobalSettingsResponse {

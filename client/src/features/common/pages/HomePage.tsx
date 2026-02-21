@@ -110,6 +110,13 @@ const testimonials = [
 
 export default function Home() {
   const navigate = useNavigate();
+
+  const scrollToPricing = () => {
+    document.getElementById("pricing")?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  };
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [plans, setPlans] = useState<
     Array<{
@@ -231,7 +238,7 @@ export default function Home() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => navigate("/login")}
+                  onClick={scrollToPricing}
                   className="rounded-full border-white/20 px-7 text-sm font-semibold text-gray-100 hover:border-fuchsia-300"
                 >
                   Ver precios
@@ -415,7 +422,7 @@ export default function Home() {
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => navigate("/login")}
+                onClick={scrollToPricing}
                 className="rounded-full border-white/20 px-5 text-xs font-semibold text-gray-100 hover:border-fuchsia-300"
               >
                 Ver precios
@@ -620,7 +627,7 @@ export default function Home() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => navigate("/login")}
+              onClick={scrollToPricing}
               className="rounded-full border-white/20 px-6 text-sm font-semibold text-gray-100 hover:border-fuchsia-300"
             >
               Ver precios

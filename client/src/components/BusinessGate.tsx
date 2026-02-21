@@ -75,9 +75,12 @@ export default function BusinessGate({
   }
 
   if (requiredFeature && features && features[requiredFeature] === false) {
+    const isAssistantBlocked = requiredFeature === "assistant";
     return (
       <div className="rounded-lg border border-purple-400/30 bg-purple-500/10 px-4 py-3 text-sm text-purple-100">
-        Esta funcionalidad está desactivada para el negocio seleccionado.
+        {isAssistantBlocked
+          ? "Business Assistant está disponible solo para el plan Enterprise."
+          : "Esta funcionalidad está desactivada para el negocio seleccionado."}
       </div>
     );
   }

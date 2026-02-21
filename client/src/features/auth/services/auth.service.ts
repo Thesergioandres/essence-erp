@@ -92,6 +92,35 @@ export const authService = {
     return response.data;
   },
 
+  async selectPlan(plan: "starter" | "pro" | "enterprise") {
+    const response = await api.patch<{
+      success: boolean;
+      data: {
+        selectedPlan: "starter" | "pro" | "enterprise";
+        selectedPlanAt: string;
+      };
+    }>("/auth/select-plan", { plan });
+
+    const currentUserRaw = localStorage.getItem("user");
+    if (currentUserRaw) {
+      try {
+        const currentUser = JSON.parse(currentUserRaw);
+        localStorage.setItem(
+          "user",
+          JSON.stringify({
+            ...currentUser,
+            selectedPlan: response.data.data.selectedPlan,
+            selectedPlanAt: response.data.data.selectedPlanAt,
+          })
+        );
+      } catch {
+        // no-op
+      }
+    }
+
+    return response.data.data;
+  },
+
   async login(email: string, password: string): Promise<AuthResponse> {
     // Limpiar datos anteriores para evitar conflictos de sesión
     localStorage.removeItem("token");

@@ -1,6 +1,6 @@
 import { BarChart3 } from "lucide-react";
 import { type ChangeEvent, useEffect, useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { Navigate, NavLink, Outlet, useNavigate } from "react-router-dom";
 import BusinessGate from "../../../components/BusinessGate";
 import BusinessSelector from "../../../components/BusinessSelector";
 import FeatureNavLink from "../../../components/FeatureNavLink";
@@ -30,6 +30,7 @@ const SectionTitle = ({ label }: { label: string }) => (
 export default function DashboardLayout() {
   const navigate = useNavigate();
   const user = authService.getCurrentUser();
+  const userRole = user?.role;
   const { business } = useBusiness();
   const logoUrl = useBrandLogo();
   const brandLogo = (
@@ -45,6 +46,11 @@ export default function DashboardLayout() {
   const isImpersonating = authService.isImpersonating();
 
   useEffect(() => {
+    if (!userRole) {
+      setDistributors([]);
+      return;
+    }
+
     const loadDistributors = async () => {
       try {
         const response = await distributorService.getAll({ active: true });
@@ -63,10 +69,10 @@ export default function DashboardLayout() {
       }
     };
 
-    if (["admin", "super_admin", "god"].includes(user.role)) {
+    if (["admin", "super_admin", "god"].includes(userRole)) {
       loadDistributors();
     }
-  }, [user.role]);
+  }, [userRole]);
 
   const handleLogout = () => {
     authService.logout();
@@ -93,7 +99,7 @@ export default function DashboardLayout() {
   };
 
   if (!user) {
-    return null;
+    return <Navigate to="/login" replace />;
   }
 
   return (
@@ -314,9 +320,12 @@ export default function DashboardLayout() {
             </FeatureNavLink>
 
             <SectionTitle label="General" />
-            <NavLink
+            <FeatureNavLink
               to="/admin/business-assistant"
-              className={({ isActive }): string => navLinkClasses(isActive)}
+              feature="assistant"
+              className={(isActive: boolean): string =>
+                navLinkClasses(isActive)
+              }
               id="demo-business-assistant"
             >
               <svg
@@ -333,7 +342,7 @@ export default function DashboardLayout() {
                 />
               </svg>
               Business Assistant
-            </NavLink>
+            </FeatureNavLink>
             <FeatureNavLink
               to="/admin/global-inventory"
               feature="inventory"

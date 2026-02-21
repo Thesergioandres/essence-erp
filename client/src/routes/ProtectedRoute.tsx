@@ -17,8 +17,18 @@ export default function ProtectedRoute({
   const { user: sessionUser, loading } = useSession();
   const user = sessionUser || authService.getCurrentUser();
 
-  if (loading) {
-    return null;
+  if (loading && token && user) {
+    return children;
+  }
+
+  if (loading && (!token || !user)) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-950 text-white">
+        <div className="rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-sm text-gray-200">
+          Validando sesión...
+        </div>
+      </div>
+    );
   }
 
   // If not authenticated, redirect to login

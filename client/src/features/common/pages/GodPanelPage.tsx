@@ -15,8 +15,11 @@ interface DurationForm {
   years: number;
 }
 
+type PlanKey = "starter" | "pro" | "enterprise";
+type AccountStatus = "active" | "pending" | "expired" | "suspended" | "paused";
+
 interface PlanCardConfig {
-  id: "starter" | "pro" | "enterprise";
+  id: PlanKey;
   name: string;
   description?: string;
   monthlyPrice: number;
@@ -25,6 +28,9 @@ interface PlanCardConfig {
   limits: {
     branches: number;
     distributors: number;
+  };
+  features: {
+    businessAssistant: boolean;
   };
 }
 
@@ -38,7 +44,7 @@ interface SubscriptionBusinessRow {
     email: string;
     status?: string;
   } | null;
-  plan: "starter" | "pro" | "enterprise";
+  plan: PlanKey;
   customLimits?: {
     branches?: number;
     distributors?: number;
@@ -66,6 +72,7 @@ const statusBadgeStyles: Record<string, string> = {
 };
 
 const defaultDuration: DurationForm = { days: 30, months: 0, years: 0 };
+const PLAN_KEYS: PlanKey[] = ["starter", "pro", "enterprise"];
 
 const formatDateTime = (value?: string | null) => {
   if (!value) return "Sin fecha";
@@ -102,13 +109,28 @@ export default function GodPanel() {
   const [activeTab, setActiveTab] = useState<
     "users" | "issues" | "subscriptions"
   >("users");
+  const [userSearch, setUserSearch] = useState("");
+  const [userStatusFilter, setUserStatusFilter] = useState<
+    "all" | AccountStatus
+  >("all");
   const [subscriptionsLoading, setSubscriptionsLoading] = useState(false);
   const [subscriptionRows, setSubscriptionRows] = useState<
     SubscriptionBusinessRow[]
   >([]);
+  const [initialSubscriptionRows, setInitialSubscriptionRows] = useState<
+    SubscriptionBusinessRow[]
+  >([]);
+  const [subscriptionSearch, setSubscriptionSearch] = useState("");
+  const [subscriptionPlanFilter, setSubscriptionPlanFilter] = useState<
+    "all" | PlanKey
+  >("all");
+  const [subscriptionStatusFilter, setSubscriptionStatusFilter] = useState<
+    "all" | AccountStatus
+  >("all");
   const [maintenanceMode, setMaintenanceMode] = useState(false);
+  const [initialMaintenanceMode, setInitialMaintenanceMode] = useState(false);
   const [planConfigs, setPlanConfigs] = useState<
-    Record<"starter" | "pro" | "enterprise", PlanCardConfig>
+    Record<PlanKey, PlanCardConfig>
   >({
     starter: {
       id: "starter",
@@ -118,6 +140,7 @@ export default function GodPanel() {
       yearlyPrice: 190,
       currency: "USD",
       limits: { branches: 1, distributors: 2 },
+      features: { businessAssistant: false },
     },
     pro: {
       id: "pro",
@@ -127,6 +150,7 @@ export default function GodPanel() {
       yearlyPrice: 490,
       currency: "USD",
       limits: { branches: 3, distributors: 10 },
+      features: { businessAssistant: false },
     },
     enterprise: {
       id: "enterprise",
@@ -136,8 +160,11 @@ export default function GodPanel() {
       yearlyPrice: 990,
       currency: "USD",
       limits: { branches: 10, distributors: 50 },
+      features: { businessAssistant: true },
     },
   });
+  const [initialPlanConfigs, setInitialPlanConfigs] =
+    useState<Record<PlanKey, PlanCardConfig>>(planConfigs);
 
   const loadIssues = async (
     status: "all" | "open" | "reviewing" | "closed" = "open"
@@ -170,6 +197,110 @@ export default function GodPanel() {
       >
     );
   }, [users]);
+
+  const filteredUsers = useMemo(() => {
+    const search = userSearch.trim().toLowerCase();
+
+    return users.filter(user => {
+      const status = (user.status || "pending") as AccountStatus;
+      const statusMatches =
+        userStatusFilter === "all" ? true : status === userStatusFilter;
+      if (!statusMatches) return false;
+
+      if (!search) return true;
+      const haystack = [
+        user.name,
+        user.email,
+        user.phone,
+        user.selectedPlan,
+        user._id,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(search);
+    });
+  }, [userSearch, userStatusFilter, users]);
+
+  const filteredSubscriptionRows = useMemo(() => {
+    const search = subscriptionSearch.trim().toLowerCase();
+
+    return subscriptionRows.filter(row => {
+      const planMatches =
+        subscriptionPlanFilter === "all"
+          ? true
+          : row.plan === subscriptionPlanFilter;
+      const rowStatus = (row.status || "pending") as AccountStatus;
+      const statusMatches =
+        subscriptionStatusFilter === "all"
+          ? true
+          : rowStatus === subscriptionStatusFilter;
+
+      if (!planMatches || !statusMatches) return false;
+
+      if (!search) return true;
+      const haystack = [row.name, row.owner?.name, row.owner?.email, row._id]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(search);
+    });
+  }, [
+    subscriptionPlanFilter,
+    subscriptionRows,
+    subscriptionSearch,
+    subscriptionStatusFilter,
+  ]);
+
+  const subscriptionSummary = useMemo(() => {
+    const byPlan: Record<PlanKey, number> = {
+      starter: 0,
+      pro: 0,
+      enterprise: 0,
+    };
+    const byStatus: Record<AccountStatus, number> = {
+      active: 0,
+      pending: 0,
+      expired: 0,
+      suspended: 0,
+      paused: 0,
+    };
+
+    subscriptionRows.forEach(row => {
+      byPlan[row.plan] += 1;
+      const status = (row.status || "pending") as AccountStatus;
+      byStatus[status] = (byStatus[status] || 0) + 1;
+    });
+
+    return {
+      total: subscriptionRows.length,
+      byPlan,
+      byStatus,
+    };
+  }, [subscriptionRows]);
+
+  const isGlobalSettingsDirty = useMemo(() => {
+    return (
+      maintenanceMode !== initialMaintenanceMode ||
+      JSON.stringify(planConfigs) !== JSON.stringify(initialPlanConfigs)
+    );
+  }, [
+    initialMaintenanceMode,
+    initialPlanConfigs,
+    maintenanceMode,
+    planConfigs,
+  ]);
+
+  const isRowDirty = (row: SubscriptionBusinessRow) => {
+    const original = initialSubscriptionRows.find(item => item._id === row._id);
+    if (!original) return true;
+    return (
+      original.plan !== row.plan ||
+      JSON.stringify(original.customLimits || {}) !==
+        JSON.stringify(row.customLimits || {})
+    );
+  };
 
   useEffect(() => {
     if (currentUser?.role !== "god") {
@@ -204,8 +335,12 @@ export default function GodPanel() {
         globalSettingsService.getPublicSettings(),
       ]);
       setSubscriptionRows(rows as any);
-      setMaintenanceMode(Boolean(settings.maintenanceMode));
+      setInitialSubscriptionRows(rows as any);
+      const newMaintenanceMode = Boolean(settings.maintenanceMode);
+      setMaintenanceMode(newMaintenanceMode);
+      setInitialMaintenanceMode(newMaintenanceMode);
       setPlanConfigs(settings.plans as any);
+      setInitialPlanConfigs(settings.plans as any);
     } catch (err) {
       console.error("god panel subscriptions error", err);
       setError("No se pudo cargar gestión de suscripciones");
@@ -333,7 +468,7 @@ export default function GodPanel() {
         case "resume":
           updatedUser = await userAccessService.resume(userId);
           break;
-        case "remove":
+        case "remove": {
           const deleteStats = await userAccessService.remove(userId);
           setUsers(prev => prev.filter(u => u._id !== userId));
           setFeedback(
@@ -346,6 +481,7 @@ export default function GodPanel() {
           );
           setConfirmUser(null);
           return;
+        }
       }
 
       if (updatedUser) {
@@ -450,6 +586,36 @@ export default function GodPanel() {
         {/* Tab: Usuarios (contenido existente) */}
         {activeTab === "users" && (
           <div className="space-y-6">
+            <section className="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+                <input
+                  value={userSearch}
+                  onChange={event => setUserSearch(event.target.value)}
+                  placeholder="Buscar por nombre, email, teléfono, plan o ID..."
+                  className="w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-sm text-white placeholder:text-gray-400 focus:border-purple-400 focus:outline-none"
+                />
+                <select
+                  value={userStatusFilter}
+                  onChange={event =>
+                    setUserStatusFilter(
+                      event.target.value as "all" | AccountStatus
+                    )
+                  }
+                  className="rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-sm text-white focus:border-purple-400 focus:outline-none"
+                >
+                  <option value="all">Todos los estados</option>
+                  <option value="active">Activos</option>
+                  <option value="pending">Pendientes</option>
+                  <option value="expired">Expirados</option>
+                  <option value="suspended">Suspendidos</option>
+                  <option value="paused">Pausados</option>
+                </select>
+              </div>
+              <p className="mt-2 text-xs text-gray-400">
+                Mostrando {filteredUsers.length} de {users.length} super admins.
+              </p>
+            </section>
+
             <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
               {[
                 {
@@ -514,7 +680,7 @@ export default function GodPanel() {
               </div>
 
               <div className="space-y-3 p-4">
-                {users.map(user => {
+                {filteredUsers.map(user => {
                   const duration = getDuration(user._id);
                   const isSelf = currentUser?._id === user._id;
                   const loadingThis = actionKey?.endsWith(user._id) || false;
@@ -563,6 +729,11 @@ export default function GodPanel() {
                               Expira:{" "}
                               {formatDateTime(user.subscriptionExpiresAt)}
                             </span>
+                            {user.selectedPlan && (
+                              <span className="rounded-full border border-fuchsia-400/40 bg-fuchsia-500/15 px-3 py-1 text-xs font-semibold text-fuchsia-100">
+                                Plan solicitado: {user.selectedPlan}
+                              </span>
+                            )}
                           </div>
                         </div>
 
@@ -679,6 +850,12 @@ export default function GodPanel() {
                     </div>
                   );
                 })}
+
+                {filteredUsers.length === 0 && (
+                  <div className="rounded-xl border border-dashed border-white/20 bg-black/20 px-4 py-8 text-center text-sm text-gray-400">
+                    No hay usuarios que coincidan con el filtro actual.
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -686,6 +863,29 @@ export default function GodPanel() {
 
         {activeTab === "subscriptions" && (
           <div className="space-y-5">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <MetricCard
+                label="Negocios"
+                value={subscriptionSummary.total}
+                helper="Total gestionados"
+              />
+              <MetricCard
+                label="Activos"
+                value={subscriptionSummary.byStatus.active}
+                helper="Con acceso vigente"
+              />
+              <MetricCard
+                label="Pendientes"
+                value={subscriptionSummary.byStatus.pending}
+                helper="Pendientes de activación"
+              />
+              <MetricCard
+                label="Expirados"
+                value={subscriptionSummary.byStatus.expired}
+                helper="Requieren renovación"
+              />
+            </div>
+
             <div className="rounded-2xl border border-white/10 bg-gray-900/70 p-5">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -693,6 +893,10 @@ export default function GodPanel() {
                     Configuración SaaS
                   </p>
                   <h2 className="text-xl font-bold">Planes globales</h2>
+                  <p className="text-xs text-gray-400">
+                    Configura precios y límites por plan. Los cambios no se
+                    publican hasta guardar.
+                  </p>
                 </div>
                 <label className="inline-flex items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-gray-200">
                   <input
@@ -705,86 +909,230 @@ export default function GodPanel() {
               </div>
 
               <div className="grid gap-3 md:grid-cols-3">
-                {(["starter", "pro", "enterprise"] as const).map(planKey => {
+                {PLAN_KEYS.map(planKey => {
                   const plan = planConfigs[planKey];
                   return (
                     <div
                       key={planKey}
                       className="rounded-xl border border-white/10 bg-white/5 p-3"
                     >
-                      <p className="text-sm font-semibold text-white">
-                        {plan.name}
-                      </p>
-                      <div className="mt-3 space-y-2 text-xs">
-                        <input
-                          type="number"
-                          min={0}
-                          value={plan.monthlyPrice}
-                          onChange={e =>
-                            setPlanConfigs(prev => ({
-                              ...prev,
-                              [planKey]: {
-                                ...prev[planKey],
-                                monthlyPrice: Number(e.target.value) || 0,
-                              },
-                            }))
-                          }
-                          className="w-full rounded border border-white/15 bg-black/20 px-2 py-1 text-white"
-                          placeholder="Precio mensual"
-                        />
-                        <input
-                          type="number"
-                          min={0}
-                          value={plan.limits.branches}
-                          onChange={e =>
-                            setPlanConfigs(prev => ({
-                              ...prev,
-                              [planKey]: {
-                                ...prev[planKey],
-                                limits: {
-                                  ...prev[planKey].limits,
-                                  branches: Math.max(
-                                    1,
-                                    Number(e.target.value) || 1
-                                  ),
+                      <div className="mb-3 flex items-center justify-between gap-2">
+                        <p className="text-sm font-semibold text-white">
+                          Plan: {plan.name}
+                        </p>
+                        <span className="rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-gray-300">
+                          {plan.id}
+                        </span>
+                      </div>
+
+                      <div className="mb-3 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-gray-300">
+                        Negocios en este plan:{" "}
+                        {subscriptionSummary.byPlan[planKey]}
+                      </div>
+
+                      <div className="mt-3 space-y-3 text-xs">
+                        <label className="block space-y-1">
+                          <span className="text-gray-300">Nombre</span>
+                          <input
+                            type="text"
+                            value={plan.name}
+                            onChange={e =>
+                              setPlanConfigs(prev => ({
+                                ...prev,
+                                [planKey]: {
+                                  ...prev[planKey],
+                                  name: e.target.value,
                                 },
-                              },
-                            }))
-                          }
-                          className="w-full rounded border border-white/15 bg-black/20 px-2 py-1 text-white"
-                          placeholder="Límite sedes"
-                        />
-                        <input
-                          type="number"
-                          min={1}
-                          value={plan.limits.distributors}
-                          onChange={e =>
-                            setPlanConfigs(prev => ({
-                              ...prev,
-                              [planKey]: {
-                                ...prev[planKey],
-                                limits: {
-                                  ...prev[planKey].limits,
-                                  distributors: Math.max(
-                                    1,
-                                    Number(e.target.value) || 1
-                                  ),
+                              }))
+                            }
+                            className="w-full rounded border border-white/15 bg-black/20 px-2 py-1 text-white"
+                            placeholder="Nombre del plan"
+                          />
+                        </label>
+
+                        <label className="block space-y-1">
+                          <span className="text-gray-300">Descripción</span>
+                          <input
+                            type="text"
+                            value={plan.description || ""}
+                            onChange={e =>
+                              setPlanConfigs(prev => ({
+                                ...prev,
+                                [planKey]: {
+                                  ...prev[planKey],
+                                  description: e.target.value,
                                 },
-                              },
-                            }))
-                          }
-                          className="w-full rounded border border-white/15 bg-black/20 px-2 py-1 text-white"
-                          placeholder="Límite distribuidores"
-                        />
+                              }))
+                            }
+                            className="w-full rounded border border-white/15 bg-black/20 px-2 py-1 text-white"
+                            placeholder="Descripción corta"
+                          />
+                        </label>
+
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <label className="block space-y-1">
+                            <span className="text-gray-300">
+                              Precio mensual
+                            </span>
+                            <input
+                              type="number"
+                              min={0}
+                              value={plan.monthlyPrice}
+                              onChange={e =>
+                                setPlanConfigs(prev => ({
+                                  ...prev,
+                                  [planKey]: {
+                                    ...prev[planKey],
+                                    monthlyPrice: Number(e.target.value) || 0,
+                                  },
+                                }))
+                              }
+                              className="w-full rounded border border-white/15 bg-black/20 px-2 py-1 text-white"
+                              placeholder="0"
+                            />
+                          </label>
+
+                          <label className="block space-y-1">
+                            <span className="text-gray-300">Precio anual</span>
+                            <input
+                              type="number"
+                              min={0}
+                              value={plan.yearlyPrice}
+                              onChange={e =>
+                                setPlanConfigs(prev => ({
+                                  ...prev,
+                                  [planKey]: {
+                                    ...prev[planKey],
+                                    yearlyPrice: Number(e.target.value) || 0,
+                                  },
+                                }))
+                              }
+                              className="w-full rounded border border-white/15 bg-black/20 px-2 py-1 text-white"
+                              placeholder="0"
+                            />
+                          </label>
+                        </div>
+
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <label className="block space-y-1">
+                            <span className="text-gray-300">Sedes</span>
+                            <input
+                              type="number"
+                              min={0}
+                              value={plan.limits.branches}
+                              onChange={e =>
+                                setPlanConfigs(prev => ({
+                                  ...prev,
+                                  [planKey]: {
+                                    ...prev[planKey],
+                                    limits: {
+                                      ...prev[planKey].limits,
+                                      branches: Math.max(
+                                        1,
+                                        Number(e.target.value) || 1
+                                      ),
+                                    },
+                                  },
+                                }))
+                              }
+                              className="w-full rounded border border-white/15 bg-black/20 px-2 py-1 text-white"
+                              placeholder="1"
+                            />
+                          </label>
+
+                          <label className="block space-y-1">
+                            <span className="text-gray-300">
+                              Distribuidores
+                            </span>
+                            <input
+                              type="number"
+                              min={1}
+                              value={plan.limits.distributors}
+                              onChange={e =>
+                                setPlanConfigs(prev => ({
+                                  ...prev,
+                                  [planKey]: {
+                                    ...prev[planKey],
+                                    limits: {
+                                      ...prev[planKey].limits,
+                                      distributors: Math.max(
+                                        1,
+                                        Number(e.target.value) || 1
+                                      ),
+                                    },
+                                  },
+                                }))
+                              }
+                              className="w-full rounded border border-white/15 bg-black/20 px-2 py-1 text-white"
+                              placeholder="1"
+                            />
+                          </label>
+                        </div>
+
+                        <label className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+                          <span className="text-gray-300">
+                            Business Assistant habilitado
+                          </span>
+                          <input
+                            type="checkbox"
+                            checked={Boolean(plan.features?.businessAssistant)}
+                            onChange={e =>
+                              setPlanConfigs(prev => ({
+                                ...prev,
+                                [planKey]: {
+                                  ...prev[planKey],
+                                  features: {
+                                    ...(prev[planKey].features || {
+                                      businessAssistant: false,
+                                    }),
+                                    businessAssistant: e.target.checked,
+                                  },
+                                },
+                              }))
+                            }
+                          />
+                        </label>
+
+                        <label className="block space-y-1">
+                          <span className="text-gray-300">Moneda</span>
+                          <input
+                            type="text"
+                            value={plan.currency}
+                            onChange={e =>
+                              setPlanConfigs(prev => ({
+                                ...prev,
+                                [planKey]: {
+                                  ...prev[planKey],
+                                  currency: e.target.value.toUpperCase(),
+                                },
+                              }))
+                            }
+                            className="w-full rounded border border-white/15 bg-black/20 px-2 py-1 text-white"
+                            placeholder="Moneda (USD, COP...)"
+                          />
+                        </label>
                       </div>
                     </div>
                   );
                 })}
               </div>
 
-              <div className="mt-4 flex justify-end">
+              <div className="mt-4 flex flex-wrap justify-end gap-2">
                 <button
-                  disabled={issueAction === "global-settings"}
+                  disabled={!isGlobalSettingsDirty}
+                  onClick={() => {
+                    setPlanConfigs(initialPlanConfigs);
+                    setMaintenanceMode(initialMaintenanceMode);
+                    setFeedback("Cambios de planes descartados");
+                  }}
+                  className="rounded-lg border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Restablecer
+                </button>
+                <button
+                  disabled={
+                    issueAction === "global-settings" || !isGlobalSettingsDirty
+                  }
                   onClick={saveGlobalPlans}
                   className="rounded-lg border border-purple-500/40 bg-purple-600/30 px-4 py-2 text-sm font-semibold text-white transition hover:bg-purple-600/40 disabled:opacity-50"
                 >
@@ -794,16 +1142,64 @@ export default function GodPanel() {
             </div>
 
             <div className="rounded-2xl border border-white/10 bg-gray-900/70 p-5">
-              <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-lg font-bold text-white">
-                  Clientes y plan
-                </h3>
-                <button
-                  onClick={() => void loadSubscriptions()}
-                  className="rounded-lg border border-white/20 bg-white/5 px-3 py-1.5 text-xs font-semibold text-gray-100 hover:bg-white/10"
-                >
-                  Refrescar
-                </button>
+              <div className="mb-4 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-lg font-bold text-white">
+                    Negocios y suscripción
+                  </h3>
+                  <button
+                    onClick={() => void loadSubscriptions()}
+                    className="rounded-lg border border-white/20 bg-white/5 px-3 py-1.5 text-xs font-semibold text-gray-100 hover:bg-white/10"
+                  >
+                    Refrescar
+                  </button>
+                </div>
+
+                <div className="grid gap-2 md:grid-cols-4">
+                  <input
+                    value={subscriptionSearch}
+                    onChange={event =>
+                      setSubscriptionSearch(event.target.value)
+                    }
+                    placeholder="Buscar negocio, owner, email o ID..."
+                    className="rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-sm text-white placeholder:text-gray-400 focus:border-purple-400 focus:outline-none md:col-span-2"
+                  />
+                  <select
+                    value={subscriptionPlanFilter}
+                    onChange={event =>
+                      setSubscriptionPlanFilter(
+                        event.target.value as "all" | PlanKey
+                      )
+                    }
+                    className="rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-sm text-white focus:border-purple-400 focus:outline-none"
+                  >
+                    <option value="all">Todos los planes</option>
+                    <option value="starter">Starter</option>
+                    <option value="pro">Pro</option>
+                    <option value="enterprise">Enterprise</option>
+                  </select>
+                  <select
+                    value={subscriptionStatusFilter}
+                    onChange={event =>
+                      setSubscriptionStatusFilter(
+                        event.target.value as "all" | AccountStatus
+                      )
+                    }
+                    className="rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-sm text-white focus:border-purple-400 focus:outline-none"
+                  >
+                    <option value="all">Todos los estados</option>
+                    <option value="active">Activo</option>
+                    <option value="pending">Pendiente</option>
+                    <option value="expired">Expirado</option>
+                    <option value="suspended">Suspendido</option>
+                    <option value="paused">Pausado</option>
+                  </select>
+                </div>
+
+                <p className="text-xs text-gray-400">
+                  Mostrando {filteredSubscriptionRows.length} de{" "}
+                  {subscriptionRows.length} negocios.
+                </p>
               </div>
 
               {subscriptionsLoading ? (
@@ -812,79 +1208,71 @@ export default function GodPanel() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {subscriptionRows.map(row => (
-                    <div
-                      key={row._id}
-                      className="rounded-xl border border-white/10 bg-white/5 p-3"
-                    >
-                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                        <div>
-                          <p className="font-semibold text-white">{row.name}</p>
-                          <p className="text-xs text-gray-400">
-                            {row.owner?.email || "Sin owner"}
-                          </p>
+                  {filteredSubscriptionRows.map(row => {
+                    const dirty = isRowDirty(row);
+                    return (
+                      <div
+                        key={row._id}
+                        className="rounded-xl border border-white/10 bg-white/5 p-3"
+                      >
+                        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-semibold text-white">
+                                {row.name}
+                              </p>
+                              <span
+                                className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] ${
+                                  statusBadgeStyles[row.status || "pending"] ||
+                                  "border-gray-500/40 bg-gray-500/10 text-gray-200"
+                                }`}
+                              >
+                                {formatStatus(row.status)}
+                              </span>
+                              {dirty && (
+                                <span className="rounded-full border border-amber-400/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-100">
+                                  Cambios pendientes
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-400">
+                              {row.owner?.email || "Sin owner"}
+                            </p>
+                          </div>
+                          <div className="text-xs text-gray-300">
+                            Uso sedes: {row.limits?.usage?.branches || 0}/
+                            {row.limits?.limits?.branches || 0} · Dist:{" "}
+                            {row.limits?.usage?.distributors || 0}/
+                            {row.limits?.limits?.distributors || 0}
+                          </div>
                         </div>
-                        <div className="text-xs text-gray-300">
-                          Uso sedes: {row.limits?.usage?.branches || 0}/
-                          {row.limits?.limits?.branches || 0} · Dist:{" "}
-                          {row.limits?.usage?.distributors || 0}/
-                          {row.limits?.limits?.distributors || 0}
-                        </div>
-                      </div>
 
-                      <div className="grid gap-2 sm:grid-cols-3">
-                        <select
-                          value={row.plan}
-                          onChange={e =>
-                            setSubscriptionRows(prev =>
-                              prev.map(item =>
-                                item._id === row._id
-                                  ? {
-                                      ...item,
-                                      plan: e.target.value as
-                                        | "starter"
-                                        | "pro"
-                                        | "enterprise",
-                                    }
-                                  : item
+                        <div className="grid gap-2 sm:grid-cols-3">
+                          <select
+                            value={row.plan}
+                            onChange={e =>
+                              setSubscriptionRows(prev =>
+                                prev.map(item =>
+                                  item._id === row._id
+                                    ? {
+                                        ...item,
+                                        plan: e.target.value as PlanKey,
+                                      }
+                                    : item
+                                )
                               )
-                            )
-                          }
-                          className="rounded-lg border border-white/15 bg-black/20 px-3 py-2 text-sm text-white"
-                        >
-                          <option value="starter">Starter</option>
-                          <option value="pro">Pro</option>
-                          <option value="enterprise">Enterprise</option>
-                        </select>
-                        <input
-                          type="number"
-                          min={1}
-                          placeholder="Override sedes"
-                          value={row.customLimits?.branches ?? ""}
-                          onChange={e =>
-                            setSubscriptionRows(prev =>
-                              prev.map(item =>
-                                item._id === row._id
-                                  ? {
-                                      ...item,
-                                      customLimits: {
-                                        ...(item.customLimits || {}),
-                                        branches:
-                                          Number(e.target.value) || undefined,
-                                      },
-                                    }
-                                  : item
-                              )
-                            )
-                          }
-                          className="rounded-lg border border-white/15 bg-black/20 px-3 py-2 text-sm text-white"
-                        />
-                        <div className="flex gap-2">
+                            }
+                            className="rounded-lg border border-white/15 bg-black/20 px-3 py-2 text-sm text-white"
+                          >
+                            <option value="starter">Starter</option>
+                            <option value="pro">Pro</option>
+                            <option value="enterprise">Enterprise</option>
+                          </select>
                           <input
                             type="number"
                             min={1}
-                            placeholder="Override dist"
-                            value={row.customLimits?.distributors ?? ""}
+                            placeholder="Override sedes"
+                            value={row.customLimits?.branches ?? ""}
                             onChange={e =>
                               setSubscriptionRows(prev =>
                                 prev.map(item =>
@@ -893,7 +1281,7 @@ export default function GodPanel() {
                                         ...item,
                                         customLimits: {
                                           ...(item.customLimits || {}),
-                                          distributors:
+                                          branches:
                                             Number(e.target.value) || undefined,
                                         },
                                       }
@@ -901,24 +1289,76 @@ export default function GodPanel() {
                                 )
                               )
                             }
-                            className="w-full rounded-lg border border-white/15 bg-black/20 px-3 py-2 text-sm text-white"
+                            className="rounded-lg border border-white/15 bg-black/20 px-3 py-2 text-sm text-white"
                           />
-                          <button
-                            disabled={issueAction === `subscription-${row._id}`}
-                            onClick={() =>
-                              updateBusinessPlan(row._id, {
-                                plan: row.plan,
-                                customLimits: row.customLimits || {},
-                              })
-                            }
-                            className="rounded-lg border border-emerald-500/40 bg-emerald-600/20 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-600/30 disabled:opacity-50"
-                          >
-                            Guardar
-                          </button>
+                          <div className="flex gap-2">
+                            <input
+                              type="number"
+                              min={1}
+                              placeholder="Override dist"
+                              value={row.customLimits?.distributors ?? ""}
+                              onChange={e =>
+                                setSubscriptionRows(prev =>
+                                  prev.map(item =>
+                                    item._id === row._id
+                                      ? {
+                                          ...item,
+                                          customLimits: {
+                                            ...(item.customLimits || {}),
+                                            distributors:
+                                              Number(e.target.value) ||
+                                              undefined,
+                                          },
+                                        }
+                                      : item
+                                  )
+                                )
+                              }
+                              className="w-full rounded-lg border border-white/15 bg-black/20 px-3 py-2 text-sm text-white"
+                            />
+                            <button
+                              onClick={() =>
+                                setSubscriptionRows(prev =>
+                                  prev.map(item =>
+                                    item._id === row._id
+                                      ? {
+                                          ...item,
+                                          customLimits: undefined,
+                                        }
+                                      : item
+                                  )
+                                )
+                              }
+                              className="rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-xs font-semibold text-gray-100 hover:bg-white/10"
+                            >
+                              Reset
+                            </button>
+                            <button
+                              disabled={
+                                issueAction === `subscription-${row._id}` ||
+                                !dirty
+                              }
+                              onClick={() =>
+                                updateBusinessPlan(row._id, {
+                                  plan: row.plan,
+                                  customLimits: row.customLimits || {},
+                                })
+                              }
+                              className="rounded-lg border border-emerald-500/40 bg-emerald-600/20 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-600/30 disabled:opacity-50"
+                            >
+                              Guardar
+                            </button>
+                          </div>
                         </div>
                       </div>
+                    );
+                  })}
+
+                  {filteredSubscriptionRows.length === 0 && (
+                    <div className="rounded-xl border border-dashed border-white/20 bg-black/20 px-4 py-8 text-center text-sm text-gray-400">
+                      No hay negocios que coincidan con el filtro actual.
                     </div>
-                  ))}
+                  )}
                 </div>
               )}
             </div>
@@ -1196,6 +1636,24 @@ interface ActionButtonProps {
   disabled?: boolean;
   loading?: boolean;
   onClick: () => void;
+}
+
+interface MetricCardProps {
+  label: string;
+  value: number;
+  helper: string;
+}
+
+function MetricCard({ label, value, helper }: MetricCardProps) {
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+      <p className="text-[11px] uppercase tracking-[0.18em] text-gray-300">
+        {label}
+      </p>
+      <p className="mt-1 text-2xl font-bold text-white">{value}</p>
+      <p className="mt-1 text-xs text-gray-400">{helper}</p>
+    </div>
+  );
 }
 
 function ActionButton({

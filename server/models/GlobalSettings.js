@@ -8,6 +8,13 @@ const planLimitsSchema = new mongoose.Schema(
   { _id: false },
 );
 
+const planFeaturesSchema = new mongoose.Schema(
+  {
+    businessAssistant: { type: Boolean, default: false },
+  },
+  { _id: false },
+);
+
 const planSchema = new mongoose.Schema(
   {
     id: { type: String, required: true, trim: true },
@@ -17,6 +24,7 @@ const planSchema = new mongoose.Schema(
     yearlyPrice: { type: Number, default: 0, min: 0 },
     currency: { type: String, default: "USD", trim: true },
     limits: { type: planLimitsSchema, default: () => ({}) },
+    features: { type: planFeaturesSchema, default: () => ({}) },
   },
   { _id: false },
 );
@@ -49,6 +57,7 @@ const globalSettingsSchema = new mongoose.Schema(
           yearlyPrice: 190,
           currency: "USD",
           limits: { branches: 1, distributors: 2 },
+          features: { businessAssistant: false },
         }),
       },
       pro: {
@@ -61,6 +70,7 @@ const globalSettingsSchema = new mongoose.Schema(
           yearlyPrice: 490,
           currency: "USD",
           limits: { branches: 3, distributors: 10 },
+          features: { businessAssistant: false },
         }),
       },
       enterprise: {
@@ -73,6 +83,7 @@ const globalSettingsSchema = new mongoose.Schema(
           yearlyPrice: 990,
           currency: "USD",
           limits: { branches: 10, distributors: 50 },
+          features: { businessAssistant: true },
         }),
       },
     },

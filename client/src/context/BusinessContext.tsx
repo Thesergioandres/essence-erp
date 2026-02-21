@@ -14,6 +14,10 @@ import type {
   BusinessFeatures,
   Membership,
 } from "../features/business/types/business.types";
+import { globalSettingsService } from "../features/common/services";
+
+type PlanKey = "starter" | "pro" | "enterprise";
+type AssistantPlanMap = Record<PlanKey, boolean>;
 
 interface BusinessContextValue {
   businessId: string | null;
@@ -49,6 +53,12 @@ const defaultFeatures: BusinessFeatures = {
   defectiveProducts: true,
 };
 
+const defaultAssistantByPlan: AssistantPlanMap = {
+  starter: false,
+  pro: false,
+  enterprise: true,
+};
+
 /**
  * Read memberships from localStorage user object (set by login)
  * This prevents the "amnesia" bug where memberships are empty until API responds
@@ -77,6 +87,9 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [initializing, setInitializing] = useState(true);
+  const [assistantByPlan, setAssistantByPlan] = useState<AssistantPlanMap>(
+    defaultAssistantByPlan
+  );
   const tokenRef = useRef<string | null>(localStorage.getItem("token"));
   const isFetchingRef = useRef(false); // Guard against concurrent refresh calls
   const retryRef = useRef(0); // Guard for auto-retry
@@ -108,7 +121,22 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     setError(null);
     try {
-      const { memberships: fetched } = await businessService.getMyMemberships();
+      const [{ memberships: fetched }, publicSettings] = await Promise.all([
+        businessService.getMyMemberships(),
+        globalSettingsService.getPublicSettings().catch(() => null),
+      ]);
+
+      if (publicSettings?.plans) {
+        setAssistantByPlan({
+          starter:
+            publicSettings.plans.starter?.features?.businessAssistant ?? false,
+          pro: publicSettings.plans.pro?.features?.businessAssistant ?? false,
+          enterprise:
+            publicSettings.plans.enterprise?.features?.businessAssistant ??
+            true,
+        });
+      }
+
       console.log(
         "[BusinessContext] Fetched memberships:",
         fetched?.length,
@@ -221,8 +249,16 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
   );
 
   const features = useMemo<BusinessFeatures>(() => {
-    return selectedMembership?.business?.config?.features || defaultFeatures;
-  }, [selectedMembership]);
+    const selectedPlan = (selectedMembership?.business?.plan ||
+      "starter") as PlanKey;
+    const baseFeatures = selectedMembership?.business?.config?.features || {};
+
+    return {
+      ...defaultFeatures,
+      ...baseFeatures,
+      assistant: assistantByPlan[selectedPlan] === true,
+    };
+  }, [assistantByPlan, selectedMembership]);
 
   const value: BusinessContextValue = {
     businessId: selectedMembership?.business?._id || null,

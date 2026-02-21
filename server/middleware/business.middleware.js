@@ -359,7 +359,7 @@ export const requirePermission = ({ module, action, branchResolver } = {}) => {
 
 // Verifica que la feature esté activa para el negocio seleccionado
 export const requireFeature = (featureKey) => {
-  return (req, res, next) => {
+  return async (req, res, next) => {
     const debugLogs = [];
     const addDebugLog = (msg) => {
       console.log(msg);
@@ -391,9 +391,38 @@ export const requireFeature = (featureKey) => {
       return next();
     }
 
-    const isEnabled = req.business?.config?.features?.[featureKey];
+    const normalizedFeatureKey =
+      featureKey === "businessAssistant" ? "assistant" : featureKey;
+
+    if (normalizedFeatureKey === "assistant") {
+      const resolvedLimits = await resolveBusinessLimits(
+        req.business || req.businessId,
+      );
+      const isAssistantEnabledByPlan =
+        resolvedLimits?.planConfig?.features?.businessAssistant === true;
+
+      addDebugLog(
+        `[requireFeature] Assistant enabled by plan: ${isAssistantEnabledByPlan}`,
+      );
+
+      if (!isAssistantEnabledByPlan) {
+        addDebugLog(
+          `[requireFeature] ❌ Assistant blocked: current plan has no access`,
+        );
+        return res.status(403).json({
+          message: "Business Assistant no está disponible para el plan actual",
+          code: "FEATURE_RESTRICTED_BY_PLAN",
+          feature: "assistant",
+        });
+      }
+
+      addDebugLog(`[requireFeature] ✅ Assistant allowed by plan`);
+      return next();
+    }
+
+    const isEnabled = req.business?.config?.features?.[normalizedFeatureKey];
     addDebugLog(
-      `[requireFeature] Feature '${featureKey}' enabled: ${isEnabled}`,
+      `[requireFeature] Feature '${normalizedFeatureKey}' enabled: ${isEnabled}`,
     );
 
     // Si no está definido, asumir habilitado para no bloquear rutas por config incompleta

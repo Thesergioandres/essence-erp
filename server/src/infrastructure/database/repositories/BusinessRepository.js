@@ -1,5 +1,6 @@
 import Business from "../../../../models/Business.js";
 import Membership from "../../../../models/Membership.js";
+import User from "../../../../models/User.js";
 
 export class BusinessRepository {
   async create(data, creatorId) {
@@ -9,6 +10,16 @@ export class BusinessRepository {
       err.statusCode = 400;
       throw err;
     }
+
+    const creatorUser = await User.findById(creatorId)
+      .select("selectedPlan")
+      .lean();
+    const selectedPlan = creatorUser?.selectedPlan;
+    const effectivePlan =
+      data.plan ||
+      (selectedPlan && ["starter", "pro", "enterprise"].includes(selectedPlan)
+        ? selectedPlan
+        : "starter");
 
     const business = await Business.create({
       name: data.name,
@@ -21,7 +32,7 @@ export class BusinessRepository {
       contactLocation: data.contactLocation,
       config: { features: { ...(data.features || {}) } },
       createdBy: creatorId,
-      plan: data.plan || "starter",
+      plan: effectivePlan,
       customLimits: data.customLimits,
     });
 

@@ -10,7 +10,7 @@ import { BusinessAssistantController } from "../controllers/BusinessAssistantCon
 const router = Router();
 const controller = new BusinessAssistantController();
 
-router.use(protect, businessContext, requireFeature("businessAssistant"));
+router.use(protect, businessContext, requireFeature("assistant"));
 
 // Analysis routes - MUST be before any parameterized routes
 router.get("/analysis/latest", (req, res) =>

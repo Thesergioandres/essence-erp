@@ -50,6 +50,16 @@ const userSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    selectedPlan: {
+      type: String,
+      enum: ["starter", "pro", "enterprise"],
+      default: null,
+      index: true,
+    },
+    selectedPlanAt: {
+      type: Date,
+      default: null,
+    },
     // Solo para distribuidores
     assignedProducts: [
       {

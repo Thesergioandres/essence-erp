@@ -4,6 +4,7 @@ import User from "../../../../models/User.js";
 import { LoginUseCase } from "../../../application/use-cases/LoginUseCase.js";
 import { RegisterUserUseCase } from "../../../application/use-cases/RegisterUserUseCase.js";
 import { AuthService } from "../../../domain/services/AuthService.js";
+import { VALID_BUSINESS_PLANS } from "../../services/planLimits.service.js";
 
 /**
  * Get current user profile
@@ -44,12 +45,10 @@ export const login = async (req, res, next) => {
 
 /**
  * Register Controller (Hexagonal)
- * Note: Assuming public registration or protected by admin logic depending on route
  */
 export const register = async (req, res, next) => {
   try {
     const useCase = new RegisterUserUseCase();
-    // businessId might come from headers if SaaS or body if simple logic
     const businessId = req.headers["x-business-id"] || req.body.businessId;
 
     const result = await useCase.execute({
@@ -63,6 +62,46 @@ export const register = async (req, res, next) => {
       return res.status(400).json({ message: error.message });
     }
     next(error);
+  }
+};
+
+/**
+ * Save selected plan after registration
+ */
+export const selectPlan = async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?.userId;
+    const { plan } = req.body || {};
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "No autorizado" });
+    }
+
+    if (!VALID_BUSINESS_PLANS.includes(plan)) {
+      return res.status(400).json({ success: false, message: "Plan inválido" });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Usuario no encontrado" });
+    }
+
+    user.selectedPlan = plan;
+    user.selectedPlanAt = new Date();
+    await user.save();
+
+    return res.json({
+      success: true,
+      data: {
+        selectedPlan: user.selectedPlan,
+        selectedPlanAt: user.selectedPlanAt,
+      },
+      message: "Plan guardado correctamente",
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
 

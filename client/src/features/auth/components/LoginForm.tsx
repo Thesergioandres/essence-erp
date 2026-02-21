@@ -5,7 +5,7 @@ import { Input } from "../../../shared/components/ui/Input";
 import type { LoginCredentials } from "../types/auth.types";
 
 interface LoginFormProps {
-  onSubmit: (credentials: LoginCredentials) => void;
+  onSubmit: (credentials: LoginCredentials) => Promise<unknown> | void;
   isLoading: boolean;
 }
 
@@ -17,7 +17,7 @@ export const LoginForm = ({ onSubmit, isLoading }: LoginFormProps) => {
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    onSubmit(formData);
+    void Promise.resolve(onSubmit(formData)).catch(() => undefined);
   };
 
   return (

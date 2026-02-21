@@ -14,6 +14,7 @@ const defaultPlans = {
     yearlyPrice: 190,
     currency: "USD",
     limits: { branches: 1, distributors: 2 },
+    features: { businessAssistant: false },
   },
   pro: {
     id: "pro",
@@ -23,6 +24,7 @@ const defaultPlans = {
     yearlyPrice: 490,
     currency: "USD",
     limits: { branches: 3, distributors: 10 },
+    features: { businessAssistant: false },
   },
   enterprise: {
     id: "enterprise",
@@ -32,7 +34,31 @@ const defaultPlans = {
     yearlyPrice: 990,
     currency: "USD",
     limits: { branches: 10, distributors: 50 },
+    features: { businessAssistant: true },
   },
+};
+
+const toPlainPlan = (plan) => {
+  if (!plan) return {};
+  return typeof plan.toObject === "function" ? plan.toObject() : plan;
+};
+
+const mergePlanWithDefaults = (planKey, plan) => {
+  const defaults = defaultPlans[planKey];
+  const plainPlan = toPlainPlan(plan);
+
+  return {
+    ...defaults,
+    ...plainPlan,
+    limits: {
+      ...defaults.limits,
+      ...(plainPlan?.limits || {}),
+    },
+    features: {
+      ...defaults.features,
+      ...(plainPlan?.features || {}),
+    },
+  };
 };
 
 const normalizePositiveInteger = (value) => {
@@ -75,8 +101,10 @@ export const resolveBusinessLimits = async (businessDocOrId) => {
   }
 
   const selectedPlan = normalizePlan(business.plan || settings.defaultPlan);
-  const planConfig =
-    settings.plans?.[selectedPlan] || defaultPlans[selectedPlan];
+  const planConfig = mergePlanWithDefaults(
+    selectedPlan,
+    settings.plans?.[selectedPlan],
+  );
   const planLimits = planConfig?.limits || defaultPlans[selectedPlan].limits;
 
   const customBranches = normalizePositiveInteger(
@@ -153,9 +181,12 @@ export const listPublicPlans = async () => {
     maintenanceMode: Boolean(settings.maintenanceMode),
     defaultPlan: settings.defaultPlan || "starter",
     plans: {
-      starter: settings.plans?.starter || defaultPlans.starter,
-      pro: settings.plans?.pro || defaultPlans.pro,
-      enterprise: settings.plans?.enterprise || defaultPlans.enterprise,
+      starter: mergePlanWithDefaults("starter", settings.plans?.starter),
+      pro: mergePlanWithDefaults("pro", settings.plans?.pro),
+      enterprise: mergePlanWithDefaults(
+        "enterprise",
+        settings.plans?.enterprise,
+      ),
     },
   };
 };

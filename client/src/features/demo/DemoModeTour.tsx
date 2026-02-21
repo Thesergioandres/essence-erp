@@ -43,12 +43,15 @@ export default function DemoModeTour() {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(location.search);
     const shouldStart = params.get("demo") === "1";
-    const stored = localStorage.getItem(DEMO_MODE_KEY) === "1";
 
-    if (shouldStart || stored) {
+    if (shouldStart) {
       localStorage.setItem(DEMO_MODE_KEY, "1");
       setRun(true);
+      return;
     }
+
+    localStorage.removeItem(DEMO_MODE_KEY);
+    setRun(false);
   }, [location.search]);
 
   const step = steps[stepIndex];
@@ -111,6 +114,19 @@ export default function DemoModeTour() {
     };
   }, [run, updateRect]);
 
+  useEffect(() => {
+    if (!run) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        finishTour();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [finishTour, run]);
+
   if (!run || !step) return null;
 
   const padding = 10;
@@ -134,7 +150,10 @@ export default function DemoModeTour() {
 
   return (
     <div className="z-10000 fixed inset-0">
-      <div className="absolute inset-0 bg-black/70" />
+      <div
+        className="absolute inset-0 bg-black/70"
+        onClick={() => finishTour()}
+      />
       {highlightStyle && (
         <div
           className="absolute rounded-2xl border border-fuchsia-400/60 shadow-[0_0_0_3px_rgba(217,70,239,0.35)]"

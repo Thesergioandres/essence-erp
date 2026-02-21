@@ -1,12 +1,57 @@
 import type { ChangeEvent, FormEvent } from "react";
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useBrandLogo } from "../../../hooks/useBrandLogo";
 import { Button, Input } from "../../../shared/components/ui";
+import { globalSettingsService } from "../../common/services";
 import { authService } from "../services";
+
+type PlanOption = {
+  id: "starter" | "pro" | "enterprise";
+  name: string;
+  description?: string;
+  monthlyPrice: number;
+  yearlyPrice: number;
+  currency: string;
+  limits: { branches: number; distributors: number };
+};
+
+const fallbackPlans: PlanOption[] = [
+  {
+    id: "starter",
+    name: "Starter",
+    description: "Para negocios en etapa inicial",
+    monthlyPrice: 19,
+    yearlyPrice: 190,
+    currency: "USD",
+    limits: { branches: 1, distributors: 2 },
+  },
+  {
+    id: "pro",
+    name: "Pro",
+    description: "Para equipos que escalan ventas",
+    monthlyPrice: 49,
+    yearlyPrice: 490,
+    currency: "USD",
+    limits: { branches: 3, distributors: 10 },
+  },
+  {
+    id: "enterprise",
+    name: "Enterprise",
+    description: "Para operaciones multi-sede avanzadas",
+    monthlyPrice: 99,
+    yearlyPrice: 990,
+    currency: "USD",
+    limits: { branches: 10, distributors: 50 },
+  },
+];
+
+const WHATSAPP_OWNER_PHONE = "573185753007";
+const REGISTER_STEP_STORAGE_KEY = "pending_register_user";
 
 export default function RegisterPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -18,7 +63,47 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [registeredUser, setRegisteredUser] = useState<{
+    name: string;
+    email: string;
+  } | null>(null);
+  const [plans, setPlans] = useState<PlanOption[]>(fallbackPlans);
+  const [planAction, setPlanAction] = useState<PlanOption["id"] | null>(null);
   const brandLogo = useBrandLogo();
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const step = params.get("step");
+    if (step !== "plan" || registeredUser) return;
+
+    const raw = sessionStorage.getItem(REGISTER_STEP_STORAGE_KEY);
+    if (!raw) return;
+
+    try {
+      const parsed = JSON.parse(raw) as { name?: string; email?: string };
+      if (parsed?.name && parsed?.email) {
+        setRegisteredUser({ name: parsed.name, email: parsed.email });
+        setSuccess(
+          "✅ Registro completado. Ahora elige tu plan para continuar."
+        );
+      }
+    } catch {
+      sessionStorage.removeItem(REGISTER_STEP_STORAGE_KEY);
+    }
+  }, [location.search, registeredUser]);
+
+  useEffect(() => {
+    globalSettingsService
+      .getPublicSettings()
+      .then(settings => {
+        setPlans([
+          settings.plans.starter,
+          settings.plans.pro,
+          settings.plans.enterprise,
+        ] as PlanOption[]);
+      })
+      .catch(() => undefined);
+  }, []);
 
   const handleChange = (
     e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -77,22 +162,57 @@ export default function RegisterPage() {
       };
 
       await authService.register(payload);
-
-      setSuccess("✅ Registro completado. Tienes 7 días gratis para probar.");
-      setLoading(false);
-
-      // Redirigir después de 2 segundos para que el usuario vea el mensaje
-      setTimeout(() => {
-        navigate("/admin/create-business", {
-          replace: true,
-        });
-      }, 2000);
+      const pendingUser = { name: trimmedName, email: trimmedEmail };
+      setRegisteredUser(pendingUser);
+      sessionStorage.setItem(
+        REGISTER_STEP_STORAGE_KEY,
+        JSON.stringify(pendingUser)
+      );
+      setSuccess("✅ Registro completado. Ahora elige tu plan para continuar.");
+      navigate("/register?step=plan", { replace: true });
     } catch (err) {
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data
           ?.message || "No se pudo completar el registro";
       setError(message);
+    } finally {
       setLoading(false);
+    }
+  };
+
+  const handleChoosePlan = async (plan: PlanOption) => {
+    if (!registeredUser) return;
+
+    setError("");
+    setPlanAction(plan.id);
+    try {
+      await authService.selectPlan(plan.id);
+
+      const text = [
+        "Hola, acabo de registrarme en Essence ERP.",
+        `Nombre: ${registeredUser.name}`,
+        `Email: ${registeredUser.email}`,
+        `Plan elegido: ${plan.name}`,
+        `Valor mensual: ${plan.currency} ${plan.monthlyPrice}`,
+        "Comparto comprobante de consignación para activar 30 días.",
+      ].join("\n");
+
+      const whatsappUrl = `https://wa.me/${WHATSAPP_OWNER_PHONE}?text=${encodeURIComponent(text)}`;
+      window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+
+      authService.logout();
+      sessionStorage.removeItem(REGISTER_STEP_STORAGE_KEY);
+      navigate("/account-hold?reason=pending", {
+        replace: true,
+        state: { reason: "pending" },
+      });
+    } catch (err) {
+      const message =
+        (err as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message || "No se pudo guardar el plan seleccionado";
+      setError(message);
+    } finally {
+      setPlanAction(null);
     }
   };
 
@@ -112,33 +232,15 @@ export default function RegisterPage() {
                 Essence ERP
               </p>
               <h1 className="bg-linear-to-r from-purple-200 to-pink-200 bg-clip-text text-3xl font-extrabold leading-tight text-transparent sm:text-4xl lg:text-5xl">
-                Crea tu cuenta y opera tu negocio
+                Crea tu cuenta y elige tu plan
               </h1>
             </div>
           </div>
 
           <p className="max-w-2xl text-base text-gray-300 sm:text-lg">
-            Configura tu panel para gestionar inventario, catálogos, comisiones
-            y analítica desde un solo lugar. Onboarding guiado y soporte
-            incluido.
+            Registro rápido, selección de plan y activación manual por WhatsApp
+            después de validar tu consignación.
           </p>
-
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {[
-              "Onboarding asistido",
-              "Roles y permisos",
-              "KPIs en vivo",
-              "Multi-negocio",
-            ].map(item => (
-              <div
-                key={item}
-                className="flex items-center gap-2 rounded-lg border border-white/5 bg-white/5 px-3 py-2 text-sm text-gray-200"
-              >
-                <span className="h-2 w-2 rounded-full bg-green-400" />
-                {item}
-              </div>
-            ))}
-          </div>
         </div>
 
         <div className="rounded-2xl border border-white/10 bg-white/5 p-6 shadow-2xl shadow-purple-900/40 backdrop-blur-xl sm:p-8 lg:p-10">
@@ -147,10 +249,12 @@ export default function RegisterPage() {
               Registro
             </p>
             <h2 className="mt-2 text-2xl font-bold sm:text-3xl">
-              Crear cuenta
+              {registeredUser ? "Elige tu plan" : "Crear cuenta"}
             </h2>
             <p className="mt-1 text-sm text-gray-300">
-              Te tomará menos de un minuto.
+              {registeredUser
+                ? "Te enviaremos al chat de WhatsApp para validar pago y activar 30 días."
+                : "Te tomará menos de un minuto."}
             </p>
           </div>
 
@@ -161,104 +265,116 @@ export default function RegisterPage() {
           )}
 
           {success && (
-            <div className="mb-4 rounded-lg border border-green-500/50 bg-green-500/10 p-4">
-              <p className="text-sm font-semibold text-green-200">{success}</p>
-              <div className="mt-3 flex items-center justify-center gap-2">
-                <div className="h-5 w-5 animate-spin rounded-full border-2 border-green-500 border-t-transparent"></div>
-                <span className="text-xs text-green-300">
-                  Preparando tu cuenta...
-                </span>
-              </div>
+            <div className="mb-4 rounded-lg border border-green-500/50 bg-green-500/10 p-3 text-sm text-green-200">
+              {success}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <Input
-                  label="Nombre completo"
-                  type="text"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  required
-                  placeholder="Tu nombre"
-                />
-              </div>
+          {!registeredUser ? (
+            <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
+              <Input
+                label="Nombre completo"
+                type="text"
+                name="name"
+                value={formData.name}
+                onChange={handleChange}
+                required
+                placeholder="Tu nombre"
+              />
+              <Input
+                label="Correo electrónico"
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
+                required
+                autoComplete="email"
+                placeholder="tu@email.com"
+              />
+              <Input
+                label="Número de teléfono"
+                type="tel"
+                name="phone"
+                value={formData.phone}
+                onChange={handleChange}
+                required
+                inputMode="tel"
+                placeholder="Ej: +57 300 000 0000"
+              />
+              <Input
+                label="Lugar / Dirección"
+                type="text"
+                name="address"
+                value={formData.address}
+                onChange={handleChange}
+                required
+                placeholder="Ciudad, país o dirección completa"
+              />
+              <Input
+                label="Contraseña"
+                type="password"
+                name="password"
+                value={formData.password}
+                onChange={handleChange}
+                required
+                autoComplete="new-password"
+                placeholder="••••••••"
+              />
+              <Input
+                label="Confirmar contraseña"
+                type="password"
+                name="confirmPassword"
+                value={formData.confirmPassword}
+                onChange={handleChange}
+                required
+                autoComplete="new-password"
+                placeholder="••••••••"
+              />
 
-              <div>
-                <Input
-                  label="Correo electrónico"
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  required
-                  autoComplete="email"
-                  placeholder="tu@email.com"
-                />
-              </div>
-
-              <div>
-                <Input
-                  label="Número de teléfono"
-                  type="tel"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={handleChange}
-                  required
-                  inputMode="tel"
-                  placeholder="Ej: +57 300 000 0000"
-                />
-              </div>
-
-              <div className="sm:col-span-2">
-                <Input
-                  label="Lugar / Dirección"
-                  type="text"
-                  name="address"
-                  value={formData.address}
-                  onChange={handleChange}
-                  required
-                  placeholder="Ciudad, país o dirección completa"
-                />
-              </div>
-
-              <div>
-                <Input
-                  label="Contraseña"
-                  type="password"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  required
-                  autoComplete="new-password"
-                  placeholder="••••••••"
-                />
-              </div>
-
-              <div>
-                <Input
-                  label="Confirmar contraseña"
-                  type="password"
-                  name="confirmPassword"
-                  value={formData.confirmPassword}
-                  onChange={handleChange}
-                  required
-                  autoComplete="new-password"
-                  placeholder="••••••••"
-                />
-              </div>
+              <Button
+                type="submit"
+                loading={loading}
+                className="bg-linear-to-r mt-2 w-full from-purple-600 to-fuchsia-600 text-base font-semibold text-white hover:from-purple-700 hover:to-fuchsia-700 focus:ring-purple-500"
+              >
+                {loading ? "Creando cuenta..." : "Registrarme"}
+              </Button>
+            </form>
+          ) : (
+            <div className="space-y-3">
+              {plans.map(plan => (
+                <div
+                  key={plan.id}
+                  className="rounded-xl border border-white/10 bg-white/5 p-4"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-base font-semibold text-white">
+                        {plan.name}
+                      </p>
+                      <p className="text-xs text-gray-300">
+                        {plan.description}
+                      </p>
+                    </div>
+                    <p className="text-lg font-bold text-fuchsia-200">
+                      {plan.currency} {plan.monthlyPrice}/mes
+                    </p>
+                  </div>
+                  <p className="mt-2 text-xs text-gray-300">
+                    Incluye hasta {plan.limits.branches} sede(s) y{" "}
+                    {plan.limits.distributors} distribuidor(es).
+                  </p>
+                  <Button
+                    type="button"
+                    className="mt-3 w-full"
+                    loading={planAction === plan.id}
+                    onClick={() => handleChoosePlan(plan)}
+                  >
+                    Elegir plan y hablar por WhatsApp
+                  </Button>
+                </div>
+              ))}
             </div>
-
-            <Button
-              type="submit"
-              loading={loading}
-              className="bg-linear-to-r mt-2 w-full from-purple-600 to-fuchsia-600 text-base font-semibold text-white hover:from-purple-700 hover:to-fuchsia-700 focus:ring-purple-500"
-            >
-              {loading ? "Creando cuenta..." : "Registrarme"}
-            </Button>
-          </form>
+          )}
 
           <p className="mt-4 text-center text-sm text-gray-400">
             ¿Ya tienes cuenta?{" "}

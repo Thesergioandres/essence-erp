@@ -102,6 +102,7 @@ export interface Membership {
     _id: string;
     name: string;
     description?: string;
+    plan?: "starter" | "pro" | "enterprise";
     config?: BusinessConfig;
     status?: Business["status"];
     logoUrl?: string;

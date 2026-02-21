@@ -48,6 +48,13 @@ const logApiError = (error: AxiosError) => {
   const status = error.response?.status;
   const url = error.config?.url;
   const method = error.config?.method;
+  const isPublicSettingsEndpoint =
+    typeof url === "string" && url.includes("/global-settings/public");
+
+  if (status === 401 && isPublicSettingsEndpoint) {
+    return;
+  }
+
   const requestId =
     (error.response?.headers?.["x-request-id"] as string | undefined) ||
     (error.response?.data as { requestId?: string } | undefined)?.requestId;
@@ -75,15 +82,22 @@ api.interceptors.request.use(
     }
 
     const url = config.url || "";
+    const isPublicSettingsEndpoint = url.startsWith("/global-settings/public");
+    const isAuthEndpoint =
+      url.startsWith("/auth/login") ||
+      url.startsWith("/auth/register") ||
+      url.startsWith("/auth/refresh");
+
     const allowsWithoutBusiness =
       url.startsWith("/auth") ||
       url.startsWith("/business/my-memberships") ||
       url.startsWith("/upload") ||
       url.startsWith("/users/god") ||
       url.startsWith("/issues") ||
+      isPublicSettingsEndpoint ||
       (config.method === "post" && url === "/business");
 
-    if (token) {
+    if (token && !isPublicSettingsEndpoint && !isAuthEndpoint) {
       config.headers.Authorization = `Bearer ${token}`;
     }
 
@@ -119,10 +133,15 @@ api.interceptors.response.use(
     }
 
     // Intentar refresh automático en 401 (excepto en rutas de auth)
+    const isPublicSettings401 = originalRequest.url?.includes(
+      "/global-settings/public"
+    );
+
     if (
       error.response?.status === 401 &&
       !originalRequest._retry &&
-      !originalRequest.url?.includes("/auth/")
+      !originalRequest.url?.includes("/auth/") &&
+      !isPublicSettings401
     ) {
       const refreshToken = localStorage.getItem("refreshToken");
 

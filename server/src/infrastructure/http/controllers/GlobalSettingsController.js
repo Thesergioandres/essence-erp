@@ -170,6 +170,17 @@ class GlobalSettingsController {
           if (planInput.currency !== undefined)
             targetPlan.currency = String(planInput.currency || "USD");
 
+          if (planInput.features && typeof planInput.features === "object") {
+            if (planInput.features.businessAssistant !== undefined) {
+              if (!targetPlan.features) {
+                targetPlan.features = { businessAssistant: false };
+              }
+              targetPlan.features.businessAssistant = Boolean(
+                planInput.features.businessAssistant,
+              );
+            }
+          }
+
           if (planInput.limits && typeof planInput.limits === "object") {
             if (planInput.limits.branches !== undefined) {
               targetPlan.limits.branches = Math.max(

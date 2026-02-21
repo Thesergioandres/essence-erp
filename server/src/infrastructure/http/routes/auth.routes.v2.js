@@ -10,12 +10,14 @@ import {
   login,
   register,
   revertImpersonation,
+  selectPlan,
 } from "../controllers/AuthController.js";
 
 const router = express.Router();
 
 router.post("/login", login);
 router.post("/register", register);
+router.patch("/select-plan", protect, selectPlan);
 router.get("/profile", protect, getProfile);
 router.post("/impersonate/revert", protect, revertImpersonation);
 router.post(
