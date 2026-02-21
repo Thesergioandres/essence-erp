@@ -15,16 +15,18 @@ export class LoginUseCase {
     const rawPassword = String(password);
 
     // 1. Find User (Need password for check + memberships)
-    const user = await this.userRepository.findByEmailWithMethods(
-      normalizedEmail,
-    );
+    const user =
+      await this.userRepository.findByEmailWithMethods(normalizedEmail);
 
     if (!user) {
       throw new Error("Invalid credentials");
     }
 
     // 2. Validate Password
-    const isMatch = await AuthService.validatePassword(rawPassword, user.password);
+    const isMatch = await AuthService.validatePassword(
+      rawPassword,
+      user.password,
+    );
 
     if (!isMatch) {
       const storedPassword = String(user.password || "");

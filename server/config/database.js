@@ -9,7 +9,8 @@ if (process.env.NODE_ENV === "test") {
 }
 
 const resolveDbName = (mongoUri) => {
-  const explicitDbName = process.env.MONGO_DB_NAME || process.env.MONGODB_DB_NAME;
+  const explicitDbName =
+    process.env.MONGO_DB_NAME || process.env.MONGODB_DB_NAME;
 
   if (explicitDbName) return explicitDbName;
 
