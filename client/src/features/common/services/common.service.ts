@@ -8,6 +8,7 @@ import api from "../../../api/axios";
 import type { ProfitHistoryAdminOverview } from "../../analytics/types/analytics.types";
 import type {
   Achievement,
+  DistributorStats,
   DistributorStatsResponse,
   GamificationConfig,
   PeriodWinner,
@@ -289,7 +290,32 @@ export const gamificationService = {
         params: params?.recalculate ? { recalculate: "true" } : undefined,
       }
     );
-    return (response.data as any)?.data ?? response.data;
+    const payload = (response.data as any)?.data ?? response.data;
+
+    if (payload?.stats) {
+      return payload;
+    }
+
+    const looksLikeStats =
+      payload &&
+      typeof payload === "object" &&
+      ("totalPoints" in payload ||
+        "currentLevel" in payload ||
+        "currentMonthPoints" in payload);
+
+    if (looksLikeStats) {
+      return {
+        stats: payload as DistributorStats,
+        currentRankingPosition: 0,
+        totalDistributors: 0,
+      };
+    }
+
+    return {
+      stats: {} as DistributorStats,
+      currentRankingPosition: 0,
+      totalDistributors: 0,
+    };
   },
 
   async recalculatePoints(distributorId?: string): Promise<{

@@ -43,7 +43,7 @@ export default function DistributorDashboardLayout() {
           .catch(() => null);
 
         if (!isActive) return;
-        setDistributorStats(statsRes?.stats ?? null);
+        setDistributorStats((statsRes as any)?.stats ?? statsRes ?? null);
       } catch (error) {
         console.error("Error loading gamification widget:", error);
       }
