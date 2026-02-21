@@ -11,7 +11,7 @@ import type {
   DefectiveProduct,
   Product,
 } from "../../inventory/types/product.types";
-import { defectiveProductService } from "../../sales/services";
+import { defectiveProductService, warrantyService } from "../../sales/services";
 
 export default function DefectiveProductsManagement() {
   const [data, setData] = useState<{
@@ -46,7 +46,12 @@ export default function DefectiveProductsManagement() {
   const [adminNotes, setAdminNotes] = useState("");
   const [hasWarrantyOnConfirm, setHasWarrantyOnConfirm] = useState(false);
   const [actionType, setActionType] = useState<
-    "confirm" | "reject" | "approveWarranty" | "rejectWarranty"
+    | "confirm"
+    | "reject"
+    | "approveWarranty"
+    | "rejectWarranty"
+    | "resolveScrap"
+    | "resolveSupplier"
   >("confirm");
 
   // Estados para reportar desde admin
@@ -167,7 +172,13 @@ export default function DefectiveProductsManagement() {
 
   const handleAction = (
     report: DefectiveProduct,
-    action: "confirm" | "reject" | "approveWarranty" | "rejectWarranty"
+    action:
+      | "confirm"
+      | "reject"
+      | "approveWarranty"
+      | "rejectWarranty"
+      | "resolveScrap"
+      | "resolveSupplier"
   ) => {
     setSelectedReport(report);
     setActionType(action);
@@ -197,6 +208,18 @@ export default function DefectiveProductsManagement() {
       } else if (actionType === "rejectWarranty") {
         await defectiveProductService.rejectWarranty(
           selectedReport._id,
+          adminNotes
+        );
+      } else if (actionType === "resolveScrap") {
+        await warrantyService.resolveWarranty(
+          selectedReport._id,
+          "scrap",
+          adminNotes
+        );
+      } else if (actionType === "resolveSupplier") {
+        await warrantyService.resolveWarranty(
+          selectedReport._id,
+          "supplier_warranty",
           adminNotes
         );
       }
@@ -537,6 +560,16 @@ export default function DefectiveProductsManagement() {
                     : null;
                 const branch =
                   typeof report.branch === "object" ? report.branch : null;
+                const replacementProduct =
+                  typeof report.replacementProduct === "object"
+                    ? report.replacementProduct
+                    : null;
+                const resolutionLabel =
+                  report.warrantyResolution === "scrap"
+                    ? "Pérdida total"
+                    : report.warrantyResolution === "supplier_warranty"
+                      ? "Garantía proveedor"
+                      : "Pendiente";
 
                 return (
                   <tr key={report._id} className="hover:bg-white/5">
@@ -593,6 +626,16 @@ export default function DefectiveProductsManagement() {
                           {product?.name || "N/A"}
                         </span>
                       </div>
+                      {report.ticketId && (
+                        <div className="mt-1 text-xs text-purple-300">
+                          Ticket: {report.ticketId}
+                        </div>
+                      )}
+                      {replacementProduct && (
+                        <div className="mt-1 text-xs text-gray-400">
+                          Reemplazo: {replacementProduct.name}
+                        </div>
+                      )}
                     </td>
                     <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-white">
                       {report.quantity}
@@ -601,6 +644,11 @@ export default function DefectiveProductsManagement() {
                       <div className="line-clamp-2" title={report.reason}>
                         {report.reason}
                       </div>
+                      {report.priceDifference && report.priceDifference > 0 && (
+                        <div className="mt-1 text-xs text-emerald-300">
+                          Upselling: +${report.priceDifference.toLocaleString()}
+                        </div>
+                      )}
                     </td>
                     <td className="whitespace-nowrap px-6 py-4">
                       {report.hasWarranty ? (
@@ -623,6 +671,12 @@ export default function DefectiveProductsManagement() {
                               ⏳ Pendiente
                             </span>
                           )}
+                          {report.origin === "customer_warranty" &&
+                            report.warrantyResolution && (
+                              <span className="text-xs text-purple-300">
+                                Resolución: {resolutionLabel}
+                              </span>
+                            )}
                         </div>
                       ) : (
                         <span className="inline-flex items-center rounded-full bg-gray-500/15 px-2.5 py-0.5 text-xs font-medium text-gray-400">
@@ -649,7 +703,41 @@ export default function DefectiveProductsManagement() {
                     </td>
                     <td className="whitespace-nowrap px-6 py-4 text-sm">
                       {/* ⭐ Si es de un pedido (origin=order), mostrar solo info, no acciones */}
-                      {report.origin === "order" ? (
+                      {report.origin === "customer_warranty" ? (
+                        report.warrantyResolution === "pending" ? (
+                          <div className="flex flex-col gap-1">
+                            <button
+                              onClick={() =>
+                                handleAction(report, "resolveScrap")
+                              }
+                              disabled={processingId === report._id}
+                              className="rounded bg-red-600 px-2 py-1 text-xs font-medium text-white hover:bg-red-500 disabled:opacity-50"
+                            >
+                              ✗ Pérdida total
+                            </button>
+                            <button
+                              onClick={() =>
+                                handleAction(report, "resolveSupplier")
+                              }
+                              disabled={processingId === report._id}
+                              className="rounded bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+                            >
+                              ✓ Garantía proveedor
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col gap-1">
+                            <span className="text-xs text-gray-400">
+                              Resuelto: {resolutionLabel}
+                            </span>
+                            {report.lossAmount && report.lossAmount > 0 && (
+                              <span className="text-xs text-red-400">
+                                Pérdida: ${report.lossAmount}
+                              </span>
+                            )}
+                          </div>
+                        )
+                      ) : report.origin === "order" ? (
                         <div className="flex flex-col gap-1">
                           <span className="inline-flex items-center rounded-full bg-purple-500/15 px-2 py-0.5 text-xs font-medium text-purple-300">
                             📦 Desde Pedido
@@ -781,7 +869,11 @@ export default function DefectiveProductsManagement() {
                       ? "Rechazar Reporte"
                       : actionType === "approveWarranty"
                         ? "✓ Aprobar Garantía"
-                        : "✗ Rechazar Garantía"}
+                        : actionType === "rejectWarranty"
+                          ? "✗ Rechazar Garantía"
+                          : actionType === "resolveScrap"
+                            ? "✗ Pérdida total"
+                            : "✓ Garantía proveedor"}
                 </h2>
                 <p className="mt-1 text-sm text-gray-400">
                   Revisa los detalles antes de continuar.
@@ -831,6 +923,20 @@ export default function DefectiveProductsManagement() {
                 <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4">
                   <p className="text-sm font-medium text-red-200">
                     ✗ Se registrará como pérdida definitiva.
+                  </p>
+                </div>
+              )}
+              {actionType === "resolveScrap" && (
+                <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4">
+                  <p className="text-sm font-medium text-red-200">
+                    ✗ Se marcará como pérdida total (scrap).
+                  </p>
+                </div>
+              )}
+              {actionType === "resolveSupplier" && (
+                <div className="rounded-xl border border-blue-500/20 bg-blue-500/10 p-4">
+                  <p className="text-sm font-medium text-blue-200">
+                    ✓ Se marca como garantía de proveedor.
                   </p>
                 </div>
               )}
@@ -915,7 +1021,11 @@ export default function DefectiveProductsManagement() {
                       ? "bg-red-600 text-white hover:bg-red-700"
                       : actionType === "approveWarranty"
                         ? "bg-blue-600 text-white hover:bg-blue-700"
-                        : "bg-orange-600 text-white hover:bg-orange-700"
+                        : actionType === "rejectWarranty"
+                          ? "bg-orange-600 text-white hover:bg-orange-700"
+                          : actionType === "resolveScrap"
+                            ? "bg-red-600 text-white hover:bg-red-700"
+                            : "bg-blue-600 text-white hover:bg-blue-700"
                 }`}
               >
                 {processingId !== null
@@ -926,7 +1036,11 @@ export default function DefectiveProductsManagement() {
                       ? "Rechazar"
                       : actionType === "approveWarranty"
                         ? "Aprobar Garantía"
-                        : "Rechazar Garantía"}
+                        : actionType === "rejectWarranty"
+                          ? "Rechazar Garantía"
+                          : actionType === "resolveScrap"
+                            ? "Marcar pérdida"
+                            : "Garantía proveedor"}
               </button>
             </div>
           </div>

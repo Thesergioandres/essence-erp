@@ -92,11 +92,20 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Configurar orígenes permitidos
-const allowedOrigins = [
+const defaultAllowedOrigins = [
   "http://localhost:3000",
   "http://localhost:5173",
-  "http://93.189.89.195",
-  "https://93.189.89.195",
+];
+const envOriginsRaw = process.env.ALLOWED_ORIGINS || "";
+const envOrigins = envOriginsRaw
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+const frontendOrigin = (process.env.FRONTEND_URL || "").trim();
+const allowedOrigins = [
+  ...defaultAllowedOrigins,
+  ...(frontendOrigin ? [frontendOrigin] : []),
+  ...envOrigins,
 ];
 
 // Conectar a MongoDB y Redis

@@ -5,4 +5,5 @@ export {
   defectiveProductService,
   saleService,
   specialSaleService,
+  warrantyService,
 } from "./sales.service";

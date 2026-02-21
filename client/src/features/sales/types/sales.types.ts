@@ -60,6 +60,7 @@ export interface Sale {
   distributorProfit?: number;
   distributorProfitPercentage?: number;
   totalProfit?: number;
+  totalGroupProfit?: number;
   netProfit?: number;
   shippingCost?: number;
   discount?: number;
@@ -74,6 +75,10 @@ export interface Sale {
   promotion?: { _id: string; name?: string } | string | null;
   saleGroupId?: string;
   saleId?: string;
+  warrantyTicketId?: string;
+  isComplementarySale?: boolean;
+  parentSaleId?: string | null;
+  parentSaleGroupId?: string | null;
   notes?: string;
   saleDate: string;
   sourceLocation?: "warehouse" | "branch" | "distributor";

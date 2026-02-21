@@ -256,8 +256,13 @@ const StockManagement = () => {
       return;
     }
 
-    const product = products.find(p => p._id === branchSelectedProductId);
-    if (!product) return;
+    const product = availableBranchProducts.find(
+      p => p._id === branchSelectedProductId
+    );
+    if (!product) {
+      setError("El producto seleccionado no tiene stock en la sede origen");
+      return;
+    }
 
     if (branchItems.some(item => item.productId === branchSelectedProductId)) {
       setError("Este producto ya está en la lista");

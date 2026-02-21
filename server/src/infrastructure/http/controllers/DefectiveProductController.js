@@ -199,6 +199,106 @@ export class DefectiveProductController {
     }
   }
 
+  async getSaleLookup(req, res) {
+    try {
+      const businessId = req.businessId;
+      if (!businessId) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Falta x-business-id" });
+      }
+
+      const lookup = req.params.saleId || req.query.saleId;
+      const result = await repository.getSaleLookup(
+        businessId,
+        lookup,
+        req.user,
+      );
+
+      res.json({ success: true, data: result });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      res.status(status).json({ success: false, message: error.message });
+    }
+  }
+
+  async createCustomerWarranty(req, res) {
+    try {
+      const businessId = req.businessId;
+      if (!businessId) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Falta x-business-id" });
+      }
+
+      const role = req.membership?.role || req.user?.role;
+      const isDistributor = role === "distribuidor";
+      const replacementSource = req.body?.replacementSource;
+
+      if (isDistributor && replacementSource === "warehouse") {
+        return res.status(403).json({
+          success: false,
+          message: "No tienes acceso a la bodega",
+        });
+      }
+
+      if (isDistributor && replacementSource === "branch") {
+        const allowedBranches = Array.isArray(req.membership?.allowedBranches)
+          ? req.membership.allowedBranches.map((id) => id.toString())
+          : [];
+        const branchId = req.body?.replacementBranchId;
+        if (!branchId || !allowedBranches.includes(branchId.toString())) {
+          return res.status(403).json({
+            success: false,
+            message: "No tienes acceso a esta sede",
+          });
+        }
+      }
+
+      const result = await repository.createCustomerWarranty(
+        req.body,
+        businessId,
+        req.user,
+      );
+
+      res.status(201).json({ success: true, data: result });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      res.status(status).json({ success: false, message: error.message });
+    }
+  }
+
+  async resolveCustomerWarranty(req, res) {
+    try {
+      const businessId = req.businessId;
+      if (!businessId) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Falta x-business-id" });
+      }
+
+      const role = req.membership?.role || req.user?.role;
+      if (role === "distribuidor") {
+        return res.status(403).json({
+          success: false,
+          message: "No tienes permiso para resolver garantias",
+        });
+      }
+
+      const report = await repository.resolveCustomerWarranty(
+        req.params.id,
+        businessId,
+        req.user._id,
+        req.body,
+      );
+
+      res.json({ success: true, data: report });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      res.status(status).json({ success: false, message: error.message });
+    }
+  }
+
   async cancel(req, res) {
     try {
       const businessId = req.businessId;

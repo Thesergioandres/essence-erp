@@ -73,6 +73,29 @@ export default function Sales() {
   const [showAllSales, setShowAllSales] = useState(false);
   const [isLoadingAll, setIsLoadingAll] = useState(false);
 
+  const getSaleRevenue = (sale: Sale) => {
+    const gross = sale.salePrice * sale.quantity;
+    const discount = sale.discount || 0;
+    const fallback = Math.max(0, gross - discount);
+    if (typeof sale.actualPayment === "number") {
+      return Number.isFinite(sale.actualPayment)
+        ? sale.actualPayment
+        : fallback;
+    }
+    return fallback;
+  };
+
+  const getAdminNetProfit = (sale: Sale) => {
+    if (Number.isFinite(sale.netProfit)) {
+      return sale.netProfit as number;
+    }
+    const deductions =
+      (sale.totalAdditionalCosts || 0) +
+      (sale.shippingCost || 0) +
+      (sale.discount || 0);
+    return (sale.adminProfit ?? 0) - deductions;
+  };
+
   const handleExport = async (type: "excel" | "pdf") => {
     if (sales.length === 0) return;
     setIsExporting(true);
@@ -99,11 +122,8 @@ export default function Sales() {
           Cliente: customerName,
           Producto: productName,
           Cantidad: sale.quantity,
-          Total: sale.salePrice * sale.quantity,
-          Ganancia:
-            (sale.adminProfit ?? 0) -
-            (sale.totalAdditionalCosts || 0) -
-            (sale.shippingCost || 0),
+          Total: getSaleRevenue(sale),
+          Ganancia: getAdminNetProfit(sale),
           Estado: sale.paymentStatus,
         };
       });
@@ -593,20 +613,11 @@ export default function Sales() {
         id: groupId,
         sales: groupSales,
         totalQuantity: groupSales.reduce((sum, s) => sum + s.quantity, 0),
-        totalRevenue: groupSales.reduce(
-          (sum, s) => sum + s.salePrice * s.quantity,
-          0
-        ),
+        totalRevenue: groupSales.reduce((sum, s) => sum + getSaleRevenue(s), 0),
         // Ganancia Admin = solo adminProfit (sin incluir comisión del distribuidor)
         // Luego restar costos adicionales que asume la empresa
         totalProfit: groupSales.reduce((sum, s) => {
-          const baseAdminProfit = s.adminProfit ?? 0;
-          const deductions =
-            (s.totalAdditionalCosts || 0) + (s.shippingCost || 0);
-          const netFromSale = Number.isFinite(s.netProfit)
-            ? s.netProfit
-            : baseAdminProfit - deductions;
-          return sum + netFromSale;
+          return sum + getAdminNetProfit(s);
         }, 0),
         totalDistributorProfit: groupSales.reduce(
           (sum, s) => sum + (s.distributorProfit || 0),
@@ -628,19 +639,13 @@ export default function Sales() {
 
     // Procesar ventas individuales
     individual.forEach(sale => {
-      // Ganancia Admin = solo adminProfit - costos adicionales (empresa)
-      const baseAdminProfit = sale.adminProfit ?? 0;
-      const deductions =
-        (sale.totalAdditionalCosts || 0) + (sale.shippingCost || 0);
-      const adminNetProfit = Number.isFinite(sale.netProfit)
-        ? sale.netProfit
-        : baseAdminProfit - deductions;
+      const adminNetProfit = getAdminNetProfit(sale);
 
       result.push({
         id: sale._id,
         sales: [sale],
         totalQuantity: sale.quantity,
-        totalRevenue: sale.salePrice * sale.quantity,
+        totalRevenue: getSaleRevenue(sale),
         // Solo ganancia del admin (no incluye comisión distribuidor)
         totalProfit: adminNetProfit,
         totalDistributorProfit: sale.distributorProfit || 0,
@@ -711,7 +716,7 @@ export default function Sales() {
       ) {
         return sum + s.credit.remainingAmount;
       }
-      return sum + s.salePrice * s.quantity;
+      return sum + getSaleRevenue(s);
     }, 0);
 
     return {
@@ -725,16 +730,10 @@ export default function Sales() {
       pendingCollectionAmount: pendingCollectionAmount,
       totalRevenue:
         statsData.totalRevenue ||
-        sales.reduce((sum, s) => sum + s.salePrice * s.quantity, 0),
+        sales.reduce((sum, s) => sum + getSaleRevenue(s), 0),
       // Ganancia Admin = solo adminProfit - costos que asume la empresa
       totalProfit: sales.reduce((sum, s) => {
-        const baseAdminProfit = s.adminProfit ?? 0;
-        const deductions =
-          (s.totalAdditionalCosts || 0) + (s.shippingCost || 0);
-        const netFromSale = Number.isFinite(s.netProfit)
-          ? s.netProfit
-          : baseAdminProfit - deductions;
-        return sum + netFromSale;
+        return sum + getAdminNetProfit(s);
       }, 0),
       // Total de costos adicionales
       totalAdditionalCosts: sales.reduce(
@@ -1047,6 +1046,9 @@ export default function Sales() {
                     <th className="px-6 py-3 text-left text-xs font-medium uppercase text-gray-400">
                       Fecha
                     </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase text-gray-400">
+                      ID
+                    </th>
                     {showBranchColumn && (
                       <th className="px-6 py-3 text-left text-xs font-medium uppercase text-gray-400">
                         Sede
@@ -1129,6 +1131,11 @@ export default function Sales() {
                       distributor?.name || createdByUser?.name || "Admin";
                     const displayEmail =
                       distributor?.email || createdByUser?.email || "";
+                    const warrantyTicketId = group.sales.find(
+                      sale => sale.warrantyTicketId
+                    )?.warrantyTicketId;
+                    const displayId =
+                      warrantyTicketId || firstSale.saleId || firstSale._id;
 
                     // Determinar rango según comisión
                     let rankBadge = {
@@ -1192,6 +1199,16 @@ export default function Sales() {
                               month: "short",
                               day: "numeric",
                             })}
+                          </td>
+                          <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-200">
+                            <div className="flex items-center gap-2">
+                              <span>{displayId}</span>
+                              <span
+                                className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${warrantyTicketId ? "bg-amber-500/20 text-amber-200" : "bg-emerald-500/15 text-emerald-200"}`}
+                              >
+                                {warrantyTicketId ? "REF-GAR" : "SALE"}
+                              </span>
+                            </div>
                           </td>
                           {showBranchColumn && (
                             <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-300">
@@ -1441,6 +1458,22 @@ export default function Sales() {
                                 <td className="whitespace-nowrap px-6 py-3 pl-12 text-sm text-gray-400">
                                   {/* Vacío - fecha ya mostrada */}
                                 </td>
+                                <td className="whitespace-nowrap px-6 py-3 text-sm text-gray-400">
+                                  <div className="flex items-center gap-2">
+                                    <span>
+                                      {sale.warrantyTicketId ||
+                                        sale.saleId ||
+                                        sale._id}
+                                    </span>
+                                    <span
+                                      className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${sale.warrantyTicketId ? "bg-amber-500/20 text-amber-200" : "bg-emerald-500/15 text-emerald-200"}`}
+                                    >
+                                      {sale.warrantyTicketId
+                                        ? "REF-GAR"
+                                        : "SALE"}
+                                    </span>
+                                  </div>
+                                </td>
                                 {showBranchColumn && (
                                   <td className="whitespace-nowrap px-6 py-3 text-sm text-gray-400">
                                     {/* Vacío */}
@@ -1495,25 +1528,16 @@ export default function Sales() {
                                   {sale.quantity}
                                 </td>
                                 <td className="whitespace-nowrap px-6 py-3 text-sm text-gray-300">
-                                  $
-                                  {(
-                                    sale.salePrice * sale.quantity
-                                  ).toLocaleString()}
+                                  ${getSaleRevenue(sale).toLocaleString()}
                                 </td>
                                 <td className="whitespace-nowrap px-6 py-3 text-sm text-green-400">
-                                  $
-                                  {(Number.isFinite(sale.netProfit)
-                                    ? sale.netProfit
-                                    : (sale.adminProfit ?? 0) -
-                                      (sale.totalAdditionalCosts || 0) -
-                                      (sale.shippingCost || 0)
-                                  ).toLocaleString()}
+                                  ${getAdminNetProfit(sale).toLocaleString()}
                                 </td>
                                 {distributorsEnabled && (
                                   <td className="whitespace-nowrap px-6 py-3 text-sm text-yellow-400">
                                     {distributor &&
                                     (sale.distributorProfit || 0) > 0
-                                      ? `$${(sale.salePrice * sale.quantity - (sale.distributorProfit || 0)).toLocaleString()}`
+                                      ? `$${(getSaleRevenue(sale) - (sale.distributorProfit || 0)).toLocaleString()}`
                                       : "-"}
                                   </td>
                                 )}

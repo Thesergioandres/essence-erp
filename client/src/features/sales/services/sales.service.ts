@@ -700,3 +700,70 @@ export const defectiveProductService = {
     return response.data;
   },
 };
+
+// ==================== WARRANTY (CUSTOMER) SERVICE ====================
+export const warrantyService = {
+  async getSaleLookup(saleId: string): Promise<{
+    success: boolean;
+    data: {
+      saleGroupId: string;
+      saleId: string;
+      saleDate: string;
+      seller: {
+        role: "admin" | "distribuidor";
+        user: { _id: string; name: string; email?: string } | string | null;
+      };
+      items: Array<{
+        saleItemId: string;
+        saleGroupId?: string;
+        saleId?: string;
+        saleDate?: string;
+        product: Product | string;
+        quantity: number;
+        salePrice: number;
+        distributor?: { _id: string; name: string } | string | null;
+        branch?: { _id: string; name: string } | string | null;
+        sourceLocation?: "warehouse" | "branch" | "distributor" | null;
+        createdBy?: { _id: string; name: string } | string | null;
+      }>;
+    };
+  }> {
+    const response = await api.get(
+      `/defective-products/warranty/sale/${saleId}`
+    );
+    return response.data;
+  },
+
+  async createWarranty(data: {
+    saleItemId: string;
+    quantity: number;
+    reason: string;
+    replacementProductId: string;
+    replacementPrice?: number;
+    cashRefund?: number;
+    replacementSource: "warehouse" | "branch" | "distributor";
+    replacementBranchId?: string;
+    adminNotes?: string;
+  }): Promise<{
+    success: boolean;
+    data: {
+      report: DefectiveProduct;
+      upsellSale?: unknown;
+    };
+  }> {
+    const response = await api.post("/defective-products/warranty", data);
+    return response.data;
+  },
+
+  async resolveWarranty(
+    reportId: string,
+    resolution: "scrap" | "supplier_warranty",
+    adminNotes?: string
+  ): Promise<{ success: boolean; data: DefectiveProduct }> {
+    const response = await api.put(
+      `/defective-products/${reportId}/resolve-warranty`,
+      { resolution, adminNotes }
+    );
+    return response.data;
+  },
+};

@@ -27,6 +27,13 @@ const saleRepository = new SaleRepository();
  * @param {mongoose.ClientSession} session
  */
 async function restoreStock(sale, session) {
+  if (sale?.isComplementarySale) {
+    console.log(
+      "📦 [DELETE SALE] Complementary sale detected, skipping stock restore",
+    );
+    return;
+  }
+
   const productId = sale.product?._id || sale.product;
   const quantity = Number(sale.quantity) || 0;
 
@@ -147,27 +154,43 @@ async function restoreDefectiveStock(reports, session) {
   if (!reports || reports.length === 0) return;
 
   for (const report of reports) {
-    const productId = report.product;
-    const quantity = Number(report.quantity) || 0;
+    const isCustomerWarranty =
+      report.origin === "customer_warranty" && report.replacementProduct;
+    const productId = isCustomerWarranty
+      ? report.replacementProduct
+      : report.product;
+    const quantity =
+      Number(
+        isCustomerWarranty ? report.replacementQuantity : report.quantity,
+      ) || 0;
+    const stockOrigin = isCustomerWarranty
+      ? report.replacementStockOrigin || report.stockOrigin
+      : report.stockOrigin;
+    const branchId = isCustomerWarranty
+      ? report.replacementBranch
+      : report.branch;
+    const distributorId = isCustomerWarranty
+      ? report.replacementDistributor
+      : report.distributor;
 
     if (!productId || !mongoose.isValidObjectId(productId) || quantity <= 0) {
       continue;
     }
 
-    if (report.stockOrigin === "distributor" && report.distributor) {
+    if (stockOrigin === "distributor" && distributorId) {
       await DistributorStock.findOneAndUpdate(
         {
-          distributor: report.distributor,
+          distributor: distributorId,
           product: productId,
           ...(report.business ? { business: report.business } : {}),
         },
         { $inc: { quantity } },
         { session, upsert: true },
       );
-    } else if (report.stockOrigin === "branch" && report.branch) {
+    } else if (stockOrigin === "branch" && branchId) {
       await BranchStock.findOneAndUpdate(
         {
-          branch: report.branch,
+          branch: branchId,
           product: productId,
           ...(report.business ? { business: report.business } : {}),
         },

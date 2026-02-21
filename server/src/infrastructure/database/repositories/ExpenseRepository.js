@@ -209,8 +209,17 @@ class ExpenseRepository {
     const filter = businessId ? { business: businessId } : {};
     const saleFilter = businessId ? { business: businessId } : {};
     const defectiveFilter = businessId
-      ? { business: businessId, status: "confirmado" }
-      : { status: "confirmado" };
+      ? {
+          business: businessId,
+          status: "confirmado",
+          lossAmount: { $gt: 0 },
+          origin: { $ne: "customer_warranty" },
+        }
+      : {
+          status: "confirmado",
+          lossAmount: { $gt: 0 },
+          origin: { $ne: "customer_warranty" },
+        };
 
     const resolvedType =
       (typeof type === "string" && type.trim()) ||
@@ -304,7 +313,9 @@ class ExpenseRepository {
     const defectiveExpenses = defectiveProducts.map((def) => ({
       _id: `defective-${def._id}`,
       type: "Pérdida - Defectuoso",
-      amount: (def.product?.purchasePrice || 0) * (def.quantity || 1),
+      amount:
+        Number(def.lossAmount) ||
+        (def.product?.purchasePrice || 0) * (def.quantity || 1),
       description: `Producto defectuoso - ${def.product?.name || "Producto"} (x${def.quantity})`,
       expenseDate: def.reportDate,
       createdBy: def.reportedBy || null,

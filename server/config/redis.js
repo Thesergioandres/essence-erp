@@ -12,11 +12,23 @@ const initRedis = () => {
       return null;
     }
 
-    redisClient = new Redis(process.env.REDIS_URL, {
+    const redisUrl = process.env.REDIS_URL;
+
+    // Configuración base de Redis
+    const redisOptions = {
       maxRetriesPerRequest: 3,
       enableReadyCheck: true,
       connectTimeout: 10000,
-    });
+    };
+
+    // Agregar opciones TLS automáticas si es un endpoint seguro (muy común en Railway y Upstash)
+    if (redisUrl.startsWith("rediss://")) {
+      redisOptions.tls = {
+        rejectUnauthorized: false, // Permite certificados auto-firmados comunes en infraestructuras nativas de cloud
+      };
+    }
+
+    redisClient = new Redis(redisUrl, redisOptions);
 
     redisClient.on("connect", () => {
       console.log("✅ Redis conectado exitosamente");

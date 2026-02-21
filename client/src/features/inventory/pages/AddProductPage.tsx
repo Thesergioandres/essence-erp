@@ -249,8 +249,21 @@ export default function AddProduct() {
     } catch (err) {
       const errorPayload = (err as { response?: { data?: any } })?.response
         ?.data;
+      const rawMessage =
+        errorPayload?.message || (err instanceof Error ? err.message : "");
+      const isImageError =
+        Boolean(imageFile) &&
+        (errorPayload?.code === "LIMIT_FILE_SIZE" ||
+          /image|imagen|upload|archivo|file|cloudinary|multipart/i.test(
+            rawMessage
+          ));
       if (errorPayload?.code === "LIMIT_FILE_SIZE") {
         setError("Imagen muy pesada. Maximo 10MB.");
+      } else if (isImageError) {
+        const reason = rawMessage || "el servidor no pudo procesar el archivo.";
+        setError(
+          `Error al subir imagen: ${reason} Verifica formato (JPG/PNG/WEBP), peso < 10MB y que no este corrupto.`
+        );
       } else {
         const message =
           err instanceof Error

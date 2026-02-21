@@ -90,6 +90,9 @@ export interface DefectiveProduct {
   images?: Array<{ url: string; publicId: string }>;
   hasWarranty?: boolean;
   warrantyStatus?: "pending" | "approved" | "rejected" | "not_applicable";
+  warrantyResolution?: "pending" | "scrap" | "supplier_warranty";
+  warrantyResolvedAt?: string;
+  warrantyResolvedBy?: unknown | string;
   lossAmount?: number;
   stockRestored?: boolean;
   stockRestoredAt?: string;
@@ -99,7 +102,29 @@ export interface DefectiveProduct {
   confirmedBy?: unknown | string;
   adminNotes?: string;
   saleGroupId?: string;
-  origin?: "direct" | "order";
+  ticketId?: string;
+  originalSaleId?: string;
+  originalSaleGroupId?: string;
+  originalSaleItem?: unknown | string;
+  originalSaleDate?: string;
+  originalSalePrice?: number;
+  replacementProduct?:
+    | { _id: string; name: string; image?: ProductImage }
+    | string
+    | null;
+  replacementQuantity?: number;
+  replacementPrice?: number;
+  replacementTotal?: number;
+  priceDifference?: number;
+  cashRefund?: number;
+  replacementStockOrigin?: "warehouse" | "branch" | "distributor";
+  replacementBranch?: { _id: string; name: string } | string | null;
+  replacementDistributor?: { _id: string; name: string } | string | null;
+  upsellSale?:
+    | { _id: string; saleId?: string; salePrice?: number; quantity?: number }
+    | string
+    | null;
+  origin?: "direct" | "order" | "customer_warranty";
   createdAt?: string;
   updatedAt?: string;
 }

@@ -104,6 +104,16 @@ export const FinancialKPICards: React.FC<{
           color: "bg-violet-500",
         },
         {
+          id: "rangeReceivable",
+          label: "Cuentas por Cobrar (rango)",
+          tooltip: "Saldo pendiente por cobrar en el rango seleccionado.",
+          value: formatMoney(
+            range.accountsReceivable ?? summary.accountsReceivable ?? 0
+          ),
+          icon: <TrendingDown className="h-8 w-8" />,
+          color: "bg-rose-500",
+        },
+        {
           id: "rangeProfit",
           label: "Ganancia neta (rango)",
           tooltip:
@@ -230,6 +240,16 @@ export const FinancialKPICards: React.FC<{
           ),
           icon: <TrendingUp className="h-8 w-8" />,
           color: "bg-cyan-600",
+        },
+        {
+          id: "monthReceivable",
+          label: "Cuentas por Cobrar (mes)",
+          tooltip: "Saldo pendiente por cobrar del mes actual.",
+          value: formatMoney(
+            summary.monthAccountsReceivable ?? summary.accountsReceivable ?? 0
+          ),
+          icon: <TrendingDown className="h-8 w-8" />,
+          color: "bg-rose-500",
         },
         {
           id: "avgTicket",

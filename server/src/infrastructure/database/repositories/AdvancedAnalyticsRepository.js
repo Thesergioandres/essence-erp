@@ -1,6 +1,5 @@
 import mongoose from "mongoose";
 import Credit from "../../../../models/Credit.js";
-import CreditPayment from "../../../../models/CreditPayment.js";
 import DefectiveProduct from "../../../../models/DefectiveProduct.js";
 import Expense from "../../../../models/Expense.js";
 import Membership from "../../../../models/Membership.js";
@@ -44,6 +43,52 @@ const buildColombiaRange = (startStr, endStr) => {
 
   return range;
 };
+
+const buildSaleRevenueExpression = () => ({
+  $ifNull: [
+    "$actualPayment",
+    {
+      $subtract: [
+        { $multiply: ["$salePrice", "$quantity"] },
+        { $ifNull: ["$discount", 0] },
+      ],
+    },
+  ],
+});
+
+const buildAdminNetProfitExpression = () => ({
+  $ifNull: [
+    "$netProfit",
+    {
+      $subtract: [
+        {
+          $subtract: [
+            {
+              $subtract: [
+                { $ifNull: ["$adminProfit", 0] },
+                { $ifNull: ["$totalAdditionalCosts", 0] },
+              ],
+            },
+            { $ifNull: ["$discount", 0] },
+          ],
+        },
+        { $ifNull: ["$shippingCost", 0] },
+      ],
+    },
+  ],
+});
+
+const buildTotalGroupProfitExpression = () => ({
+  $ifNull: [
+    "$totalGroupProfit",
+    {
+      $ifNull: [
+        "$totalProfit",
+        { $add: ["$adminProfit", "$distributorProfit"] },
+      ],
+    },
+  ],
+});
 
 export class AdvancedAnalyticsRepository {
   // Financial KPIs - Main dashboard data
@@ -99,10 +144,14 @@ export class AdvancedAnalyticsRepository {
       warrantyTodayData,
       warrantyWeekData,
       warrantyMonthData,
-      creditRangeData,
-      creditTodayData,
-      creditWeekData,
-      creditMonthData,
+      warrantyRevenueRangeData,
+      warrantyRevenueTodayData,
+      warrantyRevenueWeekData,
+      warrantyRevenueMonthData,
+      creditPendingRangeData,
+      creditPendingTodayData,
+      creditPendingWeekData,
+      creditPendingMonthData,
       activeDistributors,
       expensesData,
     ] = await Promise.all([
@@ -113,44 +162,13 @@ export class AdvancedAnalyticsRepository {
             _id: null,
             sales: { $sum: 1 },
             revenue: {
-              $sum: {
-                $cond: [
-                  { $eq: ["$isCredit", true] },
-                  0,
-                  { $multiply: ["$salePrice", "$quantity"] },
-                ],
-              },
+              $sum: buildSaleRevenueExpression(),
             },
             profit: {
-              $sum: {
-                $ifNull: [
-                  "$totalProfit",
-                  {
-                    $ifNull: [
-                      "$netProfit",
-                      { $add: ["$adminProfit", "$distributorProfit"] },
-                    ],
-                  },
-                ],
-              },
+              $sum: buildTotalGroupProfitExpression(),
             },
             netProfit: {
-              $sum: {
-                $subtract: [
-                  {
-                    $subtract: [
-                      {
-                        $subtract: [
-                          { $ifNull: ["$adminProfit", 0] },
-                          { $ifNull: ["$totalAdditionalCosts", 0] },
-                        ],
-                      },
-                      { $ifNull: ["$discount", 0] },
-                    ],
-                  },
-                  { $ifNull: ["$shippingCost", 0] },
-                ],
-              },
+              $sum: buildAdminNetProfitExpression(),
             },
             quantity: { $sum: "$quantity" },
           },
@@ -182,44 +200,13 @@ export class AdvancedAnalyticsRepository {
             _id: null,
             sales: { $sum: 1 },
             revenue: {
-              $sum: {
-                $cond: [
-                  { $eq: ["$isCredit", true] },
-                  0,
-                  { $multiply: ["$salePrice", "$quantity"] },
-                ],
-              },
+              $sum: buildSaleRevenueExpression(),
             },
             profit: {
-              $sum: {
-                $ifNull: [
-                  "$totalProfit",
-                  {
-                    $ifNull: [
-                      "$netProfit",
-                      { $add: ["$adminProfit", "$distributorProfit"] },
-                    ],
-                  },
-                ],
-              },
+              $sum: buildTotalGroupProfitExpression(),
             },
             netProfit: {
-              $sum: {
-                $subtract: [
-                  {
-                    $subtract: [
-                      {
-                        $subtract: [
-                          { $ifNull: ["$adminProfit", 0] },
-                          { $ifNull: ["$totalAdditionalCosts", 0] },
-                        ],
-                      },
-                      { $ifNull: ["$discount", 0] },
-                    ],
-                  },
-                  { $ifNull: ["$shippingCost", 0] },
-                ],
-              },
+              $sum: buildAdminNetProfitExpression(),
             },
           },
         },
@@ -249,44 +236,13 @@ export class AdvancedAnalyticsRepository {
             _id: null,
             sales: { $sum: 1 },
             revenue: {
-              $sum: {
-                $cond: [
-                  { $eq: ["$isCredit", true] },
-                  0,
-                  { $multiply: ["$salePrice", "$quantity"] },
-                ],
-              },
+              $sum: buildSaleRevenueExpression(),
             },
             profit: {
-              $sum: {
-                $ifNull: [
-                  "$totalProfit",
-                  {
-                    $ifNull: [
-                      "$netProfit",
-                      { $add: ["$adminProfit", "$distributorProfit"] },
-                    ],
-                  },
-                ],
-              },
+              $sum: buildTotalGroupProfitExpression(),
             },
             netProfit: {
-              $sum: {
-                $subtract: [
-                  {
-                    $subtract: [
-                      {
-                        $subtract: [
-                          { $ifNull: ["$adminProfit", 0] },
-                          { $ifNull: ["$totalAdditionalCosts", 0] },
-                        ],
-                      },
-                      { $ifNull: ["$discount", 0] },
-                    ],
-                  },
-                  { $ifNull: ["$shippingCost", 0] },
-                ],
-              },
+              $sum: buildAdminNetProfitExpression(),
             },
           },
         },
@@ -316,44 +272,13 @@ export class AdvancedAnalyticsRepository {
             _id: null,
             sales: { $sum: 1 },
             revenue: {
-              $sum: {
-                $cond: [
-                  { $eq: ["$isCredit", true] },
-                  0,
-                  { $multiply: ["$salePrice", "$quantity"] },
-                ],
-              },
+              $sum: buildSaleRevenueExpression(),
             },
             profit: {
-              $sum: {
-                $ifNull: [
-                  "$totalProfit",
-                  {
-                    $ifNull: [
-                      "$netProfit",
-                      { $add: ["$adminProfit", "$distributorProfit"] },
-                    ],
-                  },
-                ],
-              },
+              $sum: buildTotalGroupProfitExpression(),
             },
             netProfit: {
-              $sum: {
-                $subtract: [
-                  {
-                    $subtract: [
-                      {
-                        $subtract: [
-                          { $ifNull: ["$adminProfit", 0] },
-                          { $ifNull: ["$totalAdditionalCosts", 0] },
-                        ],
-                      },
-                      { $ifNull: ["$discount", 0] },
-                    ],
-                  },
-                  { $ifNull: ["$shippingCost", 0] },
-                ],
-              },
+              $sum: buildAdminNetProfitExpression(),
             },
           },
         },
@@ -381,7 +306,7 @@ export class AdvancedAnalyticsRepository {
           $match: {
             business: businessObjectId,
             status: { $in: ["confirmado", "procesado"] },
-            lossAmount: { $gt: 0 },
+            lossAmount: { $ne: 0 },
             origin: { $ne: "order" },
             ...(dateRange ? { reportDate: dateRange } : {}),
           },
@@ -393,7 +318,7 @@ export class AdvancedAnalyticsRepository {
           $match: {
             business: businessObjectId,
             status: { $in: ["confirmado", "procesado"] },
-            lossAmount: { $gt: 0 },
+            lossAmount: { $ne: 0 },
             origin: { $ne: "order" },
             reportDate: { $gte: todayStart, $lte: todayEnd },
           },
@@ -405,7 +330,7 @@ export class AdvancedAnalyticsRepository {
           $match: {
             business: businessObjectId,
             status: { $in: ["confirmado", "procesado"] },
-            lossAmount: { $gt: 0 },
+            lossAmount: { $ne: 0 },
             origin: { $ne: "order" },
             reportDate: { $gte: weekStart, $lte: new Date() },
           },
@@ -417,66 +342,162 @@ export class AdvancedAnalyticsRepository {
           $match: {
             business: businessObjectId,
             status: { $in: ["confirmado", "procesado"] },
-            lossAmount: { $gt: 0 },
+            lossAmount: { $ne: 0 },
             origin: { $ne: "order" },
             reportDate: { $gte: monthStart, $lte: new Date() },
           },
         },
         { $group: { _id: null, totalLoss: { $sum: "$lossAmount" } } },
       ]),
-      CreditPayment.aggregate([
+      DefectiveProduct.aggregate([
         {
           $match: {
             business: businessObjectId,
-            ...(dateRange ? { paymentDate: dateRange } : {}),
+            status: { $in: ["confirmado", "procesado"] },
+            origin: "customer_warranty",
+            ...(dateRange ? { reportDate: dateRange } : {}),
           },
         },
         {
           $group: {
             _id: null,
-            totalAmount: { $sum: "$amount" },
+            totalAdjust: {
+              $sum: {
+                $subtract: [
+                  { $ifNull: ["$priceDifference", 0] },
+                  { $ifNull: ["$cashRefund", 0] },
+                ],
+              },
+            },
           },
         },
       ]),
-      CreditPayment.aggregate([
+      DefectiveProduct.aggregate([
         {
           $match: {
             business: businessObjectId,
-            paymentDate: { $gte: todayStart, $lte: todayEnd },
+            status: { $in: ["confirmado", "procesado"] },
+            origin: "customer_warranty",
+            reportDate: { $gte: todayStart, $lte: todayEnd },
           },
         },
         {
           $group: {
             _id: null,
-            totalAmount: { $sum: "$amount" },
+            totalAdjust: {
+              $sum: {
+                $subtract: [
+                  { $ifNull: ["$priceDifference", 0] },
+                  { $ifNull: ["$cashRefund", 0] },
+                ],
+              },
+            },
           },
         },
       ]),
-      CreditPayment.aggregate([
+      DefectiveProduct.aggregate([
         {
           $match: {
             business: businessObjectId,
-            paymentDate: { $gte: weekStart, $lte: new Date() },
+            status: { $in: ["confirmado", "procesado"] },
+            origin: "customer_warranty",
+            reportDate: { $gte: weekStart, $lte: new Date() },
           },
         },
         {
           $group: {
             _id: null,
-            totalAmount: { $sum: "$amount" },
+            totalAdjust: {
+              $sum: {
+                $subtract: [
+                  { $ifNull: ["$priceDifference", 0] },
+                  { $ifNull: ["$cashRefund", 0] },
+                ],
+              },
+            },
           },
         },
       ]),
-      CreditPayment.aggregate([
+      DefectiveProduct.aggregate([
         {
           $match: {
             business: businessObjectId,
-            paymentDate: { $gte: monthStart, $lte: new Date() },
+            status: { $in: ["confirmado", "procesado"] },
+            origin: "customer_warranty",
+            reportDate: { $gte: monthStart, $lte: new Date() },
           },
         },
         {
           $group: {
             _id: null,
-            totalAmount: { $sum: "$amount" },
+            totalAdjust: {
+              $sum: {
+                $subtract: [
+                  { $ifNull: ["$priceDifference", 0] },
+                  { $ifNull: ["$cashRefund", 0] },
+                ],
+              },
+            },
+          },
+        },
+      ]),
+      Credit.aggregate([
+        {
+          $match: {
+            business: businessObjectId,
+            status: { $in: ["pending", "partial", "overdue"] },
+            ...(dateRange ? { createdAt: dateRange } : {}),
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalAmount: { $sum: "$remainingAmount" },
+          },
+        },
+      ]),
+      Credit.aggregate([
+        {
+          $match: {
+            business: businessObjectId,
+            status: { $in: ["pending", "partial", "overdue"] },
+            createdAt: { $gte: todayStart, $lte: todayEnd },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalAmount: { $sum: "$remainingAmount" },
+          },
+        },
+      ]),
+      Credit.aggregate([
+        {
+          $match: {
+            business: businessObjectId,
+            status: { $in: ["pending", "partial", "overdue"] },
+            createdAt: { $gte: weekStart, $lte: new Date() },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalAmount: { $sum: "$remainingAmount" },
+          },
+        },
+      ]),
+      Credit.aggregate([
+        {
+          $match: {
+            business: businessObjectId,
+            status: { $in: ["pending", "partial", "overdue"] },
+            createdAt: { $gte: monthStart, $lte: new Date() },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalAmount: { $sum: "$remainingAmount" },
           },
         },
       ]),
@@ -558,34 +579,40 @@ export class AdvancedAnalyticsRepository {
     const warrantyDaily = warrantyTodayData[0]?.totalLoss || 0;
     const warrantyWeekly = warrantyWeekData[0]?.totalLoss || 0;
     const warrantyMonthly = warrantyMonthData[0]?.totalLoss || 0;
-    const creditRange = creditRangeData[0]?.totalAmount || 0;
-    const creditDaily = creditTodayData[0]?.totalAmount || 0;
-    const creditWeekly = creditWeekData[0]?.totalAmount || 0;
-    const creditMonthly = creditMonthData[0]?.totalAmount || 0;
+    const warrantyRevenueRange = warrantyRevenueRangeData[0]?.totalAdjust || 0;
+    const warrantyRevenueDaily = warrantyRevenueTodayData[0]?.totalAdjust || 0;
+    const warrantyRevenueWeekly = warrantyRevenueWeekData[0]?.totalAdjust || 0;
+    const warrantyRevenueMonthly =
+      warrantyRevenueMonthData[0]?.totalAdjust || 0;
+    const creditRange = creditPendingRangeData[0]?.totalAmount || 0;
+    const creditDaily = creditPendingTodayData[0]?.totalAmount || 0;
+    const creditWeekly = creditPendingWeekData[0]?.totalAmount || 0;
+    const creditMonthly = creditPendingMonthData[0]?.totalAmount || 0;
     const expenses = expensesData[0] || { totalExpenses: 0, count: 0 };
 
     const combinedRange = {
       sales: range.sales + rangeSpecial.sales,
-      revenue: range.revenue + rangeSpecial.revenue,
+      revenue: range.revenue + rangeSpecial.revenue + warrantyRevenueRange,
       profit: range.profit + rangeSpecial.profit,
       netProfit: range.netProfit + rangeSpecial.netProfit,
       quantity: range.quantity + rangeSpecial.quantity,
     };
     const combinedDaily = {
       sales: daily.sales + dailySpecial.sales,
-      revenue: daily.revenue + dailySpecial.revenue,
+      revenue: daily.revenue + dailySpecial.revenue + warrantyRevenueDaily,
       profit: daily.profit + dailySpecial.profit,
       netProfit: daily.netProfit + dailySpecial.netProfit,
     };
     const combinedWeekly = {
       sales: weekly.sales + weeklySpecial.sales,
-      revenue: weekly.revenue + weeklySpecial.revenue,
+      revenue: weekly.revenue + weeklySpecial.revenue + warrantyRevenueWeekly,
       profit: weekly.profit + weeklySpecial.profit,
       netProfit: weekly.netProfit + weeklySpecial.netProfit,
     };
     const combinedMonthly = {
       sales: monthly.sales + monthlySpecial.sales,
-      revenue: monthly.revenue + monthlySpecial.revenue,
+      revenue:
+        monthly.revenue + monthlySpecial.revenue + warrantyRevenueMonthly,
       profit: monthly.profit + monthlySpecial.profit,
       netProfit: monthly.netProfit + monthlySpecial.netProfit,
     };
@@ -601,17 +628,21 @@ export class AdvancedAnalyticsRepository {
     return {
       kpis: {
         todaySales: combinedDaily.sales,
-        todayRevenue: combinedDaily.revenue + creditDaily,
+        todayRevenue: combinedDaily.revenue,
         todayProfit: combinedDaily.profit,
         todayNetProfit: dailyNetProfit, // TODO: Add daily expense filtering
         weekSales: combinedWeekly.sales,
-        weekRevenue: combinedWeekly.revenue + creditWeekly,
+        weekRevenue: combinedWeekly.revenue,
         weekProfit: combinedWeekly.profit,
         weekNetProfit: weeklyNetProfit, // TODO: Add weekly expense filtering
         monthSales: combinedMonthly.sales,
-        monthRevenue: combinedMonthly.revenue + creditMonthly,
+        monthRevenue: combinedMonthly.revenue,
         monthProfit: combinedMonthly.profit,
         monthNetProfit: monthlyNetProfit, // TODO: Add monthly expense filtering
+        todayAccountsReceivable: creditDaily,
+        weekAccountsReceivable: creditWeekly,
+        monthAccountsReceivable: creditMonthly,
+        accountsReceivable: creditRange,
         averageTicket:
           combinedRange.sales > 0
             ? combinedRange.revenue / combinedRange.sales
@@ -625,7 +656,7 @@ export class AdvancedAnalyticsRepository {
       monthly: combinedMonthly,
       range: {
         sales: combinedRange.sales,
-        revenue: combinedRange.revenue + creditRange,
+        revenue: combinedRange.revenue,
         grossProfit: combinedRange.profit, // Renamed for clarity
         netProfit: netSalesProfit, // Ganancia neta de ventas
         quantity: combinedRange.quantity,
@@ -634,6 +665,7 @@ export class AdvancedAnalyticsRepository {
             ? combinedRange.revenue / combinedRange.sales
             : 0,
         totalExpenses: expenses.totalExpenses,
+        accountsReceivable: creditRange,
       },
     };
   }
@@ -655,7 +687,7 @@ export class AdvancedAnalyticsRepository {
           $group: {
             _id: "$paymentStatus",
             count: { $sum: 1 },
-            totalValue: { $sum: { $multiply: ["$salePrice", "$quantity"] } },
+            totalValue: { $sum: buildSaleRevenueExpression() },
           },
         },
       ]),
@@ -738,29 +770,9 @@ export class AdvancedAnalyticsRepository {
       {
         $project: {
           saleDate: "$saleDate",
-          revenue: { $multiply: ["$salePrice", "$quantity"] },
-          profit: {
-            $ifNull: [
-              "$totalProfit",
-              { $add: ["$adminProfit", "$distributorProfit"] },
-            ],
-          },
-          netProfit: {
-            $subtract: [
-              {
-                $subtract: [
-                  {
-                    $subtract: [
-                      { $ifNull: ["$adminProfit", 0] },
-                      { $ifNull: ["$totalAdditionalCosts", 0] },
-                    ],
-                  },
-                  { $ifNull: ["$discount", 0] },
-                ],
-              },
-              { $ifNull: ["$shippingCost", 0] },
-            ],
-          },
+          revenue: buildSaleRevenueExpression(),
+          profit: buildTotalGroupProfitExpression(),
+          netProfit: buildAdminNetProfitExpression(),
           quantity: "$quantity",
         },
       },
@@ -832,8 +844,47 @@ export class AdvancedAnalyticsRepository {
     const warrantyLossByDate = new Map(
       warrantyTimeline.map((item) => [item._id, item.totalLoss || 0]),
     );
+
+    const warrantyRevenueTimeline = await DefectiveProduct.aggregate([
+      {
+        $match: {
+          business: businessObjectId,
+          status: "confirmado",
+          origin: "customer_warranty",
+          ...(dateRange ? { reportDate: dateRange } : {}),
+        },
+      },
+      {
+        $group: {
+          _id: {
+            $dateToString: {
+              format: dateFormat,
+              date: "$reportDate",
+              timezone: timeZone,
+            },
+          },
+          totalAdjust: {
+            $sum: {
+              $subtract: [
+                { $ifNull: ["$priceDifference", 0] },
+                { $ifNull: ["$cashRefund", 0] },
+              ],
+            },
+          },
+        },
+      },
+    ]);
+
+    const warrantyRevenueByDate = new Map(
+      warrantyRevenueTimeline.map((item) => [item._id, item.totalAdjust || 0]),
+    );
+
     const totalWarrantyLoss = warrantyTimeline.reduce(
       (sum, item) => sum + (item.totalLoss || 0),
+      0,
+    );
+    const totalWarrantyRevenueAdjust = warrantyRevenueTimeline.reduce(
+      (sum, item) => sum + (item.totalAdjust || 0),
       0,
     );
 
@@ -855,10 +906,11 @@ export class AdvancedAnalyticsRepository {
     return {
       timeline: timeline.map((t) => {
         const warrantyLoss = warrantyLossByDate.get(t._id) || 0;
+        const warrantyRevenueAdjust = warrantyRevenueByDate.get(t._id) || 0;
         return {
           date: t._id,
           salesCount: t.salesCount,
-          revenue: t.revenue,
+          revenue: t.revenue + warrantyRevenueAdjust,
           profit: t.profit,
           netProfit: t.netProfit - warrantyLoss,
           quantity: t.quantity,
@@ -866,7 +918,7 @@ export class AdvancedAnalyticsRepository {
       }),
       summary: {
         totalSales: total.sales,
-        totalRevenue: total.revenue,
+        totalRevenue: total.revenue + totalWarrantyRevenueAdjust,
         totalProfit: total.profit,
         totalNetProfit: total.netProfit - totalWarrantyLoss,
         peakDate: peak._id,
@@ -916,8 +968,8 @@ export class AdvancedAnalyticsRepository {
             $group: {
               _id: null,
               sales: { $sum: 1 },
-              revenue: { $sum: { $multiply: ["$salePrice", "$quantity"] } },
-              profit: { $sum: "$totalProfit" },
+              revenue: { $sum: buildSaleRevenueExpression() },
+              profit: { $sum: buildTotalGroupProfitExpression() },
             },
           },
         ]),
@@ -933,8 +985,8 @@ export class AdvancedAnalyticsRepository {
             $group: {
               _id: null,
               sales: { $sum: 1 },
-              revenue: { $sum: { $multiply: ["$salePrice", "$quantity"] } },
-              profit: { $sum: "$totalProfit" },
+              revenue: { $sum: buildSaleRevenueExpression() },
+              profit: { $sum: buildTotalGroupProfitExpression() },
             },
           },
         ]),
@@ -1046,9 +1098,9 @@ export class AdvancedAnalyticsRepository {
             _id: null,
             totalSales: { $sum: 1 },
             totalRevenue: {
-              $sum: { $multiply: ["$salePrice", "$quantity"] },
+              $sum: buildSaleRevenueExpression(),
             },
-            totalProfit: { $sum: "$totalProfit" },
+            totalProfit: { $sum: buildTotalGroupProfitExpression() },
             totalCost: { $sum: { $multiply: ["$purchasePrice", "$quantity"] } },
           },
         },
@@ -1112,8 +1164,8 @@ export class AdvancedAnalyticsRepository {
         $project: {
           product: "$product",
           quantity: "$quantity",
-          salePrice: "$salePrice",
-          totalProfit: "$totalProfit",
+          revenue: buildSaleRevenueExpression(),
+          profit: buildTotalGroupProfitExpression(),
         },
       },
       {
@@ -1132,8 +1184,8 @@ export class AdvancedAnalyticsRepository {
               $project: {
                 product: "$product.productId",
                 quantity: "$quantity",
-                salePrice: "$specialPrice",
-                totalProfit: "$totalProfit",
+                revenue: { $multiply: ["$specialPrice", "$quantity"] },
+                profit: "$totalProfit",
               },
             },
           ],
@@ -1143,8 +1195,8 @@ export class AdvancedAnalyticsRepository {
         $group: {
           _id: "$product",
           totalQuantity: { $sum: "$quantity" },
-          totalRevenue: { $sum: { $multiply: ["$salePrice", "$quantity"] } },
-          totalProfit: { $sum: "$totalProfit" },
+          totalRevenue: { $sum: "$revenue" },
+          totalProfit: { $sum: "$profit" },
         },
       },
       { $sort: { totalRevenue: -1 } },
@@ -1212,8 +1264,8 @@ export class AdvancedAnalyticsRepository {
         $group: {
           _id: "$distributorObjId",
           totalSales: { $sum: 1 },
-          totalRevenue: { $sum: { $multiply: ["$salePrice", "$quantity"] } },
-          totalProfit: { $sum: "$totalProfit" },
+          totalRevenue: { $sum: buildSaleRevenueExpression() },
+          totalProfit: { $sum: buildTotalGroupProfitExpression() },
           distributorProfit: { $sum: "$distributorProfit" },
         },
       },
@@ -1338,8 +1390,8 @@ export class AdvancedAnalyticsRepository {
         $project: {
           product: "$product",
           quantity: "$quantity",
-          salePrice: "$salePrice",
-          totalProfit: "$totalProfit",
+          revenue: buildSaleRevenueExpression(),
+          profit: buildTotalGroupProfitExpression(),
         },
       },
       {
@@ -1358,8 +1410,8 @@ export class AdvancedAnalyticsRepository {
               $project: {
                 product: "$product.productId",
                 quantity: "$quantity",
-                salePrice: "$specialPrice",
-                totalProfit: "$totalProfit",
+                revenue: { $multiply: ["$specialPrice", "$quantity"] },
+                profit: "$totalProfit",
               },
             },
           ],
@@ -1378,8 +1430,8 @@ export class AdvancedAnalyticsRepository {
         $group: {
           _id: "$productInfo.category",
           totalSales: { $sum: 1 },
-          totalRevenue: { $sum: { $multiply: ["$salePrice", "$quantity"] } },
-          totalProfit: { $sum: "$totalProfit" },
+          totalRevenue: { $sum: "$revenue" },
+          totalProfit: { $sum: "$profit" },
           totalQuantity: { $sum: "$quantity" },
         },
       },
@@ -1525,7 +1577,7 @@ export class AdvancedAnalyticsRepository {
             $sum: {
               $cond: [
                 { $eq: ["$paymentStatus", "confirmado"] },
-                { $multiply: ["$salePrice", "$quantity"] },
+                buildSaleRevenueExpression(),
                 0,
               ],
             },
@@ -1534,7 +1586,7 @@ export class AdvancedAnalyticsRepository {
             $sum: {
               $cond: [
                 { $eq: ["$paymentStatus", "confirmado"] },
-                "$totalProfit",
+                buildTotalGroupProfitExpression(),
                 0,
               ],
             },

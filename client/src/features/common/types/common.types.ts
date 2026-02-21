@@ -66,7 +66,25 @@ export interface DefectiveProduct {
   confirmedBy?: unknown | string;
   adminNotes?: string;
   saleGroupId?: string;
-  origin?: "direct" | "order";
+  origin?: "direct" | "order" | "customer_warranty";
+  ticketId?: string;
+  originalSaleId?: string;
+  originalSaleGroupId?: string;
+  originalSaleItem?: unknown | string;
+  originalSaleDate?: string;
+  originalSalePrice?: number;
+  replacementProduct?:
+    | { _id: string; name: string; image?: { url: string; publicId?: string } }
+    | string
+    | null;
+  replacementQuantity?: number;
+  replacementPrice?: number;
+  replacementTotal?: number;
+  priceDifference?: number;
+  cashRefund?: number;
+  warrantyResolution?: "pending" | "scrap" | "supplier_warranty";
+  warrantyResolvedAt?: string;
+  warrantyResolvedBy?: unknown | string;
   createdAt?: string;
   updatedAt?: string;
 }

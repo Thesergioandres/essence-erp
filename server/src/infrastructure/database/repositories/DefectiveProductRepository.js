@@ -2,8 +2,11 @@ import mongoose from "mongoose";
 import BranchStock from "../../../../models/BranchStock.js";
 import DefectiveProduct from "../../../../models/DefectiveProduct.js";
 import DistributorStock from "../../../../models/DistributorStock.js";
+import Membership from "../../../../models/Membership.js";
 import Product from "../../../../models/Product.js";
 import ProfitHistory from "../../../../models/ProfitHistory.js";
+import Sale from "../../../../models/Sale.js";
+import ProfitHistoryRepository from "./ProfitHistoryRepository.js";
 
 export class DefectiveProductRepository {
   async reportFromAdmin(data, businessId, userId) {
@@ -171,6 +174,559 @@ export class DefectiveProductRepository {
     return defectiveReport;
   }
 
+  async generateWarrantyTicket(businessId) {
+    const maxAttempts = 5;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const suffix = Math.floor(Math.random() * 100000)
+        .toString()
+        .padStart(5, "0");
+      const ticketId = `REF-GAR-${suffix}`;
+
+      const exists = await DefectiveProduct.findOne({
+        business: businessId,
+        ticketId,
+      })
+        .select("_id")
+        .lean();
+
+      if (!exists) return ticketId;
+    }
+
+    return `REF-GAR-${Date.now()}`;
+  }
+
+  async getSaleLookup(businessId, saleLookup, user) {
+    const lookup = String(saleLookup || "").trim();
+    if (!lookup) {
+      const err = new Error("Falta el ID de la venta");
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const orFilters = [{ saleId: lookup }, { saleGroupId: lookup }];
+    if (mongoose.Types.ObjectId.isValid(lookup)) {
+      orFilters.push({ _id: lookup });
+    }
+
+    const sale = await Sale.findOne({
+      business: businessId,
+      $or: orFilters,
+    })
+      .populate("product", "name image clientPrice distributorPrice")
+      .populate("branch", "name")
+      .populate("distributor", "name email")
+      .populate("createdBy", "name email")
+      .lean();
+
+    if (!sale) {
+      const err = new Error("Venta no encontrada");
+      err.statusCode = 404;
+      throw err;
+    }
+
+    if (user?.role === "distribuidor") {
+      const distributorId = user._id?.toString?.() || user.id?.toString?.();
+      const saleDistributorId = sale.distributor
+        ? sale.distributor.toString()
+        : null;
+      const saleCreatorId = sale.createdBy ? sale.createdBy.toString() : null;
+
+      const hasAccess =
+        Boolean(distributorId) &&
+        (saleDistributorId === distributorId ||
+          (!saleDistributorId && saleCreatorId === distributorId));
+
+      if (!hasAccess) {
+        const err = new Error("No tienes acceso a esta venta");
+        err.statusCode = 403;
+        throw err;
+      }
+    }
+
+    const saleGroupId = sale.saleGroupId || sale._id.toString();
+    const sales = sale.saleGroupId
+      ? await Sale.find({ business: businessId, saleGroupId })
+          .populate("product", "name image clientPrice distributorPrice")
+          .populate("branch", "name")
+          .populate("distributor", "name email")
+          .populate("createdBy", "name email")
+          .lean()
+      : [sale];
+
+    const seller = sale.distributor
+      ? { role: "distribuidor", user: sale.distributor }
+      : { role: "admin", user: sale.createdBy };
+
+    const items = sales.map((item) => ({
+      saleItemId: item._id,
+      saleGroupId: item.saleGroupId,
+      saleId: item.saleId,
+      saleDate: item.saleDate,
+      product: item.product,
+      quantity: item.quantity,
+      salePrice: item.salePrice,
+      distributor: item.distributor,
+      branch: item.branch,
+      sourceLocation: item.sourceLocation,
+      createdBy: item.createdBy,
+    }));
+
+    return {
+      saleGroupId,
+      saleId: sale.saleId,
+      saleDate: sale.saleDate,
+      seller,
+      items,
+    };
+  }
+
+  async createCustomerWarranty(data, businessId, user, options = {}) {
+    const userId = user?._id || user?.id;
+    if (!userId) {
+      const err = new Error("Usuario no autenticado");
+      err.statusCode = 401;
+      throw err;
+    }
+
+    const quantity = Number(data.quantity || 0);
+    if (!quantity || quantity <= 0) {
+      const err = new Error("Cantidad inválida");
+      err.statusCode = 400;
+      throw err;
+    }
+
+    if (!data.saleItemId) {
+      const err = new Error("Falta la venta original");
+      err.statusCode = 400;
+      throw err;
+    }
+
+    if (!String(data.reason || "").trim()) {
+      const err = new Error("Falta la descripción del fallo");
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const saleItem = await Sale.findOne({
+      _id: data.saleItemId,
+      business: businessId,
+    })
+      .populate("product", "name purchasePrice averageCost")
+      .lean();
+
+    if (!saleItem) {
+      const err = new Error("Venta original no encontrada");
+      err.statusCode = 404;
+      throw err;
+    }
+
+    if (
+      user?.role === "distribuidor" &&
+      saleItem.distributor &&
+      saleItem.distributor.toString() !== userId.toString()
+    ) {
+      const err = new Error("No tienes acceso a esta venta");
+      err.statusCode = 403;
+      throw err;
+    }
+
+    if (quantity > Number(saleItem.quantity || 0)) {
+      const err = new Error("La cantidad supera lo vendido");
+      err.statusCode = 400;
+      throw err;
+    }
+
+    if (!data.replacementProductId) {
+      const err = new Error("Selecciona el producto de reemplazo");
+      err.statusCode = 400;
+      throw err;
+    }
+
+    if (data.replacementPrice !== undefined) {
+      const parsedReplacementPrice = Number(data.replacementPrice);
+      if (
+        !Number.isFinite(parsedReplacementPrice) ||
+        parsedReplacementPrice < 0
+      ) {
+        const err = new Error("Precio de reemplazo inválido");
+        err.statusCode = 400;
+        throw err;
+      }
+    }
+
+    const defectiveProductId = saleItem.product?._id || saleItem.product;
+    const replacementProduct = await Product.findOne({
+      _id: data.replacementProductId,
+      business: businessId,
+    }).lean();
+
+    if (!replacementProduct) {
+      const err = new Error("Producto de reemplazo no encontrado");
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const replacementPrice =
+      Number(data.replacementPrice) ||
+      replacementProduct.clientPrice ||
+      replacementProduct.suggestedPrice ||
+      replacementProduct.distributorPrice ||
+      saleItem.salePrice ||
+      0;
+
+    const originalUnitPrice = Number(saleItem.salePrice || 0);
+    const saleQuantity = Number(saleItem.quantity || 1) || 1;
+    const quantityRatio = saleQuantity > 0 ? quantity / saleQuantity : 1;
+    const originalUnitCost =
+      saleItem.averageCostAtSale ||
+      saleItem.purchasePrice ||
+      saleItem.product?.averageCost ||
+      saleItem.product?.purchasePrice ||
+      0;
+    const perUnitAdditionalCosts =
+      (saleItem.totalAdditionalCosts || 0) / saleQuantity;
+    const perUnitShipping = (saleItem.shippingCost || 0) / saleQuantity;
+    const perUnitDiscount = (saleItem.discount || 0) / saleQuantity;
+    const computedOriginalNetProfit =
+      (originalUnitPrice -
+        originalUnitCost -
+        perUnitAdditionalCosts -
+        perUnitShipping -
+        perUnitDiscount) *
+      quantity;
+    const originalNetProfit = Number.isFinite(saleItem.netProfit)
+      ? (saleItem.netProfit || 0) * quantityRatio
+      : computedOriginalNetProfit;
+
+    const replacementUnitCost =
+      replacementProduct.averageCost || replacementProduct.purchasePrice || 0;
+    const replacementNetProfit =
+      (replacementPrice - replacementUnitCost) * quantity;
+
+    const originalTotal = originalUnitPrice * quantity;
+    const replacementTotal = replacementPrice * quantity;
+    const priceDifference = Math.max(0, replacementTotal - originalTotal);
+    let cashRefund = Math.max(0, originalTotal - replacementTotal);
+
+    if (data.cashRefund !== undefined) {
+      const parsedRefund = Number(data.cashRefund);
+      if (!Number.isFinite(parsedRefund) || parsedRefund < 0) {
+        const err = new Error("Devolucion de efectivo invalida");
+        err.statusCode = 400;
+        throw err;
+      }
+      if (parsedRefund > originalTotal) {
+        const err = new Error("La devolucion excede el total original");
+        err.statusCode = 400;
+        throw err;
+      }
+      cashRefund = parsedRefund;
+    }
+
+    const warrantyLossAmount = originalNetProfit - replacementNetProfit;
+
+    const replacementSource = data.replacementSource;
+    if (!replacementSource) {
+      const err = new Error("Selecciona el origen del reemplazo");
+      err.statusCode = 400;
+      throw err;
+    }
+
+    if (!["warehouse", "branch", "distributor"].includes(replacementSource)) {
+      const err = new Error("Origen de reemplazo inválido");
+      err.statusCode = 400;
+      throw err;
+    }
+
+    if (replacementSource === "distributor") {
+      if (user?.role !== "distribuidor") {
+        const err = new Error("Solo distribuidores pueden usar su inventario");
+        err.statusCode = 403;
+        throw err;
+      }
+
+      const distStock = await DistributorStock.findOneAndUpdate(
+        {
+          business: businessId,
+          distributor: userId,
+          product: replacementProduct._id,
+          quantity: { $gte: quantity },
+        },
+        { $inc: { quantity: -quantity } },
+        { new: true },
+      );
+
+      if (!distStock) {
+        const err = new Error("Stock insuficiente del distribuidor");
+        err.statusCode = 400;
+        throw err;
+      }
+
+      await Product.findByIdAndUpdate(replacementProduct._id, {
+        $inc: { totalStock: -quantity },
+      });
+    } else if (replacementSource === "branch") {
+      const branchId = data.replacementBranchId;
+      if (!branchId) {
+        const err = new Error("Falta la sede de reemplazo");
+        err.statusCode = 400;
+        throw err;
+      }
+
+      const branchStock = await BranchStock.findOneAndUpdate(
+        {
+          business: businessId,
+          branch: branchId,
+          product: replacementProduct._id,
+          quantity: { $gte: quantity },
+        },
+        { $inc: { quantity: -quantity } },
+        { new: true },
+      );
+
+      if (!branchStock) {
+        const err = new Error("Stock insuficiente en la sede");
+        err.statusCode = 400;
+        throw err;
+      }
+
+      await Product.findByIdAndUpdate(replacementProduct._id, {
+        $inc: { totalStock: -quantity },
+      });
+    } else {
+      const updatedProduct = await Product.findOneAndUpdate(
+        {
+          _id: replacementProduct._id,
+          business: businessId,
+          warehouseStock: { $gte: quantity },
+        },
+        { $inc: { warehouseStock: -quantity, totalStock: -quantity } },
+        { new: true },
+      );
+
+      if (!updatedProduct) {
+        const err = new Error("Stock insuficiente en bodega");
+        err.statusCode = 400;
+        throw err;
+      }
+    }
+
+    const ticketId = await this.generateWarrantyTicket(businessId);
+    const isDistributor = user?.role === "distribuidor";
+
+    const resolvedSaleGroupId =
+      saleItem.saleGroupId || saleItem._id?.toString();
+
+    const report = await DefectiveProduct.create({
+      distributor: isDistributor ? userId : saleItem.distributor || null,
+      product: defectiveProductId,
+      business: businessId,
+      branch: saleItem.branch || null,
+      quantity,
+      reason: data.reason,
+      images: data.images || [],
+      hasWarranty: true,
+      warrantyStatus: "pending",
+      lossAmount: warrantyLossAmount,
+      saleGroupId: resolvedSaleGroupId,
+      ticketId,
+      originalSaleId: saleItem.saleId,
+      originalSaleGroupId: resolvedSaleGroupId,
+      originalSaleItem: saleItem._id,
+      originalSaleDate: saleItem.saleDate,
+      originalSalePrice: saleItem.salePrice,
+      replacementProduct: replacementProduct._id,
+      replacementQuantity: quantity,
+      replacementPrice,
+      replacementTotal,
+      priceDifference,
+      cashRefund,
+      replacementStockOrigin: replacementSource,
+      replacementBranch:
+        replacementSource === "branch" ? data.replacementBranchId : null,
+      replacementDistributor:
+        replacementSource === "distributor" ? userId : null,
+      stockOrigin: replacementSource,
+      status: isDistributor ? "pendiente" : "confirmado",
+      confirmedAt: isDistributor ? null : Date.now(),
+      confirmedBy: isDistributor ? null : userId,
+      adminNotes: data.adminNotes,
+      origin: "customer_warranty",
+      warrantyResolution: "pending",
+    });
+
+    const adminMembership = await Membership.findOne({
+      business: businessId,
+      role: "admin",
+      status: "active",
+    })
+      .select("user")
+      .lean();
+
+    if (adminMembership?.user) {
+      const adjustmentMetadata = {
+        quantity,
+        ticketId,
+        eventName: "warranty_profit_adjustment",
+        originalSaleId: saleItem.saleId,
+        originalSaleGroupId: saleItem.saleGroupId,
+        originalNetProfit,
+        replacementNetProfit,
+        priceDifference,
+        cashRefund,
+      };
+
+      if (originalNetProfit !== 0) {
+        await ProfitHistoryRepository.create({
+          business: businessId,
+          user: adminMembership.user,
+          type: "ajuste",
+          amount: -originalNetProfit,
+          sale: saleItem._id,
+          product: defectiveProductId,
+          description: `Reverso ganancia venta original (${ticketId})`,
+          date: new Date(),
+          metadata: adjustmentMetadata,
+        });
+      }
+
+      if (replacementNetProfit !== 0) {
+        await ProfitHistoryRepository.create({
+          business: businessId,
+          user: adminMembership.user,
+          type: "ajuste",
+          amount: replacementNetProfit,
+          sale: saleItem._id,
+          product: replacementProduct._id,
+          description: `Ganancia ajustada por garantia (${ticketId})`,
+          date: new Date(),
+          metadata: adjustmentMetadata,
+        });
+      }
+    }
+
+    return { report, upsellSale: null };
+  }
+
+  async resolveCustomerWarranty(reportId, businessId, userId, data) {
+    const report = await DefectiveProduct.findOne({
+      _id: reportId,
+      business: businessId,
+    });
+
+    if (!report) {
+      const err = new Error("Reporte no encontrado");
+      err.statusCode = 404;
+      throw err;
+    }
+
+    if (report.origin !== "customer_warranty") {
+      const err = new Error("El reporte no es una garantia al cliente");
+      err.statusCode = 400;
+      throw err;
+    }
+
+    if (report.warrantyResolution && report.warrantyResolution !== "pending") {
+      const err = new Error("La garantia ya fue resuelta");
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const resolution = data?.resolution;
+    if (!resolution || !["scrap", "supplier_warranty"].includes(resolution)) {
+      const err = new Error("Resolucion invalida");
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const previousLossAmount = Number(report.lossAmount || 0);
+
+    report.warrantyResolution = resolution;
+    report.warrantyResolvedAt = new Date();
+    report.warrantyResolvedBy = userId;
+    report.adminNotes = data?.adminNotes || report.adminNotes;
+    report.status = "confirmado";
+
+    if (resolution === "scrap") {
+      const product = await Product.findOne({
+        _id: report.product,
+        business: businessId,
+      }).lean();
+
+      if (!product) {
+        const err = new Error("Producto no encontrado");
+        err.statusCode = 404;
+        throw err;
+      }
+
+      const unitCost = product.averageCost || product.purchasePrice || 0;
+      const lossAmount = unitCost * (report.quantity || 0);
+      report.lossAmount = lossAmount;
+      report.hasWarranty = false;
+      report.warrantyStatus = "rejected";
+
+      if (lossAmount > 0) {
+        await ProfitHistory.create({
+          business: businessId,
+          user: userId,
+          type: "ajuste",
+          amount: -lossAmount,
+          product: report.product,
+          description: `Perdida por garantia (${report.quantity}): ${product.name}`,
+          date: new Date(),
+          metadata: {
+            quantity: report.quantity,
+            salePrice: 0,
+            saleId: report.originalSaleId || null,
+            eventName: "warranty_scrap",
+            reportId: report._id,
+            unitCost,
+            ticketId: report.ticketId,
+          },
+        });
+      }
+    } else {
+      report.lossAmount = 0;
+      report.hasWarranty = true;
+      report.warrantyStatus = "pending";
+
+      if (previousLossAmount !== 0) {
+        const existingCompensation = await ProfitHistory.findOne({
+          business: businessId,
+          type: "ajuste",
+          "metadata.eventName": "warranty_supplier_compensation",
+          "metadata.reportId": report._id,
+        })
+          .select("_id")
+          .lean();
+
+        if (!existingCompensation) {
+          await ProfitHistory.create({
+            business: businessId,
+            user: userId,
+            type: "ajuste",
+            amount: previousLossAmount,
+            product: report.product,
+            description: `Reverso ajuste por garantía proveedor (${report.ticketId || report._id})`,
+            date: new Date(),
+            metadata: {
+              eventName: "warranty_supplier_compensation",
+              reportId: report._id,
+              ticketId: report.ticketId,
+              originalSaleId: report.originalSaleId || null,
+              priceDifference: report.priceDifference || 0,
+              cashRefund: report.cashRefund || 0,
+              lossAmount: previousLossAmount,
+            },
+          });
+        }
+      }
+    }
+
+    await report.save();
+    return report;
+  }
+
   async findByBusiness(businessId, filters = {}) {
     const query = { business: businessId };
 
@@ -193,6 +749,10 @@ export class DefectiveProductRepository {
     const [reports, total] = await Promise.all([
       DefectiveProduct.find(query)
         .populate("product", "name image purchasePrice averageCost")
+        .populate("replacementProduct", "name image clientPrice")
+        .populate("replacementBranch", "name")
+        .populate("replacementDistributor", "name email")
+        .populate("upsellSale", "saleId salePrice quantity")
         .populate("distributor", "name email")
         .populate("confirmedBy", "name email")
         .sort({ createdAt: -1 })
@@ -354,6 +914,10 @@ export class DefectiveProductRepository {
       business: businessId,
     })
       .populate("product", "name image purchasePrice distributorPrice")
+      .populate("replacementProduct", "name image clientPrice")
+      .populate("replacementBranch", "name")
+      .populate("replacementDistributor", "name email")
+      .populate("upsellSale", "saleId salePrice quantity")
       .populate("distributor", "name email")
       .populate("confirmedBy", "name email")
       .lean();
@@ -715,39 +1279,57 @@ export class DefectiveProductRepository {
       throw err;
     }
 
-    const shouldRestore =
-      report.status === "confirmado" && !report.stockRestored;
-    const quantity = report.quantity || 0;
+    const isCustomerWarranty =
+      report.origin === "customer_warranty" && report.replacementProduct;
+    const shouldRestore = isCustomerWarranty
+      ? true
+      : report.status === "confirmado" && !report.stockRestored;
+    const quantity =
+      Number(
+        isCustomerWarranty ? report.replacementQuantity : report.quantity,
+      ) || 0;
+    const productId = isCustomerWarranty
+      ? report.replacementProduct
+      : report.product;
+    const stockOrigin = isCustomerWarranty
+      ? report.replacementStockOrigin || report.stockOrigin
+      : report.stockOrigin;
+    const branchId = isCustomerWarranty
+      ? report.replacementBranch
+      : report.branch;
+    const distributorId = isCustomerWarranty
+      ? report.replacementDistributor
+      : report.distributor;
 
     if (shouldRestore && quantity > 0) {
-      if (report.stockOrigin === "distributor" && report.distributor) {
+      if (stockOrigin === "distributor" && distributorId) {
         await DistributorStock.findOneAndUpdate(
           {
-            distributor: report.distributor,
-            product: report.product,
+            distributor: distributorId,
+            product: productId,
             business: businessId,
           },
           { $inc: { quantity } },
         );
 
-        await Product.findByIdAndUpdate(report.product, {
+        await Product.findByIdAndUpdate(productId, {
           $inc: { totalStock: quantity },
         });
-      } else if (report.stockOrigin === "branch" && report.branch) {
+      } else if (stockOrigin === "branch" && branchId) {
         await BranchStock.findOneAndUpdate(
           {
-            branch: report.branch,
-            product: report.product,
+            branch: branchId,
+            product: productId,
             business: businessId,
           },
           { $inc: { quantity } },
         );
 
-        await Product.findByIdAndUpdate(report.product, {
+        await Product.findByIdAndUpdate(productId, {
           $inc: { totalStock: quantity },
         });
       } else {
-        await Product.findByIdAndUpdate(report.product, {
+        await Product.findByIdAndUpdate(productId, {
           $inc: { warehouseStock: quantity, totalStock: quantity },
         });
       }
@@ -757,7 +1339,7 @@ export class DefectiveProductRepository {
 
     return {
       restoredQuantity: shouldRestore ? quantity : 0,
-      restoredTo: report.stockOrigin || "warehouse",
+      restoredTo: stockOrigin || "warehouse",
     };
   }
 

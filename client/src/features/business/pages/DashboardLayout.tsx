@@ -542,6 +542,28 @@ export default function DashboardLayout() {
               </svg>
               Productos Defectuosos
             </FeatureNavLink>
+            <FeatureNavLink
+              to="/admin/warranties"
+              feature="defectiveProducts"
+              className={(isActive: boolean): string =>
+                navLinkClasses(isActive)
+              }
+            >
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 6v6l4 2m6-2a10 10 0 11-20 0 10 10 0 0120 0z"
+                />
+              </svg>
+              Garantias
+            </FeatureNavLink>
 
             <SectionTitle label="Reportes" />
 

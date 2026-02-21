@@ -35,6 +35,9 @@ const DefectiveReports = lazy(
 const DefectiveProductsManagement = lazy(
   () => import("./features/common/pages/DefectiveProductsManagementPage")
 );
+const CustomerWarranty = lazy(
+  () => import("./features/warranties/pages/CustomerWarrantyPage")
+);
 const TestOptimization = lazy(
   () => import("./features/common/pages/TestOptimizationPage")
 );
@@ -450,6 +453,18 @@ export default function App() {
             element={<DefectiveProductsManagement />}
           />
           <Route
+            path="warranties"
+            element={
+              <BusinessGate requiredFeature="defectiveProducts">
+                <CustomerWarranty />
+              </BusinessGate>
+            }
+          />
+          <Route
+            path="warrantiess"
+            element={<Navigate to="/admin/warranties" replace />}
+          />
+          <Route
             path="register-sale"
             element={
               <ProtectedRoute allowedRoles={["admin", "super_admin", "god"]}>
@@ -654,6 +669,14 @@ export default function App() {
             element={
               <BusinessGate requiredFeature="incidents">
                 <DefectiveReports />
+              </BusinessGate>
+            }
+          />
+          <Route
+            path="warranties"
+            element={
+              <BusinessGate requiredFeature="defectiveProducts">
+                <CustomerWarranty />
               </BusinessGate>
             }
           />

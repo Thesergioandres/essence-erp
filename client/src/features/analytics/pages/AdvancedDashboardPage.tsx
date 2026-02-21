@@ -344,6 +344,8 @@ export default function AdvancedDashboard() {
 
   // State for export loading
   const [isExporting, setIsExporting] = useState(false);
+  const [fullExportData, setFullExportData] = useState<unknown>(null);
+  const [fullExportError, setFullExportError] = useState("");
 
   /**
    * Export full business data as JSON backup
@@ -351,7 +353,9 @@ export default function AdvancedDashboard() {
   const handleExportFullData = async () => {
     try {
       setIsExporting(true);
+      setFullExportError("");
       const data = await analyticsService.getFullDataExport();
+      setFullExportData(data);
 
       const blob = new Blob([JSON.stringify(data, null, 2)], {
         type: "application/json",
@@ -366,6 +370,9 @@ export default function AdvancedDashboard() {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error("Error al exportar datos:", error);
+      setFullExportError(
+        "No se pudo cargar la informacion completa de la empresa. Revisa tu conexion o permisos."
+      );
       alert("Error al exportar los datos. Por favor intente de nuevo.");
     } finally {
       setIsExporting(false);
@@ -401,6 +408,30 @@ export default function AdvancedDashboard() {
           </button>
         </div>
       </div>
+      {fullExportError && (
+        <div className="rounded-lg border border-red-500 bg-red-500/10 p-4 text-sm text-red-300">
+          {fullExportError}
+        </div>
+      )}
+      {fullExportData && (
+        <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/40 p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-emerald-200">
+              Informacion completa de la empresa
+            </h2>
+            <button
+              type="button"
+              onClick={() => setFullExportData(null)}
+              className="text-xs font-medium text-emerald-300 hover:text-emerald-200"
+            >
+              Cerrar
+            </button>
+          </div>
+          <pre className="max-h-[420px] overflow-auto rounded-lg bg-black/40 p-4 text-xs text-emerald-100">
+            {JSON.stringify(fullExportData, null, 2)}
+          </pre>
+        </div>
+      )}
       <div className="space-y-12">
         {/* === SECCIÓN 1: VISTA GENERAL === */}
         <section>

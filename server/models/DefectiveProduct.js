@@ -93,10 +93,93 @@ const defectiveProductSchema = new mongoose.Schema(
       trim: true,
       index: true,
     },
+    // Identificador del ticket de garantia al cliente
+    ticketId: {
+      type: String,
+      trim: true,
+      index: true,
+      unique: true,
+      sparse: true,
+    },
+    // Referencias a la venta original
+    originalSaleId: {
+      type: String,
+      trim: true,
+      index: true,
+    },
+    originalSaleGroupId: {
+      type: String,
+      trim: true,
+      index: true,
+    },
+    originalSaleItem: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Sale",
+    },
+    originalSaleDate: {
+      type: Date,
+    },
+    originalSalePrice: {
+      type: Number,
+      default: 0,
+    },
+    // Datos del reemplazo
+    replacementProduct: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Product",
+    },
+    replacementQuantity: {
+      type: Number,
+      min: 1,
+    },
+    replacementPrice: {
+      type: Number,
+      default: 0,
+    },
+    replacementTotal: {
+      type: Number,
+      default: 0,
+    },
+    priceDifference: {
+      type: Number,
+      default: 0,
+    },
+    cashRefund: {
+      type: Number,
+      default: 0,
+    },
+    replacementStockOrigin: {
+      type: String,
+      enum: ["warehouse", "branch", "distributor"],
+    },
+    replacementBranch: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Branch",
+    },
+    replacementDistributor: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+    upsellSale: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Sale",
+    },
+    warrantyResolution: {
+      type: String,
+      enum: ["pending", "scrap", "supplier_warranty"],
+      default: "pending",
+    },
+    warrantyResolvedAt: {
+      type: Date,
+    },
+    warrantyResolvedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
     // Origen del reporte
     origin: {
       type: String,
-      enum: ["direct", "order"], // direct = reporte manual, order = desde registro de pedido
+      enum: ["direct", "order", "customer_warranty"], // direct = reporte manual, order = desde registro de pedido
       default: "direct",
     },
   },
@@ -109,6 +192,8 @@ const defectiveProductSchema = new mongoose.Schema(
 defectiveProductSchema.index({ business: 1, status: 1 });
 defectiveProductSchema.index({ distributor: 1, status: 1 });
 defectiveProductSchema.index({ product: 1, reportDate: -1 });
+defectiveProductSchema.index({ business: 1, ticketId: 1 });
+defectiveProductSchema.index({ business: 1, originalSaleGroupId: 1 });
 
 export default mongoose.models.DefectiveProduct ||
   mongoose.model("DefectiveProduct", defectiveProductSchema);

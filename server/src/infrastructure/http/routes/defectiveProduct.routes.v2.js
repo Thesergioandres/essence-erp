@@ -48,6 +48,16 @@ router.get(
   (req, res) => controller.getAll(req, res),
 );
 router.get(
+  "/warranty/sale/:saleId",
+  requirePermission({ module: "defectiveProducts", action: "read" }),
+  (req, res) => controller.getSaleLookup(req, res),
+);
+router.post(
+  "/warranty",
+  requirePermission({ module: "defectiveProducts", action: "create" }),
+  (req, res) => controller.createCustomerWarranty(req, res),
+);
+router.get(
   "/stats",
   requirePermission({ module: "defectiveProducts", action: "read" }),
   (req, res) => controller.getStats(req, res),
@@ -66,6 +76,11 @@ router.put(
   "/:id/reject",
   requirePermission({ module: "defectiveProducts", action: "update" }),
   (req, res) => controller.reject(req, res),
+);
+router.put(
+  "/:id/resolve-warranty",
+  requirePermission({ module: "defectiveProducts", action: "update" }),
+  (req, res) => controller.resolveCustomerWarranty(req, res),
 );
 
 router.put(

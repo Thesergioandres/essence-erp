@@ -40,6 +40,25 @@ const saleSchema = new mongoose.Schema(
       type: String,
       index: true,
     },
+    // Venta complementaria por garantia
+    isComplementarySale: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    parentSaleId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Sale",
+    },
+    parentSaleGroupId: {
+      type: String,
+      trim: true,
+    },
+    warrantyTicketId: {
+      type: String,
+      trim: true,
+      index: true,
+    },
     distributor: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -104,6 +123,10 @@ const saleSchema = new mongoose.Schema(
       default: 0,
     },
     totalProfit: {
+      type: Number,
+      default: 0,
+    },
+    totalGroupProfit: {
       type: Number,
       default: 0,
     },
@@ -283,8 +306,8 @@ const saleSchema = new mongoose.Schema(
       index: true,
     },
     // ============ GANANCIAS NETAS ============
-    // Ganancia neta (después de costos adicionales y descuentos)
-    // Fórmula: totalProfit - totalAdditionalCosts - discount
+    // Ganancia neta del admin (después de costos adicionales, descuentos y envios)
+    // Fórmula: adminProfit - totalAdditionalCosts - shippingCost - discount
     netProfit: {
       type: Number,
       default: 0,
@@ -355,19 +378,22 @@ saleSchema.pre("save", function (next) {
       this.distributorProfit =
         (this.salePrice - distributorPrice) * this.quantity;
       this.adminProfit = (distributorPrice - costBasis) * this.quantity;
-      this.totalProfit = this.distributorProfit + this.adminProfit;
+      this.totalGroupProfit = this.distributorProfit + this.adminProfit;
+      this.totalProfit = this.totalGroupProfit;
     } else {
       this.adminProfit = (this.salePrice - costBasis) * this.quantity;
       this.distributorProfit = 0;
       this.distributorProfitPercentage = 0;
-      this.totalProfit = this.adminProfit;
+      this.totalGroupProfit = this.adminProfit;
+      this.totalProfit = this.totalGroupProfit;
     }
   } else if (!this.distributor) {
     // Solo hay ganancia del admin: (precio de venta - costo) * cantidad
     this.adminProfit = (this.salePrice - costBasis) * this.quantity;
     this.distributorProfit = 0;
     this.distributorProfitPercentage = 0;
-    this.totalProfit = this.adminProfit;
+    this.totalGroupProfit = this.adminProfit;
+    this.totalProfit = this.totalGroupProfit;
   } else {
     // Venta de distribuidor
     // El distribuidor recibe una comisión sobre el precio de venta según su ranking
@@ -392,8 +418,9 @@ saleSchema.pre("save", function (next) {
       (this.salePrice - costBasis - (this.salePrice - priceForDistributor)) *
       this.quantity;
 
-    // Ganancia total
-    this.totalProfit = this.distributorProfit + this.adminProfit;
+    // Ganancia total del grupo (admin + distribuidor)
+    this.totalGroupProfit = this.distributorProfit + this.adminProfit;
+    this.totalProfit = this.totalGroupProfit;
   }
 
   // Calcular total de costos adicionales
@@ -409,9 +436,9 @@ saleSchema.pre("save", function (next) {
   // Incluir costo de envío en costos adicionales para el cálculo
   const totalExtraCosts = this.totalAdditionalCosts + (this.shippingCost || 0);
 
-  // Calcular ganancia neta
-  // netProfit = totalProfit - costos adicionales - envío - descuento
-  this.netProfit = this.totalProfit - totalExtraCosts - (this.discount || 0);
+  // Calcular ganancia neta del admin
+  // netProfit = adminProfit - costos adicionales - envío - descuento
+  this.netProfit = this.adminProfit - totalExtraCosts - (this.discount || 0);
 
   // Calcular porcentajes de rentabilidad
   // profitabilityPercentage: qué % de la venta TOTAL es ganancia NETA
