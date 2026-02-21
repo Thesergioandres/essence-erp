@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m as motion } from "framer-motion";
 import { BookOpen, Loader2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "../../../shared/components/ui";

@@ -1,5 +1,5 @@
 import type { HTMLMotionProps } from "framer-motion";
-import { motion, useReducedMotion } from "framer-motion";
+import { m as motion, useReducedMotion } from "framer-motion";
 import React from "react";
 import { cn } from "../../../utils/cn";
 

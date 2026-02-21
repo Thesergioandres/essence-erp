@@ -1,4 +1,4 @@
-import { motion } from "framer-motion";
+import { m as motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import type { DefectiveProduct } from "../features/common/types/common.types";
 import { defectiveProductService } from "../features/sales/services";

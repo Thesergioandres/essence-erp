@@ -1,6 +1,6 @@
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
-import { motion } from "framer-motion";
+import { m as motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { advancedAnalyticsService } from "../../features/analytics/services";
 import InfoTooltip from "../InfoTooltip";

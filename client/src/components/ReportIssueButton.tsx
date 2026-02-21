@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m as motion } from "framer-motion";
 import { useRef, useState } from "react";
 import { useErrorReporter } from "../hooks/useErrorReporter";
 

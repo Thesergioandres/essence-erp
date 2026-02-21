@@ -1,4 +1,4 @@
-import { motion } from "framer-motion";
+import { m as motion } from "framer-motion";
 import { Award, Medal, TrendingUp, Trophy } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { advancedAnalyticsService } from "../../features/analytics/services";

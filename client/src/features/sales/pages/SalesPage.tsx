@@ -1,4 +1,4 @@
-import { motion } from "framer-motion";
+import { m as motion } from "framer-motion";
 import { FileSpreadsheet, FileText } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { useFeature } from "../../../components/FeatureSection";

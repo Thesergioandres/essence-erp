@@ -1,5 +1,5 @@
 import { endOfMonth, format, startOfMonth, subDays } from "date-fns";
-import { motion } from "framer-motion";
+import { m as motion } from "framer-motion";
 import {
   BarChart3,
   Download,
