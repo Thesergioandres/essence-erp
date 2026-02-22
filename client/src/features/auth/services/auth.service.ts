@@ -79,14 +79,11 @@ export const authService = {
 
     // Guardar token para que el usuario pueda crear su negocio
     if (response.data.token) {
-      localStorage.setItem("token", response.data.token);
-      localStorage.setItem("user", JSON.stringify(response.data));
+      applySession({ token: response.data.token, user: response.data });
       if (response.data.refreshToken) {
         localStorage.setItem("refreshToken", response.data.refreshToken);
       }
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new Event("auth-changed"));
-      }
+      notifySessionChange();
     }
 
     return response.data;
@@ -134,22 +131,12 @@ export const authService = {
     });
 
     if (response.data.token) {
-      localStorage.setItem("token", response.data.token);
-      localStorage.setItem("user", JSON.stringify(response.data));
+      applySession({ token: response.data.token, user: response.data });
       if (response.data.refreshToken) {
         localStorage.setItem("refreshToken", response.data.refreshToken);
       }
       await trySetBusinessForGod(response.data.role);
-      if (typeof window !== "undefined") {
-        // Disparar evento de cambio de auth para refrescar contextos
-        window.dispatchEvent(new Event("auth-changed"));
-        // Disparar evento personalizado para forzar refresh de business context
-        window.dispatchEvent(
-          new CustomEvent("session-refresh", {
-            detail: { role: response.data.role, userId: response.data._id },
-          })
-        );
-      }
+      notifySessionChange();
     }
 
     return response.data;

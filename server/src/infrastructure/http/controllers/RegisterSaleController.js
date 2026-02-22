@@ -8,7 +8,10 @@ import { RegisterStandardSaleUseCase } from "../../../application/use-cases/Regi
  */
 const buildSaleInput = (req, distributorId) => ({
   user: req.user,
-  businessId: req.headers["x-business-id"],
+  businessId:
+    req.businessId ||
+    req.business?._id?.toString?.() ||
+    req.headers["x-business-id"],
   distributorId,
   locationType: req.body.locationType || req.body.sourceLocation,
   branchId: req.body.branchId || req.body.branch,
