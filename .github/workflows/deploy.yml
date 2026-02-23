@@ -12,33 +12,28 @@ concurrency:
 jobs:
   deploy-railway:
     runs-on: ubuntu-latest
+    env:
+      RAILWAY_BACKEND_DEPLOY_HOOK_URL: ${{ secrets.RAILWAY_BACKEND_DEPLOY_HOOK_URL != '' && secrets.RAILWAY_BACKEND_DEPLOY_HOOK_URL || vars.RAILWAY_BACKEND_DEPLOY_HOOK_URL }}
+      RAILWAY_FRONTEND_DEPLOY_HOOK_URL: ${{ secrets.RAILWAY_FRONTEND_DEPLOY_HOOK_URL != '' && secrets.RAILWAY_FRONTEND_DEPLOY_HOOK_URL || vars.RAILWAY_FRONTEND_DEPLOY_HOOK_URL }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Validate Railway deploy hooks
-        env:
-          RAILWAY_BACKEND_DEPLOY_HOOK_URL: ${{ secrets[format('RAILWAY_{0}_DEPLOY_HOOK_URL', 'BACKEND')] }}
-          RAILWAY_FRONTEND_DEPLOY_HOOK_URL: ${{ secrets[format('RAILWAY_{0}_DEPLOY_HOOK_URL', 'FRONTEND')] }}
         run: |
-          if [ -z "$RAILWAY_BACKEND_DEPLOY_HOOK_URL" ]; then
-            echo "Missing secret: RAILWAY_BACKEND_DEPLOY_HOOK_URL"
-            exit 1
-          fi
-
-          if [ -z "$RAILWAY_FRONTEND_DEPLOY_HOOK_URL" ]; then
-            echo "Missing secret: RAILWAY_FRONTEND_DEPLOY_HOOK_URL"
+          if [ -z "$RAILWAY_BACKEND_DEPLOY_HOOK_URL" ] && [ -z "$RAILWAY_FRONTEND_DEPLOY_HOOK_URL" ]; then
+            echo "Missing deploy hooks. Configure at least one of:"
+            echo "- Secret or Variable: RAILWAY_BACKEND_DEPLOY_HOOK_URL"
+            echo "- Secret or Variable: RAILWAY_FRONTEND_DEPLOY_HOOK_URL"
             exit 1
           fi
 
       - name: Trigger backend deployment (Railway)
-        env:
-          RAILWAY_BACKEND_DEPLOY_HOOK_URL: ${{ secrets[format('RAILWAY_{0}_DEPLOY_HOOK_URL', 'BACKEND')] }}
+        if: env.RAILWAY_BACKEND_DEPLOY_HOOK_URL != ''
         run: |
           curl -fsS -X POST "$RAILWAY_BACKEND_DEPLOY_HOOK_URL"
 
       - name: Trigger frontend deployment (Railway)
-        env:
-          RAILWAY_FRONTEND_DEPLOY_HOOK_URL: ${{ secrets[format('RAILWAY_{0}_DEPLOY_HOOK_URL', 'FRONTEND')] }}
+        if: env.RAILWAY_FRONTEND_DEPLOY_HOOK_URL != ''
         run: |
           curl -fsS -X POST "$RAILWAY_FRONTEND_DEPLOY_HOOK_URL"
