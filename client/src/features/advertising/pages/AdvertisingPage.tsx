@@ -45,6 +45,24 @@ function pickRandom<T>(arr: T[], n: number): T[] {
   return result;
 }
 
+function hashText(value: string): number {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash << 5) - hash + value.charCodeAt(index);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
+
+function getMarginScore(product: Product): number {
+  const salePrice =
+    product.clientPrice ?? product.suggestedPrice ?? product.distributorPrice;
+  if (!salePrice || !product.purchasePrice) return 0;
+  const margin = salePrice - product.purchasePrice;
+  if (margin <= 0) return 0;
+  return Math.min(25, margin / 2);
+}
+
 const getPromotionPrice = (promo: Promotion) => {
   if (typeof promo.promotionPrice === "number") return promo.promotionPrice;
   if (typeof promo.value === "number" && promo.type === "fixed") {
@@ -94,12 +112,70 @@ export default function AdvertisingPage() {
 
   // "Sugerencias del Día" — 6 productos aleatorios (se regeneran con el botón)
   const [suggestionSeed, setSuggestionSeed] = useState(0);
+  const promotedProductIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const promo of promotions) {
+      for (const item of promo.comboItems || []) {
+        if (typeof item.product === "string") {
+          ids.add(item.product);
+        } else if (item.product?._id) {
+          ids.add(item.product._id);
+        }
+      }
+      for (const productId of promo.applicableProducts || []) {
+        ids.add(productId);
+      }
+    }
+    return ids;
+  }, [promotions]);
+
   const suggestions = useMemo(() => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const _seed = suggestionSeed; // forzar recálculo
-    const withImage = activeProducts.filter(p => p.image);
+    const activeInventory = products.filter(
+      product => product.active !== false
+    );
+    const pool = activeInventory.filter(product => {
+      const productPrice =
+        product.clientPrice ??
+        product.suggestedPrice ??
+        product.distributorPrice;
+      return typeof productPrice === "number" && productPrice > 0;
+    });
+
+    const ranked = pool
+      .map(product => {
+        const stockScore = Math.min(
+          20,
+          Math.max(0, (product.totalStock || 0) / 5)
+        );
+        const imageScore = product.image?.url ? 18 : 0;
+        const featuredScore = product.featured ? 8 : 0;
+        const promotionScore = promotedProductIds.has(product._id) ? 30 : 0;
+        const marginScore = getMarginScore(product);
+        const seedNoise =
+          ((hashText(`${product._id}:${suggestionSeed}`) % 11) - 5) * 0.6;
+
+        const score =
+          stockScore +
+          imageScore +
+          featuredScore +
+          promotionScore +
+          marginScore +
+          seedNoise;
+
+        return {
+          score,
+          adProduct: toAdProduct(product),
+        };
+      })
+      .sort((left, right) => right.score - left.score)
+      .map(item => item.adProduct);
+
+    const topRanked = ranked.slice(0, 6);
+    if (topRanked.length > 0) return topRanked;
+
+    const withImage = activeProducts.filter(product => product.image);
     return pickRandom(withImage.length >= 6 ? withImage : activeProducts, 6);
-  }, [activeProducts, suggestionSeed]);
+  }, [activeProducts, products, promotedProductIds, suggestionSeed]);
 
   const refreshSuggestions = useCallback(
     () => setSuggestionSeed(s => s + 1),

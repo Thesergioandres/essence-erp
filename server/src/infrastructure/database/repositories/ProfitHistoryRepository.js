@@ -280,8 +280,13 @@ class ProfitHistoryRepository {
   /**
    * Create profit entry
    */
-  async create(data) {
-    return await ProfitHistory.create(data);
+  async create(data, options = {}) {
+    const { session } = options;
+    const [created] = await ProfitHistory.create(
+      [data],
+      session ? { session } : {},
+    );
+    return created;
   }
 
   /**

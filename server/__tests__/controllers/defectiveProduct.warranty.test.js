@@ -22,6 +22,9 @@ const { default: Category } = await import("../../models/Category.js");
 const { default: Membership } = await import("../../models/Membership.js");
 const { default: DefectiveProduct } =
   await import("../../models/DefectiveProduct.js");
+const { default: Expense } = await import("../../models/Expense.js");
+const { default: ProfitHistory } =
+  await import("../../models/ProfitHistory.js");
 const { default: Sale } = await import("../../models/Sale.js");
 
 const JWT_SECRET = process.env.JWT_SECRET || "test-secret";
@@ -123,6 +126,8 @@ describe("Defective Product Warranty System", () => {
       await Membership.deleteMany({ business: testBusiness._id });
       await Business.findByIdAndDelete(testBusiness._id);
       await Sale.deleteMany({ business: testBusiness._id });
+      await Expense.deleteMany({ business: testBusiness._id });
+      await ProfitHistory.deleteMany({ business: testBusiness._id });
     }
 
     if (adminUser?._id) {
@@ -162,6 +167,8 @@ describe("Defective Product Warranty System", () => {
     // Limpiar reportes después de cada test
     await DefectiveProduct.deleteMany({ business: testBusiness._id });
     await Sale.deleteMany({ business: testBusiness._id });
+    await Expense.deleteMany({ business: testBusiness._id });
+    await ProfitHistory.deleteMany({ business: testBusiness._id });
   });
 
   describe("POST /api/v2/defective-products/:id/approve-warranty", () => {
@@ -456,6 +463,255 @@ describe("Defective Product Warranty System", () => {
   });
 
   describe("POST /api/v2/defective-products/warranty - escenarios financieros", () => {
+    test("idempotencia create: mismo operationId no duplica reporte ni upsell", async () => {
+      const originalSale = await Sale.create({
+        business: testBusiness._id,
+        createdBy: adminUser._id,
+        product: testProduct._id,
+        quantity: 1,
+        purchasePrice: 5000,
+        distributorPrice: 8000,
+        salePrice: 10000,
+        paymentStatus: "confirmado",
+      });
+
+      const replacement = await Product.create({
+        name: "Replacement Idempotent",
+        description: "Reemplazo idempotente",
+        business: testBusiness._id,
+        category: testCategory._id,
+        warehouseStock: 50,
+        totalStock: 50,
+        purchasePrice: 7000,
+        distributorPrice: 14000,
+        clientPrice: 15000,
+      });
+
+      const payload = {
+        operationId: `op-${Date.now()}`,
+        saleItemId: originalSale._id,
+        quantity: 1,
+        reason: "Garantía idempotente",
+        replacementProductId: replacement._id,
+        replacementPrice: 15000,
+        replacementSource: "warehouse",
+      };
+
+      const first = await request(app)
+        .post("/api/v2/defective-products/warranty")
+        .set("Authorization", `Bearer ${adminToken}`)
+        .set("x-business-id", testBusiness._id.toString())
+        .send(payload);
+
+      const second = await request(app)
+        .post("/api/v2/defective-products/warranty")
+        .set("Authorization", `Bearer ${adminToken}`)
+        .set("x-business-id", testBusiness._id.toString())
+        .send(payload);
+
+      expect(first.status).toBe(201);
+      expect(second.status).toBe(201);
+      expect(first.body?.data?.report?._id).toBeTruthy();
+      expect(second.body?.data?.report?._id).toBe(
+        first.body?.data?.report?._id,
+      );
+
+      const reports = await DefectiveProduct.find({
+        business: testBusiness._id,
+        origin: "customer_warranty",
+        warrantyOperationId: payload.operationId,
+      });
+      expect(reports.length).toBe(1);
+    });
+
+    test("margen: debe registrar delta con fórmula explícita y upsell", async () => {
+      const originalSale = await Sale.create({
+        business: testBusiness._id,
+        createdBy: adminUser._id,
+        product: testProduct._id,
+        quantity: 1,
+        purchasePrice: 5000,
+        distributorPrice: 8000,
+        salePrice: 10000,
+        paymentStatus: "confirmado",
+      });
+
+      const replacement = await Product.create({
+        name: "Replacement Margin Formula",
+        description: "Reemplazo para fórmula de margen",
+        business: testBusiness._id,
+        category: testCategory._id,
+        warehouseStock: 30,
+        totalStock: 30,
+        purchasePrice: 7000,
+        distributorPrice: 12000,
+        clientPrice: 15000,
+      });
+
+      const operationId = `margin-${Date.now()}`;
+      const response = await request(app)
+        .post("/api/v2/defective-products/warranty")
+        .set("Authorization", `Bearer ${adminToken}`)
+        .set("x-business-id", testBusiness._id.toString())
+        .send({
+          operationId,
+          saleItemId: originalSale._id,
+          quantity: 1,
+          reason: "Garantía fórmula margen",
+          replacementProductId: replacement._id,
+          replacementPrice: 15000,
+          replacementSource: "warehouse",
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.data.report.priceDifference).toBe(5000);
+
+      const marginEntry = await ProfitHistory.findOne({
+        business: testBusiness._id,
+        "metadata.eventName": "warranty_margin_delta",
+        "metadata.operationId": operationId,
+      });
+      const upsellEntry = await ProfitHistory.findOne({
+        business: testBusiness._id,
+        "metadata.eventName": "warranty_upsell_sale",
+        "metadata.operationId": operationId,
+      });
+
+      expect(marginEntry).toBeTruthy();
+      expect(marginEntry.amount).toBe(3000);
+      expect(upsellEntry).toBeTruthy();
+      expect(upsellEntry.amount).toBe(5000);
+    });
+
+    test("no debe permitir exceder cantidad vendida acumulada en garantías", async () => {
+      const originalSale = await Sale.create({
+        business: testBusiness._id,
+        createdBy: adminUser._id,
+        product: testProduct._id,
+        quantity: 2,
+        purchasePrice: 1000,
+        distributorPrice: 1500,
+        salePrice: 2000,
+        paymentStatus: "confirmado",
+      });
+
+      const replacement = await Product.create({
+        name: "Replacement Qty Cap",
+        description: "Reemplazo para cap de cantidad",
+        business: testBusiness._id,
+        category: testCategory._id,
+        warehouseStock: 40,
+        totalStock: 40,
+        purchasePrice: 1000,
+        distributorPrice: 1800,
+        clientPrice: 2000,
+      });
+
+      const first = await request(app)
+        .post("/api/v2/defective-products/warranty")
+        .set("Authorization", `Bearer ${adminToken}`)
+        .set("x-business-id", testBusiness._id.toString())
+        .send({
+          operationId: `cap-1-${Date.now()}`,
+          saleItemId: originalSale._id,
+          quantity: 1,
+          reason: "Garantía parcial",
+          replacementProductId: replacement._id,
+          replacementPrice: 2000,
+          replacementSource: "warehouse",
+        });
+
+      const second = await request(app)
+        .post("/api/v2/defective-products/warranty")
+        .set("Authorization", `Bearer ${adminToken}`)
+        .set("x-business-id", testBusiness._id.toString())
+        .send({
+          operationId: `cap-2-${Date.now()}`,
+          saleItemId: originalSale._id,
+          quantity: 2,
+          reason: "Garantía excedida",
+          replacementProductId: replacement._id,
+          replacementPrice: 2000,
+          replacementSource: "warehouse",
+        });
+
+      expect(first.status).toBe(201);
+      expect(second.status).toBe(400);
+      expect(second.body?.message || "").toContain("saldo disponible");
+    });
+
+    test("idempotencia resolve scrap: mismo operationId no duplica gasto", async () => {
+      const originalSale = await Sale.create({
+        business: testBusiness._id,
+        createdBy: adminUser._id,
+        product: testProduct._id,
+        quantity: 1,
+        purchasePrice: 1000,
+        distributorPrice: 1200,
+        salePrice: 1500,
+        paymentStatus: "confirmado",
+      });
+
+      const replacement = await Product.create({
+        name: "Replacement Scrap Idempotent",
+        description: "Reemplazo para scrap idempotente",
+        business: testBusiness._id,
+        category: testCategory._id,
+        warehouseStock: 10,
+        totalStock: 10,
+        purchasePrice: 900,
+        distributorPrice: 1400,
+        clientPrice: 1500,
+      });
+
+      const createResponse = await request(app)
+        .post("/api/v2/defective-products/warranty")
+        .set("Authorization", `Bearer ${adminToken}`)
+        .set("x-business-id", testBusiness._id.toString())
+        .send({
+          saleItemId: originalSale._id,
+          quantity: 1,
+          reason: "Garantía para scrap idempotente",
+          replacementProductId: replacement._id,
+          replacementPrice: 1500,
+          replacementSource: "warehouse",
+        });
+
+      expect(createResponse.status).toBe(201);
+      const reportId = createResponse.body?.data?.report?._id;
+      const operationId = `resolve-${Date.now()}`;
+
+      const firstResolve = await request(app)
+        .put(`/api/v2/defective-products/${reportId}/resolve-warranty`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .set("x-business-id", testBusiness._id.toString())
+        .send({
+          operationId,
+          resolution: "scrap",
+          adminNotes: "Scrap por defecto total",
+        });
+
+      const secondResolve = await request(app)
+        .put(`/api/v2/defective-products/${reportId}/resolve-warranty`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .set("x-business-id", testBusiness._id.toString())
+        .send({
+          operationId,
+          resolution: "scrap",
+          adminNotes: "Scrap duplicado",
+        });
+
+      expect(firstResolve.status).toBe(200);
+      expect(secondResolve.status).toBe(200);
+
+      const expenseDocs = await Expense.find({
+        business: testBusiness._id,
+        operationId,
+      });
+      expect(expenseDocs.length).toBe(1);
+      expect(Number(expenseDocs[0].amount || 0)).toBeGreaterThan(0);
+    });
+
     test("same price: no debe crear upsellSale", async () => {
       const originalSale = await Sale.create({
         business: testBusiness._id,

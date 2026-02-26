@@ -54,6 +54,12 @@ const expenseSchema = new mongoose.Schema(
       ref: "User",
       default: null,
     },
+    operationId: {
+      type: String,
+      trim: true,
+      index: true,
+      default: null,
+    },
     expenseDate: {
       type: Date,
       default: Date.now,
@@ -71,6 +77,14 @@ const expenseSchema = new mongoose.Schema(
 
 expenseSchema.index({ expenseDate: -1 });
 expenseSchema.index({ type: 1, expenseDate: -1 });
+expenseSchema.index(
+  { business: 1, operationId: 1 },
+  {
+    unique: true,
+    sparse: true,
+    partialFilterExpression: { operationId: { $exists: true, $ne: null } },
+  },
+);
 
 export default mongoose.models.Expense ||
   mongoose.model("Expense", expenseSchema);

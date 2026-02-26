@@ -19,7 +19,8 @@ class ExpenseRepository {
     return err;
   }
 
-  async create(businessId, data, userId) {
+  async create(businessId, data, userId, options = {}) {
+    const { session, operationId } = options;
     const { type, category, amount, description, expenseDate } = data;
 
     const resolvedType =
@@ -33,31 +34,95 @@ class ExpenseRepository {
     if (!Number.isFinite(parsedAmount) || parsedAmount < 0)
       throw new Error("El monto es inválido");
 
-    const expense = await Expense.create({
-      type: resolvedType.trim(),
-      amount: parsedAmount,
-      description: typeof description === "string" ? description.trim() : "",
-      expenseDate: expenseDate ? new Date(expenseDate) : new Date(),
-      createdBy: userId,
-      business: businessId,
-    });
+    if (operationId) {
+      const existingQuery = Expense.findOne({
+        business: businessId,
+        operationId,
+      }).populate("createdBy", "name email");
+      const existing = session
+        ? await existingQuery.session(session).lean()
+        : await existingQuery.lean();
+      if (existing) return existing;
+    }
 
-    await ProfitHistory.create({
-      business: businessId,
-      user: userId,
-      type: "ajuste",
-      amount: -Math.abs(parsedAmount),
-      description: `Gasto: ${resolvedType.trim()}`,
-      date: expense.expenseDate || new Date(),
-      metadata: {
-        expenseId: expense._id,
-        expenseType: resolvedType.trim(),
-      },
-    });
+    const [expense] = await Expense.create(
+      [
+        {
+          type: resolvedType.trim(),
+          amount: parsedAmount,
+          description:
+            typeof description === "string" ? description.trim() : "",
+          expenseDate: expenseDate ? new Date(expenseDate) : new Date(),
+          createdBy: userId,
+          business: businessId,
+          operationId: operationId || null,
+        },
+      ],
+      session ? { session } : {},
+    );
 
-    return Expense.findById(expense._id)
+    const existingProfitFilter = operationId
+      ? {
+          business: businessId,
+          type: "ajuste",
+          "metadata.eventName": "expense_created",
+          "metadata.operationId": operationId,
+        }
+      : null;
+
+    if (existingProfitFilter) {
+      const existingProfitQuery = ProfitHistory.findOne(existingProfitFilter)
+        .select("_id")
+        .lean();
+      const existingProfit = session
+        ? await existingProfitQuery.session(session)
+        : await existingProfitQuery;
+      if (!existingProfit) {
+        await ProfitHistory.create(
+          [
+            {
+              business: businessId,
+              user: userId,
+              type: "ajuste",
+              amount: -Math.abs(parsedAmount),
+              description: `Gasto: ${resolvedType.trim()}`,
+              date: expense.expenseDate || new Date(),
+              metadata: {
+                expenseId: expense._id,
+                expenseType: resolvedType.trim(),
+                eventName: "expense_created",
+                operationId,
+              },
+            },
+          ],
+          session ? { session } : {},
+        );
+      }
+    } else {
+      await ProfitHistory.create(
+        [
+          {
+            business: businessId,
+            user: userId,
+            type: "ajuste",
+            amount: -Math.abs(parsedAmount),
+            description: `Gasto: ${resolvedType.trim()}`,
+            date: expense.expenseDate || new Date(),
+            metadata: {
+              expenseId: expense._id,
+              expenseType: resolvedType.trim(),
+              eventName: "expense_created",
+            },
+          },
+        ],
+        session ? { session } : {},
+      );
+    }
+
+    const finalQuery = Expense.findById(expense._id)
       .populate("createdBy", "name email")
       .lean();
+    return session ? await finalQuery.session(session) : await finalQuery;
   }
 
   async createInventoryWithdrawal(businessId, data, userId) {

@@ -176,6 +176,16 @@ const defectiveProductSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
+    warrantyOperationId: {
+      type: String,
+      trim: true,
+      index: true,
+    },
+    resolutionOperationId: {
+      type: String,
+      trim: true,
+      index: true,
+    },
     // Origen del reporte
     origin: {
       type: String,
@@ -194,6 +204,17 @@ defectiveProductSchema.index({ distributor: 1, status: 1 });
 defectiveProductSchema.index({ product: 1, reportDate: -1 });
 defectiveProductSchema.index({ business: 1, ticketId: 1 });
 defectiveProductSchema.index({ business: 1, originalSaleGroupId: 1 });
+defectiveProductSchema.index(
+  { business: 1, warrantyOperationId: 1 },
+  {
+    unique: true,
+    sparse: true,
+    partialFilterExpression: {
+      origin: "customer_warranty",
+      warrantyOperationId: { $exists: true, $ne: null },
+    },
+  },
+);
 
 export default mongoose.models.DefectiveProduct ||
   mongoose.model("DefectiveProduct", defectiveProductSchema);

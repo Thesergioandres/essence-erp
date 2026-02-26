@@ -6,9 +6,134 @@ import Membership from "../../../../models/Membership.js";
 import Product from "../../../../models/Product.js";
 import ProfitHistory from "../../../../models/ProfitHistory.js";
 import Sale from "../../../../models/Sale.js";
+import expenseRepository from "./ExpenseRepository.js";
 import ProfitHistoryRepository from "./ProfitHistoryRepository.js";
 
 export class DefectiveProductRepository {
+  constructor() {
+    this.expenseRepository = expenseRepository;
+  }
+
+  normalizeOperationId(operationId) {
+    if (operationId === undefined || operationId === null) return null;
+    const normalized = String(operationId).trim();
+    return normalized || null;
+  }
+
+  isTransactionUnsupportedError(error) {
+    const message = String(error?.message || "");
+    return (
+      message.includes(
+        "Transaction numbers are only allowed on a replica set member or mongos",
+      ) ||
+      message.includes("does not support transactions") ||
+      message.includes("NotYetInitialized")
+    );
+  }
+
+  async runInOptionalTransaction(work) {
+    const session = await mongoose.startSession();
+
+    try {
+      await session.withTransaction(async () => {
+        await work(session);
+      });
+    } catch (error) {
+      if (!this.isTransactionUnsupportedError(error)) {
+        throw error;
+      }
+
+      await work(null);
+    } finally {
+      await session.endSession();
+    }
+  }
+
+  buildWarrantyLedger({
+    saleItem,
+    replacementProduct,
+    quantity,
+    replacementPrice,
+    cashRefundInput,
+  }) {
+    const originalUnitPrice = Number(saleItem.salePrice || 0);
+    const originalUnitCost =
+      saleItem.averageCostAtSale ||
+      saleItem.purchasePrice ||
+      saleItem.product?.averageCost ||
+      saleItem.product?.purchasePrice ||
+      0;
+    const originalMargin = (originalUnitPrice - originalUnitCost) * quantity;
+
+    const replacementUnitCost =
+      replacementProduct.averageCost || replacementProduct.purchasePrice || 0;
+    const replacementMargin =
+      (replacementPrice - replacementUnitCost) * quantity;
+    const marginDelta = replacementMargin - originalMargin;
+
+    const originalTotal = originalUnitPrice * quantity;
+    const replacementTotal = replacementPrice * quantity;
+    const priceDifference = Math.max(0, replacementTotal - originalTotal);
+    let cashRefund = Math.max(0, originalTotal - replacementTotal);
+
+    if (cashRefundInput !== undefined) {
+      const parsedRefund = Number(cashRefundInput);
+      if (!Number.isFinite(parsedRefund) || parsedRefund < 0) {
+        const err = new Error("Devolucion de efectivo invalida");
+        err.statusCode = 400;
+        throw err;
+      }
+      if (parsedRefund > originalTotal) {
+        const err = new Error("La devolucion excede el total original");
+        err.statusCode = 400;
+        throw err;
+      }
+      cashRefund = parsedRefund;
+    }
+
+    const warrantyLossAmount = Math.max(0, originalMargin - replacementMargin);
+
+    return {
+      originalMargin,
+      replacementMargin,
+      marginDelta,
+      priceDifference,
+      cashRefund,
+      replacementTotal,
+      warrantyLossAmount,
+    };
+  }
+
+  async getWarrantedQuantityForSaleItem(
+    businessId,
+    saleItemId,
+    session = null,
+  ) {
+    const aggregateQuery = DefectiveProduct.aggregate([
+      {
+        $match: {
+          business: new mongoose.Types.ObjectId(businessId),
+          origin: "customer_warranty",
+          originalSaleItem: new mongoose.Types.ObjectId(saleItemId),
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          quantity: { $sum: "$quantity" },
+        },
+      },
+    ]);
+
+    if (session) {
+      aggregateQuery.session(session);
+    }
+
+    const aggregation = await aggregateQuery;
+
+    return Number(aggregation?.[0]?.quantity || 0);
+  }
+
   getContextRole(actor) {
     return (
       actor?.membership?.role ||
@@ -182,7 +307,8 @@ export class DefectiveProductRepository {
     return defectiveReport;
   }
 
-  async generateWarrantyTicket(businessId) {
+  async generateWarrantyTicket(businessId, options = {}) {
+    const { session } = options;
     const maxAttempts = 5;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       const suffix = Math.floor(Math.random() * 100000)
@@ -190,12 +316,16 @@ export class DefectiveProductRepository {
         .padStart(5, "0");
       const ticketId = `REF-GAR-${suffix}`;
 
-      const exists = await DefectiveProduct.findOne({
+      const ticketQuery = DefectiveProduct.findOne({
         business: businessId,
         ticketId,
       })
         .select("_id")
         .lean();
+
+      const exists = session
+        ? await ticketQuery.session(session)
+        : await ticketQuery;
 
       if (!exists) return ticketId;
     }
@@ -236,10 +366,14 @@ export class DefectiveProductRepository {
 
     if (contextRole === "distribuidor") {
       const distributorId = user._id?.toString?.() || user.id?.toString?.();
-      const saleDistributorId = sale.distributor
-        ? sale.distributor.toString()
-        : null;
-      const saleCreatorId = sale.createdBy ? sale.createdBy.toString() : null;
+      const saleDistributorId =
+        sale?.distributor && typeof sale.distributor === "object"
+          ? sale.distributor?._id?.toString?.() || null
+          : sale?.distributor?.toString?.() || null;
+      const saleCreatorId =
+        sale?.createdBy && typeof sale.createdBy === "object"
+          ? sale.createdBy?._id?.toString?.() || null
+          : sale?.createdBy?.toString?.() || null;
 
       const hasAccess =
         Boolean(distributorId) &&
@@ -292,6 +426,9 @@ export class DefectiveProductRepository {
 
   async createCustomerWarranty(data, businessId, user, options = {}) {
     const contextRole = this.getContextRole(user);
+    const operationId = this.normalizeOperationId(
+      data?.operationId || options?.operationId,
+    );
 
     const userId = user?._id || user?.id;
     if (!userId) {
@@ -319,493 +456,567 @@ export class DefectiveProductRepository {
       throw err;
     }
 
-    const saleItem = await Sale.findOne({
-      _id: data.saleItemId,
-      business: businessId,
-    })
-      .populate("product", "name purchasePrice averageCost")
-      .lean();
+    let result = null;
 
-    if (!saleItem) {
-      const err = new Error("Venta original no encontrada");
-      err.statusCode = 404;
-      throw err;
-    }
-
-    if (
-      contextRole === "distribuidor" &&
-      saleItem.distributor &&
-      saleItem.distributor.toString() !== userId.toString()
-    ) {
-      const err = new Error("No tienes acceso a esta venta");
-      err.statusCode = 403;
-      throw err;
-    }
-
-    if (quantity > Number(saleItem.quantity || 0)) {
-      const err = new Error("La cantidad supera lo vendido");
-      err.statusCode = 400;
-      throw err;
-    }
-
-    if (!data.replacementProductId) {
-      const err = new Error("Selecciona el producto de reemplazo");
-      err.statusCode = 400;
-      throw err;
-    }
-
-    if (data.replacementPrice !== undefined) {
-      const parsedReplacementPrice = Number(data.replacementPrice);
-      if (
-        !Number.isFinite(parsedReplacementPrice) ||
-        parsedReplacementPrice < 0
-      ) {
-        const err = new Error("Precio de reemplazo inválido");
-        err.statusCode = 400;
-        throw err;
-      }
-    }
-
-    const defectiveProductId = saleItem.product?._id || saleItem.product;
-    const replacementProduct = await Product.findOne({
-      _id: data.replacementProductId,
-      business: businessId,
-    }).lean();
-
-    if (!replacementProduct) {
-      const err = new Error("Producto de reemplazo no encontrado");
-      err.statusCode = 404;
-      throw err;
-    }
-
-    const replacementPrice =
-      Number(data.replacementPrice) ||
-      replacementProduct.clientPrice ||
-      replacementProduct.suggestedPrice ||
-      replacementProduct.distributorPrice ||
-      saleItem.salePrice ||
-      0;
-
-    const originalUnitPrice = Number(saleItem.salePrice || 0);
-    const saleQuantity = Number(saleItem.quantity || 1) || 1;
-    const quantityRatio = saleQuantity > 0 ? quantity / saleQuantity : 1;
-    const originalUnitCost =
-      saleItem.averageCostAtSale ||
-      saleItem.purchasePrice ||
-      saleItem.product?.averageCost ||
-      saleItem.product?.purchasePrice ||
-      0;
-    const perUnitAdditionalCosts =
-      (saleItem.totalAdditionalCosts || 0) / saleQuantity;
-    const perUnitShipping = (saleItem.shippingCost || 0) / saleQuantity;
-    const perUnitDiscount = (saleItem.discount || 0) / saleQuantity;
-    const computedOriginalNetProfit =
-      (originalUnitPrice -
-        originalUnitCost -
-        perUnitAdditionalCosts -
-        perUnitShipping -
-        perUnitDiscount) *
-      quantity;
-    const originalNetProfit = Number.isFinite(saleItem.netProfit)
-      ? (saleItem.netProfit || 0) * quantityRatio
-      : computedOriginalNetProfit;
-
-    const replacementUnitCost =
-      replacementProduct.averageCost || replacementProduct.purchasePrice || 0;
-    const replacementNetProfit =
-      (replacementPrice - replacementUnitCost) * quantity;
-
-    const originalTotal = originalUnitPrice * quantity;
-    const replacementTotal = replacementPrice * quantity;
-    const priceDifference = Math.max(0, replacementTotal - originalTotal);
-    let cashRefund = Math.max(0, originalTotal - replacementTotal);
-
-    if (data.cashRefund !== undefined) {
-      const parsedRefund = Number(data.cashRefund);
-      if (!Number.isFinite(parsedRefund) || parsedRefund < 0) {
-        const err = new Error("Devolucion de efectivo invalida");
-        err.statusCode = 400;
-        throw err;
-      }
-      if (parsedRefund > originalTotal) {
-        const err = new Error("La devolucion excede el total original");
-        err.statusCode = 400;
-        throw err;
-      }
-      cashRefund = parsedRefund;
-    }
-
-    const warrantyLossAmount = originalNetProfit - replacementNetProfit;
-
-    const replacementSource = data.replacementSource;
-    if (!replacementSource) {
-      const err = new Error("Selecciona el origen del reemplazo");
-      err.statusCode = 400;
-      throw err;
-    }
-
-    if (!["warehouse", "branch", "distributor"].includes(replacementSource)) {
-      const err = new Error("Origen de reemplazo inválido");
-      err.statusCode = 400;
-      throw err;
-    }
-
-    if (replacementSource === "distributor") {
-      if (contextRole !== "distribuidor") {
-        const err = new Error("Solo distribuidores pueden usar su inventario");
-        err.statusCode = 403;
-        throw err;
-      }
-
-      const distStock = await DistributorStock.findOneAndUpdate(
-        {
+    await this.runInOptionalTransaction(async (session) => {
+      if (operationId) {
+        const existingQuery = DefectiveProduct.findOne({
           business: businessId,
-          distributor: userId,
-          product: replacementProduct._id,
-          quantity: { $gte: quantity },
-        },
-        { $inc: { quantity: -quantity } },
-        { new: true },
-      );
+          origin: "customer_warranty",
+          warrantyOperationId: operationId,
+        })
+          .populate("upsellSale")
+          .lean();
 
-      if (!distStock) {
-        const err = new Error("Stock insuficiente del distribuidor");
-        err.statusCode = 400;
-        throw err;
+        const existingReport = session
+          ? await existingQuery.session(session)
+          : await existingQuery;
+
+        if (existingReport) {
+          result = {
+            report: existingReport,
+            upsellSale: existingReport.upsellSale || null,
+          };
+          return;
+        }
       }
 
-      await Product.findByIdAndUpdate(replacementProduct._id, {
-        $inc: { totalStock: -quantity },
-      });
-    } else if (replacementSource === "branch") {
-      const branchId = data.replacementBranchId;
-      if (!branchId) {
-        const err = new Error("Falta la sede de reemplazo");
-        err.statusCode = 400;
-        throw err;
-      }
-
-      const branchStock = await BranchStock.findOneAndUpdate(
-        {
-          business: businessId,
-          branch: branchId,
-          product: replacementProduct._id,
-          quantity: { $gte: quantity },
-        },
-        { $inc: { quantity: -quantity } },
-        { new: true },
-      );
-
-      if (!branchStock) {
-        const err = new Error("Stock insuficiente en la sede");
-        err.statusCode = 400;
-        throw err;
-      }
-
-      await Product.findByIdAndUpdate(replacementProduct._id, {
-        $inc: { totalStock: -quantity },
-      });
-    } else {
-      const updatedProduct = await Product.findOneAndUpdate(
-        {
-          _id: replacementProduct._id,
-          business: businessId,
-          warehouseStock: { $gte: quantity },
-        },
-        { $inc: { warehouseStock: -quantity, totalStock: -quantity } },
-        { new: true },
-      );
-
-      if (!updatedProduct) {
-        const err = new Error("Stock insuficiente en bodega");
-        err.statusCode = 400;
-        throw err;
-      }
-    }
-
-    const ticketId = await this.generateWarrantyTicket(businessId);
-    const isDistributor = contextRole === "distribuidor";
-
-    const resolvedSaleGroupId =
-      saleItem.saleGroupId || saleItem._id?.toString();
-
-    const report = await DefectiveProduct.create({
-      distributor: isDistributor ? userId : saleItem.distributor || null,
-      product: defectiveProductId,
-      business: businessId,
-      branch: saleItem.branch || null,
-      quantity,
-      reason: data.reason,
-      images: data.images || [],
-      hasWarranty: true,
-      warrantyStatus: "pending",
-      lossAmount: warrantyLossAmount,
-      saleGroupId: resolvedSaleGroupId,
-      ticketId,
-      originalSaleId: saleItem.saleId,
-      originalSaleGroupId: resolvedSaleGroupId,
-      originalSaleItem: saleItem._id,
-      originalSaleDate: saleItem.saleDate,
-      originalSalePrice: saleItem.salePrice,
-      replacementProduct: replacementProduct._id,
-      replacementQuantity: quantity,
-      replacementPrice,
-      replacementTotal,
-      priceDifference,
-      cashRefund,
-      replacementStockOrigin: replacementSource,
-      replacementBranch:
-        replacementSource === "branch" ? data.replacementBranchId : null,
-      replacementDistributor:
-        replacementSource === "distributor" ? userId : null,
-      stockOrigin: replacementSource,
-      status: isDistributor ? "pendiente" : "confirmado",
-      confirmedAt: isDistributor ? null : Date.now(),
-      confirmedBy: isDistributor ? null : userId,
-      adminNotes: data.adminNotes,
-      origin: "customer_warranty",
-      warrantyResolution: "pending",
-    });
-
-    let upsellSale = null;
-
-    if (priceDifference > 0) {
-      const upsellNetProfit = replacementNetProfit - originalNetProfit;
-
-      upsellSale = await Sale.create({
+      const saleItemQuery = Sale.findOne({
+        _id: data.saleItemId,
         business: businessId,
-        branch: saleItem.branch || null,
-        customer: saleItem.customer || null,
-        customerName: saleItem.customerName || null,
-        customerEmail: saleItem.customerEmail || null,
-        customerPhone: saleItem.customerPhone || null,
-        saleGroupId: resolvedSaleGroupId,
-        isComplementarySale: true,
-        parentSaleId: saleItem._id,
-        parentSaleGroupId: resolvedSaleGroupId,
-        warrantyTicketId: ticketId,
-        distributor: saleItem.distributor || null,
-        product: replacementProduct._id,
-        quantity: 1,
-        purchasePrice: 0,
-        distributorPrice: 0,
-        salePrice: priceDifference,
-        sourceLocation: replacementSource,
-        createdBy: userId,
-        paymentStatus: isDistributor ? "pendiente" : "confirmado",
-        paymentConfirmedAt: isDistributor ? null : new Date(),
-        paymentConfirmedBy: isDistributor ? null : userId,
-        actualPayment: priceDifference,
-        discount: 0,
-        shippingCost: 0,
-        totalAdditionalCosts: 0,
-        distributorProfit: 0,
-        adminProfit: priceDifference,
-        totalProfit: priceDifference,
-        totalGroupProfit: priceDifference,
-        netProfit: upsellNetProfit,
-        notes: `Venta complementaria por garantía ${ticketId}`,
-      });
+      })
+        .populate("product", "name purchasePrice averageCost")
+        .lean();
 
-      report.upsellSale = upsellSale._id;
-      await report.save();
-    }
+      const saleItem = session
+        ? await saleItemQuery.session(session)
+        : await saleItemQuery;
 
-    const adminMembership = await Membership.findOne({
-      business: businessId,
-      role: "admin",
-      status: "active",
-    })
-      .select("user")
-      .lean();
-
-    if (adminMembership?.user) {
-      const adjustmentMetadata = {
-        quantity,
-        ticketId,
-        eventName: "warranty_profit_adjustment",
-        originalSaleId: saleItem.saleId,
-        originalSaleGroupId: saleItem.saleGroupId,
-        originalNetProfit,
-        replacementNetProfit,
-        priceDifference,
-        cashRefund,
-      };
-
-      if (originalNetProfit !== 0) {
-        await ProfitHistoryRepository.create({
-          business: businessId,
-          user: adminMembership.user,
-          type: "ajuste",
-          amount: -originalNetProfit,
-          sale: saleItem._id,
-          product: defectiveProductId,
-          description: `Reverso ganancia venta original (${ticketId})`,
-          date: new Date(),
-          metadata: adjustmentMetadata,
-        });
-      }
-
-      if (replacementNetProfit !== 0) {
-        await ProfitHistoryRepository.create({
-          business: businessId,
-          user: adminMembership.user,
-          type: "ajuste",
-          amount: replacementNetProfit,
-          sale: saleItem._id,
-          product: replacementProduct._id,
-          description: `Ganancia ajustada por garantia (${ticketId})`,
-          date: new Date(),
-          metadata: adjustmentMetadata,
-        });
-      }
-
-      if (upsellSale && priceDifference > 0) {
-        await ProfitHistoryRepository.create({
-          business: businessId,
-          user: adminMembership.user,
-          type: "venta_normal",
-          amount: priceDifference,
-          sale: upsellSale._id,
-          product: replacementProduct._id,
-          description: `Ingreso por upselling en garantía (${ticketId})`,
-          date: new Date(),
-          metadata: {
-            quantity,
-            salePrice: priceDifference,
-            saleId: upsellSale.saleId,
-            eventName: "warranty_upsell_sale",
-            ticketId,
-            originalSaleId: saleItem.saleId,
-            originalNetProfit,
-            replacementNetProfit,
-            priceDifference,
-            cashRefund,
-          },
-        });
-      }
-    }
-
-    return { report, upsellSale };
-  }
-
-  async resolveCustomerWarranty(reportId, businessId, userId, data) {
-    const report = await DefectiveProduct.findOne({
-      _id: reportId,
-      business: businessId,
-    });
-
-    if (!report) {
-      const err = new Error("Reporte no encontrado");
-      err.statusCode = 404;
-      throw err;
-    }
-
-    if (report.origin !== "customer_warranty") {
-      const err = new Error("El reporte no es una garantia al cliente");
-      err.statusCode = 400;
-      throw err;
-    }
-
-    if (report.warrantyResolution && report.warrantyResolution !== "pending") {
-      const err = new Error("La garantia ya fue resuelta");
-      err.statusCode = 400;
-      throw err;
-    }
-
-    const resolution = data?.resolution;
-    if (!resolution || !["scrap", "supplier_warranty"].includes(resolution)) {
-      const err = new Error("Resolucion invalida");
-      err.statusCode = 400;
-      throw err;
-    }
-
-    const previousLossAmount = Number(report.lossAmount || 0);
-
-    report.warrantyResolution = resolution;
-    report.warrantyResolvedAt = new Date();
-    report.warrantyResolvedBy = userId;
-    report.adminNotes = data?.adminNotes || report.adminNotes;
-    report.status = "confirmado";
-
-    if (resolution === "scrap") {
-      const product = await Product.findOne({
-        _id: report.product,
-        business: businessId,
-      }).lean();
-
-      if (!product) {
-        const err = new Error("Producto no encontrado");
+      if (!saleItem) {
+        const err = new Error("Venta original no encontrada");
         err.statusCode = 404;
         throw err;
       }
 
-      const unitCost = product.averageCost || product.purchasePrice || 0;
-      const lossAmount = unitCost * (report.quantity || 0);
-      report.lossAmount = lossAmount;
-      report.hasWarranty = false;
-      report.warrantyStatus = "rejected";
-
-      if (lossAmount > 0) {
-        await ProfitHistory.create({
-          business: businessId,
-          user: userId,
-          type: "ajuste",
-          amount: -lossAmount,
-          product: report.product,
-          description: `Perdida por garantia (${report.quantity}): ${product.name}`,
-          date: new Date(),
-          metadata: {
-            quantity: report.quantity,
-            salePrice: 0,
-            saleId: report.originalSaleId || null,
-            eventName: "warranty_scrap",
-            reportId: report._id,
-            unitCost,
-            ticketId: report.ticketId,
-          },
-        });
+      if (
+        contextRole === "distribuidor" &&
+        saleItem.distributor &&
+        saleItem.distributor.toString() !== userId.toString()
+      ) {
+        const err = new Error("No tienes acceso a esta venta");
+        err.statusCode = 403;
+        throw err;
       }
-    } else {
-      report.lossAmount = 0;
-      report.hasWarranty = true;
-      report.warrantyStatus = "pending";
 
-      if (previousLossAmount !== 0) {
-        const existingCompensation = await ProfitHistory.findOne({
-          business: businessId,
-          type: "ajuste",
-          "metadata.eventName": "warranty_supplier_compensation",
-          "metadata.reportId": report._id,
-        })
-          .select("_id")
-          .lean();
+      const soldQty = Number(saleItem.quantity || 0);
+      if (quantity > soldQty) {
+        const err = new Error("La cantidad supera lo vendido");
+        err.statusCode = 400;
+        throw err;
+      }
 
-        if (!existingCompensation) {
-          await ProfitHistory.create({
-            business: businessId,
-            user: userId,
-            type: "ajuste",
-            amount: previousLossAmount,
-            product: report.product,
-            description: `Reverso ajuste por garantía proveedor (${report.ticketId || report._id})`,
-            date: new Date(),
-            metadata: {
-              eventName: "warranty_supplier_compensation",
-              reportId: report._id,
-              ticketId: report.ticketId,
-              originalSaleId: report.originalSaleId || null,
-              priceDifference: report.priceDifference || 0,
-              cashRefund: report.cashRefund || 0,
-              lossAmount: previousLossAmount,
-            },
-          });
+      const alreadyWarrantedQty = await this.getWarrantedQuantityForSaleItem(
+        businessId,
+        saleItem._id,
+        session,
+      );
+      const availableWarrantyQty = soldQty - alreadyWarrantedQty;
+      if (quantity > availableWarrantyQty) {
+        const err = new Error(
+          `La cantidad supera el saldo disponible para garantía (${availableWarrantyQty})`,
+        );
+        err.statusCode = 400;
+        throw err;
+      }
+
+      if (!data.replacementProductId) {
+        const err = new Error("Selecciona el producto de reemplazo");
+        err.statusCode = 400;
+        throw err;
+      }
+
+      if (data.replacementPrice !== undefined) {
+        const parsedReplacementPrice = Number(data.replacementPrice);
+        if (
+          !Number.isFinite(parsedReplacementPrice) ||
+          parsedReplacementPrice < 0
+        ) {
+          const err = new Error("Precio de reemplazo inválido");
+          err.statusCode = 400;
+          throw err;
         }
       }
-    }
 
-    await report.save();
-    return report;
+      const defectiveProductId = saleItem.product?._id || saleItem.product;
+      const replacementProductQuery = Product.findOne({
+        _id: data.replacementProductId,
+        business: businessId,
+      }).lean();
+
+      const replacementProduct = session
+        ? await replacementProductQuery.session(session)
+        : await replacementProductQuery;
+
+      if (!replacementProduct) {
+        const err = new Error("Producto de reemplazo no encontrado");
+        err.statusCode = 404;
+        throw err;
+      }
+
+      const replacementPrice =
+        Number(data.replacementPrice) ||
+        replacementProduct.clientPrice ||
+        replacementProduct.suggestedPrice ||
+        replacementProduct.distributorPrice ||
+        saleItem.salePrice ||
+        0;
+
+      const {
+        originalMargin,
+        replacementMargin,
+        marginDelta,
+        priceDifference,
+        cashRefund,
+        replacementTotal,
+        warrantyLossAmount,
+      } = this.buildWarrantyLedger({
+        saleItem,
+        replacementProduct,
+        quantity,
+        replacementPrice,
+        cashRefundInput: data.cashRefund,
+      });
+
+      const replacementSource = data.replacementSource;
+      if (!replacementSource) {
+        const err = new Error("Selecciona el origen del reemplazo");
+        err.statusCode = 400;
+        throw err;
+      }
+
+      if (!["warehouse", "branch", "distributor"].includes(replacementSource)) {
+        const err = new Error("Origen de reemplazo inválido");
+        err.statusCode = 400;
+        throw err;
+      }
+
+      const resolvedReplacementSource = replacementSource;
+
+      if (resolvedReplacementSource === "distributor") {
+        if (contextRole !== "distribuidor") {
+          const err = new Error(
+            "Solo distribuidores pueden usar su inventario",
+          );
+          err.statusCode = 403;
+          throw err;
+        }
+
+        const distStock = await DistributorStock.findOneAndUpdate(
+          {
+            business: businessId,
+            distributor: userId,
+            product: replacementProduct._id,
+            quantity: { $gte: quantity },
+          },
+          { $inc: { quantity: -quantity } },
+          session ? { new: true, session } : { new: true },
+        );
+
+        if (!distStock) {
+          const err = new Error("Stock insuficiente del distribuidor");
+          err.statusCode = 400;
+          throw err;
+        }
+
+        await Product.findByIdAndUpdate(
+          replacementProduct._id,
+          {
+            $inc: { totalStock: -quantity },
+          },
+          session ? { session } : {},
+        );
+      } else if (resolvedReplacementSource === "branch") {
+        const branchId = data.replacementBranchId;
+        if (!branchId) {
+          const err = new Error("Falta la sede de reemplazo");
+          err.statusCode = 400;
+          throw err;
+        }
+
+        const branchStock = await BranchStock.findOneAndUpdate(
+          {
+            business: businessId,
+            branch: branchId,
+            product: replacementProduct._id,
+            quantity: { $gte: quantity },
+          },
+          { $inc: { quantity: -quantity } },
+          session ? { new: true, session } : { new: true },
+        );
+
+        if (!branchStock) {
+          const err = new Error("Stock insuficiente en la sede");
+          err.statusCode = 400;
+          throw err;
+        }
+
+        await Product.findByIdAndUpdate(
+          replacementProduct._id,
+          {
+            $inc: { totalStock: -quantity },
+          },
+          session ? { session } : {},
+        );
+      } else {
+        const updatedProduct = await Product.findOneAndUpdate(
+          {
+            _id: replacementProduct._id,
+            business: businessId,
+            warehouseStock: { $gte: quantity },
+          },
+          { $inc: { warehouseStock: -quantity, totalStock: -quantity } },
+          session ? { new: true, session } : { new: true },
+        );
+
+        if (!updatedProduct) {
+          const err = new Error("Stock insuficiente en bodega");
+          err.statusCode = 400;
+          throw err;
+        }
+      }
+
+      const ticketId = await this.generateWarrantyTicket(businessId, {
+        session,
+      });
+      const isDistributor = contextRole === "distribuidor";
+      const resolvedSaleGroupId =
+        saleItem.saleGroupId || saleItem._id?.toString();
+
+      const [report] = await DefectiveProduct.create(
+        [
+          {
+            distributor: isDistributor ? userId : saleItem.distributor || null,
+            product: defectiveProductId,
+            business: businessId,
+            branch: saleItem.branch || null,
+            quantity,
+            reason: data.reason,
+            images: data.images || [],
+            hasWarranty: true,
+            warrantyStatus: "pending",
+            lossAmount: warrantyLossAmount,
+            saleGroupId: resolvedSaleGroupId,
+            ticketId,
+            originalSaleId: saleItem.saleId,
+            originalSaleGroupId: resolvedSaleGroupId,
+            originalSaleItem: saleItem._id,
+            originalSaleDate: saleItem.saleDate,
+            originalSalePrice: saleItem.salePrice,
+            replacementProduct: replacementProduct._id,
+            replacementQuantity: quantity,
+            replacementPrice,
+            replacementTotal,
+            priceDifference,
+            cashRefund,
+            replacementStockOrigin: replacementSource,
+            replacementBranch:
+              resolvedReplacementSource === "branch"
+                ? data.replacementBranchId
+                : null,
+            replacementDistributor:
+              resolvedReplacementSource === "distributor" ? userId : null,
+            stockOrigin: resolvedReplacementSource,
+            status: isDistributor ? "pendiente" : "confirmado",
+            confirmedAt: isDistributor ? null : Date.now(),
+            confirmedBy: isDistributor ? null : userId,
+            adminNotes: data.adminNotes,
+            origin: "customer_warranty",
+            warrantyResolution: "pending",
+            warrantyOperationId: operationId,
+          },
+        ],
+        session ? { session } : {},
+      );
+
+      let upsellSale = null;
+
+      if (priceDifference > 0) {
+        const upsellNetProfit = marginDelta;
+
+        upsellSale = new Sale({
+          business: businessId,
+          branch: saleItem.branch || null,
+          customer: saleItem.customer || null,
+          customerName: saleItem.customerName || null,
+          customerEmail: saleItem.customerEmail || null,
+          customerPhone: saleItem.customerPhone || null,
+          saleGroupId: resolvedSaleGroupId,
+          isComplementarySale: true,
+          parentSaleId: saleItem._id,
+          parentSaleGroupId: resolvedSaleGroupId,
+          warrantyTicketId: ticketId,
+          distributor: saleItem.distributor || null,
+          product: replacementProduct._id,
+          quantity: 1,
+          purchasePrice: 0,
+          distributorPrice: Number(saleItem.distributorPrice || 0),
+          salePrice: priceDifference,
+          sourceLocation: resolvedReplacementSource,
+          createdBy: userId,
+          paymentStatus: isDistributor ? "pendiente" : "confirmado",
+          paymentConfirmedAt: isDistributor ? null : new Date(),
+          paymentConfirmedBy: isDistributor ? null : userId,
+          actualPayment: priceDifference,
+          discount: 0,
+          shippingCost: 0,
+          totalAdditionalCosts: 0,
+          distributorProfit: 0,
+          adminProfit: priceDifference,
+          totalProfit: priceDifference,
+          totalGroupProfit: priceDifference,
+          netProfit: upsellNetProfit,
+          notes: `Venta complementaria por garantía ${ticketId}`,
+        });
+        await upsellSale.save(session ? { session } : {});
+
+        report.upsellSale = upsellSale._id;
+        await report.save({ session });
+      }
+
+      const adminMembershipQuery = Membership.findOne({
+        business: businessId,
+        role: "admin",
+        status: "active",
+      })
+        .select("user")
+        .lean();
+
+      const adminMembership = session
+        ? await adminMembershipQuery.session(session)
+        : await adminMembershipQuery;
+
+      if (adminMembership?.user) {
+        const adjustmentMetadata = {
+          quantity,
+          ticketId,
+          eventName: "warranty_margin_delta",
+          operationId: operationId || null,
+          originalSaleId: saleItem.saleId,
+          originalSaleGroupId: saleItem.saleGroupId,
+          originalMargin,
+          replacementMargin,
+          marginDelta,
+          priceDifference,
+          cashRefund,
+        };
+
+        if (marginDelta !== 0) {
+          await ProfitHistoryRepository.create(
+            {
+              business: businessId,
+              user: adminMembership.user,
+              type: "ajuste",
+              amount: marginDelta,
+              sale: saleItem._id,
+              product: replacementProduct._id,
+              description: `Ajuste de margen por garantia (${ticketId})`,
+              date: new Date(),
+              metadata: adjustmentMetadata,
+            },
+            { session },
+          );
+        }
+
+        if (upsellSale && priceDifference > 0) {
+          await ProfitHistoryRepository.create(
+            {
+              business: businessId,
+              user: adminMembership.user,
+              type: "venta_normal",
+              amount: priceDifference,
+              sale: upsellSale._id,
+              product: replacementProduct._id,
+              description: `Ingreso por upselling en garantía (${ticketId})`,
+              date: new Date(),
+              metadata: {
+                quantity,
+                salePrice: priceDifference,
+                saleId: upsellSale.saleId,
+                eventName: "warranty_upsell_sale",
+                operationId: operationId || null,
+                ticketId,
+                originalSaleId: saleItem.saleId,
+                originalMargin,
+                replacementMargin,
+                marginDelta,
+                priceDifference,
+                cashRefund,
+              },
+            },
+            { session },
+          );
+        }
+      }
+
+      result = {
+        report,
+        upsellSale,
+      };
+    });
+
+    return result;
+  }
+
+  async resolveCustomerWarranty(reportId, businessId, userId, data) {
+    const operationId = this.normalizeOperationId(data?.operationId);
+    let resolvedReport = null;
+
+    await this.runInOptionalTransaction(async (session) => {
+      const reportQuery = DefectiveProduct.findOne({
+        _id: reportId,
+        business: businessId,
+      });
+
+      const report = session
+        ? await reportQuery.session(session)
+        : await reportQuery;
+
+      if (!report) {
+        const err = new Error("Reporte no encontrado");
+        err.statusCode = 404;
+        throw err;
+      }
+
+      if (report.origin !== "customer_warranty") {
+        const err = new Error("El reporte no es una garantia al cliente");
+        err.statusCode = 400;
+        throw err;
+      }
+
+      if (
+        report.warrantyResolution &&
+        report.warrantyResolution !== "pending"
+      ) {
+        if (operationId && report.resolutionOperationId === operationId) {
+          resolvedReport = report;
+          return;
+        }
+        const err = new Error("La garantia ya fue resuelta");
+        err.statusCode = 400;
+        throw err;
+      }
+
+      const resolution = data?.resolution;
+      if (!resolution || !["scrap", "supplier_warranty"].includes(resolution)) {
+        const err = new Error("Resolucion invalida");
+        err.statusCode = 400;
+        throw err;
+      }
+
+      const previousLossAmount = Number(report.lossAmount || 0);
+
+      report.warrantyResolution = resolution;
+      report.warrantyResolvedAt = new Date();
+      report.warrantyResolvedBy = userId;
+      report.adminNotes = data?.adminNotes || report.adminNotes;
+      report.status = "confirmado";
+      if (operationId) {
+        report.resolutionOperationId = operationId;
+      }
+
+      if (resolution === "scrap") {
+        const productQuery = Product.findOne({
+          _id: report.product,
+          business: businessId,
+        }).lean();
+
+        const product = session
+          ? await productQuery.session(session)
+          : await productQuery;
+
+        if (!product) {
+          const err = new Error("Producto no encontrado");
+          err.statusCode = 404;
+          throw err;
+        }
+
+        const unitCost = product.averageCost || product.purchasePrice || 0;
+        const lossAmount = unitCost * (report.quantity || 0);
+        report.lossAmount = lossAmount;
+        report.hasWarranty = false;
+        report.warrantyStatus = "rejected";
+
+        if (lossAmount > 0) {
+          await this.expenseRepository.create(
+            businessId,
+            {
+              type: "Pérdida por Garantía",
+              amount: lossAmount,
+              description: `Pérdida total por garantía (${report.quantity}): ${product.name}`,
+              expenseDate: new Date(),
+            },
+            userId,
+            {
+              session,
+              operationId:
+                operationId ||
+                `warranty-scrap:${report._id.toString()}:${report.updatedAt?.getTime?.() || Date.now()}`,
+            },
+          );
+        }
+      } else {
+        report.lossAmount = 0;
+        report.hasWarranty = true;
+        report.warrantyStatus = "pending";
+
+        if (previousLossAmount !== 0) {
+          const existingCompensationQuery = ProfitHistory.findOne({
+            business: businessId,
+            type: "ajuste",
+            "metadata.eventName": "warranty_supplier_compensation",
+            "metadata.reportId": report._id,
+          })
+            .select("_id")
+            .lean();
+
+          const existingCompensation = session
+            ? await existingCompensationQuery.session(session)
+            : await existingCompensationQuery;
+
+          if (!existingCompensation) {
+            await ProfitHistory.create(
+              [
+                {
+                  business: businessId,
+                  user: userId,
+                  type: "ajuste",
+                  amount: previousLossAmount,
+                  product: report.product,
+                  description: `Reverso ajuste por garantía proveedor (${report.ticketId || report._id})`,
+                  date: new Date(),
+                  metadata: {
+                    eventName: "warranty_supplier_compensation",
+                    operationId: operationId || null,
+                    reportId: report._id,
+                    ticketId: report.ticketId,
+                    originalSaleId: report.originalSaleId || null,
+                    priceDifference: report.priceDifference || 0,
+                    cashRefund: report.cashRefund || 0,
+                    lossAmount: previousLossAmount,
+                  },
+                },
+              ],
+              session ? { session } : {},
+            );
+          }
+        }
+      }
+
+      await report.save(session ? { session } : {});
+      resolvedReport = report;
+    });
+
+    return resolvedReport;
   }
 
   async findByBusiness(businessId, filters = {}) {
