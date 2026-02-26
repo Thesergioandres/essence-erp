@@ -486,10 +486,6 @@ const StockManagement = () => {
   const selectorProducts =
     operation === "withdraw" ? withdrawSelectableProducts : products;
 
-  const availableProducts = selectorProducts.filter(
-    p => !items.some(item => item.productId === p._id)
-  );
-
   const inventoryCategories = useMemo(() => {
     const cats = new Set<string>();
     selectorProducts.forEach(product => {
@@ -935,11 +931,12 @@ const StockManagement = () => {
                 </div>
               )}
 
-              {filteredInventoryProducts.length === 0 && selectorProducts.length > 0 && (
-                <div className="mt-4 rounded-lg border border-gray-700 bg-gray-900/50 px-4 py-4 text-sm text-gray-400">
-                  No se encontraron productos con los filtros actuales.
-                </div>
-              )}
+              {filteredInventoryProducts.length === 0 &&
+                selectorProducts.length > 0 && (
+                  <div className="mt-4 rounded-lg border border-gray-700 bg-gray-900/50 px-4 py-4 text-sm text-gray-400">
+                    No se encontraron productos con los filtros actuales.
+                  </div>
+                )}
 
               <div className="mt-4 flex gap-4">
                 <div className="flex-1">
