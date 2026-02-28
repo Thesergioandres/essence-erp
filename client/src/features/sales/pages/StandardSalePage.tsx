@@ -249,7 +249,12 @@ export default function StandardSalePage() {
   // Fetch branch stock when branch location is selected
   useEffect(() => {
     const fetchBranchStock = async () => {
-      if (order.locationType !== "branch" || !order.locationId) return;
+      if (order.locationType !== "branch" || !order.locationId) {
+        setBranchStock(new Map());
+        return;
+      }
+
+      setBranchStock(new Map());
 
       try {
         const branchStockData = await stockService.getBranchStock(
@@ -267,6 +272,7 @@ export default function StandardSalePage() {
         setBranchStock(stockMap);
       } catch (error) {
         console.error("Error fetching branch stock:", error);
+        setBranchStock(new Map());
       }
     };
 
@@ -300,19 +306,30 @@ export default function StandardSalePage() {
 
   const selectorProducts = useMemo(
     () =>
-      productsWithLocationStock.map(product => ({
-        _id: product._id,
-        name: product.name,
-        category: product.category,
-        totalStock: product.totalStock,
-        warehouseStock: product.warehouseStock,
-        purchasePrice: product.purchasePrice,
-        averageCost: product.averageCost,
-        suggestedPrice: product.clientPrice,
-        clientPrice: product.clientPrice,
-        image: product.image,
-      })),
-    [productsWithLocationStock]
+      productsWithLocationStock
+        .map(product => {
+          const availableStock =
+            order.locationType === "warehouse"
+              ? (product.warehouseStock ?? 0)
+              : order.locationType === "branch"
+                ? (product.branchStock ?? 0)
+                : (product.distributorStock ?? 0);
+
+          return {
+            _id: product._id,
+            name: product.name,
+            category: product.category,
+            totalStock: availableStock,
+            warehouseStock: product.warehouseStock,
+            purchasePrice: product.purchasePrice,
+            averageCost: product.averageCost,
+            suggestedPrice: product.clientPrice,
+            clientPrice: product.clientPrice,
+            image: product.image,
+          };
+        })
+        .filter(product => (product.totalStock ?? 0) > 0),
+    [productsWithLocationStock, order.locationType]
   );
 
   const gamificationSummary = useMemo(() => {
