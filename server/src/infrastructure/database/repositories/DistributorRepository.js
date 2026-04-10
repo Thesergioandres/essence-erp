@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
 import Business from "../../../../models/Business.js";
 import DistributorStock from "../../../../models/DistributorStock.js";
+import InventoryMovement from "../../../../models/InventoryMovement.js";
 import Membership from "../../../../models/Membership.js";
 import Promotion from "../../../../models/Promotion.js";
 import Product from "../models/Product.js";
@@ -280,12 +281,11 @@ export class DistributorRepository {
     return distributor;
   }
 
-  async delete(id, businessId) {
+  async toggleActive(id, businessId) {
     const membership = await Membership.findOne({
       business: businessId,
       user: id,
       role: "distribuidor",
-      status: "active",
     });
 
     if (!membership) {
@@ -294,13 +294,189 @@ export class DistributorRepository {
       throw err;
     }
 
-    await User.findByIdAndUpdate(id, { active: false });
-    await Membership.findOneAndUpdate(
-      { user: id, business: businessId },
-      { status: "inactive" },
-    );
+    const distributor = await User.findOne({ _id: id, role: "distribuidor" });
+    if (!distributor) {
+      const err = new Error("Distribuidor no encontrado");
+      err.statusCode = 404;
+      throw err;
+    }
 
-    return { message: "Distribuidor desactivado" };
+    const nextActive = distributor.active !== false ? false : true;
+    distributor.active = nextActive;
+    if (nextActive) {
+      distributor.status = "active";
+    } else if (distributor.status === "active") {
+      distributor.status = "suspended";
+    }
+    await distributor.save();
+
+    return {
+      message: nextActive
+        ? "Distribuidor activado correctamente"
+        : "Distribuidor pausado correctamente",
+      distributor: {
+        _id: distributor._id,
+        name: distributor.name,
+        email: distributor.email,
+        phone: distributor.phone,
+        address: distributor.address,
+        role: distributor.role,
+        active: distributor.active,
+        status: distributor.status,
+      },
+    };
+  }
+
+  async delete(id, businessId, performedBy) {
+    const session = await mongoose.startSession();
+
+    try {
+      const summary = await session.withTransaction(async () => {
+        const membership = await Membership.findOne({
+          business: businessId,
+          user: id,
+          role: "distribuidor",
+        }).session(session);
+
+        if (!membership) {
+          const err = new Error("Distribuidor no encontrado en este negocio");
+          err.statusCode = 404;
+          throw err;
+        }
+
+        const distributor = await User.findOne({
+          _id: id,
+          role: "distribuidor",
+        }).session(session);
+
+        if (!distributor) {
+          const err = new Error("Distribuidor no encontrado");
+          err.statusCode = 404;
+          throw err;
+        }
+
+        const distributorNameSnapshot =
+          String(distributor.name || "").trim() ||
+          String(distributor.email || "").trim() ||
+          "Distribuidor eliminado";
+
+        const stockRows = await DistributorStock.find({
+          business: businessId,
+          distributor: id,
+          $or: [{ quantity: { $gt: 0 } }, { inTransitQuantity: { $gt: 0 } }],
+        }).session(session);
+
+        let returnedUnits = 0;
+        let returnedProducts = 0;
+
+        for (const stockRow of stockRows) {
+          const quantity = Number(stockRow.quantity || 0);
+          const inTransitQuantity = Number(stockRow.inTransitQuantity || 0);
+          const totalToReturn = quantity + inTransitQuantity;
+
+          if (totalToReturn <= 0) continue;
+
+          const updatedProduct = await Product.findOneAndUpdate(
+            { _id: stockRow.product, business: businessId },
+            { $inc: { warehouseStock: totalToReturn } },
+            { new: true, session },
+          );
+
+          if (!updatedProduct) {
+            const err = new Error(
+              "Producto no encontrado para retorno de stock",
+            );
+            err.statusCode = 404;
+            throw err;
+          }
+
+          await InventoryMovement.create(
+            [
+              {
+                business: businessId,
+                product: stockRow.product,
+                quantity: totalToReturn,
+                movementType: "INBOUND_RETURN",
+                fromLocation: {
+                  type: "distributor",
+                  id: id,
+                  name: distributorNameSnapshot,
+                },
+                toLocation: {
+                  type: "warehouse",
+                  id: null,
+                  name: "Bodega Central",
+                },
+                referenceModel: "User",
+                referenceId: id,
+                performedBy: performedBy || id,
+                notes: "Retorno por eliminación de distribuidor",
+                metadata: {
+                  reason: "distributor_removal",
+                  distributorId: String(id),
+                  quantity,
+                  inTransitQuantity,
+                },
+              },
+            ],
+            { session },
+          );
+
+          returnedUnits += totalToReturn;
+          returnedProducts += 1;
+        }
+
+        const salesUpdateResult = await Sale.updateMany(
+          { business: businessId, distributor: id },
+          {
+            $set: {
+              distributorNameSnapshot,
+              distributor: null,
+            },
+          },
+          { session },
+        );
+
+        await DistributorStock.deleteMany({
+          business: businessId,
+          distributor: id,
+        }).session(session);
+
+        await Membership.deleteMany({ user: id }).session(session);
+
+        const deleteUserResult = await User.deleteOne({
+          _id: id,
+          role: "distribuidor",
+        }).session(session);
+
+        if (!deleteUserResult.deletedCount) {
+          const err = new Error("No se pudo eliminar el distribuidor");
+          err.statusCode = 500;
+          throw err;
+        }
+
+        return {
+          message:
+            "Distribuidor eliminado correctamente. El inventario fue retornado a bodega.",
+          distributorNameSnapshot,
+          returnedUnits,
+          returnedProducts,
+          affectedSales:
+            salesUpdateResult?.modifiedCount ||
+            salesUpdateResult?.nModified ||
+            0,
+        };
+      });
+
+      return summary;
+    } catch (error) {
+      if (!error?.statusCode) {
+        error.statusCode = 500;
+      }
+      throw error;
+    } finally {
+      session.endSession();
+    }
   }
 
   async assignProducts(distributorId, businessId, productIds) {

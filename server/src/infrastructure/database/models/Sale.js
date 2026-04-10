@@ -64,6 +64,11 @@ const saleSchema = new mongoose.Schema(
       ref: "User",
       required: false,
     },
+    distributorNameSnapshot: {
+      type: String,
+      trim: true,
+      default: null,
+    },
     product: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Product",

@@ -8,6 +8,8 @@ import {
   getProfile,
   impersonateDistributor,
   login,
+  logout,
+  refreshAccessToken,
   register,
   revertImpersonation,
   selectPlan,
@@ -17,6 +19,8 @@ const router = express.Router();
 
 router.post("/login", login);
 router.post("/register", register);
+router.post("/refresh", refreshAccessToken);
+router.post("/logout", logout);
 router.patch("/select-plan", protect, selectPlan);
 router.get("/profile", protect, getProfile);
 router.post("/impersonate/revert", protect, revertImpersonation);

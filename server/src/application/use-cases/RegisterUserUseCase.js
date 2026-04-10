@@ -46,6 +46,11 @@ export class RegisterUserUseCase {
       newUser.role,
       newUser.business,
     );
+    const refreshToken = AuthService.generateRefreshToken(
+      newUser._id,
+      newUser.role,
+      newUser.business,
+    );
 
     return {
       _id: newUser._id,
@@ -57,6 +62,8 @@ export class RegisterUserUseCase {
       subscriptionExpiresAt: newUser.subscriptionExpiresAt,
       business: newUser.business,
       token,
+      refreshToken,
+      refreshExpiresAt: AuthService.getTokenExpirationIso(refreshToken),
     };
   }
 }

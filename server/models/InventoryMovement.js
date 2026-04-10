@@ -46,6 +46,7 @@ const inventoryMovementSchema = new mongoose.Schema(
         "DISPATCH_IN_TRANSIT",
         "DISPATCH_RECEIVED",
         "SALE_PROMOTION_OUTBOUND",
+        "INBOUND_RETURN",
       ],
       required: true,
       index: true,
@@ -60,7 +61,7 @@ const inventoryMovementSchema = new mongoose.Schema(
     },
     referenceModel: {
       type: String,
-      enum: ["DispatchRequest", "Sale"],
+      enum: ["DispatchRequest", "Sale", "User"],
       default: "DispatchRequest",
       index: true,
     },

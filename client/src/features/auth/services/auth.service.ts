@@ -133,10 +133,12 @@ const notifySessionChange = () => {
 async function trySetBusinessForGod(role: string): Promise<void> {
   if (role !== "god") return;
   try {
-    const { data } = await api.get<{ memberships: Membership[] }>(
-      "/business/me/memberships"
-    );
-    const memberships = data?.memberships || [];
+    const { data } = await api.get<{
+      success?: boolean;
+      memberships?: Membership[];
+      data?: { memberships?: Membership[] };
+    }>("/business/my-memberships");
+    const memberships = data?.memberships || data?.data?.memberships || [];
     const resolvedBusinessId = resolveEntityId(memberships[0]?.business);
     if (memberships.length === 1 && resolvedBusinessId) {
       localStorage.setItem("businessId", resolvedBusinessId);

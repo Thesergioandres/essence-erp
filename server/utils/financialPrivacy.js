@@ -6,9 +6,19 @@ export const SENSITIVE_COST_FIELD_NAMES = Object.freeze([
   "purchasePrice",
   "averageCost",
   "supplierId",
+  "profit",
+]);
+
+export const SENSITIVE_FINANCIAL_ZERO_FIELD_NAMES = Object.freeze([
+  "totalRevenue",
+  "distributorProfit",
+  "adminProfit",
 ]);
 
 const SENSITIVE_COST_FIELD_SET = new Set(SENSITIVE_COST_FIELD_NAMES);
+const SENSITIVE_FINANCIAL_ZERO_FIELD_SET = new Set(
+  SENSITIVE_FINANCIAL_ZERO_FIELD_NAMES,
+);
 
 const hasHideFinancialFlag = (user, membership) => {
   const safeUser = toRecord(user);
@@ -106,7 +116,6 @@ export const sanitizeSaleForFinancialPrivacy = (sale = {}) => {
     "purchasePrice",
     "averageCost",
     "averageCostAtSale",
-    "adminProfit",
     "totalProfit",
     "totalGroupProfit",
     "netProfit",
@@ -114,9 +123,21 @@ export const sanitizeSaleForFinancialPrivacy = (sale = {}) => {
     "supplierId",
   ];
 
+  const zeroTopLevelFields = [
+    "adminProfit",
+    "distributorProfit",
+    "totalRevenue",
+  ];
+
   for (const fieldName of nullifyTopLevelFields) {
     if (Object.prototype.hasOwnProperty.call(safeSale, fieldName)) {
       safeSale[fieldName] = null;
+    }
+  }
+
+  for (const fieldName of zeroTopLevelFields) {
+    if (Object.prototype.hasOwnProperty.call(safeSale, fieldName)) {
+      safeSale[fieldName] = 0;
     }
   }
 
@@ -178,6 +199,11 @@ export const sanitizeFinancialCostFieldsToNull = (
   for (const [fieldName, value] of Object.entries(payload)) {
     if (SENSITIVE_COST_FIELD_SET.has(fieldName)) {
       sanitized[fieldName] = null;
+      continue;
+    }
+
+    if (SENSITIVE_FINANCIAL_ZERO_FIELD_SET.has(fieldName)) {
+      sanitized[fieldName] = 0;
       continue;
     }
 

@@ -12,6 +12,7 @@ export const financialShield = (req, res, next) => {
         return originalJson(payload);
       }
 
+      // Scrub global de costos y métricas financieras sensibles.
       const sanitizedPayload = sanitizeFinancialCostFieldsToNull(payload);
       return originalJson(sanitizedPayload);
     } catch {

@@ -1,10 +1,13 @@
 import jwt from "jsonwebtoken";
 import Membership from "../../../../models/Membership.js";
-import User from "../../database/models/User.js";
 import { LoginUseCase } from "../../../application/use-cases/LoginUseCase.js";
 import { RegisterUserUseCase } from "../../../application/use-cases/RegisterUserUseCase.js";
 import { AuthService } from "../../../domain/services/AuthService.js";
+import User from "../../database/models/User.js";
+import { UserRepository } from "../../database/repositories/UserRepository.js";
 import { VALID_BUSINESS_PLANS } from "../../services/planLimits.service.js";
+
+const userRepository = new UserRepository();
 
 /**
  * Get current user profile
@@ -63,6 +66,67 @@ export const register = async (req, res, next) => {
     }
     next(error);
   }
+};
+
+/**
+ * Refresh access token using refresh token
+ */
+export const refreshAccessToken = async (req, res) => {
+  try {
+    const { refreshToken } = req.body || {};
+    if (!refreshToken) {
+      return res.status(400).json({ message: "Refresh token requerido" });
+    }
+
+    let decoded;
+    try {
+      decoded = AuthService.verifyRefreshToken(refreshToken);
+    } catch {
+      return res.status(401).json({ message: "Refresh token inválido" });
+    }
+
+    const userId = decoded?.id || decoded?.userId;
+    if (!userId) {
+      return res.status(401).json({ message: "Refresh token inválido" });
+    }
+
+    const user = await userRepository.findById(userId);
+    if (!user) {
+      return res.status(401).json({ message: "Usuario no encontrado" });
+    }
+
+    const memberships = Array.isArray(user.memberships) ? user.memberships : [];
+    const firstMembershipBusiness = memberships[0]?.business;
+    const membershipBusinessId =
+      typeof firstMembershipBusiness === "string"
+        ? firstMembershipBusiness
+        : firstMembershipBusiness?._id || null;
+
+    const businessId = decoded?.businessId || membershipBusinessId || null;
+
+    const token = AuthService.generateToken(user._id, user.role, businessId);
+    const nextRefreshToken = AuthService.generateRefreshToken(
+      user._id,
+      user.role,
+      businessId,
+    );
+
+    return res.json({
+      token,
+      refreshToken: nextRefreshToken,
+      refreshExpiresAt: AuthService.getTokenExpirationIso(nextRefreshToken),
+      user,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+/**
+ * Logout endpoint (stateless token model)
+ */
+export const logout = async (_req, res) => {
+  return res.json({ success: true, message: "Sesión cerrada" });
 };
 
 /**

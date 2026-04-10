@@ -50,6 +50,11 @@ export class LoginUseCase {
 
     // 4. Generate Token
     const token = AuthService.generateToken(user._id, user.role, businessId);
+    const refreshToken = AuthService.generateRefreshToken(
+      user._id,
+      user.role,
+      businessId,
+    );
 
     // 5. Return result with memberships for frontend
     return {
@@ -62,6 +67,8 @@ export class LoginUseCase {
       subscriptionExpiresAt: user.subscriptionExpiresAt,
       memberships, // 🔑 Frontend needs this to know user has businesses
       token,
+      refreshToken,
+      refreshExpiresAt: AuthService.getTokenExpirationIso(refreshToken),
     };
   }
 }

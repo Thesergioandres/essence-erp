@@ -37,6 +37,11 @@ router.put(
   requirePermission({ module: "distributors", action: "update" }),
   (req, res) => controller.update(req, res),
 );
+router.put(
+  "/:id/toggle-active",
+  requirePermission({ module: "distributors", action: "update" }),
+  (req, res) => controller.toggleActive(req, res),
+);
 router.delete(
   "/:id",
   requirePermission({ module: "distributors", action: "delete" }),

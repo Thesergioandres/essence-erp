@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useBusiness } from "../../../context/BusinessContext";
 import { LoadingSpinner, PlanLimitModal } from "../../../shared/components/ui";
@@ -7,6 +8,7 @@ import {
   readSessionCache,
   writeSessionCache,
 } from "../../../utils/requestCache";
+import { toast } from "../../../utils/toast";
 import type { User } from "../../auth/types/auth.types";
 import type { BusinessPlanSnapshot } from "../../business/types/business.types";
 import { globalSettingsService } from "../../common/services";
@@ -28,10 +30,22 @@ export default function Distributors() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<"all" | "active" | "inactive">("all");
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
   const [planSnapshot, setPlanSnapshot] = useState<BusinessPlanSnapshot | null>(
     null
   );
   const [showLimitModal, setShowLimitModal] = useState(false);
+
+  const applyFilterToList = useCallback(
+    (items: User[]) => {
+      if (filter === "all") return items;
+      const expectedActive = filter === "active";
+      return items.filter(item => (item.active !== false) === expectedActive);
+    },
+    [filter]
+  );
 
   const loadDistributors = useCallback(async () => {
     try {
@@ -97,11 +111,37 @@ export default function Distributors() {
 
   const handleToggleActive = async (id: string) => {
     try {
-      await distributorService.toggleActive(id);
-      await loadDistributors();
+      setActionLoadingId(id);
+      const result = await distributorService.toggleActive(id);
+      const updatedDistributor = result?.distributor;
+
+      if (updatedDistributor?._id) {
+        setDistributors(prev => {
+          const next = prev.map(distributor =>
+            distributor._id === updatedDistributor._id
+              ? {
+                  ...distributor,
+                  ...updatedDistributor,
+                }
+              : distributor
+          );
+          return applyFilterToList(next);
+        });
+      } else {
+        await loadDistributors();
+      }
+
+      toast.success(
+        updatedDistributor?.active
+          ? "Distribuidor activado correctamente"
+          : "Distribuidor pausado correctamente"
+      );
     } catch (err) {
       setError("Error al cambiar estado del distribuidor");
+      toast.error("No se pudo cambiar el estado del distribuidor");
       console.error(err);
+    } finally {
+      setActionLoadingId(null);
     }
   };
 
@@ -113,23 +153,33 @@ export default function Distributors() {
     navigate("/admin/distributors/add");
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (
-      !window.confirm(
-        `¿Estás seguro de eliminar al distribuidor "${name}"?\nEsta acción no se puede deshacer.`
-      )
-    ) {
-      return;
-    }
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
 
     try {
-      await distributorService.delete(id);
-      await loadDistributors();
+      setDeleteSubmitting(true);
+      const result = await distributorService.delete(deleteTarget._id);
+
+      setDistributors(prev =>
+        prev.filter(item => item._id !== deleteTarget._id)
+      );
+      setPagination(prev => ({
+        ...prev,
+        total: Math.max(0, prev.total - 1),
+      }));
+
+      toast.success(
+        `${result.distributorNameSnapshot} eliminado. ${result.returnedUnits} unidades retornadas a bodega.`
+      );
+      setDeleteTarget(null);
     } catch (err) {
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data
           ?.message || "Error al eliminar distribuidor";
       setError(message);
+      toast.error(message);
+    } finally {
+      setDeleteSubmitting(false);
     }
   };
 
@@ -267,20 +317,32 @@ export default function Distributors() {
                 </button>
                 <button
                   onClick={() => handleToggleActive(distributor._id)}
+                  disabled={
+                    actionLoadingId === distributor._id ||
+                    deleteSubmitting ||
+                    Boolean(deleteTarget)
+                  }
                   className={`rounded-lg border px-4 py-2 text-sm font-medium transition ${
                     distributor.active
                       ? "border-yellow-500/60 text-yellow-300 hover:bg-yellow-600/20"
                       : "border-green-500/60 text-green-300 hover:bg-green-600/20"
-                  }`}
+                  } disabled:cursor-not-allowed disabled:opacity-60`}
                   title={distributor.active ? "Desactivar" : "Activar"}
                 >
-                  {distributor.active ? "⏸" : "▶"}
+                  {actionLoadingId === distributor._id
+                    ? "..."
+                    : distributor.active
+                      ? "⏸"
+                      : "▶"}
                 </button>
                 <button
-                  onClick={() =>
-                    handleDelete(distributor._id, distributor.name)
+                  onClick={() => setDeleteTarget(distributor)}
+                  disabled={
+                    actionLoadingId === distributor._id ||
+                    deleteSubmitting ||
+                    Boolean(deleteTarget)
                   }
-                  className="rounded-lg border border-red-500/60 px-4 py-2 text-sm font-medium text-red-300 transition hover:bg-red-600/20"
+                  className="rounded-lg border border-red-500/60 px-4 py-2 text-sm font-medium text-red-300 transition hover:bg-red-600/20 disabled:cursor-not-allowed disabled:opacity-60"
                   title="Eliminar"
                 >
                   🗑
@@ -320,6 +382,49 @@ export default function Distributors() {
           </div>
         </div>
       )}
+
+      {deleteTarget &&
+        createPortal(
+          <div className="z-90 fixed inset-0 flex items-center justify-center bg-black/70 p-4">
+            <div className="w-full max-w-lg rounded-2xl border border-red-500/40 bg-[#190b0b] p-6 shadow-2xl">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-red-300">
+                Confirmación crítica
+              </p>
+              <h3 className="mt-2 text-2xl font-bold text-red-100">
+                Eliminar y reasignar distribuidor
+              </h3>
+              <p className="mt-4 rounded-lg border border-red-400/30 bg-red-500/10 p-4 text-sm text-red-200">
+                ¿Estás seguro? El stock de este distribuidor regresará a la
+                bodega principal.
+              </p>
+              <p className="mt-3 text-sm text-red-100/90">
+                Esta acción también conservará el historial de ventas usando
+                snapshot del nombre del distribuidor y luego eliminará el
+                registro de usuario.
+              </p>
+
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setDeleteTarget(null)}
+                  disabled={deleteSubmitting}
+                  className="min-h-11 rounded-lg border border-white/20 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={deleteSubmitting}
+                  className="min-h-11 rounded-lg border border-red-500/70 bg-red-600/30 px-4 py-2 text-sm font-semibold text-red-100 transition hover:bg-red-600/45 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {deleteSubmitting ? "Eliminando..." : "Eliminar y reasignar"}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
 
       <PlanLimitModal
         open={showLimitModal}

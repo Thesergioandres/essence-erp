@@ -18,16 +18,16 @@ export class CommissionPolicyService {
     bonusCommission = 0,
   } = {}) {
     if (isCommissionFixed) {
-      const fixedCandidate =
-        toFiniteNumber(customCommissionRate) ??
-        toFiniteNumber(baseCommissionRate) ??
-        MIN_FIXED_COMMISSION_PERCENTAGE;
-
-      const protectedFixedRate = clamp(
-        fixedCandidate,
-        MIN_FIXED_COMMISSION_PERCENTAGE,
-        MAX_COMMISSION_PERCENTAGE,
-      );
+      const explicitCustomRate = toFiniteNumber(customCommissionRate);
+      const protectedFixedRate =
+        explicitCustomRate !== null
+          ? clamp(explicitCustomRate, 0, MAX_COMMISSION_PERCENTAGE)
+          : clamp(
+              toFiniteNumber(baseCommissionRate) ??
+                MIN_FIXED_COMMISSION_PERCENTAGE,
+              MIN_FIXED_COMMISSION_PERCENTAGE,
+              MAX_COMMISSION_PERCENTAGE,
+            );
 
       return {
         baseCommissionPercentage: protectedFixedRate,

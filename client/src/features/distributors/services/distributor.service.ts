@@ -97,6 +97,10 @@ export const distributorService = {
 
   async delete(id: string): Promise<{
     message: string;
+    distributorNameSnapshot: string;
+    returnedUnits: number;
+    returnedProducts: number;
+    affectedSales: number;
   }> {
     const response = await api.delete(`/distributors/${id}`);
     // V2 API devuelve { success: true, data: {...} }
@@ -106,7 +110,7 @@ export const distributorService = {
 
   async toggleActive(id: string): Promise<{
     message: string;
-    distributor: Distributor;
+    distributor: User;
   }> {
     const response = await api.put(`/distributors/${id}/toggle-active`);
     // V2 API devuelve { success: true, data: {...} }

@@ -69,8 +69,23 @@ export class DistributorController {
   async delete(req, res) {
     try {
       const businessId = req.businessId;
-      await repository.delete(req.params.id, businessId);
-      res.json({ success: true, message: "Distribuidor desactivado" });
+      const result = await repository.delete(
+        req.params.id,
+        businessId,
+        req.user?.id || req.user?._id,
+      );
+      res.json({ success: true, data: result, message: result.message });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      res.status(status).json({ success: false, message: error.message });
+    }
+  }
+
+  async toggleActive(req, res) {
+    try {
+      const businessId = req.businessId;
+      const result = await repository.toggleActive(req.params.id, businessId);
+      res.json({ success: true, data: result, message: result.message });
     } catch (error) {
       const status = error.statusCode || 500;
       res.status(status).json({ success: false, message: error.message });
