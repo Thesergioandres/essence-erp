@@ -112,10 +112,37 @@ export const distributorService = {
     message: string;
     distributor: User;
   }> {
-    const response = await api.put(`/distributors/${id}/toggle-active`);
-    // V2 API devuelve { success: true, data: {...} }
-    const apiResponse = response.data;
-    return apiResponse.data || apiResponse;
+    const response = await api.put(`/distributors/${id}/toggle-active`, null, {
+      // Compatibilidad: si el backend aún no tiene esta ruta, caemos al update legacy.
+      validateStatus: status =>
+        (status >= 200 && status < 300) || status === 404,
+    });
+
+    if (response.status !== 404) {
+      const apiResponse = response.data;
+      return apiResponse.data || apiResponse;
+    }
+
+    const currentResponse = await api.get(`/distributors/${id}`);
+    const currentApiResponse = currentResponse.data;
+    const currentDistributor =
+      currentApiResponse.data ||
+      currentApiResponse.distributor ||
+      currentApiResponse;
+
+    const nextActive = currentDistributor?.active === false;
+    const legacyResponse = await api.put(`/distributors/${id}`, {
+      active: nextActive,
+    });
+    const legacyApiResponse = legacyResponse.data;
+    const updatedDistributor = legacyApiResponse.data || legacyApiResponse;
+
+    return {
+      message: nextActive
+        ? "Distribuidor activado correctamente"
+        : "Distribuidor pausado correctamente",
+      distributor: updatedDistributor,
+    };
   },
 
   async getProfile(): Promise<{

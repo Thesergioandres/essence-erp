@@ -54,7 +54,13 @@ export class HttpDispatchRepository implements DispatchRepository {
   }
 
   async getPendingCount(): Promise<number> {
-    const response = await api.get("/dispatches/pending-count", {
+    const response = await api.get("/dispatches/requests", {
+      // Compatibilidad con backends que aún no exponen /pending-count.
+      params: {
+        status: "PENDIENTE",
+        page: 1,
+        limit: 1,
+      },
       // Para ciertos roles/no autenticado el backend puede responder 401/403.
       // En dashboard lo tratamos como contador no disponible (=0).
       validateStatus: status =>
@@ -68,7 +74,7 @@ export class HttpDispatchRepository implements DispatchRepository {
       return 0;
     }
 
-    return Number(response.data?.data?.pendingCount || 0);
+    return Number(response.data?.pagination?.total || 0);
   }
 
   async getPendingReceptionCount(): Promise<number> {
