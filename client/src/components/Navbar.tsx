@@ -6,9 +6,14 @@ import { useSmartLoginEntry } from "../features/auth/hooks/useSmartLoginEntry";
 import { useBrandLogo } from "../hooks/useBrandLogo";
 import { Button } from "../shared/components/ui";
 
-export default function Navbar() {
+interface NavbarProps {
+  logoUrlOverride?: string | null;
+}
+
+export default function Navbar({ logoUrlOverride }: NavbarProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const brandLogo = useBrandLogo();
+  const resolvedLogo = logoUrlOverride?.trim() || brandLogo;
   const navigate = useNavigate();
   const { enter, loading } = useSmartLoginEntry();
 
@@ -28,7 +33,7 @@ export default function Navbar() {
             onClick={() => setMobileMenuOpen(false)}
           >
             <img
-              src={brandLogo}
+              src={resolvedLogo}
               alt="Essence ERP"
               className="h-12 w-auto sm:h-14"
               loading="lazy"

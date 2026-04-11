@@ -7,6 +7,7 @@ import BusinessSelector from "../../../components/BusinessSelector";
 import FeatureNavLink from "../../../components/FeatureNavLink";
 import ReportIssueButton from "../../../components/ReportIssueButton";
 import { useBusiness } from "../../../context/BusinessContext";
+import { useBrandLogo } from "../../../hooks/useBrandLogo";
 import { Button } from "../../../shared/components/ui";
 import { useMotionProfile } from "../../../shared/config/motion.config";
 import type { DistributorStats } from "../../analytics/types/gamification.types";
@@ -28,6 +29,7 @@ export default function DistributorDashboardLayout() {
   const location = useLocation();
   const user = authService.getCurrentUser();
   const { businessId, memberships } = useBusiness();
+  const brandLogo = useBrandLogo();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
   const [isMobileViewport, setIsMobileViewport] = useState(() =>
@@ -48,6 +50,7 @@ export default function DistributorDashboardLayout() {
     activeMemberships.find(
       membership => membership.business?._id === businessId
     ) ?? (activeMemberships.length === 1 ? activeMemberships[0] : null);
+  const brandName = currentMembership?.business?.name?.trim() || "Essence";
 
   const hasPermission = (module: string, action: string) =>
     currentMembership?.permissions?.[module]?.[action] === true;
@@ -222,13 +225,13 @@ export default function DistributorDashboardLayout() {
           <div className="bg-white/2 shrink-0 border-b border-white/10 px-4 py-4 sm:py-6">
             <div className="flex items-center gap-3">
               <img
-                src="/logo-essence.svg"
-                alt="Essence Logo"
+                src={brandLogo}
+                alt={`Logo de ${brandName}`}
                 className="h-10 w-10 rounded-lg bg-white/5 p-1 drop-shadow-lg sm:h-12 sm:w-12"
               />
               <div>
                 <h1 className="bg-linear-to-r from-cyan-300 via-blue-300 to-slate-200 bg-clip-text text-2xl font-bold text-transparent sm:text-3xl">
-                  ESSENCE
+                  {brandName.toUpperCase()}
                 </h1>
                 <p className="mt-0.5 text-xs text-gray-400 sm:text-sm">
                   Panel Distribuidor

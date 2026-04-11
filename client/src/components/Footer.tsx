@@ -4,7 +4,11 @@ import { useSmartLoginEntry } from "../features/auth/hooks/useSmartLoginEntry";
 import { useBrandLogo } from "../hooks/useBrandLogo";
 import { Button } from "../shared/components/ui";
 
-export default function Footer() {
+interface FooterProps {
+  logoUrlOverride?: string | null;
+}
+
+export default function Footer({ logoUrlOverride }: FooterProps) {
   const { business } = useBusiness();
   const { enter, loading } = useSmartLoginEntry();
   const contactEmail = business?.contactEmail || "";
@@ -12,6 +16,7 @@ export default function Footer() {
     business?.contactWhatsapp || business?.contactPhone || "";
   const contactLocation = business?.contactLocation || "";
   const brandLogo = useBrandLogo();
+  const resolvedLogo = logoUrlOverride?.trim() || brandLogo;
   const phoneDigits = contactPhone.replace(/\D/g, "");
 
   return (
@@ -54,7 +59,7 @@ export default function Footer() {
         <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 sm:gap-10 md:grid-cols-3">
           <div className="text-center sm:text-left">
             <img
-              src={brandLogo}
+              src={resolvedLogo}
               alt="Essence ERP"
               className="mx-auto h-16 w-auto sm:mx-0 sm:h-20"
               loading="lazy"

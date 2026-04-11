@@ -551,7 +551,9 @@ export default function Catalog() {
       className="min-h-screen bg-[#0f1210] text-slate-100"
       style={{ fontFamily: "'Poppins', 'Montserrat', sans-serif" }}
     >
-      {!hideChrome && <Navbar />}
+      {!hideChrome && (
+        <Navbar logoUrlOverride={catalogBranding?.logoUrl || undefined} />
+      )}
 
       {!hideChrome && (
         <div className="relative overflow-hidden">
@@ -1336,7 +1338,9 @@ export default function Catalog() {
         </div>
       )}
 
-      {!hideChrome && <Footer />}
+      {!hideChrome && (
+        <Footer logoUrlOverride={catalogBranding?.logoUrl || undefined} />
+      )}
     </div>
   );
 }
