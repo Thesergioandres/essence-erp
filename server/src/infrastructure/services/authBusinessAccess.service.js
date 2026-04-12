@@ -4,6 +4,15 @@ import Business from "../database/models/Business.js";
 import Membership from "../database/models/Membership.js";
 import User from "../database/models/User.js";
 
+const ACCESSIBLE_MEMBERSHIP_STATUS_QUERY = {
+  $or: [
+    { status: "active" },
+    { status: "invited" },
+    { status: { $exists: false } },
+    { status: null },
+  ],
+};
+
 export const checkBusinessOwnerAccess = async (userId) => {
   try {
     const user = await User.findById(userId).select("role").lean();
@@ -14,7 +23,7 @@ export const checkBusinessOwnerAccess = async (userId) => {
     const membership = await Membership.findOne({
       user: userId,
       role: employeeRoleQuery,
-      status: "active",
+      ...ACCESSIBLE_MEMBERSHIP_STATUS_QUERY,
     }).populate("business");
 
     if (!membership || !membership.business) {

@@ -1,9 +1,11 @@
-import { type ReactNode } from "react";
-import { Navigate } from "react-router-dom";
+import { type ReactNode, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { useBusiness } from "../context/BusinessContext";
 import { authService } from "../features/auth/services";
 import { useSession } from "../hooks/useSession";
 import BusinessSelector from "./BusinessSelector";
+
+const BUSINESS_GATE_DEBUG_PREFIX = "[Essence Debug] | BusinessGate |";
 
 interface BusinessGateProps {
   children: ReactNode;
@@ -14,6 +16,7 @@ export default function BusinessGate({
   children,
   requiredFeature,
 }: BusinessGateProps) {
+  const navigate = useNavigate();
   const {
     business,
     businessId,
@@ -25,6 +28,59 @@ export default function BusinessGate({
   } = useBusiness();
   const { loading: authLoading } = useSession();
   const user = authService.getCurrentUser();
+  const hasSelectedBusiness = Boolean(businessId && business);
+  const hasMemberships = memberships.length > 0;
+  const lastBlockReasonRef = useRef<string | null>(null);
+  const canCreateBusiness =
+    user?.role === "admin" ||
+    user?.role === "super_admin" ||
+    user?.role === "god";
+
+  useEffect(() => {
+    if (authLoading || hydrating || loading || hasSelectedBusiness) {
+      lastBlockReasonRef.current = null;
+      return;
+    }
+
+    const blockReason = hasMemberships
+      ? "sin-negocio-seleccionado"
+      : "sin-membresias";
+
+    if (lastBlockReasonRef.current === blockReason) {
+      return;
+    }
+
+    lastBlockReasonRef.current = blockReason;
+
+    console.warn(`${BUSINESS_GATE_DEBUG_PREFIX} Compuerta bloqueada`, {
+      blockReason,
+      membershipsLength: memberships.length,
+      businessId,
+      role: user?.role,
+      status: user?.status,
+      error,
+    });
+  }, [
+    authLoading,
+    businessId,
+    error,
+    hasMemberships,
+    hasSelectedBusiness,
+    hydrating,
+    loading,
+    memberships.length,
+    user?.role,
+    user?.status,
+  ]);
+
+  const handleLogout = () => {
+    authService.logout();
+    navigate("/login", { replace: true });
+  };
+
+  const handleCreateBusiness = () => {
+    navigate("/onboarding", { replace: true });
+  };
 
   const renderLoader = (message: string) => (
     <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-sm text-gray-200">
@@ -44,32 +100,52 @@ export default function BusinessGate({
     return renderLoader("Cargando contexto de negocio...");
   }
 
-  if (error) {
-    return (
-      <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-        {error}
-      </div>
-    );
-  }
+  if (!hasSelectedBusiness) {
+    if (!hasMemberships) {
+      return (
+        <div className="space-y-4 rounded-lg border border-cyan-400/30 bg-cyan-500/10 px-4 py-4 text-sm text-cyan-100">
+          <div>
+            <p className="font-semibold text-cyan-200">
+              Bienvenido, aun no perteneces a ningun negocio.
+            </p>
+            <p className="mt-1 text-cyan-100/80">
+              Para continuar, crea tu primer negocio o cierra sesion para entrar
+              con otra cuenta.
+            </p>
+          </div>
 
-  if (!businessId || !business) {
-    if (
-      !loading &&
-      !hydrating &&
-      user?.role === "super_admin" &&
-      user?.status === "active" &&
-      memberships.length === 0
-    ) {
-      return <Navigate to="/onboarding" replace />;
+          <div className="flex flex-wrap gap-2">
+            {canCreateBusiness && (
+              <button
+                type="button"
+                onClick={handleCreateBusiness}
+                className="rounded-md border border-cyan-300/50 bg-cyan-400/10 px-3 py-2 font-semibold text-cyan-100 transition hover:bg-cyan-400/20"
+              >
+                Crear mi primer negocio
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="rounded-md border border-white/30 bg-white/5 px-3 py-2 font-semibold text-white transition hover:bg-white/10"
+            >
+              Cerrar sesion
+            </button>
+          </div>
+        </div>
+      );
     }
 
     return (
       <div className="space-y-3 rounded-lg border border-amber-400/30 bg-amber-500/10 px-4 py-4 text-sm text-amber-100">
         <div className="font-semibold text-amber-200">
-          {loading
-            ? "Cargando negocios..."
-            : "Selecciona un negocio para continuar"}
+          Selecciona un negocio para continuar
         </div>
+        {error && (
+          <div className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+            {error}
+          </div>
+        )}
         <BusinessSelector />
       </div>
     );

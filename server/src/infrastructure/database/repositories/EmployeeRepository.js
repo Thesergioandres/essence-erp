@@ -10,6 +10,38 @@ import Promotion from "../models/Promotion.js";
 import Sale from "../models/Sale.js";
 import User from "../models/User.js";
 
+const LISTABLE_MEMBERSHIP_STATUS_QUERY = {
+  $or: [
+    { status: "active" },
+    { status: "invited" },
+    { status: "disabled" },
+    { status: { $exists: false } },
+    { status: null },
+  ],
+};
+
+const resolveObjectIdString = (value) => {
+  if (!value) return null;
+
+  const candidate =
+    typeof value === "object"
+      ? value._id || value.id || value.$oid || value
+      : value;
+
+  if (!mongoose.isValidObjectId(candidate)) {
+    return null;
+  }
+
+  return String(candidate);
+};
+
+const toUniqueObjectIdStrings = (values = []) =>
+  Array.from(
+    new Set(
+      values.map((value) => resolveObjectIdString(value)).filter(Boolean),
+    ),
+  );
+
 export class EmployeeRepository {
   async create(data, businessId) {
     const userExists = await User.findOne({ email: data.email });
@@ -53,16 +85,48 @@ export class EmployeeRepository {
   async findByBusiness(businessId, filters = {}) {
     const page = parseInt(filters.page) || 1;
     const limit = parseInt(filters.limit) || 20;
+    const businessObjectId = new mongoose.Types.ObjectId(businessId);
 
     const memberships = await Membership.find({
       business: businessId,
       role: employeeRoleQuery,
-      status: "active",
+      ...LISTABLE_MEMBERSHIP_STATUS_QUERY,
     }).select("user");
 
-    const membershipDistributorIds = memberships
-      .map((m) => m.user)
-      .filter((id) => id && mongoose.isValidObjectId(id));
+    let membershipDistributorIds = toUniqueObjectIdStrings(
+      memberships.map((membership) => membership.user),
+    );
+
+    if (membershipDistributorIds.length === 0) {
+      const [legacyScopedUsers, stockDistributorIds, salesDistributorIds] =
+        await Promise.all([
+          User.find({
+            role: employeeRoleQuery,
+            $or: [
+              { business: businessId },
+              { business: businessObjectId },
+              { businessId },
+              { businessId: businessObjectId },
+              { "metadata.businessId": businessId },
+              { "metadata.businessId": businessObjectId },
+            ],
+          })
+            .select("_id")
+            .lean(),
+          DistributorStock.distinct("distributor", {
+            business: businessObjectId,
+          }),
+          Sale.distinct("distributor", {
+            business: businessObjectId,
+          }),
+        ]);
+
+      membershipDistributorIds = toUniqueObjectIdStrings([
+        ...legacyScopedUsers.map((user) => user._id),
+        ...stockDistributorIds,
+        ...salesDistributorIds,
+      ]);
+    }
 
     if (membershipDistributorIds.length === 0) {
       return {
@@ -78,12 +142,23 @@ export class EmployeeRepository {
     }
 
     const filter = {
-      role: employeeRoleQuery,
       _id: { $in: membershipDistributorIds },
     };
 
     if (filters.active !== undefined) {
-      filter.active = filters.active === "true";
+      const requestedActive = filters.active === "true";
+
+      if (requestedActive) {
+        filter.$or = [
+          { active: true },
+          { active: { $exists: false }, status: "active" },
+        ];
+      } else {
+        filter.$or = [
+          { active: false },
+          { status: { $in: ["suspended", "paused", "expired"] } },
+        ];
+      }
     }
 
     const skip = (page - 1) * limit;
@@ -114,7 +189,6 @@ export class EmployeeRepository {
       };
     }
 
-    const businessObjectId = new mongoose.Types.ObjectId(businessId);
     const objectIds = distributorIds.map(
       (id) => new mongoose.Types.ObjectId(id),
     );
@@ -195,7 +269,7 @@ export class EmployeeRepository {
       business: businessId,
       user: id,
       role: employeeRoleQuery,
-      status: "active",
+      ...LISTABLE_MEMBERSHIP_STATUS_QUERY,
     });
 
     if (!membership) {
@@ -253,7 +327,7 @@ export class EmployeeRepository {
       business: businessId,
       user: id,
       role: employeeRoleQuery,
-      status: "active",
+      ...LISTABLE_MEMBERSHIP_STATUS_QUERY,
     });
 
     if (!membership) {
@@ -488,7 +562,7 @@ export class EmployeeRepository {
       business: businessId,
       user: distributorId,
       role: employeeRoleQuery,
-      status: "active",
+      ...LISTABLE_MEMBERSHIP_STATUS_QUERY,
     });
 
     if (!membership) {

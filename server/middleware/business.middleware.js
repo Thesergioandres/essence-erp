@@ -15,6 +15,15 @@ import {
   isActionAllowed,
 } from "../utils/permissions.js";
 
+const ACCESSIBLE_MEMBERSHIP_STATUS_QUERY = {
+  $or: [
+    { status: "active" },
+    { status: "invited" },
+    { status: { $exists: false } },
+    { status: null },
+  ],
+};
+
 // Resuelve el contexto de negocio a partir del header/query y valida membership
 export const businessContext = async (req, res, next) => {
   try {
@@ -38,7 +47,7 @@ export const businessContext = async (req, res, next) => {
     if (!businessId && req.user) {
       const defaultMembership = await Membership.findOne({
         user: req.user._id || req.user.id,
-        status: "active",
+        ...ACCESSIBLE_MEMBERSHIP_STATUS_QUERY,
       }).sort({ createdAt: 1 }); // Preferir el más antiguo/principal
 
       addDebugLog(
@@ -93,7 +102,7 @@ export const businessContext = async (req, res, next) => {
       membership = await Membership.findOne({
         business: businessId,
         user: req.user?.id,
-        status: "active",
+        ...ACCESSIBLE_MEMBERSHIP_STATUS_QUERY,
       });
 
       addDebugLog(

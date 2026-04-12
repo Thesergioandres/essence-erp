@@ -33,6 +33,16 @@ let failedQueue: Array<{
   reject: (reason?: unknown) => void;
 }> = [];
 
+const AXIOS_DEBUG_PREFIX = "[Essence Debug] | axios.ts |";
+
+const logAxiosWarn = (action: string, details?: unknown) => {
+  console.warn(`${AXIOS_DEBUG_PREFIX} ${action}`, details);
+};
+
+const logAxiosError = (action: string, details?: unknown) => {
+  console.error(`${AXIOS_DEBUG_PREFIX} ${action}`, details);
+};
+
 const processQueue = (error: unknown, token: string | null = null) => {
   failedQueue.forEach(prom => {
     if (error) {
@@ -46,11 +56,14 @@ const processQueue = (error: unknown, token: string | null = null) => {
 
 const logApiError = (error: AxiosError | Error) => {
   if (error.message === "Debes seleccionar un negocio antes de continuar") {
+    logAxiosWarn("Request bloqueada por falta de negocio seleccionado", {
+      message: error.message,
+    });
     return;
   }
 
   if (!axios.isAxiosError(error)) {
-    console.error("[API ERROR]", {
+    logAxiosError("Error no-Axios en interceptor", {
       message: error.message,
     });
     return;
@@ -70,18 +83,67 @@ const logApiError = (error: AxiosError | Error) => {
     status === 403 &&
     typeof url === "string" &&
     (url.includes("/advanced-analytics/") || url.startsWith("/providers"));
+  const isExpectedDistributorFallbackNotFound =
+    status === 404 &&
+    method === "get" &&
+    typeof url === "string" &&
+    (url.startsWith("/employees") || url.startsWith("/distributors"));
   const isExpectedSessionBootstrapAuthError =
     (status === 401 || status === 403) && isSessionBootstrapEndpoint;
+  const isExpectedSessionBootstrapRateLimit =
+    status === 429 && isSessionBootstrapEndpoint;
 
   if (status === 401 && isPublicSettingsEndpoint) {
+    logAxiosWarn("401 esperado en global-settings/public", {
+      url,
+      method,
+      status,
+    });
+    return;
+  }
+
+  if (status === 429 && isPublicSettingsEndpoint) {
+    logAxiosWarn("429 en global-settings/public", {
+      url,
+      method,
+      status,
+    });
+    return;
+  }
+
+  if (isExpectedSessionBootstrapRateLimit) {
+    logAxiosWarn("Rate limit durante bootstrap de sesion", {
+      url,
+      method,
+      status,
+    });
+    return;
+  }
+
+  if (isExpectedDistributorFallbackNotFound) {
+    logAxiosWarn("404 esperado en fallback employees/distributors", {
+      url,
+      method,
+      status,
+    });
     return;
   }
 
   if (isExpectedSessionBootstrapAuthError) {
+    logAxiosWarn("Auth error esperado durante bootstrap de sesion", {
+      url,
+      method,
+      status,
+    });
     return;
   }
 
   if (isExpectedForbiddenEndpoint) {
+    logAxiosWarn("403 esperado por permisos/plan", {
+      url,
+      method,
+      status,
+    });
     return;
   }
 
@@ -90,7 +152,7 @@ const logApiError = (error: AxiosError | Error) => {
     (error.response?.data as { requestId?: string } | undefined)?.requestId;
 
   // Consola detallada para depurar fallos en frontend
-  console.error("[API ERROR]", {
+  logAxiosError("Error de API no esperado", {
     url,
     method,
     status,
@@ -133,6 +195,10 @@ api.interceptors.request.use(
     }
 
     if (!businessId && token && !allowsWithoutBusiness) {
+      logAxiosWarn("Request rechazada por ausencia de x-business-id", {
+        url,
+        method: config.method,
+      });
       return Promise.reject(
         new Error("Debes seleccionar un negocio antes de continuar")
       );
@@ -159,12 +225,19 @@ api.interceptors.response.use(
       | undefined;
 
     if (!originalRequest) {
+      logAxiosWarn("Error de respuesta sin request original", {
+        message: (error as { message?: string })?.message,
+      });
       return Promise.reject(error);
     }
 
     const code = (error.response?.data as { code?: string } | undefined)?.code;
 
     if (error.response?.status === 403 && code === "owner_inactive") {
+      logAxiosWarn("Redireccion por owner_inactive", {
+        url: originalRequest.url,
+        status: error.response?.status,
+      });
       localStorage.setItem("accessHoldReason", "owner_inactive");
       window.location.href = "/account-hold?reason=owner_inactive";
       return Promise.reject(error);
@@ -196,6 +269,10 @@ api.interceptors.response.use(
               return api(originalRequest);
             })
             .catch(err => {
+              logAxiosWarn(
+                "Fallo request encolada durante refresh compartido",
+                err
+              );
               return Promise.reject(err);
             });
         }
@@ -207,6 +284,11 @@ api.interceptors.response.use(
           const response = await axios.post(`${apiBaseUrl}/auth/refresh`, {
             refreshToken,
           });
+
+          const currentRefreshToken = localStorage.getItem("refreshToken");
+          if (!currentRefreshToken || currentRefreshToken !== refreshToken) {
+            throw new Error("Session changed during token refresh");
+          }
 
           const { token: newToken, refreshToken: newRefreshToken } =
             response.data;
@@ -225,7 +307,7 @@ api.interceptors.response.use(
           return api(originalRequest);
         } catch (refreshError) {
           processQueue(refreshError, null);
-          console.error("[UI ERROR] Token refresh failed, logging out");
+          logAxiosError("Fallo refresh token; cerrando sesion", refreshError);
 
           // Limpiar todo y redirigir a login
           localStorage.removeItem("token");
@@ -242,6 +324,9 @@ api.interceptors.response.use(
         // No hay refresh token, limpiar y redirigir a login si había token
         const token = localStorage.getItem("token");
         if (token) {
+          logAxiosWarn("401 sin refresh token disponible; limpiando sesion", {
+            url: originalRequest.url,
+          });
           localStorage.removeItem("token");
           localStorage.removeItem("refreshToken");
           localStorage.removeItem("user");
@@ -254,6 +339,10 @@ api.interceptors.response.use(
       originalRequest.url?.includes("/auth/")
     ) {
       // Error 401 en rutas de auth (login/register/refresh) - no redirigir, solo rechazar
+      logAxiosWarn("401 en endpoint de auth", {
+        url: originalRequest.url,
+        status: error.response?.status,
+      });
       return Promise.reject(error);
     }
 

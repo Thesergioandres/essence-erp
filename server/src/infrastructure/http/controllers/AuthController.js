@@ -17,7 +17,7 @@ export const getProfile = async (req, res) => {
       return res.status(401).json({ success: false, message: "No autorizado" });
     }
 
-    const user = await User.findById(req.user.id).select("-password").lean();
+    const user = await userRepository.findById(req.user.id);
     if (!user) {
       return res
         .status(404)

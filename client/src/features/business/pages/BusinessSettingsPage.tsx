@@ -85,8 +85,8 @@ export default function BusinessSettings() {
       },
       {
         key: "distributors" as const,
-        title: "Distribuidores",
-        desc: "Gestiona tu red de distribuidores",
+        title: "Empleados",
+        desc: "Gestiona tu equipo de trabajo",
       },
       {
         key: "gamification" as const,

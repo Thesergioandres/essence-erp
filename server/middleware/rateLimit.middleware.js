@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import rateLimit from "express-rate-limit";
 import { logApiWarn } from "../utils/logger.js";
 
@@ -8,13 +9,70 @@ const ipKeyGenerator = (req) => {
   return ip.replace(/^::ffff:/, "");
 };
 
+const toPositiveInt = (value, fallback) => {
+  const parsed = Number.parseInt(String(value || ""), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const getBearerToken = (req) => {
+  const authorization = req.headers?.authorization;
+  if (typeof authorization !== "string") {
+    return "";
+  }
+
+  if (!authorization.startsWith("Bearer ")) {
+    return "";
+  }
+
+  return authorization.slice(7).trim();
+};
+
+const tokenFingerprint = (req) => {
+  const token = getBearerToken(req);
+  if (!token) {
+    return "";
+  }
+
+  return createHash("sha256").update(token).digest("hex").slice(0, 16);
+};
+
+const AUTH_WINDOW_MS = toPositiveInt(
+  process.env.RATE_LIMIT_AUTH_WINDOW_MS,
+  15 * 60 * 1000,
+);
+const AUTH_MAX = toPositiveInt(process.env.RATE_LIMIT_AUTH_MAX, 10);
+
+const API_WINDOW_MS = toPositiveInt(
+  process.env.RATE_LIMIT_API_WINDOW_MS,
+  15 * 60 * 1000,
+);
+const API_MAX = toPositiveInt(process.env.RATE_LIMIT_API_MAX, 300);
+
+const UPLOAD_WINDOW_MS = toPositiveInt(
+  process.env.RATE_LIMIT_UPLOAD_WINDOW_MS,
+  60 * 60 * 1000,
+);
+const UPLOAD_MAX = toPositiveInt(process.env.RATE_LIMIT_UPLOAD_MAX, 100);
+
+const REGISTER_WINDOW_MS = toPositiveInt(
+  process.env.RATE_LIMIT_REGISTER_WINDOW_MS,
+  60 * 60 * 1000,
+);
+const REGISTER_MAX = toPositiveInt(process.env.RATE_LIMIT_REGISTER_MAX, 10);
+
+const SENSITIVE_WINDOW_MS = toPositiveInt(
+  process.env.RATE_LIMIT_SENSITIVE_WINDOW_MS,
+  5 * 60 * 1000,
+);
+const SENSITIVE_MAX = toPositiveInt(process.env.RATE_LIMIT_SENSITIVE_MAX, 40);
+
 /**
  * Rate Limiter para endpoints de autenticación
  * Más restrictivo para prevenir ataques de fuerza bruta
  */
 export const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 5, // máximo 5 intentos por ventana
+  windowMs: AUTH_WINDOW_MS,
+  max: AUTH_MAX,
   message: {
     message:
       "Demasiados intentos de autenticación. Intenta de nuevo en 15 minutos.",
@@ -51,8 +109,8 @@ export const authLimiter = rateLimit({
  * Menos restrictivo, para uso normal
  */
 export const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 100, // 100 req/15min por instrucción
+  windowMs: API_WINDOW_MS,
+  max: API_MAX,
   message: {
     message: "Demasiadas solicitudes. Intenta de nuevo en un momento.",
     code: "RATE_LIMIT_API",
@@ -62,6 +120,11 @@ export const apiLimiter = rateLimit({
   skip: (req) => {
     // Omitir rate limiting en tests
     return process.env.NODE_ENV === "test";
+  },
+  keyGenerator: (req) => {
+    const ipKey = ipKeyGenerator(req);
+    const tokenKey = tokenFingerprint(req);
+    return tokenKey ? `${ipKey}-${tokenKey}` : ipKey;
   },
   handler: (req, res, next, options) => {
     logApiWarn({
@@ -84,8 +147,8 @@ export const apiLimiter = rateLimit({
  * Muy restrictivo por el tamaño de las peticiones
  */
 export const uploadLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hora
-  max: 50, // 50 uploads por hora
+  windowMs: UPLOAD_WINDOW_MS,
+  max: UPLOAD_MAX,
   message: {
     message: "Límite de uploads alcanzado. Intenta de nuevo más tarde.",
     code: "RATE_LIMIT_UPLOAD",
@@ -111,8 +174,8 @@ export const uploadLimiter = rateLimit({
  * Previene creación masiva de cuentas
  */
 export const registerLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hora
-  max: 5, // 5 registros por hora por IP
+  windowMs: REGISTER_WINDOW_MS,
+  max: REGISTER_MAX,
   message: {
     message: "Demasiados registros desde esta IP. Intenta de nuevo más tarde.",
     code: "RATE_LIMIT_REGISTER",
@@ -137,8 +200,8 @@ export const registerLimiter = rateLimit({
  * Rate Limiter para endpoints sensibles (GOD panel, etc.)
  */
 export const sensitiveLimiter = rateLimit({
-  windowMs: 5 * 60 * 1000, // 5 minutos
-  max: 20, // 20 requests por 5 minutos
+  windowMs: SENSITIVE_WINDOW_MS,
+  max: SENSITIVE_MAX,
   message: {
     message: "Acceso restringido temporalmente por exceso de solicitudes.",
     code: "RATE_LIMIT_SENSITIVE",

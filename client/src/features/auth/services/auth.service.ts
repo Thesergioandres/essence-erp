@@ -15,6 +15,51 @@ import type {
 } from "../types/auth.types";
 
 const ADMIN_ORIGINAL_TOKEN_KEY = "admin_original_token";
+const AUTH_PROFILE_RATE_LIMIT_FALLBACK_MS = 20 * 1000;
+const AUTH_PROFILE_TRANSIENT_FALLBACK_MS = 5 * 1000;
+
+let syncSessionInFlight: Promise<User | null> | null = null;
+let syncSessionRateLimitedUntil = 0;
+let authSessionVersion = 0;
+
+const invalidateAuthSessionState = () => {
+  authSessionVersion += 1;
+  syncSessionInFlight = null;
+  syncSessionRateLimitedUntil = 0;
+};
+
+const clearSessionScopedStorage = () => {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.sessionStorage.clear();
+  } catch {
+    // Ignore storage access errors.
+  }
+};
+
+const resolveRetryAfterMs = (rawRetryAfter: unknown): number => {
+  if (typeof rawRetryAfter !== "string") {
+    return AUTH_PROFILE_RATE_LIMIT_FALLBACK_MS;
+  }
+
+  const trimmed = rawRetryAfter.trim();
+  if (!trimmed) {
+    return AUTH_PROFILE_RATE_LIMIT_FALLBACK_MS;
+  }
+
+  const seconds = Number(trimmed);
+  if (Number.isFinite(seconds) && seconds > 0) {
+    return seconds * 1000;
+  }
+
+  const retryAfterDate = Date.parse(trimmed);
+  if (Number.isNaN(retryAfterDate)) {
+    return AUTH_PROFILE_RATE_LIMIT_FALLBACK_MS;
+  }
+
+  return Math.max(retryAfterDate - Date.now(), 1000);
+};
 
 const resolveEntityId = (value: unknown): string | null => {
   if (typeof value === "string") {
@@ -109,10 +154,25 @@ const resolveBusinessIdFromUser = (user?: {
   return resolveEntityId(membershipBusiness) || resolveEntityId(user.business);
 };
 
+const readStoredSessionUser = (): User | null => {
+  const userRaw = localStorage.getItem("user");
+  if (!userRaw) {
+    return null;
+  }
+
+  try {
+    return normalizeSessionUser(JSON.parse(userRaw) as User);
+  } catch {
+    return null;
+  }
+};
+
 const applySession = (payload: {
   token: string;
   user: User | AuthResponse;
 }) => {
+  invalidateAuthSessionState();
+
   const normalizedUser = normalizeSessionUser(payload.user);
 
   localStorage.setItem("token", payload.token);
@@ -159,18 +219,88 @@ export const authService = {
     const token = localStorage.getItem("token");
     if (!token) return null;
 
-    const response = await api.get<{ success: boolean; data: User }>(
-      "/auth/profile"
-    );
-    const user = normalizeSessionUser(response.data.data);
-    localStorage.setItem("user", JSON.stringify(user));
+    const requestSessionVersion = authSessionVersion;
+    const tokenSnapshot = token;
 
-    const businessId = resolveBusinessIdFromUser(user);
-    if (businessId) {
-      localStorage.setItem("businessId", businessId);
+    if (syncSessionInFlight) {
+      return syncSessionInFlight;
     }
 
-    return user;
+    if (Date.now() < syncSessionRateLimitedUntil) {
+      return readStoredSessionUser();
+    }
+
+    syncSessionInFlight = api
+      .get<{ success: boolean; data: User }>("/auth/profile")
+      .then(response => {
+        const currentToken = localStorage.getItem("token");
+        if (
+          requestSessionVersion !== authSessionVersion ||
+          currentToken !== tokenSnapshot
+        ) {
+          return readStoredSessionUser();
+        }
+
+        const user = normalizeSessionUser(response.data.data);
+        localStorage.setItem("user", JSON.stringify(user));
+
+        const businessId = resolveBusinessIdFromUser(user);
+        if (businessId) {
+          localStorage.setItem("businessId", businessId);
+        }
+
+        syncSessionRateLimitedUntil = 0;
+        return user;
+      })
+      .catch(error => {
+        const currentToken = localStorage.getItem("token");
+        if (
+          requestSessionVersion !== authSessionVersion ||
+          currentToken !== tokenSnapshot
+        ) {
+          return readStoredSessionUser();
+        }
+
+        const status = (error as { response?: { status?: number } })?.response
+          ?.status;
+
+        if (status === 429) {
+          const retryAfterHeader = (
+            error as {
+              response?: {
+                headers?: Record<string, unknown>;
+              };
+            }
+          )?.response?.headers?.["retry-after"];
+
+          syncSessionRateLimitedUntil =
+            Date.now() + resolveRetryAfterMs(retryAfterHeader);
+
+          return readStoredSessionUser();
+        }
+
+        if (status && status >= 500) {
+          syncSessionRateLimitedUntil =
+            Date.now() + AUTH_PROFILE_TRANSIENT_FALLBACK_MS;
+
+          console.warn(
+            "[Essence Debug] | auth.service | syncSession recibio 5xx transitorio; usando sesion local",
+            {
+              status,
+              fallbackMs: AUTH_PROFILE_TRANSIENT_FALLBACK_MS,
+            }
+          );
+
+          return readStoredSessionUser();
+        }
+
+        throw error;
+      })
+      .finally(() => {
+        syncSessionInFlight = null;
+      });
+
+    return syncSessionInFlight;
   },
 
   async register(payload: RegisterCredentials): Promise<AuthResponse> {
@@ -218,11 +348,15 @@ export const authService = {
   },
 
   async login(email: string, password: string): Promise<AuthResponse> {
+    invalidateAuthSessionState();
+
     // Limpiar datos anteriores para evitar conflictos de sesión
     localStorage.removeItem("token");
     localStorage.removeItem("refreshToken");
     localStorage.removeItem("user");
     localStorage.removeItem("businessId");
+    localStorage.removeItem(ADMIN_ORIGINAL_TOKEN_KEY);
+    clearSessionScopedStorage();
 
     const response = await api.post<AuthResponse>("/auth/login", {
       email,
@@ -248,10 +382,21 @@ export const authService = {
     const refreshToken = localStorage.getItem("refreshToken");
     if (!refreshToken) return null;
 
+    const requestSessionVersion = authSessionVersion;
+    const refreshTokenSnapshot = refreshToken;
+
     try {
       const response = await api.post<RefreshTokenResponse>("/auth/refresh", {
         refreshToken,
       });
+
+      const currentRefreshToken = localStorage.getItem("refreshToken");
+      if (
+        requestSessionVersion !== authSessionVersion ||
+        currentRefreshToken !== refreshTokenSnapshot
+      ) {
+        return null;
+      }
 
       if (response.data.token) {
         localStorage.setItem("token", response.data.token);
@@ -280,6 +425,8 @@ export const authService = {
   },
 
   logout(): void {
+    invalidateAuthSessionState();
+
     const refreshToken = localStorage.getItem("refreshToken");
 
     // Intentar revocar el refresh token en el servidor
@@ -294,6 +441,7 @@ export const authService = {
     localStorage.removeItem("user");
     localStorage.removeItem("businessId");
     localStorage.removeItem(ADMIN_ORIGINAL_TOKEN_KEY);
+    clearSessionScopedStorage();
     notifySessionChange();
   },
 
@@ -302,6 +450,8 @@ export const authService = {
   },
 
   async impersonate(distributorId: string): Promise<void> {
+    invalidateAuthSessionState();
+
     const currentToken = localStorage.getItem("token");
     if (!currentToken) {
       throw new Error("No hay sesión activa para iniciar suplantación");
@@ -333,6 +483,8 @@ export const authService = {
   },
 
   async revertImpersonation(): Promise<void> {
+    invalidateAuthSessionState();
+
     const adminOriginalToken = localStorage.getItem(ADMIN_ORIGINAL_TOKEN_KEY);
     if (!adminOriginalToken) {
       throw new Error("No hay sesión original de admin para restaurar");

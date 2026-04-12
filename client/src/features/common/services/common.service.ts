@@ -85,6 +85,11 @@ interface PublicGlobalSettingsResponse {
   plans: Record<"starter" | "pro" | "enterprise", PublicPlan>;
 }
 
+interface GetPublicSettingsOptions {
+  forceRefresh?: boolean;
+  allowStaleOnRateLimit?: boolean;
+}
+
 interface BusinessSubscriptionRow {
   _id: string;
   name: string;
@@ -100,6 +105,93 @@ interface BusinessSubscriptionRow {
   customLimits?: Partial<PlanLimits> | null;
   limits: BusinessPlanSnapshot | null;
 }
+
+const PUBLIC_SETTINGS_CACHE_TTL_MS = 5 * 60 * 1000;
+const PUBLIC_SETTINGS_RATE_LIMIT_FALLBACK_MS = 20 * 1000;
+const COMMON_SERVICE_DEBUG_PREFIX = "[Essence Debug] | common.service |";
+const TRANSIENT_SERVER_STATUS = new Set([500, 502, 503, 504]);
+
+const logCommonServiceWarn = (action: string, details?: unknown) => {
+  console.warn(`${COMMON_SERVICE_DEBUG_PREFIX} ${action}`, details);
+};
+
+const logCommonServiceError = (action: string, details?: unknown) => {
+  console.error(`${COMMON_SERVICE_DEBUG_PREFIX} ${action}`, details);
+};
+
+let publicSettingsCache: {
+  value: PublicGlobalSettingsResponse;
+  fetchedAt: number;
+} | null = null;
+
+let publicSettingsInFlight: Promise<PublicGlobalSettingsResponse> | null = null;
+let publicSettingsRateLimitedUntil = 0;
+
+const DEFAULT_PUBLIC_SETTINGS: PublicGlobalSettingsResponse = {
+  maintenanceMode: false,
+  defaultPlan: "starter",
+  plans: {
+    starter: {
+      id: "starter",
+      name: "Starter",
+      description: "Para negocios en etapa inicial",
+      monthlyPrice: 19,
+      yearlyPrice: 190,
+      currency: "USD",
+      limits: { branches: 1, distributors: 2 },
+      features: { businessAssistant: false },
+    },
+    pro: {
+      id: "pro",
+      name: "Pro",
+      description: "Para equipos que escalan ventas",
+      monthlyPrice: 49,
+      yearlyPrice: 490,
+      currency: "USD",
+      limits: { branches: 3, distributors: 10 },
+      features: { businessAssistant: false },
+    },
+    enterprise: {
+      id: "enterprise",
+      name: "Enterprise",
+      description: "Para operaciones multi-sede avanzadas",
+      monthlyPrice: 99,
+      yearlyPrice: 990,
+      currency: "USD",
+      limits: { branches: 10, distributors: 50 },
+      features: { businessAssistant: true },
+    },
+  },
+};
+
+const isPublicSettingsCacheFresh = () =>
+  Boolean(
+    publicSettingsCache &&
+    Date.now() - publicSettingsCache.fetchedAt < PUBLIC_SETTINGS_CACHE_TTL_MS
+  );
+
+const resolveRetryAfterMs = (rawRetryAfter: unknown): number => {
+  if (typeof rawRetryAfter !== "string") {
+    return PUBLIC_SETTINGS_RATE_LIMIT_FALLBACK_MS;
+  }
+
+  const trimmed = rawRetryAfter.trim();
+  if (!trimmed) {
+    return PUBLIC_SETTINGS_RATE_LIMIT_FALLBACK_MS;
+  }
+
+  const seconds = Number(trimmed);
+  if (Number.isFinite(seconds) && seconds > 0) {
+    return seconds * 1000;
+  }
+
+  const retryAfterDate = Date.parse(trimmed);
+  if (Number.isNaN(retryAfterDate)) {
+    return PUBLIC_SETTINGS_RATE_LIMIT_FALLBACK_MS;
+  }
+
+  return Math.max(retryAfterDate - Date.now(), 1000);
+};
 
 const resolveEntityId = (value: unknown): string | null => {
   if (typeof value === "string") {
@@ -288,12 +380,121 @@ export const userAccessService = {
 };
 
 export const globalSettingsService = {
-  async getPublicSettings(): Promise<PublicGlobalSettingsResponse> {
-    const response = await api.get<{
-      success: boolean;
-      data: PublicGlobalSettingsResponse;
-    }>("/global-settings/public");
-    return response.data.data;
+  async getPublicSettings(
+    options: GetPublicSettingsOptions = {}
+  ): Promise<PublicGlobalSettingsResponse> {
+    const { forceRefresh = false, allowStaleOnRateLimit = true } = options;
+
+    if (!forceRefresh && isPublicSettingsCacheFresh() && publicSettingsCache) {
+      return publicSettingsCache.value;
+    }
+
+    if (publicSettingsInFlight) {
+      return publicSettingsInFlight;
+    }
+
+    const now = Date.now();
+    if (!forceRefresh && now < publicSettingsRateLimitedUntil) {
+      if (allowStaleOnRateLimit && publicSettingsCache) {
+        logCommonServiceWarn(
+          "Retornando public settings stale por cooldown de rate-limit",
+          {
+            forceRefresh,
+            allowStaleOnRateLimit,
+            rateLimitedUntil: publicSettingsRateLimitedUntil,
+          }
+        );
+        return publicSettingsCache.value;
+      }
+
+      logCommonServiceError(
+        "Sin cache stale disponible durante cooldown de rate-limit en public settings",
+        {
+          forceRefresh,
+          allowStaleOnRateLimit,
+          rateLimitedUntil: publicSettingsRateLimitedUntil,
+        }
+      );
+      throw new Error("Global settings temporalmente rate-limited");
+    }
+
+    publicSettingsInFlight = api
+      .get<{
+        success: boolean;
+        data: PublicGlobalSettingsResponse;
+      }>("/global-settings/public")
+      .then(response => {
+        publicSettingsCache = {
+          value: response.data.data,
+          fetchedAt: Date.now(),
+        };
+        publicSettingsRateLimitedUntil = 0;
+        return response.data.data;
+      })
+      .catch(error => {
+        const status = (error as { response?: { status?: number } })?.response
+          ?.status;
+
+        if (status === 429) {
+          const retryAfterHeader = (
+            error as {
+              response?: {
+                headers?: Record<string, unknown>;
+              };
+            }
+          )?.response?.headers?.["retry-after"];
+
+          publicSettingsRateLimitedUntil =
+            Date.now() + resolveRetryAfterMs(retryAfterHeader);
+
+          if (allowStaleOnRateLimit && publicSettingsCache) {
+            logCommonServiceWarn(
+              "429 en public settings; devolviendo cache stale",
+              {
+                retryAfterHeader,
+                rateLimitedUntil: publicSettingsRateLimitedUntil,
+              }
+            );
+            return publicSettingsCache.value;
+          }
+
+          logCommonServiceError("429 en public settings sin cache fallback", {
+            retryAfterHeader,
+            rateLimitedUntil: publicSettingsRateLimitedUntil,
+          });
+        }
+
+        if (typeof status === "number" && TRANSIENT_SERVER_STATUS.has(status)) {
+          if (publicSettingsCache) {
+            logCommonServiceWarn(
+              "Error 5xx en public settings; devolviendo cache local",
+              {
+                status,
+                cachedAt: publicSettingsCache.fetchedAt,
+              }
+            );
+            return publicSettingsCache.value;
+          }
+
+          logCommonServiceWarn(
+            "Error 5xx en public settings sin cache; usando defaults locales",
+            { status }
+          );
+          return DEFAULT_PUBLIC_SETTINGS;
+        }
+
+        logCommonServiceError("Fallo getPublicSettings", {
+          status,
+          error,
+        });
+
+        throw error;
+      })
+      .finally(() => {
+        publicSettingsInFlight = null;
+      });
+
+    return publicSettingsInFlight;
   },
 
   async getBusinessLimits(): Promise<BusinessPlanSnapshot> {

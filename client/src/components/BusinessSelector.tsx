@@ -1,28 +1,62 @@
-import { useMemo } from "react";
+import { useCallback, useMemo, type ChangeEvent } from "react";
 import { useBusiness } from "../context/BusinessContext";
 
 type MembershipLike = {
+  _id: string;
   business: unknown;
 };
 
-const resolveMembershipBusinessId = (membership: MembershipLike) => {
-  const business = membership.business as unknown;
+const OBJECT_ID_REGEX = /^[a-f\d]{24}$/i;
 
-  if (typeof business === "string") {
-    const trimmed = business.trim();
-    return trimmed || "";
+const resolveEntityId = (value: unknown): string => {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed || trimmed === "[object Object]") {
+      return "";
+    }
+
+    return trimmed;
   }
 
-  if (!business || typeof business !== "object") {
+  if (!value || typeof value !== "object") {
     return "";
   }
 
-  const candidate = business as { _id?: unknown; id?: unknown };
-  const byUnderscoreId =
-    typeof candidate._id === "string" ? candidate._id.trim() : "";
-  const byId = typeof candidate.id === "string" ? candidate.id.trim() : "";
+  const candidate = value as {
+    _id?: unknown;
+    id?: unknown;
+    $oid?: unknown;
+    businessId?: unknown;
+  };
 
-  return byUnderscoreId || byId || "";
+  const resolvedByStructure =
+    resolveEntityId(candidate._id) ||
+    resolveEntityId(candidate.id) ||
+    resolveEntityId(candidate.$oid) ||
+    resolveEntityId(candidate.businessId);
+
+  if (resolvedByStructure) {
+    return resolvedByStructure;
+  }
+
+  if (typeof (value as { toString?: unknown }).toString === "function") {
+    const rawValue = (value as { toString: () => string }).toString();
+    const stringified = typeof rawValue === "string" ? rawValue.trim() : "";
+
+    if (
+      stringified &&
+      stringified !== "[object Object]" &&
+      OBJECT_ID_REGEX.test(stringified)
+    ) {
+      return stringified;
+    }
+  }
+
+  return "";
+};
+
+const resolveMembershipBusinessId = (membership: MembershipLike) => {
+  return resolveEntityId(membership.business);
 };
 
 const resolveMembershipBusinessName = (membership: MembershipLike) => {
@@ -42,16 +76,43 @@ const resolveMembershipBusinessName = (membership: MembershipLike) => {
 };
 
 export default function BusinessSelector() {
-  const { memberships, businessId, selectBusiness, loading, error, hydrating } =
-    useBusiness();
+  const {
+    memberships,
+    businessId,
+    selectBusiness,
+    refresh,
+    loading,
+    error,
+    hydrating,
+  } = useBusiness();
 
-  const hasBusinesses = memberships.length > 0;
+  const businessOptions = useMemo(
+    () =>
+      memberships
+        .map(membership => ({
+          key: membership._id,
+          id: resolveMembershipBusinessId(membership),
+          name: resolveMembershipBusinessName(membership),
+        }))
+        .filter(option => Boolean(option.id)),
+    [memberships]
+  );
+
+  const hasBusinesses = businessOptions.length > 0;
 
   const label = useMemo(() => {
     if (loading || hydrating) return "Cargando negocios...";
     if (error) return error;
     return "Negocio";
   }, [loading, hydrating, error]);
+
+  const handleChange = useCallback(
+    (event: ChangeEvent<HTMLSelectElement>) => {
+      const selectedBusinessId = resolveEntityId(event.target.value) || null;
+      selectBusiness(selectedBusinessId);
+    },
+    [selectBusiness]
+  );
 
   // REMOVED: El BusinessContext ya maneja el refresh inicial.
   // El useEffect anterior que llamaba refresh() causaba un loop infinito.
@@ -65,24 +126,32 @@ export default function BusinessSelector() {
       {hasBusinesses ? (
         <select
           value={businessId ?? ""}
-          onChange={e => selectBusiness(e.target.value || null)}
+          onChange={handleChange}
           className="w-full rounded-md border border-white/10 bg-gray-900/60 px-2 py-1 text-xs text-white focus:border-purple-400 focus:outline-none"
         >
-          {memberships.map(membership => (
-            <option
-              key={membership._id}
-              value={resolveMembershipBusinessId(membership)}
-            >
-              {resolveMembershipBusinessName(membership)}
+          {businessOptions.map(option => (
+            <option key={option.key} value={option.id}>
+              {option.name}
             </option>
           ))}
         </select>
       ) : loading || hydrating ? (
         <p className="text-[11px] text-amber-200/80">Cargando negocios...</p>
       ) : (
-        <p className="text-[11px] text-amber-200/80">
-          Actualizando negocios...
-        </p>
+        <div className="space-y-2">
+          <p className="text-[11px] text-amber-200/80">
+            No encontramos negocios activos en este momento.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              void refresh();
+            }}
+            className="rounded-md border border-amber-300/40 bg-amber-400/10 px-2 py-1 text-[11px] font-semibold text-amber-100 transition hover:bg-amber-400/20"
+          >
+            Reintentar carga
+          </button>
+        </div>
       )}
     </div>
   );

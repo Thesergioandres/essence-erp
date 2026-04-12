@@ -4,6 +4,14 @@ import User from "../models/User.js";
 
 const LANDING_TEMPLATES = new Set(["modern", "minimal", "bold"]);
 const SLUG_MAX_LENGTH = 80;
+const ACCESSIBLE_MEMBERSHIP_STATUS_QUERY = {
+  $or: [
+    { status: "active" },
+    { status: "invited" },
+    { status: { $exists: false } },
+    { status: null },
+  ],
+};
 
 const normalizeSlug = (rawValue = "") =>
   String(rawValue || "")
@@ -305,7 +313,7 @@ export class BusinessRepository {
 
     const memberships = await Membership.find({
       user: userId,
-      status: "active",
+      ...ACCESSIBLE_MEMBERSHIP_STATUS_QUERY,
     })
       .populate("business")
       .lean();

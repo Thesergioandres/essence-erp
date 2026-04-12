@@ -14,6 +14,96 @@ import type {
   BusinessMembership,
 } from "../types/business.types";
 
+type MembershipsResponse = {
+  memberships: Array<
+    BusinessMembership & {
+      business: Business;
+    }
+  >;
+  activeMembership?: BusinessMembership & {
+    business: Business;
+  };
+};
+
+const MY_MEMBERSHIPS_CACHE_TTL_MS = 15 * 1000;
+const MY_MEMBERSHIPS_RATE_LIMIT_FALLBACK_MS = 20 * 1000;
+const MY_MEMBERSHIPS_TRANSIENT_FALLBACK_MS = 5 * 1000;
+
+let myMembershipsInFlight: Promise<MembershipsResponse> | null = null;
+let myMembershipsInFlightToken: string | null = null;
+let myMembershipsRateLimitedUntil = 0;
+let myMembershipsCache: {
+  value: MembershipsResponse;
+  fetchedAt: number;
+  token: string | null;
+} | null = null;
+
+const isMembershipCacheFresh = (currentToken: string | null) =>
+  Boolean(
+    myMembershipsCache &&
+    myMembershipsCache.token === currentToken &&
+    Date.now() - myMembershipsCache.fetchedAt < MY_MEMBERSHIPS_CACHE_TTL_MS
+  );
+
+const resolveRetryAfterMs = (rawRetryAfter: unknown): number => {
+  if (typeof rawRetryAfter !== "string") {
+    return MY_MEMBERSHIPS_RATE_LIMIT_FALLBACK_MS;
+  }
+
+  const trimmed = rawRetryAfter.trim();
+  if (!trimmed) {
+    return MY_MEMBERSHIPS_RATE_LIMIT_FALLBACK_MS;
+  }
+
+  const seconds = Number(trimmed);
+  if (Number.isFinite(seconds) && seconds > 0) {
+    return seconds * 1000;
+  }
+
+  const retryAfterDate = Date.parse(trimmed);
+  if (Number.isNaN(retryAfterDate)) {
+    return MY_MEMBERSHIPS_RATE_LIMIT_FALLBACK_MS;
+  }
+
+  return Math.max(retryAfterDate - Date.now(), 1000);
+};
+
+const readMembershipsFromStoredSession = (): MembershipsResponse | null => {
+  if (typeof localStorage === "undefined") {
+    return null;
+  }
+
+  const rawUser = localStorage.getItem("user");
+  if (!rawUser) {
+    return null;
+  }
+
+  try {
+    const parsedUser = JSON.parse(rawUser) as {
+      memberships?: Array<BusinessMembership & { business: Business }>;
+    };
+
+    const memberships = Array.isArray(parsedUser.memberships)
+      ? parsedUser.memberships
+      : [];
+
+    if (memberships.length === 0) {
+      return null;
+    }
+
+    const activeMembership = memberships.find(
+      membership => membership.status === "active"
+    );
+
+    return {
+      memberships,
+      activeMembership,
+    };
+  } catch {
+    return null;
+  }
+};
+
 // ==================== BUSINESS SERVICE ====================
 export const businessService = {
   async create(data: {
@@ -86,24 +176,109 @@ export const businessService = {
     };
   },
 
-  async getMyMemberships(): Promise<{
-    memberships: Array<
-      BusinessMembership & {
-        business: Business;
+  async getMyMemberships(): Promise<MembershipsResponse> {
+    const currentToken = localStorage.getItem("token");
+
+    if (isMembershipCacheFresh(currentToken) && myMembershipsCache) {
+      return myMembershipsCache.value;
+    }
+
+    if (myMembershipsInFlight && myMembershipsInFlightToken === currentToken) {
+      return myMembershipsInFlight;
+    }
+
+    if (myMembershipsInFlightToken !== currentToken) {
+      myMembershipsInFlight = null;
+      myMembershipsInFlightToken = null;
+    }
+
+    const now = Date.now();
+    if (now < myMembershipsRateLimitedUntil) {
+      const fallback =
+        myMembershipsCache?.token === currentToken
+          ? myMembershipsCache.value
+          : readMembershipsFromStoredSession();
+      if (fallback) {
+        return fallback;
       }
-    >;
-    activeMembership?: BusinessMembership & {
-      business: Business;
-    };
-  }> {
-    const response = await api.get<{
-      success: boolean;
-      data: {
-        memberships: (BusinessMembership & { business: Business })[];
-        activeMembership?: BusinessMembership & { business: Business };
-      };
-    }>("/business/my-memberships");
-    return response.data.data;
+    }
+
+    myMembershipsInFlightToken = currentToken;
+    myMembershipsInFlight = api
+      .get<{
+        success: boolean;
+        data: MembershipsResponse;
+      }>("/business/my-memberships")
+      .then(response => {
+        const activeToken = localStorage.getItem("token");
+        if (activeToken !== myMembershipsInFlightToken) {
+          return readMembershipsFromStoredSession() || response.data.data;
+        }
+
+        myMembershipsCache = {
+          value: response.data.data,
+          fetchedAt: Date.now(),
+          token: activeToken,
+        };
+        myMembershipsRateLimitedUntil = 0;
+        return response.data.data;
+      })
+      .catch(error => {
+        const status = (error as { response?: { status?: number } })?.response
+          ?.status;
+
+        if (status === 429) {
+          const retryAfterHeader = (
+            error as {
+              response?: {
+                headers?: Record<string, unknown>;
+              };
+            }
+          )?.response?.headers?.["retry-after"];
+
+          myMembershipsRateLimitedUntil =
+            Date.now() + resolveRetryAfterMs(retryAfterHeader);
+
+          const fallback =
+            myMembershipsCache?.token === currentToken
+              ? myMembershipsCache.value
+              : readMembershipsFromStoredSession();
+          if (fallback) {
+            return fallback;
+          }
+        }
+
+        if (status && status >= 500) {
+          myMembershipsRateLimitedUntil =
+            Date.now() + MY_MEMBERSHIPS_TRANSIENT_FALLBACK_MS;
+
+          const fallback =
+            myMembershipsCache?.token === currentToken
+              ? myMembershipsCache.value
+              : readMembershipsFromStoredSession();
+
+          console.warn(
+            "[Essence Debug] | business.service | getMyMemberships recibio 5xx transitorio",
+            {
+              status,
+              fallbackAvailable: Boolean(fallback),
+              fallbackMs: MY_MEMBERSHIPS_TRANSIENT_FALLBACK_MS,
+            }
+          );
+
+          if (fallback) {
+            return fallback;
+          }
+        }
+
+        throw error;
+      })
+      .finally(() => {
+        myMembershipsInFlight = null;
+        myMembershipsInFlightToken = null;
+      });
+
+    return myMembershipsInFlight;
   },
 
   async updateBusiness(

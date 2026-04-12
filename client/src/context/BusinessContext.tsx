@@ -19,6 +19,9 @@ import { normalizeEmployeeRole } from "../shared/utils/roleAliases";
 
 type PlanKey = "starter" | "pro" | "enterprise";
 type AssistantPlanMap = Record<PlanKey, boolean>;
+type RefreshBusinessOptions = {
+  silent?: boolean;
+};
 
 interface BusinessContextValue {
   businessId: string | null;
@@ -29,7 +32,7 @@ interface BusinessContextValue {
   loading: boolean;
   error: string | null;
   selectBusiness: (id: string | null) => void;
-  refresh: () => Promise<void>;
+  refresh: (options?: RefreshBusinessOptions) => Promise<void>;
 }
 
 const BusinessContext = createContext<BusinessContextValue | undefined>(
@@ -60,6 +63,19 @@ const defaultAssistantByPlan: AssistantPlanMap = {
   enterprise: true,
 };
 
+const TRANSIENT_SERVER_STATUS = new Set([500, 502, 503, 504]);
+
+const OBJECT_ID_REGEX = /^[a-f\d]{24}$/i;
+const BUSINESS_CONTEXT_DEBUG_PREFIX = "[Essence Debug] | BusinessContext |";
+
+const logBusinessContextWarn = (action: string, details?: unknown) => {
+  console.warn(`${BUSINESS_CONTEXT_DEBUG_PREFIX} ${action}`, details);
+};
+
+const logBusinessContextError = (action: string, details?: unknown) => {
+  console.error(`${BUSINESS_CONTEXT_DEBUG_PREFIX} ${action}`, details);
+};
+
 const resolveEntityId = (value: unknown): string | null => {
   if (typeof value === "string") {
     const trimmed = value.trim();
@@ -78,14 +94,33 @@ const resolveEntityId = (value: unknown): string | null => {
     _id?: unknown;
     id?: unknown;
     $oid?: unknown;
+    businessId?: unknown;
   };
 
-  return (
+  const resolvedByStructure =
     resolveEntityId(candidate._id) ||
     resolveEntityId(candidate.id) ||
     resolveEntityId(candidate.$oid) ||
-    null
-  );
+    resolveEntityId(candidate.businessId);
+
+  if (resolvedByStructure) {
+    return resolvedByStructure;
+  }
+
+  if (typeof (value as { toString?: unknown }).toString === "function") {
+    const rawValue = (value as { toString: () => string }).toString();
+    const stringified = typeof rawValue === "string" ? rawValue.trim() : "";
+
+    if (
+      stringified &&
+      stringified !== "[object Object]" &&
+      OBJECT_ID_REGEX.test(stringified)
+    ) {
+      return stringified;
+    }
+  }
+
+  return null;
 };
 
 const normalizeMembership = (membership: Membership): Membership => {
@@ -149,8 +184,11 @@ function getInitialMemberships(): Membership[] {
       const user = JSON.parse(userStr);
       return normalizeMemberships(user.memberships || []);
     }
-  } catch {
-    // Ignore parse errors
+  } catch (error) {
+    logBusinessContextWarn(
+      "No se pudieron hidratar membresias iniciales desde localStorage",
+      error
+    );
   }
   return [];
 }
@@ -163,6 +201,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
   const [memberships, setMemberships] = useState<Membership[]>(
     getInitialMemberships
   );
+  const membershipsRef = useRef<Membership[]>(memberships);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [initializing, setInitializing] = useState(true);
@@ -172,6 +211,14 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
   const tokenRef = useRef<string | null>(localStorage.getItem("token"));
   const isFetchingRef = useRef(false); // Guard against concurrent refresh calls
   const retryRef = useRef(0); // Guard for auto-retry
+
+  const finalizeInitialization = useCallback(() => {
+    setInitializing(prev => (prev ? false : prev));
+  }, []);
+
+  useEffect(() => {
+    membershipsRef.current = memberships;
+  }, [memberships]);
 
   const syncBusinessId = useCallback((id: string | null) => {
     setBusinessId(prev => (prev === id ? prev : id));
@@ -225,139 +272,267 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       if (autoSelectedBusinessId) {
         syncBusinessId(autoSelectedBusinessId);
       }
-    } catch {
-      // no-op
+    } catch (error) {
+      logBusinessContextWarn(
+        "Fallo la hidratacion de sesion almacenada",
+        error
+      );
     }
   }, [syncBusinessId]);
 
-  const refresh = useCallback(async () => {
-    // Debounce: Skip if already fetching
-    if (isFetchingRef.current) {
-      console.log("[BusinessContext] Refresh skipped - already fetching");
-      return;
-    }
+  const refresh = useCallback(
+    async (options: RefreshBusinessOptions = {}) => {
+      const { silent = false } = options;
 
-    const token = localStorage.getItem("token");
-    if (!token) {
-      setMemberships(prev => (prev.length > 0 ? [] : prev));
-      syncBusinessId(null);
-      return;
-    }
-
-    isFetchingRef.current = true;
-    setLoading(true);
-    setError(null);
-    try {
-      const [{ memberships: fetched }, publicSettings] = await Promise.all([
-        businessService.getMyMemberships(),
-        globalSettingsService.getPublicSettings().catch(() => null),
-      ]);
-
-      if (publicSettings?.plans) {
-        setAssistantByPlan({
-          starter:
-            publicSettings.plans.starter?.features?.businessAssistant ?? false,
-          pro: publicSettings.plans.pro?.features?.businessAssistant ?? false,
-          enterprise:
-            publicSettings.plans.enterprise?.features?.businessAssistant ??
-            true,
-        });
-      }
-
-      console.log(
-        "[BusinessContext] Fetched memberships:",
-        fetched?.length,
-        fetched
-      );
-
-      const fetchedMemberships = normalizeMemberships(
-        (fetched || []) as Membership[]
-      );
-      setMemberships(prev =>
-        hasSameMembershipSnapshot(prev, fetchedMemberships)
-          ? prev
-          : fetchedMemberships
-      );
-
-      // Safe Retry Logic: Si devuelve vacío y no hemos reintentado, prueba una vez más
-      if ((!fetched || fetched.length === 0) && retryRef.current < 1) {
-        console.log("[BusinessContext] Empty list, retrying once...");
-        retryRef.current += 1;
-        isFetchingRef.current = false; // Liberar lock para el reintento
-        setTimeout(() => refresh(), 800);
+      // Debounce: Skip if already fetching
+      if (isFetchingRef.current) {
+        logBusinessContextWarn(
+          "Refresh omitido porque ya existe una peticion en curso",
+          { silent }
+        );
+        if (!silent) {
+          finalizeInitialization();
+        }
         return;
       }
 
-      // Si éxito, limpiar reintentos
-      if (fetched && fetched.length > 0) {
-        retryRef.current = 0;
+      const token = localStorage.getItem("token");
+      if (!token) {
+        setMemberships(prev => (prev.length > 0 ? [] : prev));
+        syncBusinessId(null);
+        if (!silent) {
+          finalizeInitialization();
+        }
+        return;
       }
 
-      const stored = resolveEntityId(localStorage.getItem("businessId"));
-      const activeMemberships = fetchedMemberships.filter(
-        membership => membership.status === "active"
-      );
-      const hasStored =
-        Boolean(stored) &&
-        activeMemberships.some(
-          membership => getMembershipBusinessId(membership) === stored
+      isFetchingRef.current = true;
+      if (!silent) {
+        setLoading(true);
+        setError(null);
+      }
+      try {
+        const publicSettingsPromise = silent
+          ? Promise.resolve(null)
+          : globalSettingsService.getPublicSettings().catch(error => {
+              logBusinessContextWarn(
+                "Fallaron ajustes publicos durante refresh de negocio",
+                error
+              );
+              return null;
+            });
+
+        const [{ memberships: fetched }, publicSettings] = await Promise.all([
+          businessService.getMyMemberships(),
+          publicSettingsPromise,
+        ]);
+
+        if (publicSettings?.plans) {
+          setAssistantByPlan({
+            starter:
+              publicSettings.plans.starter?.features?.businessAssistant ??
+              false,
+            pro: publicSettings.plans.pro?.features?.businessAssistant ?? false,
+            enterprise:
+              publicSettings.plans.enterprise?.features?.businessAssistant ??
+              true,
+          });
+        }
+
+        console.log(
+          "[BusinessContext] Fetched memberships:",
+          fetched?.length,
+          fetched
         );
-      const onlyOneActive =
-        activeMemberships.length === 1
-          ? getMembershipBusinessId(activeMemberships[0]) || null
-          : null;
-      const onlyOneTotal =
-        fetchedMemberships.length === 1
-          ? getMembershipBusinessId(fetchedMemberships[0]) || null
-          : null;
-      const nextId =
-        (hasStored ? stored : onlyOneActive || onlyOneTotal) || null;
 
-      syncBusinessId(nextId);
-    } catch (err) {
-      const status = (err as { response?: { status?: number; data?: any } })
-        ?.response?.status;
-      const code = (err as { response?: { status?: number; data?: any } })
-        ?.response?.data?.code;
-      const isSessionBootstrapError =
-        status === 401 || status === 403 || status === 404;
+        const fetchedMemberships = normalizeMemberships(
+          (fetched || []) as Membership[]
+        );
+        const effectiveMemberships =
+          silent &&
+          fetchedMemberships.length === 0 &&
+          membershipsRef.current.length > 0
+            ? membershipsRef.current
+            : fetchedMemberships;
 
-      // Si el token quedó viejo/ilegal y el backend responde 401, limpia sesión
-      // Para 403, solo limpiar si NO es "owner_inactive" ni "pending" (usuario recién registrado)
-      const isPendingUser = code === "pending";
-      const isOwnerInactive = code === "owner_inactive";
+        setMemberships(prev =>
+          hasSameMembershipSnapshot(prev, effectiveMemberships)
+            ? prev
+            : effectiveMemberships
+        );
 
-      if (status === 401) {
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
-        syncBusinessId(null);
-        setMemberships(prev => (prev.length > 0 ? [] : prev));
-      } else if (status === 403 && !isOwnerInactive && !isPendingUser) {
-        // 403 por otras razones (token inválido, etc) - limpiar sesión
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
-        syncBusinessId(null);
-        setMemberships(prev => (prev.length > 0 ? [] : prev));
+        // Safe Retry Logic: Si devuelve vacío y no hemos reintentado, prueba una vez más
+        if ((!fetched || fetched.length === 0) && retryRef.current < 1) {
+          logBusinessContextWarn(
+            "Refresh devolvio membresias vacias; se reintentara una vez",
+            { silent, fetchedLength: fetched?.length || 0 }
+          );
+          retryRef.current += 1;
+          isFetchingRef.current = false; // Liberar lock para el reintento
+          if (!silent) {
+            finalizeInitialization();
+          }
+          setTimeout(() => {
+            void refresh(options);
+          }, 800);
+          return;
+        }
+
+        // Si éxito, limpiar reintentos
+        if (fetched && fetched.length > 0) {
+          retryRef.current = 0;
+        }
+
+        const stored = resolveEntityId(localStorage.getItem("businessId"));
+        const activeMemberships = effectiveMemberships.filter(
+          membership => membership.status === "active"
+        );
+        const hasStored =
+          Boolean(stored) &&
+          activeMemberships.some(
+            membership => getMembershipBusinessId(membership) === stored
+          );
+        const onlyOneActive =
+          activeMemberships.length === 1
+            ? getMembershipBusinessId(activeMemberships[0]) || null
+            : null;
+        const onlyOneTotal =
+          effectiveMemberships.length === 1
+            ? getMembershipBusinessId(effectiveMemberships[0]) || null
+            : null;
+        const nextId =
+          (hasStored ? stored : onlyOneActive || onlyOneTotal) || null;
+
+        syncBusinessId(nextId);
+
+        if (!silent) {
+          finalizeInitialization();
+        }
+      } catch (err) {
+        const status = (err as { response?: { status?: number; data?: any } })
+          ?.response?.status;
+        const code = (err as { response?: { status?: number; data?: any } })
+          ?.response?.data?.code;
+        const isTransientServerError =
+          typeof status === "number" && TRANSIENT_SERVER_STATUS.has(status);
+        const isSessionBootstrapError =
+          status === 401 ||
+          status === 403 ||
+          status === 404 ||
+          status === 429 ||
+          isTransientServerError;
+
+        // Si el token quedó viejo/ilegal y el backend responde 401, limpia sesión
+        // Para 403, solo limpiar si NO es "owner_inactive" ni "pending" (usuario recién registrado)
+        const isPendingUser = code === "pending";
+        const isOwnerInactive = code === "owner_inactive";
+
+        logBusinessContextError("Fallo el refresh de contexto de negocio", {
+          status,
+          code,
+          silent,
+          error: err,
+        });
+
+        if (isTransientServerError) {
+          if (retryRef.current < 2) {
+            retryRef.current += 1;
+            logBusinessContextWarn(
+              "Error transitorio del servidor en bootstrap; reintentando refresh",
+              {
+                status,
+                retryAttempt: retryRef.current,
+                hasCachedMemberships: membershipsRef.current.length > 0,
+              }
+            );
+
+            isFetchingRef.current = false;
+            if (!silent) {
+              finalizeInitialization();
+            }
+
+            setTimeout(() => {
+              void refresh(options);
+            }, 1200);
+            return;
+          }
+
+          const hasFallbackMemberships = membershipsRef.current.length > 0;
+          if (!silent && !hasFallbackMemberships) {
+            setError("El servidor esta iniciando. Intenta nuevamente.");
+          }
+
+          if (!silent) {
+            finalizeInitialization();
+          }
+
+          return;
+        }
+
+        if (status === 401) {
+          logBusinessContextWarn(
+            "Token invalido en refresh; limpiando sesion local"
+          );
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
+          syncBusinessId(null);
+          setMemberships(prev => (prev.length > 0 ? [] : prev));
+        } else if (status === 403 && !isOwnerInactive && !isPendingUser) {
+          // 403 por otras razones (token inválido, etc) - limpiar sesión
+          logBusinessContextWarn(
+            "Refresh denegado (403) fuera de owner_inactive/pending; limpiando sesion",
+            { code }
+          );
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
+          syncBusinessId(null);
+          setMemberships(prev => (prev.length > 0 ? [] : prev));
+        }
+        // Si es usuario pending (recién registrado), NO limpiar token - solo marcar memberships vacías
+        if (!silent && (isPendingUser || status === 403)) {
+          logBusinessContextWarn(
+            "Refresh sin membresias por estado pending/403; se mantiene sesion",
+            { isPendingUser, status, code }
+          );
+          setMemberships(prev => (prev.length > 0 ? [] : prev));
+        }
+
+        if (!isSessionBootstrapError && !isPendingUser && !silent) {
+          logBusinessContextError(
+            "Error no esperado obteniendo membresias",
+            err
+          );
+          setError("No se pudieron cargar tus negocios");
+        }
+
+        if (!silent) {
+          finalizeInitialization();
+        }
+      } finally {
+        if (!silent) {
+          setLoading(false);
+        }
+        isFetchingRef.current = false;
       }
-      // Si es usuario pending (recién registrado), NO limpiar token - solo marcar memberships vacías
-      if (isPendingUser || status === 403) {
-        setMemberships(prev => (prev.length > 0 ? [] : prev));
-      }
+    },
+    [finalizeInitialization, syncBusinessId]
+  );
 
-      if (!isSessionBootstrapError && !isPendingUser) {
-        console.error("Error fetching memberships", err);
-        setError("No se pudieron cargar tus negocios");
-      }
-    } finally {
-      setLoading(false);
-      isFetchingRef.current = false;
-    }
-  }, [syncBusinessId]);
+  const selectBusiness = useCallback(
+    (id: string | null) => {
+      const normalizedBusinessId = resolveEntityId(id);
+      syncBusinessId(normalizedBusinessId);
+      setError(null);
+
+      // Background refresh to keep memberships/features fresh without bloquear UI.
+      void refresh({ silent: true });
+    },
+    [refresh, syncBusinessId]
+  );
 
   useEffect(() => {
     const run = async () => {
       await refresh();
-      setInitializing(false);
     };
     void run();
   }, [refresh]);
@@ -365,7 +540,9 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
   // Escuchar evento session-refresh para actualizar cuando cambie el usuario/rol
   useEffect(() => {
     const handleSessionRefresh = async () => {
-      console.log("[BusinessContext] Session refresh triggered");
+      logBusinessContextWarn("Evento de refresco de sesion detectado", {
+        source: "session-refresh/auth-changed",
+      });
       tokenRef.current = localStorage.getItem("token");
       hydrateFromStoredSession();
       await refresh();
@@ -419,7 +596,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
     hydrating: initializing,
     loading,
     error,
-    selectBusiness: syncBusinessId,
+    selectBusiness,
     refresh,
   };
 

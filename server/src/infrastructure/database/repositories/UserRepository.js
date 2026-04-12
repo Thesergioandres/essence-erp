@@ -2,6 +2,15 @@ import Business from "../models/Business.js";
 import Membership from "../models/Membership.js";
 import User from "../models/User.js";
 
+const ACCESSIBLE_MEMBERSHIP_STATUS_QUERY = {
+  $or: [
+    { status: "active" },
+    { status: "invited" },
+    { status: { $exists: false } },
+    { status: null },
+  ],
+};
+
 export class UserRepository {
   /**
    * Find all users (for God Panel)
@@ -92,7 +101,7 @@ export class UserRepository {
     // Normal users: get actual memberships
     return Membership.find({
       user: userId,
-      status: "active",
+      ...ACCESSIBLE_MEMBERSHIP_STATUS_QUERY,
     })
       .populate(
         "business",

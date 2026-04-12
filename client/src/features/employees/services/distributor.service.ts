@@ -8,6 +8,44 @@ import api from "../../../api/axios";
 import type { User } from "../../auth/types/auth.types";
 import type { Distributor } from "../../business/types/business.types";
 
+const DISTRIBUTOR_ENDPOINT_CANDIDATES = ["/distributors", "/employees"];
+let cachedDistributorEndpoint: string | null = null;
+
+const isNotFoundError = (error: unknown): boolean =>
+  Boolean(
+    (error as { response?: { status?: number } })?.response?.status === 404
+  );
+
+const requestWithDistributorEndpointFallback = async <T>(
+  requestFactory: (endpoint: string) => Promise<T>
+): Promise<T> => {
+  const endpoints = cachedDistributorEndpoint
+    ? [
+        cachedDistributorEndpoint,
+        ...DISTRIBUTOR_ENDPOINT_CANDIDATES.filter(
+          endpoint => endpoint !== cachedDistributorEndpoint
+        ),
+      ]
+    : [...DISTRIBUTOR_ENDPOINT_CANDIDATES];
+
+  let lastError: unknown;
+
+  for (const endpoint of endpoints) {
+    try {
+      const result = await requestFactory(endpoint);
+      cachedDistributorEndpoint = endpoint;
+      return result;
+    } catch (error) {
+      lastError = error;
+      if (!isNotFoundError(error)) {
+        throw error;
+      }
+    }
+  }
+
+  throw lastError;
+};
+
 export const distributorService = {
   async getAll(params?: {
     page?: number;
@@ -24,7 +62,9 @@ export const distributorService = {
       hasMore: boolean;
     };
   }> {
-    const response = await api.get("/employees", { params });
+    const response = await requestWithDistributorEndpointFallback(endpoint =>
+      api.get(endpoint, { params })
+    );
     const apiResponse = response.data;
 
     // V2 API devuelve { success: true, data: {...} }
@@ -49,7 +89,9 @@ export const distributorService = {
   async getById(id: string): Promise<{
     distributor: User;
   }> {
-    const response = await api.get(`/employees/${id}`);
+    const response = await requestWithDistributorEndpointFallback(endpoint =>
+      api.get(`${endpoint}/${id}`)
+    );
     // V2 API returns { success: true, data: distributor }
     // Frontend expects { distributor: User }
     const apiResponse = response.data;
@@ -71,7 +113,9 @@ export const distributorService = {
     user: User;
     password: string;
   }> {
-    const response = await api.post("/employees", data);
+    const response = await requestWithDistributorEndpointFallback(endpoint =>
+      api.post(endpoint, data)
+    );
     // V2 API devuelve { success: true, data: {...} }
     const apiResponse = response.data;
     return apiResponse.data || apiResponse;
@@ -89,7 +133,9 @@ export const distributorService = {
     message: string;
     distributor: Distributor;
   }> {
-    const response = await api.put(`/employees/${id}`, data);
+    const response = await requestWithDistributorEndpointFallback(endpoint =>
+      api.put(`${endpoint}/${id}`, data)
+    );
     // V2 API devuelve { success: true, data: {...} }
     const apiResponse = response.data;
     return apiResponse.data || apiResponse;
@@ -102,7 +148,9 @@ export const distributorService = {
     returnedProducts: number;
     affectedSales: number;
   }> {
-    const response = await api.delete(`/employees/${id}`);
+    const response = await requestWithDistributorEndpointFallback(endpoint =>
+      api.delete(`${endpoint}/${id}`)
+    );
     // V2 API devuelve { success: true, data: {...} }
     const apiResponse = response.data;
     return apiResponse.data || apiResponse;
@@ -112,37 +160,38 @@ export const distributorService = {
     message: string;
     distributor: User;
   }> {
-    const response = await api.put(`/employees/${id}/toggle-active`, null, {
-      // Compatibilidad: si el backend aún no tiene esta ruta, caemos al update legacy.
-      validateStatus: status =>
-        (status >= 200 && status < 300) || status === 404,
+    return requestWithDistributorEndpointFallback(async endpoint => {
+      try {
+        const response = await api.put(`${endpoint}/${id}/toggle-active`, null);
+        const apiResponse = response.data;
+        return apiResponse.data || apiResponse;
+      } catch (error) {
+        if (!isNotFoundError(error)) {
+          throw error;
+        }
+
+        const currentResponse = await api.get(`${endpoint}/${id}`);
+        const currentApiResponse = currentResponse.data;
+        const currentDistributor =
+          currentApiResponse.data ||
+          currentApiResponse.distributor ||
+          currentApiResponse;
+
+        const nextActive = currentDistributor?.active === false;
+        const legacyResponse = await api.put(`${endpoint}/${id}`, {
+          active: nextActive,
+        });
+        const legacyApiResponse = legacyResponse.data;
+        const updatedDistributor = legacyApiResponse.data || legacyApiResponse;
+
+        return {
+          message: nextActive
+            ? "Empleado activado correctamente"
+            : "Empleado pausado correctamente",
+          distributor: updatedDistributor,
+        };
+      }
     });
-
-    if (response.status !== 404) {
-      const apiResponse = response.data;
-      return apiResponse.data || apiResponse;
-    }
-
-    const currentResponse = await api.get(`/employees/${id}`);
-    const currentApiResponse = currentResponse.data;
-    const currentDistributor =
-      currentApiResponse.data ||
-      currentApiResponse.distributor ||
-      currentApiResponse;
-
-    const nextActive = currentDistributor?.active === false;
-    const legacyResponse = await api.put(`/employees/${id}`, {
-      active: nextActive,
-    });
-    const legacyApiResponse = legacyResponse.data;
-    const updatedDistributor = legacyApiResponse.data || legacyApiResponse;
-
-    return {
-      message: nextActive
-        ? "Empleado activado correctamente"
-        : "Empleado pausado correctamente",
-      distributor: updatedDistributor,
-    };
   },
 
   async getProfile(): Promise<{
@@ -153,7 +202,9 @@ export const distributorService = {
       revenue: number;
     };
   }> {
-    const response = await api.get("/employees/me/profile");
+    const response = await requestWithDistributorEndpointFallback(endpoint =>
+      api.get(`${endpoint}/me/profile`)
+    );
     // V2 API devuelve { success: true, data: { distributor, stats } }
     const apiResponse = response.data;
     return apiResponse.data || apiResponse;
@@ -186,19 +237,18 @@ export const distributorService = {
     }>;
     total: number;
   }> {
-    const url = distributorId
-      ? `/employees/${distributorId}/products`
-      : "/employees/me/products";
-    console.log("🔍 [distributorService.getProducts] URL:", url);
-    const response = await api.get(url);
-    console.log(
-      "📦 [distributorService.getProducts] Raw response:",
-      response.data
-    );
+    const response = await requestWithDistributorEndpointFallback(endpoint => {
+      const url = distributorId
+        ? `${endpoint}/${distributorId}/products`
+        : `${endpoint}/me/products`;
+
+      return api.get(url);
+    });
+
     // V2 API devuelve { success: true, data: { products, total } }
     const apiResponse = response.data;
     const result = apiResponse.data || apiResponse;
-    console.log("📦 [distributorService.getProducts] Parsed result:", result);
+
     return result;
   },
 
@@ -214,7 +264,9 @@ export const distributorService = {
       logoUrl?: string | null;
     } | null;
   }> {
-    const response = await api.get(`/employees/${distributorId}/catalog`);
+    const response = await requestWithDistributorEndpointFallback(endpoint =>
+      api.get(`${endpoint}/${distributorId}/catalog`)
+    );
     const payload = response.data?.data || response.data;
 
     return {
