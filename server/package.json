@@ -25,7 +25,7 @@
     "recalc:commissions": "node recalculateTop1SalesTo25.js",
     "recalc:sales-profits": "node scripts/recalculateSalesProfits.js",
     "db:indexes": "node scripts/createIndexes.js",
-    "migrate:business-slugs": "node scripts/migrateBusinessSlugs.js"
+    "migrate:business-slugs": "node scripts/migrateBusinessSlugs.js",
     "migrate:employee-role": "node scripts/migrateDistributorRoleToEmployee.js"
   },
   "keywords": [

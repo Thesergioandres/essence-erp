@@ -8,7 +8,32 @@ dotenv.config();
 const LEGACY_ROLES = ["distribuidor", "distributor"];
 
 const resolveMongoUri = () =>
-  process.env.MONGODB_URI || process.env.MONGO_URI || process.env.MONGO_URI_DEV;
+  process.env.MONGODB_URI ||
+  process.env.MONGO_URI ||
+  process.env.MONGO_PUBLIC_URL ||
+  process.env.MONGO_URL ||
+  process.env.MONGO_URI_DEV;
+
+const resolveDbName = (mongoUri) => {
+  const explicitDbName =
+    process.env.MONGO_DB_NAME || process.env.MONGODB_DB_NAME;
+
+  if (explicitDbName) {
+    return explicitDbName;
+  }
+
+  try {
+    const parsed = new URL(mongoUri);
+    const dbNameFromPath = (parsed.pathname || "").replace(/^\/+/, "");
+    if (dbNameFromPath) {
+      return dbNameFromPath;
+    }
+  } catch {
+    // noop
+  }
+
+  return process.env.NODE_ENV === "test" ? "essence_test" : "essence";
+};
 
 const run = async () => {
   const mongoUri = resolveMongoUri();
@@ -18,7 +43,9 @@ const run = async () => {
     process.exit(1);
   }
 
-  await mongoose.connect(mongoUri);
+  const dbName = resolveDbName(mongoUri);
+  await mongoose.connect(mongoUri, { dbName });
+  console.log(`Connected to database: ${dbName}`);
 
   try {
     const [usersResult, membershipsResult] = await Promise.all([
