@@ -12,10 +12,15 @@ export class UpdateStockUseCase {
    * @param {mongoose.ClientSession} session - Mandatory
    */
   async execute(input, session) {
-    const { productId, quantityChange, businessId } = input;
+    const { productId, quantityChange, businessId, userRole } = input;
+    const bypassBusinessScope = userRole === "god";
 
     // 1. Fetch current state
-    const product = await this.productRepository.findById(productId);
+    const product = await this.productRepository.findByIdForBusiness(
+      productId,
+      businessId,
+      { bypassBusinessScope, session },
+    );
     if (!product) {
       throw new Error("Product not found");
     }
@@ -27,10 +32,12 @@ export class UpdateStockUseCase {
     }
 
     // 3. Persist Change (Infrastructure)
-    const updatedProduct = await this.productRepository.updateStock(
+    const updatedProduct = await this.productRepository.updateStockForBusiness(
       productId,
+      businessId,
       quantityChange,
       session,
+      { bypassBusinessScope },
     );
 
     return updatedProduct;

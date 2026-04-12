@@ -87,6 +87,27 @@ export class RegisterPromotionSaleUseCase {
     };
 
     const resolvedSaleDate = resolveSaleDate(saleDate);
+    const bypassBusinessScope = user?.role === "god";
+    const resolveTrustedSalePrice = (product) => {
+      const candidates = [
+        product?.clientPrice,
+        product?.price,
+        product?.salePrice,
+        product?.suggestedPrice,
+      ];
+
+      const trustedPrice = candidates.find(
+        (value) => Number.isFinite(Number(value)) && Number(value) > 0,
+      );
+
+      if (!Number.isFinite(Number(trustedPrice)) || Number(trustedPrice) <= 0) {
+        throw new Error(
+          `Precio invalido para el producto ${product?.name || product?._id}.`,
+        );
+      }
+
+      return Number(trustedPrice);
+    };
 
     // 1. Validation (Business Rules)
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -203,11 +224,7 @@ export class RegisterPromotionSaleUseCase {
       0,
     );
     const additionalTotal = additionalChargesTotal + additionalAdjustmentsTotal;
-    const totalSubtotal = items.reduce(
-      (sum, item) =>
-        sum + Number(item.salePrice || 0) * Number(item.quantity || 0),
-      0,
-    );
+    let totalSubtotal = 0;
 
     const normalizedWarranties = Array.isArray(warranties) ? warranties : [];
     const warrantyItems = [];
@@ -239,23 +256,45 @@ export class RegisterPromotionSaleUseCase {
       });
     }
 
-    const requiredByProduct = new Map();
-    items.forEach((item) => {
-      const key = String(item.productId);
-      requiredByProduct.set(
-        key,
-        (requiredByProduct.get(key) || 0) + Number(item.quantity || 0),
-      );
-    });
-    warrantyItems.forEach((warranty) => {
-      const key = String(warranty.productId);
-      requiredByProduct.set(
-        key,
-        (requiredByProduct.get(key) || 0) + Number(warranty.quantity || 0),
-      );
-    });
-
     const productCache = new Map();
+    const trustedItems = [];
+
+    for (const item of items) {
+      const productId = item?.productId;
+      const quantity = Number(item?.quantity || 0);
+
+      if (!productId) {
+        throw new Error("Producto invalido en items de venta promocional.");
+      }
+
+      if (!Number.isFinite(quantity) || quantity <= 0) {
+        throw new Error(`Invalid quantity for product ${productId}`);
+      }
+
+      const product = await this.productRepository.findByIdForBusiness(
+        productId,
+        businessId,
+        { bypassBusinessScope },
+      );
+
+      if (!product) {
+        throw new Error(`Product not found: ${productId}`);
+      }
+
+      const salePrice = resolveTrustedSalePrice(product);
+
+      productCache.set(String(productId), product);
+      trustedItems.push({
+        ...item,
+        productId,
+        quantity,
+        product,
+        salePrice,
+      });
+    }
+
+    const requiredByProduct = new Map();
+
     let warrantyLossTotal = 0;
 
     for (const warranty of warrantyItems) {
@@ -263,7 +302,11 @@ export class RegisterPromotionSaleUseCase {
       const productKey = String(warranty.productId);
       const product =
         productCache.get(productKey) ||
-        (await this.productRepository.findById(warranty.productId));
+        (await this.productRepository.findByIdForBusiness(
+          warranty.productId,
+          businessId,
+          { bypassBusinessScope },
+        ));
 
       if (!product) {
         throw new Error(`Product not found: ${warranty.productId}`);
@@ -313,7 +356,11 @@ export class RegisterPromotionSaleUseCase {
         };
       }
 
-      const product = await this.productRepository.findById(productId);
+      const product = await this.productRepository.findByIdForBusiness(
+        productId,
+        businessId,
+        { bypassBusinessScope },
+      );
       return {
         availableStock: product?.warehouseStock ?? 0,
         stockOrigin: "warehouse",
@@ -322,7 +369,7 @@ export class RegisterPromotionSaleUseCase {
 
     const promotionIds = Array.from(
       new Set(
-        items
+        trustedItems
           .map((item) => {
             if (!item.promotionId) return null;
             if (typeof item.promotionId === "object") {
@@ -348,7 +395,58 @@ export class RegisterPromotionSaleUseCase {
         promotionMap.set(String(promo._id), promo);
       });
     }
-    const promotionTotals = items.reduce((acc, item) => {
+
+    const scopedItems = trustedItems.map((item) => {
+      const promotionKey = normalizeId(item.promotionId);
+      if (!promotionKey) {
+        return item;
+      }
+
+      const promotionData = promotionMap.get(promotionKey);
+      if (!promotionData) {
+        throw new Error("Promocion no encontrada para aplicar precio B2B.");
+      }
+
+      const comboMatch = Array.isArray(promotionData.comboItems)
+        ? promotionData.comboItems.find(
+            (comboItem) =>
+              normalizeId(comboItem.product) === String(item.productId),
+          )
+        : null;
+
+      const promotionUnitPrice = Number(comboMatch?.unitPrice || 0);
+      if (Number.isFinite(promotionUnitPrice) && promotionUnitPrice > 0) {
+        return {
+          ...item,
+          salePrice: promotionUnitPrice,
+        };
+      }
+
+      return item;
+    });
+
+    totalSubtotal = scopedItems.reduce(
+      (sum, item) =>
+        sum + Number(item.salePrice || 0) * Number(item.quantity || 0),
+      0,
+    );
+
+    scopedItems.forEach((item) => {
+      const key = String(item.productId);
+      requiredByProduct.set(
+        key,
+        (requiredByProduct.get(key) || 0) + Number(item.quantity || 0),
+      );
+    });
+    warrantyItems.forEach((warranty) => {
+      const key = String(warranty.productId);
+      requiredByProduct.set(
+        key,
+        (requiredByProduct.get(key) || 0) + Number(warranty.quantity || 0),
+      );
+    });
+
+    const promotionTotals = scopedItems.reduce((acc, item) => {
       const rawPromotionId = item.promotionId;
       if (!rawPromotionId) return acc;
       const key = String(
@@ -382,7 +480,7 @@ export class RegisterPromotionSaleUseCase {
           ? warehouseBranchId
           : null;
 
-    items.forEach((item) => {
+    scopedItems.forEach((item) => {
       const rawPromotionId = item.promotionId;
       if (!rawPromotionId) return;
       const key = normalizeId(rawPromotionId);
@@ -504,8 +602,8 @@ export class RegisterPromotionSaleUseCase {
       promotionUsageSummary.set(promotionKey, summary);
     });
 
-    for (const item of items) {
-      const { productId, quantity, salePrice, promotionId } = item;
+    for (const item of scopedItems) {
+      const { productId, quantity, salePrice, promotionId, product } = item;
       const itemSubtotal = Number(salePrice || 0) * Number(quantity || 0);
       const discountShare =
         totalSubtotal > 0 ? (itemSubtotal / totalSubtotal) * discountTotal : 0;
@@ -517,12 +615,6 @@ export class RegisterPromotionSaleUseCase {
         0,
         itemSubtotal - discountShare - additionalShare,
       );
-
-      if (quantity <= 0)
-        throw new Error(`Invalid quantity for product ${productId}`);
-
-      const product = await this.productRepository.findById(productId);
-      if (!product) throw new Error(`Product not found: ${productId}`);
 
       productCache.set(String(productId), product);
 
@@ -681,7 +773,11 @@ export class RegisterPromotionSaleUseCase {
 
       const product =
         productCache.get(productKey) ||
-        (await this.productRepository.findById(warranty.productId));
+        (await this.productRepository.findByIdForBusiness(
+          warranty.productId,
+          businessId,
+          { bypassBusinessScope },
+        ));
       if (!product) {
         throw new Error(`Product not found: ${warranty.productId}`);
       }
@@ -920,16 +1016,24 @@ export class RegisterPromotionSaleUseCase {
         console.log(`📦 Deducted ${quantity} from BranchStock (admin sale)`);
       } else {
         // Admin Sale → Deduct from Warehouse
-        await this.productRepository.updateWarehouseStock(
+        await this.productRepository.updateWarehouseStockForBusiness(
           productId,
+          businessId,
           -quantity,
           session,
+          { bypassBusinessScope },
         );
         console.log(`📦 Deducted ${quantity} from Warehouse (admin sale)`);
       }
 
       // Always update global totalStock counter for statistics
-      await this.productRepository.updateStock(productId, -quantity, session);
+      await this.productRepository.updateStockForBusiness(
+        productId,
+        businessId,
+        -quantity,
+        session,
+        { bypassBusinessScope },
+      );
 
       await InventoryMovement.create(
         [
@@ -1049,7 +1153,11 @@ export class RegisterPromotionSaleUseCase {
         const productKey = String(warranty.productId);
         const product =
           productCache.get(productKey) ||
-          (await this.productRepository.findById(warranty.productId));
+          (await this.productRepository.findByIdForBusiness(
+            warranty.productId,
+            businessId,
+            { bypassBusinessScope },
+          ));
 
         if (!product) {
           throw new Error(`Product not found: ${warranty.productId}`);
@@ -1093,17 +1201,21 @@ export class RegisterPromotionSaleUseCase {
             );
           }
         } else {
-          await this.productRepository.updateWarehouseStock(
+          await this.productRepository.updateWarehouseStockForBusiness(
             warranty.productId,
+            businessId,
             -quantity,
             session,
+            { bypassBusinessScope },
           );
         }
 
-        await this.productRepository.updateStock(
+        await this.productRepository.updateStockForBusiness(
           warranty.productId,
+          businessId,
           -quantity,
           session,
+          { bypassBusinessScope },
         );
 
         const hasWarranty = warranty.type === "supplier_replacement";
@@ -1226,14 +1338,19 @@ export class RegisterPromotionSaleUseCase {
           saleId: results[0]?._id || null,
         },
         user.id,
+        session,
       );
 
       if (initialPayment && Number(initialPayment) > 0) {
         await CreditRepository.registerPayment(
-          credit._id,
-          Number(initialPayment),
-          "Pago inicial",
-          user.id,
+          {
+            creditId: credit._id,
+            businessId,
+            amount: Number(initialPayment),
+            notes: "Pago inicial",
+            userId: user.id,
+          },
+          session,
         );
       }
     }

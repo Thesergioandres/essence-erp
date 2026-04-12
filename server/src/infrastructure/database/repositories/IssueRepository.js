@@ -16,7 +16,13 @@ export class IssueRepository {
     return [];
   }
 
-  async create(data, userId, userRole) {
+  async create(data, userId, userRole, businessId) {
+    if (!businessId) {
+      const err = new Error("Business ID requerido");
+      err.statusCode = 400;
+      throw err;
+    }
+
     const logs = this.sanitizeLogs(data.logs);
     const totalBytes = Buffer.byteLength(logs.join("\n"), "utf8");
 
@@ -27,6 +33,7 @@ export class IssueRepository {
     }
 
     const report = await IssueReport.create({
+      business: businessId,
       user: userId,
       role: userRole,
       message: data.message.trim(),
@@ -37,7 +44,7 @@ export class IssueRepository {
         url: data.clientContext?.url,
         userAgent: data.clientContext?.userAgent,
         appVersion: data.clientContext?.appVersion,
-        businessId: data.clientContext?.businessId,
+        businessId,
       },
       screenshotUrl: data.screenshotUrl,
       screenshotPublicId: data.screenshotPublicId,
@@ -46,8 +53,14 @@ export class IssueRepository {
     return report;
   }
 
-  async findAll(filters = {}) {
-    const query = {};
+  async findAll(filters = {}, businessId) {
+    if (!businessId) {
+      const err = new Error("Business ID requerido");
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const query = { business: businessId };
 
     if (filters.status) {
       query.status = filters.status;
@@ -82,16 +95,28 @@ export class IssueRepository {
     };
   }
 
-  async findById(id) {
-    const report = await IssueReport.findById(id)
+  async findById(id, businessId) {
+    if (!businessId) {
+      const err = new Error("Business ID requerido");
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const report = await IssueReport.findOne({ _id: id, business: businessId })
       .populate("user", "name email role")
       .lean();
     return report;
   }
 
-  async updateStatus(id, status) {
-    const report = await IssueReport.findByIdAndUpdate(
-      id,
+  async updateStatus(id, status, businessId) {
+    if (!businessId) {
+      const err = new Error("Business ID requerido");
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const report = await IssueReport.findOneAndUpdate(
+      { _id: id, business: businessId },
       { status },
       { new: true },
     );

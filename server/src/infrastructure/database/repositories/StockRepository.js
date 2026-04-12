@@ -25,68 +25,88 @@ const getBodegaBranchIds = async (businessId) => {
 };
 
 class StockRepository {
+  async runInTransaction(handler) {
+    const session = await mongoose.startSession();
+    try {
+      let result;
+      await session.withTransaction(async () => {
+        result = await handler(session);
+      });
+      return result;
+    } finally {
+      await session.endSession();
+    }
+  }
+
   async assignToDistributor(businessId, distributorId, productId, quantity) {
-    const product = await Product.findOne({
-      _id: productId,
-      business: businessId,
-    });
-    if (!product || product.warehouseStock < quantity) {
-      throw new Error("Stock insuficiente");
+    const normalizedQty = Number(quantity);
+    if (!Number.isFinite(normalizedQty) || normalizedQty <= 0) {
+      throw new Error("Cantidad inválida");
     }
 
-    let distStock;
-    try {
-      distStock = await DistributorStock.findOneAndUpdate(
+    return this.runInTransaction(async (session) => {
+      const product = await Product.findOneAndUpdate(
         {
-          distributor: distributorId,
-          product: productId,
+          _id: productId,
           business: businessId,
+          warehouseStock: { $gte: normalizedQty },
         },
-        {
-          $inc: { quantity },
-          $setOnInsert: {
+        { $inc: { warehouseStock: -normalizedQty } },
+        { new: true, session },
+      );
+
+      if (!product) {
+        throw new Error("Stock insuficiente");
+      }
+
+      let distStock;
+      try {
+        distStock = await DistributorStock.findOneAndUpdate(
+          {
             distributor: distributorId,
             product: productId,
             business: businessId,
           },
-        },
-        { new: true, upsert: true },
-      );
-    } catch (error) {
-      if (error?.code === 11000) {
-        distStock = await DistributorStock.findOneAndUpdate(
-          { distributor: distributorId, product: productId },
-          { $inc: { quantity } },
-          { new: true },
+          {
+            $inc: { quantity: normalizedQty },
+            $setOnInsert: {
+              distributor: distributorId,
+              product: productId,
+              business: businessId,
+            },
+          },
+          { new: true, upsert: true, session },
         );
-      } else {
-        throw error;
+      } catch (error) {
+        if (error?.code === 11000) {
+          distStock = await DistributorStock.findOneAndUpdate(
+            {
+              distributor: distributorId,
+              product: productId,
+              business: businessId,
+            },
+            { $inc: { quantity: normalizedQty } },
+            { new: true, session },
+          );
+        } else {
+          throw error;
+        }
       }
-    }
 
-    const updated = await Product.findOneAndUpdate(
-      {
-        _id: productId,
-        business: businessId,
-        warehouseStock: { $gte: quantity },
-      },
-      { $inc: { warehouseStock: -quantity } },
-      { new: true },
-    );
+      const user = await User.findById(distributorId).session(session);
+      if (
+        user &&
+        !user.assignedProducts.some(
+          (assignedProductId) =>
+            String(assignedProductId) === String(productId),
+        )
+      ) {
+        user.assignedProducts.push(productId);
+        await user.save({ session });
+      }
 
-    if (!updated) {
-      distStock.quantity -= quantity;
-      await distStock.save();
-      throw new Error("Fallo en actualización concurrente");
-    }
-
-    const user = await User.findById(distributorId);
-    if (user && !user.assignedProducts.includes(productId)) {
-      user.assignedProducts.push(productId);
-      await user.save();
-    }
-
-    return { distStock, product: updated };
+      return { distStock, product };
+    });
   }
 
   async withdrawFromDistributor(
@@ -100,26 +120,28 @@ class StockRepository {
       throw new Error("Cantidad inválida");
     }
 
-    const stockUpdate = await DistributorStock.findOneAndUpdate(
-      {
-        business: businessId,
-        distributor: distributorId,
-        product: productId,
-        quantity: { $gte: normalizedQty },
-      },
-      { $inc: { quantity: -normalizedQty } },
-      { new: true },
-    );
+    return this.runInTransaction(async (session) => {
+      const stockUpdate = await DistributorStock.findOneAndUpdate(
+        {
+          business: businessId,
+          distributor: distributorId,
+          product: productId,
+          quantity: { $gte: normalizedQty },
+        },
+        { $inc: { quantity: -normalizedQty } },
+        { new: true, session },
+      );
 
-    if (!stockUpdate) throw new Error("Stock insuficiente");
+      if (!stockUpdate) throw new Error("Stock insuficiente");
 
-    const product = await Product.findOneAndUpdate(
-      { _id: productId, business: businessId },
-      { $inc: { warehouseStock: normalizedQty } },
-      { new: true },
-    );
+      const product = await Product.findOneAndUpdate(
+        { _id: productId, business: businessId },
+        { $inc: { warehouseStock: normalizedQty } },
+        { new: true, session },
+      );
 
-    return { stockUpdate, product };
+      return { stockUpdate, product };
+    });
   }
 
   async transferBetweenDistributors(
@@ -132,60 +154,82 @@ class StockRepository {
     if (fromDistributorId === toDistributorId) {
       throw new Error("No puedes transferir al mismo distribuidor");
     }
-    const fromStock = await DistributorStock.findOne({
-      business: businessId,
-      distributor: fromDistributorId,
-      product: productId,
-    });
 
-    if (!fromStock || fromStock.quantity < quantity) {
-      throw new Error("Stock insuficiente");
+    const normalizedQty = Number(quantity);
+    if (!Number.isFinite(normalizedQty) || normalizedQty <= 0) {
+      throw new Error("Cantidad inválida");
     }
 
-    let toStock = await DistributorStock.findOne({
-      business: businessId,
-      distributor: toDistributorId,
-      product: productId,
+    return this.runInTransaction(async (session) => {
+      const fromStock = await DistributorStock.findOneAndUpdate(
+        {
+          business: businessId,
+          distributor: fromDistributorId,
+          product: productId,
+          quantity: { $gte: normalizedQty },
+        },
+        { $inc: { quantity: -normalizedQty } },
+        { new: true, session },
+      );
+
+      if (!fromStock) {
+        throw new Error("Stock insuficiente");
+      }
+
+      const fromBefore = Number(fromStock.quantity || 0) + normalizedQty;
+
+      const toStock = await DistributorStock.findOneAndUpdate(
+        {
+          business: businessId,
+          distributor: toDistributorId,
+          product: productId,
+        },
+        {
+          $inc: { quantity: normalizedQty },
+          $setOnInsert: {
+            business: businessId,
+            distributor: toDistributorId,
+            product: productId,
+          },
+        },
+        { new: true, upsert: true, session },
+      );
+
+      const toAfter = Number(toStock?.quantity || 0);
+      const toBefore = Math.max(0, toAfter - normalizedQty);
+
+      const [transfer] = await StockTransfer.create(
+        [
+          {
+            business: businessId,
+            fromDistributor: fromDistributorId,
+            toDistributor: toDistributorId,
+            product: productId,
+            quantity: normalizedQty,
+            fromStockBefore: fromBefore,
+            fromStockAfter: Number(fromStock.quantity || 0),
+            toStockBefore: toBefore,
+            toStockAfter: toAfter,
+            status: "completed",
+          },
+        ],
+        { session },
+      );
+
+      const toUser = await User.findById(toDistributorId).session(session);
+      if (
+        toUser &&
+        !toUser.assignedProducts.some(
+          (assignedProductId) =>
+            String(assignedProductId) === String(productId),
+        )
+      ) {
+        toUser.assignedProducts.push(productId);
+        await toUser.save({ session });
+      }
+
+      return { fromStock, toStock, transfer };
     });
-
-    const fromBefore = fromStock.quantity;
-    const toBefore = toStock?.quantity || 0;
-
-    fromStock.quantity -= quantity;
-    await fromStock.save();
-
-    if (!toStock) {
-      toStock = await DistributorStock.create({
-        business: businessId,
-        distributor: toDistributorId,
-        product: productId,
-        quantity,
-      });
-    } else {
-      toStock.quantity += quantity;
-      await toStock.save();
-    }
-
-    const transfer = await StockTransfer.create({
-      business: businessId,
-      fromDistributor: fromDistributorId,
-      toDistributor: toDistributorId,
-      product: productId,
-      quantity,
-      fromStockBefore: fromBefore,
-      fromStockAfter: fromStock.quantity,
-      toStockBefore: toBefore,
-      toStockAfter: toStock.quantity,
-      status: "completed",
-    });
-
-    const toUser = await User.findById(toDistributorId);
-    if (toUser && !toUser.assignedProducts.includes(productId)) {
-      toUser.assignedProducts.push(productId);
-      await toUser.save();
-    }
-
-    return { fromStock, toStock, transfer };
   }
 
   async transferToBranchFromDistributor(
@@ -195,102 +239,106 @@ class StockRepository {
     productId,
     quantity,
   ) {
-    const branch = await Branch.findOne({
-      _id: toBranchId,
-      business: businessId,
-    });
-
-    if (!branch) {
-      throw new Error("Sede no encontrada");
+    const normalizedQty = Number(quantity);
+    if (!Number.isFinite(normalizedQty) || normalizedQty <= 0) {
+      throw new Error("Cantidad inválida");
     }
 
-    const redirectToWarehouse = isBodegaBranch(branch);
-
-    const fromStock = await DistributorStock.findOne({
-      business: businessId,
-      distributor: fromDistributorId,
-      product: productId,
-    });
-
-    if (!fromStock || fromStock.quantity < quantity) {
-      throw new Error("Stock insuficiente");
-    }
-
-    fromStock.quantity -= quantity;
-    await fromStock.save();
-
-    const fromBefore = fromStock.quantity + quantity;
-    const fromAfter = fromStock.quantity;
-
-    let toBefore = 0;
-    let toAfter = 0;
-
-    if (redirectToWarehouse) {
-      const product = await Product.findOne({
-        _id: productId,
+    return this.runInTransaction(async (session) => {
+      const branch = await Branch.findOne({
+        _id: toBranchId,
         business: businessId,
-      });
-      if (!product) {
-        throw new Error("Producto no encontrado");
+      }).session(session);
+
+      if (!branch) {
+        throw new Error("Sede no encontrada");
       }
 
-      toBefore = product.warehouseStock || 0;
-      product.warehouseStock = toBefore + quantity;
-      toAfter = product.warehouseStock;
-      await product.save();
+      const redirectToWarehouse = isBodegaBranch(branch);
 
-      await StockTransfer.create({
-        business: businessId,
-        fromDistributor: fromDistributorId,
-        toBranch: toBranchId,
-        product: productId,
-        quantity,
-        fromStockBefore: fromBefore,
-        fromStockAfter: fromAfter,
-        toStockBefore: toBefore,
-        toStockAfter: toAfter,
-        status: "completed",
-      });
+      const fromStock = await DistributorStock.findOneAndUpdate(
+        {
+          business: businessId,
+          distributor: fromDistributorId,
+          product: productId,
+          quantity: { $gte: normalizedQty },
+        },
+        { $inc: { quantity: -normalizedQty } },
+        { new: true, session },
+      );
 
-      return { fromStock, branchStock: null };
-    }
+      if (!fromStock) {
+        throw new Error("Stock insuficiente");
+      }
 
-    let branchStock = await BranchStock.findOne({
-      business: businessId,
-      branch: toBranchId,
-      product: productId,
+      const fromBefore = Number(fromStock.quantity || 0) + normalizedQty;
+      const fromAfter = Number(fromStock.quantity || 0);
+
+      let toBefore = 0;
+      let toAfter = 0;
+      let branchStock = null;
+
+      if (redirectToWarehouse) {
+        const product = await Product.findOneAndUpdate(
+          {
+            _id: productId,
+            business: businessId,
+          },
+          { $inc: { warehouseStock: normalizedQty } },
+          { new: true, session },
+        );
+
+        if (!product) {
+          throw new Error("Producto no encontrado");
+        }
+
+        toAfter = Number(product.warehouseStock || 0);
+        toBefore = Math.max(0, toAfter - normalizedQty);
+      } else {
+        branchStock = await BranchStock.findOneAndUpdate(
+          {
+            business: businessId,
+            branch: toBranchId,
+            product: productId,
+          },
+          {
+            $inc: { quantity: normalizedQty },
+            $setOnInsert: {
+              business: businessId,
+              branch: toBranchId,
+              product: productId,
+            },
+          },
+          { new: true, upsert: true, session },
+        );
+
+        toAfter = Number(branchStock?.quantity || 0);
+        toBefore = Math.max(0, toAfter - normalizedQty);
+      }
+
+      await StockTransfer.create(
+        [
+          {
+            business: businessId,
+            fromDistributor: fromDistributorId,
+            toBranch: toBranchId,
+            product: productId,
+            quantity: normalizedQty,
+            fromStockBefore: fromBefore,
+            fromStockAfter: fromAfter,
+            toStockBefore: toBefore,
+            toStockAfter: toAfter,
+            status: "completed",
+          },
+        ],
+        { session },
+      );
+
+      return {
+        fromStock,
+        branchStock: redirectToWarehouse ? null : branchStock,
+      };
     });
-
-    if (!branchStock) {
-      toBefore = 0;
-      branchStock = await BranchStock.create({
-        business: businessId,
-        branch: toBranchId,
-        product: productId,
-        quantity,
-      });
-      toAfter = quantity;
-    } else {
-      toBefore = branchStock.quantity;
-      branchStock.quantity += quantity;
-      toAfter = branchStock.quantity;
-      await branchStock.save();
-    }
-
-    await StockTransfer.create({
-      business: businessId,
-      fromDistributor: fromDistributorId,
-      toBranch: toBranchId,
-      product: productId,
-      quantity,
-      fromStockBefore: fromBefore,
-      fromStockAfter: fromAfter,
-      toStockBefore: toBefore,
-      toStockAfter: toAfter,
-      status: "completed",
-    });
-
-    return { fromStock, branchStock };
   }
 
   async getDistributorStock(businessId, distributorId) {

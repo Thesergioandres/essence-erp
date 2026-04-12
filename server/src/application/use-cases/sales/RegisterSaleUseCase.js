@@ -84,6 +84,27 @@ export class RegisterSaleUseCase {
     };
 
     const resolvedSaleDate = resolveSaleDate(saleDate);
+    const bypassBusinessScope = user?.role === "god";
+    const resolveTrustedSalePrice = (product) => {
+      const candidates = [
+        product?.clientPrice,
+        product?.price,
+        product?.salePrice,
+        product?.suggestedPrice,
+      ];
+
+      const trustedPrice = candidates.find(
+        (value) => Number.isFinite(Number(value)) && Number(value) > 0,
+      );
+
+      if (!Number.isFinite(Number(trustedPrice)) || Number(trustedPrice) <= 0) {
+        throw new Error(
+          `Precio invalido para el producto ${product?.name || product?._id}.`,
+        );
+      }
+
+      return Number(trustedPrice);
+    };
 
     // 1. Validation (Business Rules)
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -200,11 +221,7 @@ export class RegisterSaleUseCase {
       0,
     );
     const additionalTotal = additionalChargesTotal + additionalAdjustmentsTotal;
-    const totalSubtotal = items.reduce(
-      (sum, item) =>
-        sum + Number(item.salePrice || 0) * Number(item.quantity || 0),
-      0,
-    );
+    let totalSubtotal = 0;
 
     const normalizedWarranties = Array.isArray(warranties) ? warranties : [];
     const warrantyItems = [];
@@ -236,8 +253,51 @@ export class RegisterSaleUseCase {
       });
     }
 
+    const productCache = new Map();
+    const trustedItems = [];
+
+    for (const item of items) {
+      const productId = item?.productId;
+      const quantity = Number(item?.quantity || 0);
+
+      if (!productId) {
+        throw new Error("Producto invalido en items de venta.");
+      }
+
+      if (!Number.isFinite(quantity) || quantity <= 0) {
+        throw new Error(`Invalid quantity for product ${productId}`);
+      }
+
+      const product = await this.productRepository.findByIdForBusiness(
+        productId,
+        businessId,
+        { bypassBusinessScope },
+      );
+
+      if (!product) {
+        throw new Error(`Product not found: ${productId}`);
+      }
+
+      const salePrice = resolveTrustedSalePrice(product);
+
+      productCache.set(String(productId), product);
+      trustedItems.push({
+        ...item,
+        productId,
+        quantity,
+        product,
+        salePrice,
+      });
+    }
+
+    totalSubtotal = trustedItems.reduce(
+      (sum, item) =>
+        sum + Number(item.salePrice || 0) * Number(item.quantity || 0),
+      0,
+    );
+
     const requiredByProduct = new Map();
-    items.forEach((item) => {
+    trustedItems.forEach((item) => {
       const key = String(item.productId);
       requiredByProduct.set(
         key,
@@ -252,7 +312,6 @@ export class RegisterSaleUseCase {
       );
     });
 
-    const productCache = new Map();
     let warrantyLossTotal = 0;
 
     for (const warranty of warrantyItems) {
@@ -260,7 +319,11 @@ export class RegisterSaleUseCase {
       const productKey = String(warranty.productId);
       const product =
         productCache.get(productKey) ||
-        (await this.productRepository.findById(warranty.productId));
+        (await this.productRepository.findByIdForBusiness(
+          warranty.productId,
+          businessId,
+          { bypassBusinessScope },
+        ));
 
       if (!product) {
         throw new Error(`Product not found: ${warranty.productId}`);
@@ -352,35 +415,19 @@ export class RegisterSaleUseCase {
         };
       }
 
-      const product = await this.productRepository.findById(productId);
+      const product = await this.productRepository.findByIdForBusiness(
+        productId,
+        businessId,
+        { bypassBusinessScope },
+      );
       return {
         availableStock: product?.warehouseStock ?? 0,
         stockOrigin: "warehouse",
       };
     };
 
-    for (const item of items) {
-      const { productId, quantity } = item;
-
-      if (quantity <= 0)
-        throw new Error(`Invalid quantity for product ${productId}`);
-
-      // 🛡️ Anti-IDOR y Anti-Manipulación de Precios
-      const product = await this.productRepository.findById(productId);
-      if (!product) throw new Error(`Product not found: ${productId}`);
-
-      // Muro Anti-IDOR: Verificar pertinencia de negocio si NO es GOD
-      if (
-        user?.role !== "god" &&
-        String(product.business) !== String(businessId)
-      ) {
-        throw new Error(
-          `Acceso denegado: El producto no pertenece a tu negocio.`,
-        );
-      }
-
-      // Anti-Manipulación: Siempre usar el precio real almacenado en la BD
-      const salePrice = product.price || product.salePrice || 0;
+    for (const item of trustedItems) {
+      const { productId, quantity, product, salePrice } = item;
 
       const itemSubtotal = Number(salePrice || 0) * Number(quantity || 0);
       const discountShare =
@@ -516,7 +563,11 @@ export class RegisterSaleUseCase {
 
       const product =
         productCache.get(productKey) ||
-        (await this.productRepository.findById(warranty.productId));
+        (await this.productRepository.findByIdForBusiness(
+          warranty.productId,
+          businessId,
+          { bypassBusinessScope },
+        ));
       if (!product) {
         throw new Error(`Product not found: ${warranty.productId}`);
       }
@@ -732,16 +783,24 @@ export class RegisterSaleUseCase {
         console.log(`📦 Deducted ${quantity} from BranchStock (admin sale)`);
       } else {
         // Admin Sale → Deduct from Warehouse
-        await this.productRepository.updateWarehouseStock(
+        await this.productRepository.updateWarehouseStockForBusiness(
           productId,
+          businessId,
           -quantity,
           session,
+          { bypassBusinessScope },
         );
         console.log(`📦 Deducted ${quantity} from Warehouse (admin sale)`);
       }
 
       // Always update global totalStock counter for statistics
-      await this.productRepository.updateStock(productId, -quantity, session);
+      await this.productRepository.updateStockForBusiness(
+        productId,
+        businessId,
+        -quantity,
+        session,
+        { bypassBusinessScope },
+      );
 
       // G. Create ProfitHistory entries for tracking
       // Only create entries for CONFIRMED sales
@@ -832,7 +891,11 @@ export class RegisterSaleUseCase {
         const productKey = String(warranty.productId);
         const product =
           productCache.get(productKey) ||
-          (await this.productRepository.findById(warranty.productId));
+          (await this.productRepository.findByIdForBusiness(
+            warranty.productId,
+            businessId,
+            { bypassBusinessScope },
+          ));
 
         if (!product) {
           throw new Error(`Product not found: ${warranty.productId}`);
@@ -876,17 +939,21 @@ export class RegisterSaleUseCase {
             );
           }
         } else {
-          await this.productRepository.updateWarehouseStock(
+          await this.productRepository.updateWarehouseStockForBusiness(
             warranty.productId,
+            businessId,
             -quantity,
             session,
+            { bypassBusinessScope },
           );
         }
 
-        await this.productRepository.updateStock(
+        await this.productRepository.updateStockForBusiness(
           warranty.productId,
+          businessId,
           -quantity,
           session,
+          { bypassBusinessScope },
         );
 
         const hasWarranty = warranty.type === "supplier_replacement";
@@ -963,14 +1030,19 @@ export class RegisterSaleUseCase {
           saleId: results[0]?._id || null,
         },
         user.id,
+        session,
       );
 
       if (initialPayment && Number(initialPayment) > 0) {
         await CreditRepository.registerPayment(
-          credit._id,
-          Number(initialPayment),
-          "Pago inicial",
-          user.id,
+          {
+            creditId: credit._id,
+            businessId,
+            amount: Number(initialPayment),
+            notes: "Pago inicial",
+            userId: user.id,
+          },
+          session,
         );
       }
     }

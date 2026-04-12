@@ -9,9 +9,18 @@ const calculate = async () => {
     await mongoose.connect(process.env.MONGODB_URI);
     console.log("Connected to DB");
 
+    const businessId = process.env.VERIFY_BUSINESS_ID;
+    const distributorId = process.env.VERIFY_DISTRIBUTOR_ID;
+
+    if (!businessId || !distributorId) {
+      throw new Error(
+        "Debes definir VERIFY_BUSINESS_ID y VERIFY_DISTRIBUTOR_ID en variables de entorno.",
+      );
+    }
+
     const sales = await Sale.find({
-      business: new mongoose.Types.ObjectId("697963c5af6ac901be43bf57"), // Assuming this is the business
-      distributor: new mongoose.Types.ObjectId("697965a5af6ac901be43c23e"),
+      business: new mongoose.Types.ObjectId(businessId),
+      distributor: new mongoose.Types.ObjectId(distributorId),
     }).lean();
 
     console.log(`Found ${sales.length} confirmed sales`);

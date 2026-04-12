@@ -1,14 +1,17 @@
 import mongoose from "mongoose";
+import { ConfirmSalePaymentUseCase } from "../../../application/use-cases/sales/ConfirmSalePaymentUseCase.js";
+import { applySaleGamification } from "../../services/gamification.service.js";
 import Credit from "../models/Credit.js";
 import CreditPayment from "../models/CreditPayment.js";
 import Customer from "../models/Customer.js";
 import Notification from "../models/Notification.js";
 import Product from "../models/Product.js";
 import Sale from "../models/Sale.js";
-import { applySaleGamification } from "../../services/gamification.service.js";
+
+const confirmSalePaymentUseCase = new ConfirmSalePaymentUseCase();
 
 class CreditRepository {
-  async create(businessId, data, userId) {
+  async create(businessId, data, userId, existingSession = null) {
     const {
       customerId,
       amount,
@@ -19,53 +22,95 @@ class CreditRepository {
       branchId,
     } = data;
 
-    const customer = await Customer.findOne({
-      _id: customerId,
-      business: businessId,
-    });
-    if (!customer) throw new Error("Cliente no encontrado");
+    const ownsSession = !existingSession;
+    const session = existingSession || (await mongoose.startSession());
+    let createdCredit = null;
+    let customerNameForNotification = "Cliente";
 
-    const credit = await Credit.create({
-      customer: customerId,
-      business: businessId,
-      sale: saleId || null,
-      branch: branchId || null,
-      createdBy: userId,
-      originalAmount: amount,
-      remainingAmount: amount,
-      dueDate: dueDate ? new Date(dueDate) : null,
-      description,
-      items: items || [],
-    });
-
-    if (saleId) {
-      await Sale.findByIdAndUpdate(saleId, {
-        isCredit: true,
-        creditId: credit._id,
-        paymentStatus: "pending",
+    const createCreditCore = async () => {
+      const customerQuery = Customer.findOne({
+        _id: customerId,
+        business: businessId,
       });
+      const customer = await customerQuery.session(session);
+
+      if (!customer) throw new Error("Cliente no encontrado");
+      customerNameForNotification =
+        customer.name || customerNameForNotification;
+
+      const [credit] = await Credit.create(
+        [
+          {
+            customer: customerId,
+            business: businessId,
+            sale: saleId || null,
+            branch: branchId || null,
+            createdBy: userId,
+            originalAmount: amount,
+            remainingAmount: amount,
+            dueDate: dueDate ? new Date(dueDate) : null,
+            description,
+            items: items || [],
+          },
+        ],
+        { session },
+      );
+
+      if (saleId) {
+        await Sale.findOneAndUpdate(
+          { _id: saleId, business: businessId },
+          {
+            isCredit: true,
+            creditId: credit._id,
+            paymentStatus: "pending",
+          },
+          { session },
+        );
+      }
+
+      await Customer.findOneAndUpdate(
+        { _id: customerId, business: businessId },
+        {
+          $inc: { totalDebt: amount },
+          $addToSet: { segments: "con_deuda" },
+        },
+        { session },
+      );
+
+      if (session) {
+        await Notification.create(
+          [
+            {
+              business: businessId,
+              targetRole: "admin",
+              type: "credit_overdue",
+              title: "Nuevo fiado registrado",
+              message: `Se registró un fiado de $${Number(amount || 0).toFixed(2)} para ${customerNameForNotification}`,
+              priority: "medium",
+              link: `/credits/${credit._id}`,
+              relatedEntity: { type: "Credit", id: credit._id },
+            },
+          ],
+          { session },
+        );
+      }
+
+      createdCredit = credit;
+    };
+
+    try {
+      if (ownsSession) {
+        await session.withTransaction(createCreditCore);
+      } else {
+        await createCreditCore();
+      }
+    } finally {
+      if (ownsSession) {
+        await session.endSession();
+      }
     }
 
-    await Customer.findByIdAndUpdate(customerId, {
-      $inc: { totalDebt: amount },
-      $addToSet: { segments: "con_deuda" },
-    });
-
-    await Notification.createWithLog(
-      {
-        business: businessId,
-        targetRole: "admin",
-        type: "credit_overdue",
-        title: "Nuevo fiado registrado",
-        message: `Se registró un fiado de $${amount.toFixed(2)} para ${customer.name}`,
-        priority: "medium",
-        link: `/credits/${credit._id}`,
-        relatedEntity: { type: "Credit", id: credit._id },
-      },
-      `REQ-${Date.now()}`,
-    );
-
-    return credit;
+    return createdCredit;
   }
 
   async findByBusiness(businessId, filters, page, limit, userId, userRole) {
@@ -112,84 +157,146 @@ class CreditRepository {
       .populate("items.product", "name image purchasePrice suggestedPrice");
   }
 
-  async findPayments(creditId) {
-    return CreditPayment.find({ credit: creditId })
+  async findPayments(creditId, businessId) {
+    const filter = { credit: creditId };
+    if (businessId) {
+      filter.business = businessId;
+    }
+
+    return CreditPayment.find(filter)
       .populate("registeredBy", "name")
       .sort({ createdAt: -1 });
   }
 
-  async registerPayment(creditId, amount, notes, userId) {
-    const credit = await Credit.findById(creditId);
-    if (!credit) throw new Error("Crédito no encontrado");
+  async registerPayment(paymentInput, existingSession = null) {
+    const { creditId, businessId, amount, notes, userId } = paymentInput || {};
+
+    if (!creditId) {
+      throw new Error("Crédito no encontrado");
+    }
+
+    if (!businessId) {
+      throw new Error("Business ID requerido");
+    }
 
     const amountNumber = Number(amount);
     if (!Number.isFinite(amountNumber) || amountNumber <= 0) {
       throw new Error("El monto del abono es inválido");
     }
 
-    const balanceBefore = credit.remainingAmount || 0;
-    const balanceAfter = Math.max(0, balanceBefore - amountNumber);
+    const ownsSession = !existingSession;
+    const session = existingSession || (await mongoose.startSession());
+    let payment = null;
+    let updatedCredit = null;
+    let pendingGamification = false;
+    let saleForGamification = null;
 
-    const payment = await CreditPayment.create({
-      credit: creditId,
-      amount: amountNumber,
-      notes,
-      registeredBy: userId,
-      business: credit.business,
-      balanceBefore,
-      balanceAfter,
-      paymentDate: new Date(),
-    });
+    const registerPaymentCore = async () => {
+      const credit = await Credit.findOne({
+        _id: creditId,
+        business: businessId,
+      }).session(session);
 
-    credit.paidAmount += amountNumber;
-    credit.remainingAmount = balanceAfter;
-    if (credit.remainingAmount <= 0) {
-      credit.status = "paid";
-      credit.paidAt = new Date();
-    } else {
-      credit.status = "partial";
-    }
+      if (!credit) {
+        throw new Error("Crédito no encontrado");
+      }
 
-    if (Array.isArray(credit.paymentHistory)) {
-      credit.paymentHistory.push({
-        amount: amountNumber,
-        paidAt: new Date(),
-        registeredBy: userId,
-        notes,
-      });
-    }
+      const balanceBefore = Number(credit.remainingAmount || 0);
+      const balanceAfter = Math.max(0, balanceBefore - amountNumber);
+      const paymentDate = new Date();
 
-    await credit.save();
+      const [createdPayment] = await CreditPayment.create(
+        [
+          {
+            credit: creditId,
+            amount: amountNumber,
+            notes,
+            registeredBy: userId,
+            business: credit.business,
+            balanceBefore,
+            balanceAfter,
+            paymentDate,
+          },
+        ],
+        { session },
+      );
 
-    // 💰 FINANCIAL LOGIC FIX:
-    // If credit is fully paid, mark the original sale as CONFIRMED so it counts for profit.
-    if (credit.status === "paid" && credit.sale) {
-      await Sale.findByIdAndUpdate(credit.sale, {
-        paymentStatus: "confirmado",
-        paymentConfirmedAt: new Date(),
-        paymentConfirmedBy: userId,
-      });
-      const sale = await Sale.findById(credit.sale).lean();
-      if (sale?.distributor) {
-        const product = sale.product
-          ? await Product.findById(sale.product).lean()
-          : null;
-        await applySaleGamification({
-          businessId: credit.business,
-          sale,
-          product,
+      credit.paidAmount = Number(credit.paidAmount || 0) + amountNumber;
+      credit.remainingAmount = balanceAfter;
+      if (balanceAfter <= 0) {
+        credit.status = "paid";
+        credit.paidAt = paymentDate;
+      } else {
+        credit.status = "partial";
+      }
+
+      if (Array.isArray(credit.paymentHistory)) {
+        credit.paymentHistory.push({
+          amount: amountNumber,
+          paidAt: paymentDate,
+          registeredBy: userId,
+          notes,
         });
       }
-      console.log(
-        `✅ Credit Paid! Linked Sale ${credit.sale} marked as confirmed.`,
+
+      await credit.save({ session });
+
+      await Customer.findOneAndUpdate(
+        { _id: credit.customer, business: businessId },
+        { $inc: { totalDebt: -amountNumber } },
+        { session },
       );
+
+      if (credit.status === "paid" && credit.sale) {
+        const confirmationResult = await confirmSalePaymentUseCase.execute(
+          {
+            saleId: credit.sale,
+            businessId,
+            userId,
+          },
+          {
+            session,
+            deferGamification: true,
+          },
+        );
+
+        pendingGamification = confirmationResult.gamificationPending;
+        saleForGamification = confirmationResult.sale || null;
+      }
+
+      payment = createdPayment;
+      updatedCredit = credit;
+    };
+
+    try {
+      if (ownsSession) {
+        await session.withTransaction(registerPaymentCore);
+      } else {
+        await registerPaymentCore();
+      }
+    } finally {
+      if (ownsSession) {
+        await session.endSession();
+      }
     }
 
-    await Customer.findByIdAndUpdate(credit.customer, {
-      $inc: { totalDebt: -amountNumber },
-    });
+    if (
+      ownsSession &&
+      pendingGamification &&
+      saleForGamification?.distributor
+    ) {
+      const product = saleForGamification.product
+        ? await Product.findById(saleForGamification.product).lean()
+        : null;
 
-    return { payment, credit };
+      await applySaleGamification({
+        businessId,
+        sale: saleForGamification,
+        product,
+      });
+    }
+
+    return { payment, credit: updatedCredit };
   }
 
   async getMetrics(businessId) {

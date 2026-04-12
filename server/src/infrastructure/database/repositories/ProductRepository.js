@@ -2,10 +2,26 @@ import Branch from "../models/Branch.js";
 import BranchStock from "../models/BranchStock.js";
 import DistributorStock from "../models/DistributorStock.js";
 import InventoryEntry from "../models/InventoryEntry.js";
-import User from "../models/User.js";
 import Product from "../models/Product.js";
+import User from "../models/User.js";
 
 export class ProductRepository {
+  buildProductScopeQuery(productId, businessId, bypassBusinessScope = false) {
+    if (!productId) {
+      throw new Error("Product ID is required");
+    }
+
+    if (bypassBusinessScope) {
+      return { _id: productId };
+    }
+
+    if (!businessId) {
+      throw new Error("Business ID is required");
+    }
+
+    return { _id: productId, business: businessId };
+  }
+
   /**
    * Find product by ID
    * @param {string} id
@@ -13,6 +29,26 @@ export class ProductRepository {
    */
   async findById(id) {
     return Product.findById(id).lean();
+  }
+
+  /**
+   * Find product by ID scoped to business (Anti-IDOR)
+   * @param {string} productId
+   * @param {string} businessId
+   * @param {{ bypassBusinessScope?: boolean, session?: import("mongoose").ClientSession }} options
+   * @returns {Promise<Object|null>}
+   */
+  async findByIdForBusiness(productId, businessId, options = {}) {
+    const { bypassBusinessScope = false, session } = options;
+    const query = this.buildProductScopeQuery(
+      productId,
+      businessId,
+      bypassBusinessScope,
+    );
+
+    const finder = Product.findOne(query);
+    const scopedFinder = session ? finder.session(session) : finder;
+    return scopedFinder.lean();
   }
 
   /**
@@ -65,6 +101,44 @@ export class ProductRepository {
   }
 
   /**
+   * Update total stock scoped to business (Anti-IDOR)
+   * @param {string} productId
+   * @param {string} businessId
+   * @param {number} quantityChange
+   * @param {mongoose.ClientSession} session
+   * @param {{ bypassBusinessScope?: boolean }} options
+   * @returns {Promise<Object>}
+   */
+  async updateStockForBusiness(
+    productId,
+    businessId,
+    quantityChange,
+    session,
+    options = {},
+  ) {
+    const { bypassBusinessScope = false } = options;
+    const scopeQuery = this.buildProductScopeQuery(
+      productId,
+      businessId,
+      bypassBusinessScope,
+    );
+
+    const query = Product.findOne(scopeQuery);
+    const product = session ? await query.session(session) : await query;
+    if (!product) throw new Error("Product not found");
+
+    const cost = product.averageCost || product.purchasePrice || 0;
+    const valueChange = quantityChange * cost;
+
+    product.totalStock = (product.totalStock || 0) + quantityChange;
+    product.totalInventoryValue =
+      (product.totalInventoryValue || 0) + valueChange;
+
+    await product.save(session ? { session } : {});
+    return product.toObject();
+  }
+
+  /**
    * Update warehouse stock specifically (for admin sales).
    * 🎯 FIX TASK 1: Deduct from warehouse when admin makes direct sales.
    *
@@ -75,6 +149,45 @@ export class ProductRepository {
    */
   async updateWarehouseStock(productId, quantityChange, session) {
     const query = Product.findById(productId);
+    const product = session ? await query.session(session) : await query;
+    if (!product) throw new Error("Product not found");
+
+    product.warehouseStock = (product.warehouseStock || 0) + quantityChange;
+
+    if (product.warehouseStock < 0) {
+      throw new Error(
+        `Insufficient warehouse stock for ${product.name}. Available: ${product.warehouseStock + Math.abs(quantityChange)}, Requested: ${Math.abs(quantityChange)}`,
+      );
+    }
+
+    await product.save(session ? { session } : {});
+    return product.toObject();
+  }
+
+  /**
+   * Update warehouse stock scoped to business (Anti-IDOR)
+   * @param {string} productId
+   * @param {string} businessId
+   * @param {number} quantityChange
+   * @param {mongoose.ClientSession} session
+   * @param {{ bypassBusinessScope?: boolean }} options
+   * @returns {Promise<Object>}
+   */
+  async updateWarehouseStockForBusiness(
+    productId,
+    businessId,
+    quantityChange,
+    session,
+    options = {},
+  ) {
+    const { bypassBusinessScope = false } = options;
+    const scopeQuery = this.buildProductScopeQuery(
+      productId,
+      businessId,
+      bypassBusinessScope,
+    );
+
+    const query = Product.findOne(scopeQuery);
     const product = session ? await query.session(session) : await query;
     if (!product) throw new Error("Product not found");
 

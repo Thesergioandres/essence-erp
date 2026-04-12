@@ -4,6 +4,12 @@ const MAX_LOG_BYTES = 5 * 1024 * 1024; // 5 MB
 
 const issueReportSchema = new mongoose.Schema(
   {
+    business: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Business",
+      required: true,
+      index: true,
+    },
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -34,7 +40,7 @@ const issueReportSchema = new mongoose.Schema(
         validator: function (value) {
           const totalBytes = Buffer.byteLength(
             (value || []).join("\n"),
-            "utf8"
+            "utf8",
           );
           return totalBytes <= MAX_LOG_BYTES;
         },
@@ -56,9 +62,10 @@ const issueReportSchema = new mongoose.Schema(
       index: true,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 issueReportSchema.index({ createdAt: -1 });
+issueReportSchema.index({ business: 1, createdAt: -1 });
 
 export default mongoose.model("IssueReport", issueReportSchema);

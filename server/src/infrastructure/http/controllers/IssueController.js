@@ -5,6 +5,13 @@ const repository = new IssuePersistenceUseCase();
 export class IssueController {
   async create(req, res) {
     try {
+      const businessId = req.businessId || req.headers["x-business-id"];
+      if (!businessId) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Falta x-business-id" });
+      }
+
       const { message } = req.body;
 
       if (!message || typeof message !== "string" || !message.trim()) {
@@ -17,6 +24,7 @@ export class IssueController {
         req.body,
         req.user.id,
         req.user.role,
+        businessId,
       );
       res.status(201).json({ success: true, data: report });
     } catch (error) {
@@ -27,7 +35,14 @@ export class IssueController {
 
   async getAll(req, res) {
     try {
-      const result = await repository.findAll(req.query);
+      const businessId = req.businessId || req.headers["x-business-id"];
+      if (!businessId) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Falta x-business-id" });
+      }
+
+      const result = await repository.findAll(req.query, businessId);
       res.json({
         success: true,
         data: result.reports,
@@ -40,7 +55,14 @@ export class IssueController {
 
   async getById(req, res) {
     try {
-      const report = await repository.findById(req.params.id);
+      const businessId = req.businessId || req.headers["x-business-id"];
+      if (!businessId) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Falta x-business-id" });
+      }
+
+      const report = await repository.findById(req.params.id, businessId);
 
       if (!report) {
         return res
@@ -56,8 +78,19 @@ export class IssueController {
 
   async updateStatus(req, res) {
     try {
+      const businessId = req.businessId || req.headers["x-business-id"];
+      if (!businessId) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Falta x-business-id" });
+      }
+
       const { status } = req.body;
-      const report = await repository.updateStatus(req.params.id, status);
+      const report = await repository.updateStatus(
+        req.params.id,
+        status,
+        businessId,
+      );
       res.json({ success: true, data: report });
     } catch (error) {
       const status = error.statusCode || 500;

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useBusiness } from "../../../context/BusinessContext";
 import type {
   DistributorStats,
   GamificationConfig,
@@ -10,6 +11,7 @@ import LeaderboardTable from "../components/LeaderboardTable";
 
 export default function DistributorLevelPage() {
   const userId = authService.getCurrentUser()?._id || "";
+  const { businessId, hydrating } = useBusiness();
   const [loading, setLoading] = useState(true);
   const [config, setConfig] = useState<GamificationConfig | null>(null);
   const [stats, setStats] = useState<DistributorStats | null>(null);
@@ -20,8 +22,10 @@ export default function DistributorLevelPage() {
   });
 
   useEffect(() => {
-    if (!userId) {
-      setLoading(false);
+    if (!userId || hydrating || !businessId) {
+      if (!hydrating) {
+        setLoading(false);
+      }
       return;
     }
     let isActive = true;
@@ -30,7 +34,6 @@ export default function DistributorLevelPage() {
       try {
         console.log("🚀 Iniciando carga de datos gamificación para:", userId);
         setLoading(true);
-        const businessId = localStorage.getItem("businessId") || undefined;
 
         // Cargar Config
         let configRes = null;
@@ -59,7 +62,7 @@ export default function DistributorLevelPage() {
         try {
           rankingRes = await gamificationService.getRanking({
             period: "current",
-            businessId,
+            businessId: businessId || undefined,
           });
         } catch (e) {
           console.error("❌ Error loading ranking:", e);
@@ -109,7 +112,7 @@ export default function DistributorLevelPage() {
     return () => {
       isActive = false;
     };
-  }, [userId]);
+  }, [businessId, hydrating, userId]);
 
   const levels = useMemo(() => {
     if (!config?.levels) return [];

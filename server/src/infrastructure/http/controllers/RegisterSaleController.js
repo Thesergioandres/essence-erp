@@ -64,10 +64,16 @@ const runRegisterSale = async (req, res, next, UseCaseClass) => {
       useTransactions = false;
     }
 
-    if (useTransactions) {
-      session = await mongoose.startSession();
-      session.startTransaction();
+    if (!useTransactions) {
+      return res.status(503).json({
+        success: false,
+        message:
+          "MongoDB transactions are required for sales operations. Configure the database as replica set.",
+      });
     }
+
+    session = await mongoose.startSession();
+    session.startTransaction();
 
     // 2. Extract Data (Adapter)
     // Determine distributorId based on user role:

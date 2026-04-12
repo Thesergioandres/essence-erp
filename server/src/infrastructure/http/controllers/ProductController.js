@@ -1,12 +1,12 @@
 import mongoose from "mongoose";
 import { isCloudinaryConfigured } from "../../../../config/cloudinary.js";
-import Business from "../../database/models/Business.js";
-import DistributorStock from "../../database/models/DistributorStock.js";
-import InventoryEntry from "../../database/models/InventoryEntry.js";
 import { resolveFinancialPrivacyContext } from "../../../../utils/financialPrivacy.js";
 import { CreateProductUseCase } from "../../../application/use-cases/CreateProductUseCase.js";
 import { UpdateStockUseCase } from "../../../application/use-cases/UpdateStockUseCase.js";
 import { ProductPersistenceUseCase } from "../../../application/use-cases/repository-gateways/ProductPersistenceUseCase.js";
+import Business from "../../database/models/Business.js";
+import DistributorStock from "../../database/models/DistributorStock.js";
+import InventoryEntry from "../../database/models/InventoryEntry.js";
 
 const productRepository = new ProductPersistenceUseCase();
 
@@ -195,7 +195,11 @@ export const getMyCatalog = async (req, res) => {
 export const getProductById = async (req, res, next) => {
   try {
     const { id } = req.params;
-    let product = await productRepository.findById(id);
+    const businessId = req.headers["x-business-id"] || req.businessId;
+    const bypassBusinessScope = req.user?.role === "god";
+    let product = await productRepository.findByIdForBusiness(id, businessId, {
+      bypassBusinessScope,
+    });
     if (!product) {
       return res
         .status(404)
@@ -502,6 +506,7 @@ export const updateStock = async (req, res, next) => {
         productId: id,
         quantityChange,
         businessId,
+        userRole: req.user?.role,
       },
       session,
     );

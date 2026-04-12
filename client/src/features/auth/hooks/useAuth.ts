@@ -34,6 +34,45 @@ const resolveEntityId = (value: unknown): string | null => {
   );
 };
 
+const waitForBusinessHydration = async (timeoutMs = 2200): Promise<void> => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const hasBusinessId = () =>
+    Boolean(resolveEntityId(localStorage.getItem("businessId")));
+  if (hasBusinessId()) {
+    return;
+  }
+
+  await new Promise<void>(resolve => {
+    const startedAt = Date.now();
+
+    const finish = () => {
+      window.clearInterval(pollId);
+      window.removeEventListener("session-refresh", onSessionRefresh);
+      window.removeEventListener("auth-changed", onSessionRefresh);
+      resolve();
+    };
+
+    const onSessionRefresh = () => {
+      if (hasBusinessId()) {
+        finish();
+      }
+    };
+
+    const pollId = window.setInterval(() => {
+      const timedOut = Date.now() - startedAt >= timeoutMs;
+      if (hasBusinessId() || timedOut) {
+        finish();
+      }
+    }, 80);
+
+    window.addEventListener("session-refresh", onSessionRefresh);
+    window.addEventListener("auth-changed", onSessionRefresh);
+  });
+};
+
 export const useAuth = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,11 +120,12 @@ export const useAuth = () => {
       if (response.status === "pending") {
         navigate("/account-hold");
       } else if (normalizedRole === "employee") {
-        navigate("/staff/dashboard");
+        await waitForBusinessHydration();
+        navigate("/staff/dashboard", { replace: true });
       } else if (["admin", "super_admin", "god"].includes(normalizedRole)) {
-        navigate("/admin/dashboard");
+        navigate("/admin/dashboard", { replace: true });
       } else {
-        navigate("/");
+        navigate("/", { replace: true });
       }
 
       return response;

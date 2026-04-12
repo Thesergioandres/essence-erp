@@ -15,6 +15,7 @@ import type {
   Membership,
 } from "../features/business/types/business.types";
 import { globalSettingsService } from "../features/common/services";
+import { normalizeEmployeeRole } from "../shared/utils/roleAliases";
 
 type PlanKey = "starter" | "pro" | "enterprise";
 type AssistantPlanMap = Record<PlanKey, boolean>;
@@ -59,10 +60,61 @@ const defaultAssistantByPlan: AssistantPlanMap = {
   enterprise: true,
 };
 
+const resolveEntityId = (value: unknown): string | null => {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed || trimmed === "[object Object]") {
+      return null;
+    }
+
+    return trimmed;
+  }
+
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const candidate = value as {
+    _id?: unknown;
+    id?: unknown;
+    $oid?: unknown;
+  };
+
+  return (
+    resolveEntityId(candidate._id) ||
+    resolveEntityId(candidate.id) ||
+    resolveEntityId(candidate.$oid) ||
+    null
+  );
+};
+
+const normalizeMembership = (membership: Membership): Membership => {
+  const businessId = resolveEntityId(membership.business);
+
+  const normalizedBusiness =
+    typeof membership.business === "string"
+      ? {
+          _id: businessId || membership.business,
+          name: "Negocio",
+        }
+      : {
+          ...membership.business,
+          _id: businessId || membership.business?._id || "",
+          name: membership.business?.name || "Negocio",
+        };
+
+  return {
+    ...membership,
+    role: normalizeEmployeeRole(membership.role),
+    business: normalizedBusiness,
+  };
+};
+
+const normalizeMemberships = (memberships: Membership[]): Membership[] =>
+  memberships.map(normalizeMembership);
+
 const getMembershipBusinessId = (membership: Membership): string =>
-  typeof membership.business === "string"
-    ? membership.business
-    : membership.business?._id || "";
+  resolveEntityId(membership.business) || "";
 
 const hasSameMembershipSnapshot = (
   current: Membership[],
@@ -95,7 +147,7 @@ function getInitialMemberships(): Membership[] {
     const userStr = localStorage.getItem("user");
     if (userStr) {
       const user = JSON.parse(userStr);
-      return user.memberships || [];
+      return normalizeMemberships(user.memberships || []);
     }
   } catch {
     // Ignore parse errors
@@ -121,14 +173,62 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
   const isFetchingRef = useRef(false); // Guard against concurrent refresh calls
   const retryRef = useRef(0); // Guard for auto-retry
 
-  const syncBusinessId = (id: string | null) => {
+  const syncBusinessId = useCallback((id: string | null) => {
     setBusinessId(prev => (prev === id ? prev : id));
     if (id) {
       localStorage.setItem("businessId", id);
     } else {
       localStorage.removeItem("businessId");
     }
-  };
+  }, []);
+
+  const hydrateFromStoredSession = useCallback(() => {
+    try {
+      const userStr = localStorage.getItem("user");
+      if (!userStr) return;
+
+      const user = JSON.parse(userStr) as {
+        memberships?: Membership[];
+      };
+      const storedMemberships = normalizeMemberships(user.memberships || []);
+
+      if (storedMemberships.length === 0) return;
+
+      setMemberships(prev =>
+        hasSameMembershipSnapshot(prev, storedMemberships)
+          ? prev
+          : storedMemberships
+      );
+
+      const selectedBusinessId = resolveEntityId(
+        localStorage.getItem("businessId")
+      );
+      const activeMemberships = storedMemberships.filter(
+        membership => membership.status === "active"
+      );
+      const selectedStillValid =
+        selectedBusinessId &&
+        activeMemberships.some(
+          membership =>
+            getMembershipBusinessId(membership) === selectedBusinessId
+        );
+
+      if (selectedStillValid) {
+        return;
+      }
+
+      const autoSelectedBusinessId =
+        activeMemberships.length === 1
+          ? getMembershipBusinessId(activeMemberships[0]) || null
+          : null;
+
+      if (autoSelectedBusinessId) {
+        syncBusinessId(autoSelectedBusinessId);
+      }
+    } catch {
+      // no-op
+    }
+  }, [syncBusinessId]);
 
   const refresh = useCallback(async () => {
     // Debounce: Skip if already fetching
@@ -170,7 +270,9 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
         fetched
       );
 
-      const fetchedMemberships = (fetched || []) as Membership[];
+      const fetchedMemberships = normalizeMemberships(
+        (fetched || []) as Membership[]
+      );
       setMemberships(prev =>
         hasSameMembershipSnapshot(prev, fetchedMemberships)
           ? prev
@@ -191,11 +293,25 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
         retryRef.current = 0;
       }
 
-      const stored = localStorage.getItem("businessId");
-      const hasStored = stored && fetched.some(m => m.business?._id === stored);
-      const onlyOne =
-        fetched.length === 1 ? (fetched[0].business?._id ?? null) : null;
-      const nextId = hasStored ? stored : onlyOne;
+      const stored = resolveEntityId(localStorage.getItem("businessId"));
+      const activeMemberships = fetchedMemberships.filter(
+        membership => membership.status === "active"
+      );
+      const hasStored =
+        Boolean(stored) &&
+        activeMemberships.some(
+          membership => getMembershipBusinessId(membership) === stored
+        );
+      const onlyOneActive =
+        activeMemberships.length === 1
+          ? getMembershipBusinessId(activeMemberships[0]) || null
+          : null;
+      const onlyOneTotal =
+        fetchedMemberships.length === 1
+          ? getMembershipBusinessId(fetchedMemberships[0]) || null
+          : null;
+      const nextId =
+        (hasStored ? stored : onlyOneActive || onlyOneTotal) || null;
 
       syncBusinessId(nextId);
     } catch (err) {
@@ -236,7 +352,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       isFetchingRef.current = false;
     }
-  }, []);
+  }, [syncBusinessId]);
 
   useEffect(() => {
     const run = async () => {
@@ -251,6 +367,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
     const handleSessionRefresh = async () => {
       console.log("[BusinessContext] Session refresh triggered");
       tokenRef.current = localStorage.getItem("token");
+      hydrateFromStoredSession();
       await refresh();
     };
 
@@ -261,7 +378,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       window.removeEventListener("session-refresh", handleSessionRefresh);
       window.removeEventListener("auth-changed", handleSessionRefresh);
     };
-  }, [refresh]);
+  }, [hydrateFromStoredSession, refresh]);
 
   useEffect(() => {
     const currentToken = localStorage.getItem("token");
@@ -272,7 +389,8 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   const selectedMembership = useMemo(
-    () => memberships.find(m => m.business?._id === businessId) ?? null,
+    () =>
+      memberships.find(m => getMembershipBusinessId(m) === businessId) ?? null,
     [memberships, businessId]
   );
 
@@ -289,8 +407,13 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
   }, [assistantByPlan, selectedMembership]);
 
   const value: BusinessContextValue = {
-    businessId: selectedMembership?.business?._id || null,
-    business: selectedMembership?.business || null,
+    businessId: selectedMembership
+      ? getMembershipBusinessId(selectedMembership)
+      : null,
+    business:
+      selectedMembership && typeof selectedMembership.business !== "string"
+        ? selectedMembership.business
+        : null,
     features,
     memberships,
     hydrating: initializing,

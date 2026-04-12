@@ -1,6 +1,46 @@
 import { useMemo } from "react";
 import { useBusiness } from "../context/BusinessContext";
 
+type MembershipLike = {
+  business: unknown;
+};
+
+const resolveMembershipBusinessId = (membership: MembershipLike) => {
+  const business = membership.business as unknown;
+
+  if (typeof business === "string") {
+    const trimmed = business.trim();
+    return trimmed || "";
+  }
+
+  if (!business || typeof business !== "object") {
+    return "";
+  }
+
+  const candidate = business as { _id?: unknown; id?: unknown };
+  const byUnderscoreId =
+    typeof candidate._id === "string" ? candidate._id.trim() : "";
+  const byId = typeof candidate.id === "string" ? candidate.id.trim() : "";
+
+  return byUnderscoreId || byId || "";
+};
+
+const resolveMembershipBusinessName = (membership: MembershipLike) => {
+  const business = membership.business as unknown;
+
+  if (!business || typeof business !== "object") {
+    return "Sin nombre";
+  }
+
+  const candidate = business as { name?: unknown };
+  if (typeof candidate.name !== "string") {
+    return "Sin nombre";
+  }
+
+  const trimmedName = candidate.name.trim();
+  return trimmedName || "Sin nombre";
+};
+
 export default function BusinessSelector() {
   const { memberships, businessId, selectBusiness, loading, error, hydrating } =
     useBusiness();
@@ -29,8 +69,11 @@ export default function BusinessSelector() {
           className="w-full rounded-md border border-white/10 bg-gray-900/60 px-2 py-1 text-xs text-white focus:border-purple-400 focus:outline-none"
         >
           {memberships.map(membership => (
-            <option key={membership._id} value={membership.business?._id}>
-              {membership.business?.name || "Sin nombre"}
+            <option
+              key={membership._id}
+              value={resolveMembershipBusinessId(membership)}
+            >
+              {resolveMembershipBusinessName(membership)}
             </option>
           ))}
         </select>

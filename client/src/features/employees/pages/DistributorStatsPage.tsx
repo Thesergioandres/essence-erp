@@ -4,6 +4,7 @@ import {
   SalesTimelineChart,
   TopProductsChart,
 } from "../../../components/charts";
+import { useBusiness } from "../../../context/BusinessContext";
 import { ConfidentialBadge } from "../../../shared/components/ui";
 import { analyticsService } from "../../analytics/services";
 import type {
@@ -60,6 +61,7 @@ interface ProductSalesItem {
 export default function DistributorStats() {
   const { hideFinancialData, isDistributorRole, canViewCosts } =
     useFinancialPrivacy();
+  const { businessId, hydrating } = useBusiness();
   const pageRef = useRef<HTMLDivElement | null>(null);
 
   const [sales, setSales] = useState<Sale[]>([]);
@@ -96,6 +98,13 @@ export default function DistributorStats() {
   );
 
   const loadStats = React.useCallback(async () => {
+    if (hydrating || !businessId) {
+      if (!hydrating) {
+        setLoading(false);
+      }
+      return;
+    }
+
     try {
       setLoading(true);
 
@@ -150,9 +159,16 @@ export default function DistributorStats() {
     } finally {
       setLoading(false);
     }
-  }, [dateRange.endDate, dateRange.startDate]);
+  }, [businessId, dateRange.endDate, dateRange.startDate, hydrating]);
 
   const loadEstimatedProfit = React.useCallback(async () => {
+    if (hydrating || !businessId) {
+      if (!hydrating) {
+        setLoadingEstimated(false);
+      }
+      return;
+    }
+
     try {
       setLoadingEstimated(true);
       const response = await analyticsService.getDistributorEstimatedProfit();
@@ -162,11 +178,17 @@ export default function DistributorStats() {
     } finally {
       setLoadingEstimated(false);
     }
-  }, []);
+  }, [businessId, hydrating]);
 
   const loadRanking = React.useCallback(async () => {
+    if (hydrating || !businessId) {
+      if (!hydrating) {
+        setRankingData([]);
+      }
+      return;
+    }
+
     try {
-      const businessId = localStorage.getItem("businessId") || undefined;
       const [configRes, rankingRes] = await Promise.all([
         gamificationService.getConfig().catch(() => null),
         gamificationService
@@ -178,7 +200,7 @@ export default function DistributorStats() {
     } catch (error) {
       console.error("Error al cargar ranking:", error);
     }
-  }, []);
+  }, [businessId, hydrating]);
 
   useEffect(() => {
     void loadStats();

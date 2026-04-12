@@ -2,6 +2,7 @@ import { type ReactNode } from "react";
 import { Navigate } from "react-router-dom";
 import { useBusiness } from "../context/BusinessContext";
 import { authService } from "../features/auth/services";
+import { useSession } from "../hooks/useSession";
 import BusinessSelector from "./BusinessSelector";
 
 interface BusinessGateProps {
@@ -22,25 +23,25 @@ export default function BusinessGate({
     hydrating,
     memberships,
   } = useBusiness();
+  const { loading: authLoading } = useSession();
   const user = authService.getCurrentUser();
+
+  const renderLoader = (message: string) => (
+    <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-sm text-gray-200">
+      <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-cyan-300/40 border-t-cyan-200" />
+      <span>{message}</span>
+    </div>
+  );
 
   // REMOVED: El BusinessContext ya maneja el refresh inicial.
   // El useEffect anterior que llamaba refresh() causaba un loop infinito.
 
-  if (hydrating) {
-    return (
-      <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-sm text-gray-200">
-        Preparando tu negocio...
-      </div>
-    );
+  if (authLoading || hydrating) {
+    return renderLoader("Preparando tu negocio...");
   }
 
   if (loading) {
-    return (
-      <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-sm text-gray-200">
-        Cargando contexto de negocio...
-      </div>
-    );
+    return renderLoader("Cargando contexto de negocio...");
   }
 
   if (error) {

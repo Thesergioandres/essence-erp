@@ -1,5 +1,6 @@
 import type { ReactElement } from "react";
 import { Navigate, useLocation } from "react-router-dom";
+import { useBusiness } from "../context/BusinessContext";
 import { authService } from "../features/auth/services";
 import { useSession } from "../hooks/useSession";
 import { normalizeEmployeeRole } from "../shared/utils/roleAliases";
@@ -15,8 +16,9 @@ export default function ProtectedRoute({
 }: ProtectedRouteProps) {
   const location = useLocation();
   const token = localStorage.getItem("token");
-  const selectedBusinessId = localStorage.getItem("businessId");
   const { user: sessionUser, loading } = useSession();
+  const { businessId: activeBusinessId, hydrating: businessHydrating } =
+    useBusiness();
   const user = sessionUser || authService.getCurrentUser();
 
   const activeMembershipRole =
@@ -26,12 +28,12 @@ export default function ProtectedRoute({
           ? membership.business
           : membership.business?._id;
 
-      if (!selectedBusinessId || !membershipBusinessId) {
+      if (!activeBusinessId || !membershipBusinessId) {
         return false;
       }
 
       return (
-        membershipBusinessId === selectedBusinessId &&
+        membershipBusinessId === activeBusinessId &&
         membership.status === "active"
       );
     })?.role || null;
@@ -84,15 +86,12 @@ export default function ProtectedRoute({
     }
   }
 
-  if (loading && token && user) {
-    return children;
-  }
-
-  if (loading && (!token || !user)) {
+  const waitingForContext = Boolean(token && (loading || businessHydrating));
+  if (waitingForContext) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-950 text-white">
         <div className="rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-sm text-gray-200">
-          Validando sesión...
+          Validando sesión y negocio...
         </div>
       </div>
     );

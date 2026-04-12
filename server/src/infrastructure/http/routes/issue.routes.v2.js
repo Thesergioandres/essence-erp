@@ -1,12 +1,16 @@
 import { Router } from "express";
 import { protect } from "../../../../middleware/auth.middleware.js";
-import { requirePermission } from "../../../../middleware/business.middleware.js";
+import {
+  businessContext,
+  requireFeature,
+  requirePermission,
+} from "../../../../middleware/business.middleware.js";
 import { IssueController } from "../controllers/IssueController.js";
 
 const router = Router();
 const controller = new IssueController();
 
-router.use(protect);
+router.use(protect, businessContext, requireFeature("incidents"));
 
 router.post("/", (req, res) => controller.create(req, res));
 router.get(

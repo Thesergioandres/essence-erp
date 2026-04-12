@@ -1,19 +1,30 @@
 import { isEmployeeRole } from "../src/utils/roleAliases.js";
-import { buildEffectivePermissions } from "./permissions.js";
 
 const toRecord = (value) => (value && typeof value === "object" ? value : {});
 
 export const SENSITIVE_COST_FIELD_NAMES = Object.freeze([
   "purchasePrice",
   "averageCost",
+  "averageCostAtSale",
   "supplierId",
+  "supplierPrice",
+  "totalInventoryValue",
   "profit",
+  "totalProfit",
+  "totalGroupProfit",
+  "netProfit",
+  "unitCost",
+  "cost",
+  "totalCost",
+  "investment",
 ]);
 
 export const SENSITIVE_FINANCIAL_ZERO_FIELD_NAMES = Object.freeze([
   "totalRevenue",
-  "distributorProfit",
   "adminProfit",
+  "grossProfit",
+  "realizedProfit",
+  "pendingProfit",
 ]);
 
 const SENSITIVE_COST_FIELD_SET = new Set(SENSITIVE_COST_FIELD_NAMES);
@@ -44,18 +55,27 @@ const hasHideFinancialFlag = (user, membership) => {
 
 const isDistributorRole = (role) => isEmployeeRole(role);
 
-const resolvePermissionSource = (user, membership) => {
-  if (membership?.role) {
-    return {
-      role: membership.role,
-      permissions: toRecord(membership.permissions),
-    };
-  }
+const readExplicitFinancialViewPermission = ({ user, membership } = {}) => {
+  const membershipPermissions = toRecord(membership?.permissions);
+  const userPermissions = toRecord(
+    user?.modularPermissions || user?.permissions,
+  );
 
-  return {
-    role: user?.role || "user",
-    permissions: toRecord(user?.modularPermissions || user?.permissions),
-  };
+  const candidates = [
+    membershipPermissions?.financial?.view_costs,
+    membershipPermissions?.financial?.viewCosts,
+    membershipPermissions?.financial?.canViewCosts,
+    membershipPermissions?.view_costs,
+    userPermissions?.financial?.view_costs,
+    userPermissions?.financial?.viewCosts,
+    userPermissions?.financial?.canViewCosts,
+    userPermissions?.view_costs,
+    user?.canViewCosts,
+    user?.CAN_VIEW_COSTS,
+  ];
+
+  const explicitValue = candidates.find((value) => typeof value === "boolean");
+  return typeof explicitValue === "boolean" ? explicitValue : null;
 };
 
 export const canViewCostsByPermission = ({ user, membership } = {}) => {
@@ -63,19 +83,21 @@ export const canViewCostsByPermission = ({ user, membership } = {}) => {
   const safeMembership = toRecord(membership);
   const effectiveRole = safeMembership.role || safeUser.role || "user";
 
-  if (effectiveRole === "god" || effectiveRole === "super_admin") {
+  // GOD is the only role with default access.
+  if (effectiveRole === "god") {
     return true;
   }
 
-  const permissionSource = resolvePermissionSource(safeUser, safeMembership);
-  const effectivePermissions = buildEffectivePermissions(permissionSource);
-  const effectiveFinancial = toRecord(effectivePermissions.financial);
+  const explicitPermission = readExplicitFinancialViewPermission({
+    user: safeUser,
+    membership: safeMembership,
+  });
 
-  if (typeof effectiveFinancial.view_costs === "boolean") {
-    return effectiveFinancial.view_costs === true;
+  if (typeof explicitPermission === "boolean") {
+    return explicitPermission;
   }
 
-  return effectiveRole === "admin";
+  return false;
 };
 
 export const canCurrentRequestViewCosts = (req = {}) => {
@@ -125,8 +147,10 @@ export const sanitizeSaleForFinancialPrivacy = (sale = {}) => {
 
   const zeroTopLevelFields = [
     "adminProfit",
-    "distributorProfit",
     "totalRevenue",
+    "grossProfit",
+    "realizedProfit",
+    "pendingProfit",
   ];
 
   for (const fieldName of nullifyTopLevelFields) {

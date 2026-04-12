@@ -62,13 +62,19 @@ class CreditController {
       if (!businessId)
         return res.status(400).json({ message: "Falta x-business-id" });
 
-      const credit = await creditPersistenceUseCase.findById(req.params.id, businessId);
+      const credit = await creditPersistenceUseCase.findById(
+        req.params.id,
+        businessId,
+      );
       if (!credit)
         return res
           .status(404)
           .json({ success: false, message: "Crédito no encontrado" });
 
-      const payments = await creditPersistenceUseCase.findPayments(credit._id);
+      const payments = await creditPersistenceUseCase.findPayments(
+        credit._id,
+        businessId,
+      );
 
       let profitInfo = null;
       if (credit.sale) {
@@ -132,12 +138,13 @@ class CreditController {
         return res.status(400).json({ message: "Falta x-business-id" });
 
       const { amount, notes } = req.body;
-      const result = await creditPersistenceUseCase.registerPayment(
-        req.params.id,
+      const result = await creditPersistenceUseCase.registerPayment({
+        creditId: req.params.id,
+        businessId,
         amount,
         notes,
-        req.user.id,
-      );
+        userId: req.user.id,
+      });
 
       res.json({ success: true, data: result });
     } catch (error) {

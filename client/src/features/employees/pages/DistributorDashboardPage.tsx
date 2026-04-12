@@ -1,6 +1,7 @@
 import { gsap } from "gsap";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useBusiness } from "../../../context/BusinessContext";
 import { ConfidentialBadge } from "../../../shared/components/ui";
 import { authService } from "../../auth/services";
 import { useFinancialPrivacy } from "../../auth/utils/financialPrivacy";
@@ -44,6 +45,11 @@ interface RankingInfo {
 
 export default function DistributorDashboard() {
   const navigate = useNavigate();
+  const {
+    businessId,
+    hydrating: businessHydrating,
+    loading: businessLoading,
+  } = useBusiness();
   const { hideFinancialData } = useFinancialPrivacy();
   const dashboardRef = useRef<HTMLDivElement | null>(null);
   const [stats, setStats] = useState<DashboardStats>({
@@ -74,9 +80,23 @@ export default function DistributorDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const businessContextPending = businessHydrating || businessLoading;
+
   useEffect(() => {
-    loadDashboardData();
-  }, []);
+    if (businessContextPending) {
+      setLoading(true);
+      setError(null);
+      return;
+    }
+
+    if (!businessId) {
+      setError("Debes seleccionar un negocio antes de continuar.");
+      setLoading(false);
+      return;
+    }
+
+    void loadDashboardData(businessId);
+  }, [businessContextPending, businessId]);
 
   useEffect(() => {
     let isActive = true;
@@ -163,16 +183,10 @@ export default function DistributorDashboard() {
     stats.totalSales,
   ]);
 
-  const loadDashboardData = async () => {
+  const loadDashboardData = async (_businessId: string) => {
     try {
       setLoading(true);
       setError(null);
-      const businessId = localStorage.getItem("businessId");
-      if (!businessId) {
-        setError("Debes seleccionar un negocio antes de continuar.");
-        setLoading(false);
-        return;
-      }
 
       const userId = authService.getCurrentUser()?._id || "";
       const [salesData, stockData, commissionData, shipmentPendingCount] =
@@ -317,7 +331,7 @@ export default function DistributorDashboard() {
     );
   }
 
-  if (error) {
+  if (error && !businessContextPending) {
     return (
       <div className="flex h-96 flex-col items-center justify-center gap-3 text-center text-gray-200">
         <p className="text-lg font-semibold text-red-300">{error}</p>

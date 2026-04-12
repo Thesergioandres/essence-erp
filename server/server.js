@@ -109,21 +109,59 @@ if (process.env.NODE_ENV === "production") {
 }
 
 // Configurar orígenes permitidos
+const normalizeOrigin = (origin = "") =>
+  String(origin).trim().replace(/\/+$/, "").toLowerCase();
+
 const defaultAllowedOrigins = [
   "http://localhost:3000",
   "http://localhost:5173",
+  "https://essenceerp.up.railway.app",
 ];
 const envOriginsRaw = process.env.ALLOWED_ORIGINS || "";
 const envOrigins = envOriginsRaw
   .split(",")
-  .map((origin) => origin.trim())
+  .map((origin) => normalizeOrigin(origin))
   .filter(Boolean);
-const frontendOrigin = (process.env.FRONTEND_URL || "").trim();
-const allowedOrigins = [
-  ...defaultAllowedOrigins,
-  ...(frontendOrigin ? [frontendOrigin] : []),
-  ...envOrigins,
-];
+const frontendOrigin = normalizeOrigin(process.env.FRONTEND_URL || "");
+const allowedOrigins = new Set(
+  [
+    ...defaultAllowedOrigins.map((origin) => normalizeOrigin(origin)),
+    ...(frontendOrigin ? [frontendOrigin] : []),
+    ...envOrigins,
+  ].filter(Boolean),
+);
+
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Permitir requests sin origin (mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
+
+    const normalizedOrigin = normalizeOrigin(origin);
+    const isAllowed = allowedOrigins.has(normalizedOrigin);
+
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      console.log("Origin bloqueado:", origin);
+      if (process.env.NODE_ENV === "production") {
+        callback(new Error("No permitido por CORS"));
+      } else {
+        callback(null, true); // Temporalmente permitir todos para debug
+      }
+    }
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "X-Requested-With",
+    "x-business-id",
+    "X-Business-Id",
+  ],
+  exposedHeaders: ["Content-Length", "X-Requested-With"],
+  maxAge: 86400, // 24 horas de cache para preflight
+};
 
 // Conectar a MongoDB y Redis
 await connectDB();
@@ -223,49 +261,10 @@ if (process.env.DEBUG_DB === "true") {
 }
 
 // Middlewares - CORS Configuration v5.0 - Enhanced for Production
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      // Permitir requests sin origin (mobile apps, curl, etc.)
-      if (!origin) return callback(null, true);
-
-      // Verificar si el origin está en la lista permitida
-      const isAllowed = allowedOrigins.some((allowed) => {
-        if (typeof allowed === "string") {
-          return allowed === origin;
-        } else if (allowed instanceof RegExp) {
-          return allowed.test(origin);
-        }
-        return false;
-      });
-
-      if (isAllowed) {
-        callback(null, true);
-      } else {
-        console.log("Origin bloqueado:", origin);
-        if (process.env.NODE_ENV === "production") {
-          callback(new Error("No permitido por CORS"));
-        } else {
-          callback(null, true); // Temporalmente permitir todos para debug
-        }
-      }
-    },
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: [
-      "Content-Type",
-      "Authorization",
-      "X-Requested-With",
-      "x-business-id",
-      "X-Business-Id",
-    ],
-    exposedHeaders: ["Content-Length", "X-Requested-With"],
-    maxAge: 86400, // 24 horas de cache para preflight
-  }),
-);
+app.use(cors(corsOptions));
 
 // Manejo explícito de preflight requests
-app.options("*", cors());
+app.options("*", cors(corsOptions));
 
 // Logging de request/res con requestId
 app.use(requestLogger);

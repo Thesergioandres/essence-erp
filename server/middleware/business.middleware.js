@@ -64,7 +64,6 @@ export const businessContext = async (req, res, next) => {
       addDebugLog(`[businessContext] ❌ ERROR: No businessId found`);
       return res.status(400).json({
         message: "Falta el identificador de negocio (x-business-id)",
-        debug: debugLogs,
       });
     }
 
@@ -75,7 +74,6 @@ export const businessContext = async (req, res, next) => {
       );
       return res.status(404).json({
         message: "Negocio no encontrado",
-        debug: debugLogs,
       });
     }
 
@@ -131,7 +129,6 @@ export const businessContext = async (req, res, next) => {
           });
           return res.status(403).json({
             message: "No tienes acceso a este negocio",
-            debug: debugLogs,
           });
         }
       }
@@ -181,7 +178,6 @@ export const businessContext = async (req, res, next) => {
             "Acceso deshabilitado: el administrador del negocio no tiene acceso activo",
           code: "owner_inactive",
           subscriptionExpiresAt: owner?.subscriptionExpiresAt || null,
-          debug: debugLogs,
         });
       }
     }
@@ -202,8 +198,6 @@ export const businessContext = async (req, res, next) => {
     });
     res.status(500).json({
       message: "Error resolviendo negocio",
-      error: error.message,
-      debug: error.stack,
     });
   }
 };
@@ -298,7 +292,6 @@ export const requirePermission = ({ module, action, branchResolver } = {}) => {
       });
       return res.status(403).json({
         message: "Acceso denegado",
-        debug: debugLogs,
       });
     }
 
@@ -326,7 +319,6 @@ export const requirePermission = ({ module, action, branchResolver } = {}) => {
         message: "Permiso denegado",
         module,
         action,
-        debug: debugLogs,
       });
     }
 
@@ -454,7 +446,6 @@ export const requireFeature = (featureKey) => {
     });
     return res.status(403).json({
       message: "Funcionalidad desactivada para este negocio",
-      debug: debugLogs,
     });
   };
 };
