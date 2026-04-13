@@ -32,7 +32,7 @@ export default function EmployeeLevelPage() {
 
     const loadData = async () => {
       try {
-        console.warn("[Essence Debug]", "ðŸš€ Iniciando carga de datos gamificaciÃ³n para:", userId);
+        console.warn("[Essence Debug]", "ðŸš€ Iniciando carga de datos gamificación para:", userId);
         setLoading(true);
 
         // Cargar Config

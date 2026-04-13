@@ -149,7 +149,7 @@ export const getMyCatalog = async (req, res) => {
   try {
     if (req.user?.role !== "employee") {
       return res.status(403).json({
-        message: "Solo los empleados pueden acceder a su catÃ¡logo",
+        message: "Solo los empleados pueden acceder a su catálogo",
       });
     }
 
@@ -184,7 +184,7 @@ export const getMyCatalog = async (req, res) => {
     res.json(products);
   } catch (error) {
     res.status(500).json({
-      message: error.message || "Error al obtener el catÃ¡logo",
+      message: error.message || "Error al obtener el catálogo",
     });
   }
 };
@@ -329,14 +329,14 @@ export const createProduct = async (req, res, next) => {
     // Handle image upload
     if (req.file) {
       if (isCloudinaryConfigured) {
-        // Cloudinary ya procesÃ³ la imagen mediante CloudinaryStorage
+        // Cloudinary ya procesó la imagen mediante CloudinaryStorage
         productData.image = {
           url: req.file.path, // Cloudinary URL
           publicId: req.file.filename, // Cloudinary public ID
         };
         console.warn("[Essence Debug]", "â˜ï¸ Image uploaded to Cloudinary:", req.file.path);
       } else {
-        // Fallback a Base64 si Cloudinary no estÃ¡ configurado
+        // Fallback a Base64 si Cloudinary no está configurado
         const base64Image = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
         productData.image = {
           url: base64Image,
@@ -350,7 +350,7 @@ export const createProduct = async (req, res, next) => {
     console.warn("[Essence Debug]", "ðŸ“¦ Processed data:", JSON.stringify(productData, null, 2));
 
     const useCase = new CreateProductUseCase();
-    // Para desarrollo local sin replica set, ejecutar sin sesiÃ³n/transacciÃ³n
+    // Para desarrollo local sin replica set, ejecutar sin sesión/transacción
     const product = await useCase.execute(productData, null);
     console.warn("[Essence Debug]", "âœ… Product created:", product._id);
 
@@ -554,7 +554,7 @@ export const updateProductPrices = async (req, res) => {
     if (hasPrice && (!Number.isFinite(parsedPrice) || parsedPrice < 0)) {
       return res.status(400).json({
         success: false,
-        message: "price debe ser un nÃºmero vÃ¡lido mayor o igual a 0",
+        message: "price debe ser un número válido mayor o igual a 0",
       });
     }
 
@@ -564,7 +564,7 @@ export const updateProductPrices = async (req, res) => {
     ) {
       return res.status(400).json({
         success: false,
-        message: "wholesalePrice debe ser un nÃºmero vÃ¡lido mayor o igual a 0",
+        message: "wholesalePrice debe ser un número válido mayor o igual a 0",
       });
     }
 

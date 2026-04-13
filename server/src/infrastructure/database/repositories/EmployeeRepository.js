@@ -1,6 +1,6 @@
-﻿import bcrypt from "bcryptjs";
+import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
-import { employeeRoleQuery } from "../../../utils/roleAliases.js";
+
 import Business from "../models/Business.js";
 import EmployeeStock from "../models/EmployeeStock.js";
 import InventoryMovement from "../models/InventoryMovement.js";
@@ -46,7 +46,7 @@ export class EmployeeRepository {
   async create(data, businessId) {
     const userExists = await User.findOne({ email: data.email });
     if (userExists) {
-      const err = new Error("El email ya estÃ¡ registrado");
+      const err = new Error("El email ya est� registrado");
       err.statusCode = 400;
       throw err;
     }
@@ -89,7 +89,7 @@ export class EmployeeRepository {
 
     const memberships = await Membership.find({
       business: businessId,
-      role: employeeRoleQuery,
+      role: "employee",
       ...LISTABLE_MEMBERSHIP_STATUS_QUERY,
     }).select("user");
 
@@ -101,7 +101,7 @@ export class EmployeeRepository {
       const [legacyScopedUsers, stockEmployeeIds, salesEmployeeIds] =
         await Promise.all([
           User.find({
-            role: employeeRoleQuery,
+            role: "employee",
             $or: [
               { business: businessId },
               { business: businessObjectId },
@@ -143,6 +143,7 @@ export class EmployeeRepository {
 
     const filter = {
       _id: { $in: membershipEmployeeIds },
+      role: "employee",
     };
 
     if (filters.active !== undefined) {
@@ -189,9 +190,7 @@ export class EmployeeRepository {
       };
     }
 
-    const objectIds = employeeIds.map(
-      (id) => new mongoose.Types.ObjectId(id),
-    );
+    const objectIds = employeeIds.map((id) => new mongoose.Types.ObjectId(id));
 
     const [stockAgg, salesAgg] = await Promise.all([
       EmployeeStock.aggregate([
@@ -208,7 +207,7 @@ export class EmployeeRepository {
           $match: {
             business: businessObjectId,
             employee: { $in: objectIds },
-            // ðŸ’° CASH FLOW: Solo ventas confirmadas para profit
+            // 💰 CASH FLOW: Solo ventas confirmadas para profit
             paymentStatus: "confirmado",
           },
         },
@@ -268,7 +267,7 @@ export class EmployeeRepository {
     const membership = await Membership.findOne({
       business: businessId,
       user: id,
-      role: employeeRoleQuery,
+      role: "employee",
       ...LISTABLE_MEMBERSHIP_STATUS_QUERY,
     });
 
@@ -278,12 +277,9 @@ export class EmployeeRepository {
       throw err;
     }
 
-    const employee = await User.findOne({ _id: id, role: employeeRoleQuery })
+    const employee = await User.findOne({ _id: id, role: "employee" })
       .select("-password")
-      .populate(
-        "assignedProducts",
-        "name image purchasePrice employeePrice",
-      );
+      .populate("assignedProducts", "name image purchasePrice employeePrice");
 
     if (!employee) {
       const err = new Error("Empleado no encontrado");
@@ -293,7 +289,8 @@ export class EmployeeRepository {
 
     const businessObjectId = new mongoose.Types.ObjectId(businessId);
 
-    console.warn("[Essence Debug]", 
+    console.warn(
+      "[Essence Debug]",
       `[EmployeeRepository] findById called for id: ${id}, business: ${businessObjectId}`,
     );
 
@@ -302,7 +299,10 @@ export class EmployeeRepository {
       business: businessObjectId,
     }).populate("product", "name image");
 
-    console.warn("[Essence Debug]", `[EmployeeRepository] Stock found: ${stock?.length}`);
+    console.warn(
+      "[Essence Debug]",
+      `[EmployeeRepository] Stock found: ${stock?.length}`,
+    );
 
     const activePromotions = await Promotion.find({
       business: businessObjectId,
@@ -311,7 +311,8 @@ export class EmployeeRepository {
       endDate: { $gte: new Date() },
     }).lean();
 
-    console.warn("[Essence Debug]", 
+    console.warn(
+      "[Essence Debug]",
       `[EmployeeRepository] Active promotions found: ${activePromotions?.length}`,
     );
 
@@ -326,7 +327,7 @@ export class EmployeeRepository {
     const membership = await Membership.findOne({
       business: businessId,
       user: id,
-      role: employeeRoleQuery,
+      role: "employee",
       ...LISTABLE_MEMBERSHIP_STATUS_QUERY,
     });
 
@@ -360,7 +361,7 @@ export class EmployeeRepository {
     const membership = await Membership.findOne({
       business: businessId,
       user: id,
-      role: employeeRoleQuery,
+      role: "employee",
     });
 
     if (!membership) {
@@ -371,7 +372,7 @@ export class EmployeeRepository {
 
     const employee = await User.findOne({
       _id: id,
-      role: employeeRoleQuery,
+      role: "employee",
     });
     if (!employee) {
       const err = new Error("Empleado no encontrado");
@@ -413,7 +414,7 @@ export class EmployeeRepository {
         const membership = await Membership.findOne({
           business: businessId,
           user: id,
-          role: employeeRoleQuery,
+          role: "employee",
         }).session(session);
 
         if (!membership) {
@@ -424,7 +425,7 @@ export class EmployeeRepository {
 
         const employee = await User.findOne({
           _id: id,
-          role: employeeRoleQuery,
+          role: "employee",
         }).session(session);
 
         if (!employee) {
@@ -488,7 +489,7 @@ export class EmployeeRepository {
                 referenceModel: "User",
                 referenceId: id,
                 performedBy: performedBy || id,
-                notes: "Retorno por eliminaciÃ³n de empleado",
+                notes: "Retorno por eliminaci�n de empleado",
                 metadata: {
                   reason: "employee_removal",
                   employeeId: String(id),
@@ -524,7 +525,7 @@ export class EmployeeRepository {
 
         const deleteUserResult = await User.deleteOne({
           _id: id,
-          role: employeeRoleQuery,
+          role: "employee",
         }).session(session);
 
         if (!deleteUserResult.deletedCount) {
@@ -561,7 +562,7 @@ export class EmployeeRepository {
     const membership = await Membership.findOne({
       business: businessId,
       user: employeeId,
-      role: employeeRoleQuery,
+      role: "employee",
       ...LISTABLE_MEMBERSHIP_STATUS_QUERY,
     });
 
@@ -598,10 +599,15 @@ export class EmployeeRepository {
       quantity: { $gt: 0 },
     };
 
-    console.warn("[Essence Debug]", 
+    console.warn(
+      "[Essence Debug]",
       `[EmployeeRepository] getProducts. DistId: ${employeeId}, BusId: ${businessId}`,
     );
-    console.warn("[Essence Debug]", `[EmployeeRepository] Query:`, JSON.stringify(query));
+    console.warn(
+      "[Essence Debug]",
+      `[EmployeeRepository] Query:`,
+      JSON.stringify(query),
+    );
 
     if (filters.search) {
       // Need complex lookup to filter by product name, skip for now or do aggregate
@@ -618,16 +624,19 @@ export class EmployeeRepository {
       EmployeeStock.countDocuments(query),
     ]);
 
-    console.warn("[Essence Debug]", 
+    console.warn(
+      "[Essence Debug]",
       `[EmployeeRepository] Found ${stocks.length} items for employee.`,
     );
     if (stocks.length > 0) {
-      console.warn("[Essence Debug]", 
+      console.warn(
+        "[Essence Debug]",
         `[EmployeeRepository] Sample item:`,
         JSON.stringify(stocks[0]),
       );
     } else {
-      console.warn("[Essence Debug]", 
+      console.warn(
+        "[Essence Debug]",
         `[EmployeeRepository] NO STOCK FOUND. Checking without quantity filter...`,
       );
       const allStock = await EmployeeStock.find({
@@ -636,7 +645,8 @@ export class EmployeeRepository {
       })
         .limit(1)
         .lean();
-      console.warn("[Essence Debug]", 
+      console.warn(
+        "[Essence Debug]",
         `[EmployeeRepository] Unfiltered check result: ${allStock.length} items (First: ${JSON.stringify(allStock[0])})`,
       );
     }
@@ -661,7 +671,7 @@ export class EmployeeRepository {
   async getPublicCatalog(employeeId) {
     const membership = await Membership.findOne({
       user: employeeId,
-      role: employeeRoleQuery,
+      role: "employee",
       status: "active",
     })
       .select("business")
@@ -676,7 +686,7 @@ export class EmployeeRepository {
     const [employee, business] = await Promise.all([
       User.findOne({
         _id: employeeId,
-        role: employeeRoleQuery,
+        role: "employee",
       })
         .select("name email phone")
         .lean(),
@@ -722,4 +732,3 @@ export class EmployeeRepository {
     };
   }
 }
-

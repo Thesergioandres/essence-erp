@@ -80,7 +80,7 @@ export default function Customers() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // MÃ©tricas
+  // Métricas
   const [metrics, setMetrics] = useState({
     totalCustomers: 0,
     totalVip: 0,
@@ -104,7 +104,7 @@ export default function Customers() {
       const { customers: customerList } = await customerService.getAll();
       setCustomers(customerList);
 
-      // Calcular mÃ©tricas - segment ahora puede ser objeto o string
+      // Calcular métricas - segment ahora puede ser objeto o string
       const totalVip = customerList.filter(c => {
         const segmentKey = getSegmentKey(c.segment);
         return segmentKey.toLowerCase() === "vip";
@@ -126,7 +126,9 @@ export default function Customers() {
         avgSpend,
       });
 
-      console.warn("[Essence Debug]", "[UI INFO] customers_loaded", { count: customerList.length });
+      console.warn("[Essence Debug]", "[UI INFO] customers_loaded", {
+        count: customerList.length,
+      });
     } catch (err) {
       console.error("[UI ERROR] customers_fetch_failed", err);
       setError("Error al cargar clientes");
@@ -143,7 +145,9 @@ export default function Customers() {
     try {
       if (editingCustomer) {
         await customerService.update(editingCustomer._id, formData);
-        console.warn("[Essence Debug]", "[UI INFO] customer_updated", { id: editingCustomer._id });
+        console.warn("[Essence Debug]", "[UI INFO] customer_updated", {
+          id: editingCustomer._id,
+        });
       } else {
         await customerService.create(formData);
         console.warn("[Essence Debug]", "[UI INFO] customer_created");
@@ -178,7 +182,7 @@ export default function Customers() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Â¿EstÃ¡s seguro de eliminar este cliente?")) return;
+    if (!confirm("Â¿Estás seguro de eliminar este cliente?")) return;
 
     try {
       await customerService.delete(id);
@@ -248,7 +252,7 @@ export default function Customers() {
         </div>
       )}
 
-      {/* MÃ©tricas */}
+      {/* Métricas */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <div className="rounded-xl border border-gray-700/50 bg-gray-800/50 p-4 shadow-lg backdrop-blur-sm">
           <div className="flex items-center gap-3">
@@ -313,7 +317,7 @@ export default function Customers() {
           <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
-            placeholder="Buscar por nombre, telÃ©fono o email..."
+            placeholder="Buscar por nombre, teléfono o email..."
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
             className="w-full rounded-lg border border-gray-600 bg-gray-900/50 py-2.5 pl-10 pr-4 text-white placeholder-gray-500 focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
@@ -471,7 +475,7 @@ export default function Customers() {
             <p className="text-gray-500 dark:text-gray-400">
               {searchTerm || filterSegment !== "all"
                 ? "No se encontraron clientes"
-                : "AÃºn no hay clientes registrados"}
+                : "Aún no hay clientes registrados"}
             </p>
           </div>
         )}
@@ -504,7 +508,7 @@ export default function Customers() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    TelÃ©fono
+                    Teléfono
                   </label>
                   <input
                     type="tel"
@@ -531,7 +535,7 @@ export default function Customers() {
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  DirecciÃ³n
+                  Dirección
                 </label>
                 <input
                   type="text"
@@ -677,7 +681,7 @@ export default function Customers() {
                 )}
                 {selectedCustomer.lastPurchaseAt && (
                   <p className="text-gray-500 dark:text-gray-400">
-                    Ãšltima compra:{" "}
+                    Última compra:{" "}
                     {new Date(
                       selectedCustomer.lastPurchaseAt
                     ).toLocaleDateString()}
@@ -706,4 +710,3 @@ export default function Customers() {
     </div>
   );
 }
-

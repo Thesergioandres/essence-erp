@@ -1,7 +1,7 @@
 ﻿import dotenv from "dotenv";
 import mongoose from "mongoose";
 
-// Cargar el .env correcto segÃºn el entorno
+// Cargar el .env correcto según el entorno
 if (process.env.NODE_ENV === "test") {
   dotenv.config({ path: ".env.test" });
 } else {
@@ -31,7 +31,7 @@ const resolveAutoIndex = () => {
   return true;
 };
 
-// Loggers de estado de conexiÃ³n (se ejecutan una sola vez por proceso)
+// Loggers de estado de conexión (se ejecutan una sola vez por proceso)
 mongoose.connection.on("connected", () => {
   console.warn("[Essence Debug]", "âœ… Evento connected: MongoDB activo");
 });
@@ -46,7 +46,7 @@ mongoose.connection.on("error", (err) => {
 
 const connectDB = async () => {
   try {
-    // En desarrollo, preferir la BD local; en producciÃ³n usar MONGODB_URI
+    // En desarrollo, preferir la BD local; en producción usar MONGODB_URI
     let mongoUri;
 
     if (process.env.NODE_ENV === "development") {
@@ -67,13 +67,13 @@ const connectDB = async () => {
         process.env.MONGODB_URI ||
         process.env.MONGO_URI;
     } else {
-      // En producciÃ³n: usar la URI principal
+      // En producción: usar la URI principal
       mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI;
     }
 
     if (!mongoUri) {
       throw new Error(
-        "MONGODB_URI no estÃ¡ definida en las variables de entorno",
+        "MONGODB_URI no está definida en las variables de entorno",
       );
     }
 
@@ -84,11 +84,11 @@ const connectDB = async () => {
       (mongoUri.includes("_test") || dbName.includes("_test"))
     ) {
       throw new Error(
-        "âŒ PELIGRO: Intentando usar base de datos de test en producciÃ³n",
+        "âŒ PELIGRO: Intentando usar base de datos de test en producción",
       );
     }
 
-    // SEGURIDAD: Verificar que en test no se use la BD de producciÃ³n
+    // SEGURIDAD: Verificar que en test no se use la BD de producción
     if (process.env.NODE_ENV === "test" && !dbName.includes("_test")) {
       console.warn(
         "âš ï¸ URI de test sin sufijo _test detectada. Forzando dbName=essence_test para aislamiento.",
@@ -98,11 +98,11 @@ const connectDB = async () => {
 
     const autoIndex = resolveAutoIndex();
 
-    // Opciones explÃ­citas para diagnosticar timeouts y limitar pool
+    // Opciones explícitas para diagnosticar timeouts y limitar pool
     const mongoOptions = {
       dbName,
       autoIndex,
-      serverSelectionTimeoutMS: 10000, // falla rÃ¡pido si no se conecta
+      serverSelectionTimeoutMS: 10000, // falla rápido si no se conecta
       socketTimeoutMS: 45000,
       maxPoolSize: 10,
     };

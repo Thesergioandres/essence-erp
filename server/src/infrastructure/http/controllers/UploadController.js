@@ -18,7 +18,7 @@ class UploadController {
         console.warn("[Essence Debug]", "âŒ No file in request");
         return res.status(400).json({
           success: false,
-          message: "No se proporcionÃ³ ninguna imagen",
+          message: "No se proporcionó ninguna imagen",
         });
       }
 
@@ -27,7 +27,7 @@ class UploadController {
         console.warn("[Essence Debug]", "âŒ File too large:", req.file.size);
         return res.status(400).json({
           success: false,
-          message: "La imagen es muy grande. MÃ¡ximo 5MB.",
+          message: "La imagen es muy grande. Máximo 5MB.",
         });
       }
 
@@ -73,7 +73,7 @@ class UploadController {
 
       // Base64 images are stored in MongoDB, nothing to delete externally
       console.warn("[Essence Debug]", 
-        "ðŸ’¾ Imagen Base64 - se elimina automÃ¡ticamente con el producto",
+        "ðŸ’¾ Imagen Base64 - se elimina automáticamente con el producto",
       );
 
       res.json({

@@ -12,5 +12,5 @@ const vapidKeys = webpush.generateVAPIDKeys();
 console.warn("[Essence Debug]", "âœ… Claves generadas exitosamente:\n");
 console.warn("[Essence Debug]", "VAPID_PUBLIC_KEY=" + vapidKeys.publicKey);
 console.warn("[Essence Debug]", "VAPID_PRIVATE_KEY=" + vapidKeys.privateKey);
-console.warn("[Essence Debug]", "\nðŸ“ Copia estas lÃ­neas y agrÃ©galas a tu archivo .env\n");
+console.warn("[Essence Debug]", "\nðŸ“ Copia estas líneas y agrégalas a tu archivo .env\n");
 

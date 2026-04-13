@@ -6,7 +6,7 @@ const initRedis = () => {
   try {
     const redisEnabled = process.env.ENABLE_REDIS_CACHE === "true";
 
-    // Si estÃ¡ deshabilitado explÃ­citamente o no hay URL, no iniciar
+    // Si está deshabilitado explícitamente o no hay URL, no iniciar
     if (!redisEnabled || !process.env.REDIS_URL) {
       console.warn("[Essence Debug]", "â„¹ï¸  Redis cache deshabilitado en este entorno");
       return null;
@@ -14,14 +14,14 @@ const initRedis = () => {
 
     const redisUrl = process.env.REDIS_URL;
 
-    // ConfiguraciÃ³n base de Redis
+    // Configuración base de Redis
     const redisOptions = {
       maxRetriesPerRequest: 3,
       enableReadyCheck: true,
       connectTimeout: 10000,
     };
 
-    // Agregar opciones TLS automÃ¡ticas si es un endpoint seguro (muy comÃºn en Railway y Upstash)
+    // Agregar opciones TLS automáticas si es un endpoint seguro (muy común en Railway y Upstash)
     if (redisUrl.startsWith("rediss://")) {
       redisOptions.tls = {
         rejectUnauthorized: false, // Permite certificados auto-firmados comunes en infraestructuras nativas de cloud

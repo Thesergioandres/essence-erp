@@ -20,7 +20,7 @@ if (isCloudinaryConfigured) {
   });
 } else if (cloudinaryEnabled) {
   console.warn(
-    "âš ï¸  Cloudinary habilitado pero faltan CLOUDINARY_*; se deshabilita la subida de imÃ¡genes.",
+    "âš ï¸  Cloudinary habilitado pero faltan CLOUDINARY_*; se deshabilita la subida de imágenes.",
   );
 } else {
   console.warn("[Essence Debug]", 
@@ -28,7 +28,7 @@ if (isCloudinaryConfigured) {
   );
 }
 
-// Configurar storage de Multer con Cloudinary cuando estÃ¡ disponible.
+// Configurar storage de Multer con Cloudinary cuando está disponible.
 // Si no, usamos memoryStorage para que el POST no falle por el middleware.
 const storage = isCloudinaryConfigured
   ? new CloudinaryStorage({
@@ -56,12 +56,12 @@ export const upload = multer({
   },
 });
 
-// FunciÃ³n para eliminar imagen de Cloudinary
+// Función para eliminar imagen de Cloudinary
 export const deleteImage = async (publicId) => {
   try {
     if (!isCloudinaryConfigured) {
       console.warn(
-        "âš ï¸  deleteImage llamado sin Cloudinary configurado; se omite la eliminaciÃ³n.",
+        "âš ï¸  deleteImage llamado sin Cloudinary configurado; se omite la eliminación.",
         publicId,
       );
       return;
@@ -76,13 +76,13 @@ export const deleteImage = async (publicId) => {
 // Alias para compatibilidad
 export const deleteFromCloudinary = deleteImage;
 
-// FunciÃ³n para subir imagen desde base64
+// Función para subir imagen desde base64
 export const uploadToCloudinary = async (
   base64String,
   folder = "essence-products",
 ) => {
   if (!isCloudinaryConfigured) {
-    throw new Error("Cloudinary no estÃ¡ configurado");
+    throw new Error("Cloudinary no está configurado");
   }
 
   try {

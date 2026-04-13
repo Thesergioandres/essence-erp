@@ -4,7 +4,7 @@
  * Cron job para verificar y expirar suscripciones vencidas
  * Este worker revisa:
  * 1. Usuarios con subscriptionExpiresAt pasada y status = "active"
- * 2. Marca automÃ¡ticamente como "expired"
+ * 2. Marca automáticamente como "expired"
  */
 
 /**
@@ -21,7 +21,7 @@ export const checkExpiredUserSubscriptions = async () => {
   });
 
   try {
-    // Buscar usuarios activos cuya suscripciÃ³n ha expirado
+    // Buscar usuarios activos cuya suscripción ha expirado
     const expiredUsers = await User.updateMany(
       {
         role: { $ne: "god" },
@@ -59,8 +59,8 @@ export const checkExpiredUserSubscriptions = async () => {
 };
 
 /**
- * Obtener usuarios con suscripciones prÃ³ximas a expirar
- * @param {number} daysAhead - DÃ­as de anticipaciÃ³n para avisar
+ * Obtener usuarios con suscripciones próximas a expirar
+ * @param {number} daysAhead - Días de anticipación para avisar
  * @returns {Promise<Array>}
  */
 export const getExpiringSubscriptions = async (daysAhead = 7) => {
@@ -96,7 +96,7 @@ export const getExpiringSubscriptions = async (daysAhead = 7) => {
 };
 
 /**
- * Ejecutar todas las verificaciones de suscripciÃ³n
+ * Ejecutar todas las verificaciones de suscripción
  * Llamar desde un cron job externo o endpoint protegido
  */
 export const runSubscriptionChecks = async () => {
@@ -145,7 +145,7 @@ export const runSubscriptionChecks = async () => {
 };
 
 /**
- * Restaurar usuarios pausados que deberÃ­an estar activos
+ * Restaurar usuarios pausados que deberían estar activos
  * (caso edge: pausedRemainingMs > 0 pero status no es "paused")
  */
 export const cleanupInconsistentSubscriptions = async () => {
@@ -156,7 +156,7 @@ export const cleanupInconsistentSubscriptions = async () => {
   });
 
   try {
-    // Limpiar usuarios con pausedRemainingMs pero que no estÃ¡n pausados
+    // Limpiar usuarios con pausedRemainingMs pero que no están pausados
     const cleaned = await User.updateMany(
       {
         status: { $ne: "paused" },

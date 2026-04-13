@@ -1078,7 +1078,7 @@ export class RegisterPromotionSaleUseCase {
             amount: employeeProfit,
             sale: createdSale._id,
             product: productId,
-            description: `ComisiÃ³n por venta ${createdSale.saleId}`,
+            description: `Comisión por venta ${createdSale.saleId}`,
             date: saleDate,
             metadata: {
               quantity,
@@ -1231,7 +1231,7 @@ export class RegisterPromotionSaleUseCase {
           quantity,
           reason:
             warranty.reason ||
-            `${hasWarranty ? "Reemplazo proveedor" : "PÃ©rdida total"} - Orden ${saleGroupId}`,
+            `${hasWarranty ? "Reemplazo proveedor" : "Pérdida total"} - Orden ${saleGroupId}`,
           images: [],
           hasWarranty,
           warrantyStatus: hasWarranty ? "pending" : "not_applicable",
@@ -1259,7 +1259,7 @@ export class RegisterPromotionSaleUseCase {
               type: "ajuste",
               amount: -lossAmount,
               product: warranty.productId,
-              description: `PÃ©rdida por defectuoso (${quantity}): ${product.name}`,
+              description: `Pérdida por defectuoso (${quantity}): ${product.name}`,
               date: resolvedSaleDate,
               metadata: {
                 quantity,
@@ -1324,7 +1324,7 @@ export class RegisterPromotionSaleUseCase {
 
     if (paymentMethodCode === "credit") {
       if (!customerId) {
-        throw new Error("El cliente es obligatorio para ventas a crÃ©dito.");
+        throw new Error("El cliente es obligatorio para ventas a crédito.");
       }
 
       const credit = await CreditRepository.create(

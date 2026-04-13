@@ -2,8 +2,6 @@ import { resolveFinancialPrivacyContext } from "../../../../utils/financialPriva
 import { dispatchUseCases } from "../../../application/use-cases/dispatch/buildDispatchUseCases.js";
 import { isEmployeeRole } from "../../../utils/roleAliases.js";
 
-const isEmployeeRole = (role) => isEmployeeRole(role);
-
 const isGodRole = (role) => role === "god";
 
 const resolveBusinessId = (req) =>

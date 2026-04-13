@@ -21,7 +21,7 @@ const defaultFeatures: BusinessFeatures = {
 
 export default function Onboarding() {
   const navigate = useNavigate();
-  const { refresh, memberships } = useBusiness();
+  const { refresh, selectBusiness, memberships } = useBusiness();
   const [form, setForm] = useState({
     name: "",
     description: "",
@@ -38,12 +38,11 @@ export default function Onboarding() {
 
   useEffect(() => {
     if (memberships.length > 0) {
-      // Si ya tiene negocio, llÃ©valo directo al dashboard
+      // Si ya tiene negocio, llévalo directo al dashboard
       const role = memberships[0]?.role;
-      navigate(
-        role === "admin" ? "/admin/analytics" : "/staff/dashboard",
-        { replace: true }
-      );
+      navigate(role === "admin" ? "/admin/analytics" : "/staff/dashboard", {
+        replace: true,
+      });
     }
   }, [memberships, navigate]);
 
@@ -96,7 +95,8 @@ export default function Onboarding() {
       } as any);
 
       createdBusiness = result.business;
-      console.warn("[Essence Debug]", 
+      console.warn(
+        "[Essence Debug]",
         "[Onboarding] Business created successfully:",
         createdBusiness._id
       );
@@ -110,33 +110,38 @@ export default function Onboarding() {
           ?.message || "No se pudo crear el negocio";
       setError(msg);
       setLoading(false);
-      return; // Salir si falla la creaciÃ³n
+      return; // Salir si falla la creación
     }
 
-    // Si llegamos aquÃ­, el negocio se creÃ³ exitosamente
-    // Ahora intentamos refrescar los memberships (pero no bloqueamos si falla)
+    const newBusinessId = createdBusiness?._id
+      ? String(createdBusiness._id)
+      : null;
+
+    // Si llegamos aquí, el negocio se creó exitosamente
+    // Sincronizar contexto global antes de redirigir.
     try {
-      await refresh();
-      console.warn("[Essence Debug]", "[Onboarding] Memberships refreshed successfully");
+      await refresh({ silent: false });
+      if (newBusinessId) {
+        selectBusiness(newBusinessId);
+      }
     } catch (refreshErr) {
-      console.warn(
-        "[Onboarding] Refresh failed, but business was created:",
+      console.error(
+        "[Essence Debug] | Error al refrescar contexto tras crear negocio:",
         refreshErr
       );
-      // No mostramos error - el negocio se creÃ³ correctamente
     }
 
-    // Redirigir segÃºn el rol del usuario
+    // Redirigir según el rol del usuario
     const user = JSON.parse(localStorage.getItem("user") || "{}");
     const redirectPath =
-      user.role === "employee"
-        ? "/staff/dashboard"
-        : "/admin/analytics";
+      user.role === "employee" ? "/staff/dashboard" : "/admin/analytics";
 
-    console.warn("[Essence Debug]", "[Onboarding] Redirecting to:", redirectPath);
-
-    // Forzar recarga completa de la pÃ¡gina para actualizar todos los datos
-    window.location.href = redirectPath;
+    console.warn(
+      "[Essence Debug]",
+      "[Onboarding] Redirecting to:",
+      redirectPath
+    );
+    navigate(redirectPath, { replace: true });
   };
 
   return (
@@ -150,8 +155,8 @@ export default function Onboarding() {
             Crea tu primer negocio
           </h1>
           <p className="text-sm text-gray-300 sm:text-base">
-            Completa los datos bÃ¡sicos y activa los mÃ³dulos que necesitas. Luego
-            podrÃ¡s ajustarlos en Configurar negocio.
+            Completa los datos básicos y activa los módulos que necesitas. Luego
+            podrás ajustarlos en Configurar negocio.
           </p>
         </div>
 
@@ -180,7 +185,7 @@ export default function Onboarding() {
 
               <div className="sm:col-span-2">
                 <label className="mb-2 block text-sm font-medium text-gray-200">
-                  DescripciÃ³n
+                  Descripción
                 </label>
                 <textarea
                   name="description"
@@ -188,7 +193,7 @@ export default function Onboarding() {
                   onChange={handleChange}
                   rows={3}
                   className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-gray-500 focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  placeholder="Breve descripciÃ³n"
+                  placeholder="Breve descripción"
                 />
               </div>
 
@@ -208,7 +213,7 @@ export default function Onboarding() {
 
               <div>
                 <label className="mb-2 block text-sm font-medium text-gray-200">
-                  TelÃ©fono
+                  Teléfono
                 </label>
                 <input
                   name="contactPhone"
@@ -228,20 +233,20 @@ export default function Onboarding() {
                   value={form.contactWhatsapp}
                   onChange={handleChange}
                   className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-gray-500 focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  placeholder="NÃºmero para WhatsApp"
+                  placeholder="Número para WhatsApp"
                 />
               </div>
 
               <div>
                 <label className="mb-2 block text-sm font-medium text-gray-200">
-                  UbicaciÃ³n
+                  Ubicación
                 </label>
                 <input
                   name="contactLocation"
                   value={form.contactLocation}
                   onChange={handleChange}
                   className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-gray-500 focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  placeholder="Ciudad / direcciÃ³n"
+                  placeholder="Ciudad / dirección"
                 />
               </div>
 
@@ -263,7 +268,7 @@ export default function Onboarding() {
                       </div>
                     )}
                     <p className="text-sm text-gray-300">
-                      Sube el logo de tu negocio. Se mostrarÃ¡ en la navegaciÃ³n
+                      Sube el logo de tu negocio. Se mostrará en la navegación
                       para identificar tu empresa. Recomendado 512x512 png.
                     </p>
                   </div>
@@ -302,7 +307,7 @@ export default function Onboarding() {
                     Funcionalidades activas
                   </p>
                   <p className="text-sm text-gray-400">
-                    Activa los mÃ³dulos que necesitas para empezar.
+                    Activa los módulos que necesitas para empezar.
                   </p>
                 </div>
               </div>
@@ -328,7 +333,7 @@ export default function Onboarding() {
                   > = {
                     products: {
                       label: "Productos",
-                      desc: "CatÃ¡logo con imÃ¡genes, precios y comisiones.",
+                      desc: "Catálogo con imágenes, precios y comisiones.",
                     },
                     inventory: {
                       label: "Inventario",
@@ -336,23 +341,23 @@ export default function Onboarding() {
                     },
                     sales: {
                       label: "Ventas",
-                      desc: "Registro de ventas, filtros por fecha y anÃ¡lisis.",
+                      desc: "Registro de ventas, filtros por fecha y análisis.",
                     },
                     gamification: {
-                      label: "GamificaciÃ³n",
+                      label: "Gamificación",
                       desc: "Rankings, retos y premios para tu equipo.",
                     },
                     incidents: {
                       label: "Incidencias",
-                      desc: "BitÃ¡cora de problemas y seguimiento de casos.",
+                      desc: "Bitácora de problemas y seguimiento de casos.",
                     },
                     expenses: {
                       label: "Gastos",
-                      desc: "Control de egresos y categorÃ­as de gasto.",
+                      desc: "Control de egresos y categorías de gasto.",
                     },
                     assistant: {
                       label: "Business Assistant",
-                      desc: "Recomendaciones automÃ¡ticas y sugerencias.",
+                      desc: "Recomendaciones automáticas y sugerencias.",
                     },
                     reports: {
                       label: "Reportes",
@@ -364,27 +369,27 @@ export default function Onboarding() {
                     },
                     promotions: {
                       label: "Promociones",
-                      desc: "Ofertas, descuentos y campaÃ±as por temporada.",
+                      desc: "Ofertas, descuentos y campañas por temporada.",
                     },
                     branches: {
                       label: "Sedes",
-                      desc: "GestiÃ³n de sucursales y puntos de venta.",
+                      desc: "Gestión de sucursales y puntos de venta.",
                     },
                     employees: {
                       label: "Empleados",
-                      desc: "Red de distribuciÃ³n y comisiones.",
+                      desc: "Red de distribución y comisiones.",
                     },
                     rankings: {
                       label: "Rankings",
                       desc: "Clasificaciones y tablas de posiciones.",
                     },
                     credits: {
-                      label: "CrÃ©ditos",
-                      desc: "Ventas a crÃ©dito y gestiÃ³n de pagos.",
+                      label: "Créditos",
+                      desc: "Ventas a crédito y gestión de pagos.",
                     },
                     customers: {
                       label: "Clientes",
-                      desc: "GestiÃ³n de clientes y contactos.",
+                      desc: "Gestión de clientes y contactos.",
                     },
                     defectiveProducts: {
                       label: "Productos Defectuosos",
@@ -453,4 +458,3 @@ export default function Onboarding() {
     </div>
   );
 }
-

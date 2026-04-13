@@ -96,7 +96,7 @@ import { startProductionBackupWorker } from "./src/infrastructure/jobs/productio
 import godRoutesV2 from "./src/infrastructure/http/routes/god.routes.v2.js";
 import uploadRoutesV2 from "./src/infrastructure/http/routes/upload.routes.v2.js";
 
-// ConfiguraciÃ³n
+// Configuración
 dotenv.config();
 
 const app = express();
@@ -106,7 +106,7 @@ if (process.env.NODE_ENV === "production") {
   app.set("trust proxy", 1);
 }
 
-// Configurar orÃ­genes permitidos
+// Configurar orígenes permitidos
 const normalizeOrigin = (origin = "") =>
   String(origin).trim().replace(/\/+$/, "").toLowerCase();
 
@@ -185,8 +185,8 @@ if (process.env.DEBT_WORKER_ENABLED === "true") {
   startDebtNotificationWorker();
 }
 
-// Worker de backups automÃ¡ticos (cada 6 horas, mantiene 30 dÃ­as)
-// Habilitado por defecto en desarrollo y producciÃ³n, deshabilitado en tests
+// Worker de backups automáticos (cada 6 horas, mantiene 30 días)
+// Habilitado por defecto en desarrollo y producción, deshabilitado en tests
 if (
   process.env.NODE_ENV !== "test" &&
   process.env.BACKUP_WORKER_DISABLED !== "true"
@@ -240,7 +240,7 @@ app.use(helmet.hidePoweredBy());
 app.use(mongoSanitize());
 app.use(xss());
 
-// LÃ­mite de carga
+// Límite de carga
 app.use(express.json({ limit: "15kb" }));
 app.use(express.urlencoded({ extended: true, limit: "15kb" }));
 
@@ -248,7 +248,7 @@ app.use(securityHeaders);
 app.use(sanitizeHeaders);
 app.use(suspiciousRequestDetector);
 
-// ðŸ›¡ï¸ ProtecciÃ³n anti-escritura en producciÃ³n
+// ðŸ›¡ï¸ Protección anti-escritura en producción
 app.use(productionWriteGuard);
 if (process.env.DEBUG_DB === "true") {
   app.use(databaseOperationLogger);
@@ -257,7 +257,7 @@ if (process.env.DEBUG_DB === "true") {
 // Middlewares - CORS Configuration v5.0 - Enhanced for Production
 app.use(cors(corsOptions));
 
-// Manejo explÃ­cito de preflight requests
+// Manejo explícito de preflight requests
 app.options("*", cors(corsOptions));
 
 // Logging de request/res con requestId
@@ -277,7 +277,7 @@ app.get("/", (req, res) => {
   });
 });
 
-// DocumentaciÃ³n Swagger
+// Documentación Swagger
 app.use(
   "/api-docs",
   swaggerUi.serve,
@@ -288,7 +288,7 @@ app.use(
   }),
 );
 
-// JSON de la especificaciÃ³n OpenAPI
+// JSON de la especificación OpenAPI
 app.get("/api-docs.json", (_req, res) => {
   res.setHeader("Content-Type", "application/json");
   res.send(swaggerSpec);
@@ -297,7 +297,7 @@ app.get("/api-docs.json", (_req, res) => {
 // Aplicar rate limiting global a la API (excepto auth que tiene su propio limiter)
 app.use("/api", apiLimiter);
 
-// Endpoint pÃºblico de configuraciÃ³n SaaS (sin autenticaciÃ³n)
+// Endpoint público de configuración SaaS (sin autenticación)
 app.get("/api/v2/global-settings/public", async (_req, res) => {
   try {
     const data = await listPublicPlans();

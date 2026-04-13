@@ -51,7 +51,7 @@ const typeConfig: Record<
     label: "Combo",
     icon: <ShoppingCart className="h-4 w-4" />,
     color: "bg-blue-900/30 text-blue-400 border-blue-700/50",
-    description: "CombinaciÃ³n de productos con descuento",
+    description: "Combinación de productos con descuento",
   },
   bogo: {
     label: "2x1",
@@ -69,7 +69,7 @@ const typeConfig: Record<
     label: "Por Volumen",
     icon: <Tag className="h-4 w-4" />,
     color: "bg-orange-900/30 text-orange-400 border-orange-700/50",
-    description: "Descuento por comprar mÃ¡s cantidad",
+    description: "Descuento por comprar más cantidad",
   },
   fixed: {
     label: "Precio Fijo",
@@ -152,7 +152,7 @@ interface ComboItemForm {
 }
 
 export default function Promotions() {
-  // MÃ³dulo activo
+  // Módulo activo
   // const isUnderDevelopment = false;
 
   // (Removed development warning block)
@@ -328,8 +328,7 @@ export default function Promotions() {
     if (employees.length === 0) return;
     if (formData.allowedEmployees.length === 0) return;
 
-    const allSelected =
-      formData.allowedEmployees.length === employees.length;
+    const allSelected = formData.allowedEmployees.length === employees.length;
 
     if (allSelected) {
       lastAllowedEmployeesRef.current = formData.allowedEmployees;
@@ -522,7 +521,7 @@ export default function Promotions() {
     (productId: string, product?: ProductSelectorProduct) => {
       if (!product) return;
       if (comboItems.some(item => item.product === productId)) {
-        setError("Este producto ya estÃ¡ en la promociÃ³n");
+        setError("Este producto ya está en la promoción");
         return;
       }
       const price = product.clientPrice ?? product.suggestedPrice ?? 0;
@@ -615,7 +614,8 @@ export default function Promotions() {
   };
 
   const openEditModal = (promo: Promotion) => {
-    console.warn("[Essence Debug]", 
+    console.warn(
+      "[Essence Debug]",
       "Opening edit modal for:",
       promo.name,
       "DistPrice:",
@@ -682,8 +682,7 @@ export default function Promotions() {
           productImage: product?.image?.url,
           productPrice: product?.clientPrice || product?.suggestedPrice || 0,
           purchasePrice: product?.averageCost ?? product?.purchasePrice ?? 0,
-          employeePrice:
-            product?.employeePrice || product?.clientPrice || 0,
+          employeePrice: product?.employeePrice || product?.clientPrice || 0,
           quantity: item.quantity || 1,
           unitPrice: item.unitPrice || 0,
         };
@@ -762,10 +761,10 @@ export default function Promotions() {
 
       if (editingPromo) {
         await promotionService.update(editingPromo._id, payload);
-        setSuccess("PromociÃ³n actualizada correctamente");
+        setSuccess("Promoción actualizada correctamente");
       } else {
         await promotionService.create(payload as any);
-        setSuccess("PromociÃ³n creada correctamente");
+        setSuccess("Promoción creada correctamente");
       }
 
       notifyPromotionsUpdated();
@@ -778,7 +777,7 @@ export default function Promotions() {
       void loadData();
     } catch (err) {
       const error = err as Error;
-      setError(error.message || "Error al guardar promociÃ³n");
+      setError(error.message || "Error al guardar promoción");
     } finally {
       setSaving(false);
     }
@@ -791,7 +790,7 @@ export default function Promotions() {
         prev.map(p => (p._id === promo._id ? promotion : p))
       );
       setSuccess(
-        `PromociÃ³n ${promotion.status === "active" ? "activada" : "pausada"}`
+        `Promoción ${promotion.status === "active" ? "activada" : "pausada"}`
       );
       notifyPromotionsUpdated();
     } catch (err) {
@@ -801,7 +800,7 @@ export default function Promotions() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Â¿EstÃ¡s seguro de archivar esta promociÃ³n?")) return;
+    if (!confirm("Â¿Estás seguro de archivar esta promoción?")) return;
     try {
       await promotionService.delete(id);
 
@@ -809,12 +808,12 @@ export default function Promotions() {
       invalidateProductCache();
 
       setPromotions(prev => prev.filter(p => p._id !== id));
-      setSuccess("PromociÃ³n archivada");
+      setSuccess("Promoción archivada");
       notifyPromotionsUpdated();
       void loadData();
     } catch (err) {
       console.error("Error deleting:", err);
-      setError("Error al archivar promociÃ³n");
+      setError("Error al archivar promoción");
     }
   };
 
@@ -870,14 +869,14 @@ export default function Promotions() {
             className="flex items-center gap-2 rounded-lg border border-gray-700 px-4 py-2 text-gray-300 transition hover:bg-gray-800"
           >
             <BarChart3 className="h-4 w-4" />
-            MÃ©tricas
+            Métricas
           </button>
           <button
             onClick={openCreateModal}
             className="flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 font-medium text-white transition hover:bg-purple-700"
           >
             <Plus className="h-4 w-4" />
-            Nueva PromociÃ³n
+            Nueva Promoción
           </button>
         </div>
       </div>
@@ -924,7 +923,7 @@ export default function Promotions() {
             type="text"
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            placeholder="Buscar promociÃ³n..."
+            placeholder="Buscar promoción..."
             className="w-full rounded-lg border border-gray-700 bg-gray-800 py-2 pl-10 pr-4 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none"
           />
         </div>
@@ -963,7 +962,7 @@ export default function Promotions() {
             className="mt-4 inline-flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-white hover:bg-purple-700"
           >
             <Plus className="h-4 w-4" />
-            Crear tu primera promociÃ³n
+            Crear tu primera promoción
           </button>
         </div>
       ) : (
@@ -1052,7 +1051,7 @@ export default function Promotions() {
                       })}
                       {promo.comboItems.length > 3 && (
                         <span className="rounded-full bg-gray-700/50 px-2 py-0.5 text-xs text-gray-400">
-                          +{promo.comboItems.length - 3} mÃ¡s
+                          +{promo.comboItems.length - 3} más
                         </span>
                       )}
                     </div>
@@ -1136,7 +1135,7 @@ export default function Promotions() {
           <div className="w-full max-w-7xl rounded-xl border border-gray-700 bg-gray-900 shadow-xl">
             <div className="flex items-center justify-between border-b border-gray-700 p-4">
               <h2 className="text-xl font-semibold text-white">
-                {editingPromo ? "Editar PromociÃ³n" : "Nueva PromociÃ³n"}
+                {editingPromo ? "Editar Promoción" : "Nueva Promoción"}
               </h2>
               <button
                 onClick={() => {
@@ -1176,7 +1175,7 @@ export default function Promotions() {
                   {/* Description */}
                   <div>
                     <label className="mb-1 block text-sm font-medium text-gray-300">
-                      DescripciÃ³n
+                      Descripción
                     </label>
                     <textarea
                       value={formData.description}
@@ -1188,7 +1187,7 @@ export default function Promotions() {
                       }
                       rows={2}
                       className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none"
-                      placeholder="DescripciÃ³n de la promociÃ³n..."
+                      placeholder="Descripción de la promoción..."
                     />
                   </div>
 
@@ -1443,10 +1442,9 @@ export default function Promotions() {
                       ) : (
                         <div className="grid gap-2 sm:grid-cols-2">
                           {employees.map(employee => {
-                            const checked =
-                              formData.allowedEmployees.includes(
-                                employee._id
-                              );
+                            const checked = formData.allowedEmployees.includes(
+                              employee._id
+                            );
                             return (
                               <label
                                 key={employee._id}
@@ -1486,8 +1484,7 @@ export default function Promotions() {
                       )}
                     </div>
                     <p className="mt-1 text-xs text-gray-500">
-                      Si no seleccionas empleados, la promocion aplica en
-                      todos.
+                      Si no seleccionas empleados, la promocion aplica en todos.
                     </p>
                   </div>
 
@@ -1495,7 +1492,7 @@ export default function Promotions() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="mb-1 block text-sm font-medium text-gray-300">
-                        LÃ­mite total
+                        Límite total
                       </label>
                       <input
                         type="number"
@@ -1506,13 +1503,13 @@ export default function Promotions() {
                             usageLimit: e.target.value,
                           })
                         }
-                        placeholder="Sin lÃ­mite"
+                        placeholder="Sin límite"
                         className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-white focus:border-purple-500 focus:outline-none"
                       />
                     </div>
                     <div>
                       <label className="mb-1 block text-sm font-medium text-gray-300">
-                        LÃ­mite por cliente
+                        Límite por cliente
                       </label>
                       <input
                         type="number"
@@ -1523,7 +1520,7 @@ export default function Promotions() {
                             usageLimitPerCustomer: e.target.value,
                           })
                         }
-                        placeholder="Sin lÃ­mite"
+                        placeholder="Sin límite"
                         className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-white focus:border-purple-500 focus:outline-none"
                       />
                     </div>
@@ -1546,7 +1543,7 @@ export default function Promotions() {
                       htmlFor="showInCatalog"
                       className="text-sm text-gray-300"
                     >
-                      Mostrar en catÃ¡logo pÃºblico
+                      Mostrar en catálogo público
                     </label>
                   </div>
                 </div>
@@ -1576,7 +1573,7 @@ export default function Promotions() {
                   <div className="max-h-64 space-y-2 overflow-y-auto rounded-lg border border-gray-700 p-2">
                     {comboItems.length === 0 ? (
                       <p className="py-8 text-center text-gray-500">
-                        Agrega productos a la promociÃ³n
+                        Agrega productos a la promoción
                       </p>
                     ) : (
                       comboItems.map(item => (
@@ -1646,7 +1643,7 @@ export default function Promotions() {
                         </div>
                         <div className="mt-3">
                           <label className="mb-1 block text-sm font-medium text-purple-300">
-                            Precio de la promociÃ³n *
+                            Precio de la promoción *
                           </label>
                           <input
                             type="number"
@@ -1674,7 +1671,7 @@ export default function Promotions() {
                         </div>
                       </div>
 
-                      {/* ðŸ“Š INGENERÃA DE PRECIOS - Responsive Grid */}
+                      {/* ðŸ“Š INGENIERÍA DE PRECIOS - Responsive Grid */}
                       {formData.promotionPrice > 0 &&
                         (() => {
                           // Calculate financial metrics
@@ -1685,8 +1682,7 @@ export default function Promotions() {
                           );
                           const employeeCostTotal = comboItems.reduce(
                             (sum, item) =>
-                              sum +
-                              (item.employeePrice || 0) * item.quantity,
+                              sum + (item.employeePrice || 0) * item.quantity,
                             0
                           );
                           const totalPublicNormal = calculateOriginalPrice();
@@ -1717,7 +1713,7 @@ export default function Promotions() {
                           return (
                             <div className="rounded-lg border border-gray-700 bg-gray-800/50 p-3 sm:p-4">
                               <h4 className="mb-3 flex items-center gap-2 text-xs font-semibold text-gray-300 sm:text-sm">
-                                ðŸ“Š IngenierÃ­a de Precios
+                                ðŸ“Š Ingeniería de Precios
                               </h4>
 
                               {/* Alert if employee price below cost */}
@@ -1795,8 +1791,7 @@ export default function Promotions() {
                                           onClick={() => {
                                             setFormData({
                                               ...formData,
-                                              employeePrice:
-                                                employeeCostTotal,
+                                              employeePrice: employeeCostTotal,
                                             });
                                           }}
                                           className="rounded border border-gray-600 px-2 py-0.5 text-[10px] text-gray-300 transition hover:border-purple-500"
@@ -1970,7 +1965,7 @@ export default function Promotions() {
                   className="flex items-center gap-2 rounded-lg bg-purple-600 px-6 py-2 font-medium text-white transition hover:bg-purple-700 disabled:opacity-50"
                 >
                   {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-                  {editingPromo ? "Guardar cambios" : "Crear promociÃ³n"}
+                  {editingPromo ? "Guardar cambios" : "Crear promoción"}
                 </button>
               </div>
             </form>
@@ -1984,7 +1979,7 @@ export default function Promotions() {
           <div className="w-full max-w-4xl rounded-xl border border-gray-700 bg-gray-900 p-6 shadow-xl">
             <div className="mb-6 flex items-center justify-between">
               <h2 className="text-xl font-semibold text-white">
-                ðŸ“Š MÃ©tricas de Promociones
+                ðŸ“Š Métricas de Promociones
               </h2>
               <button
                 onClick={() => setShowMetrics(false)}
@@ -2031,7 +2026,9 @@ export default function Promotions() {
             <div className="grid gap-6 lg:grid-cols-3">
               {/* Top Selling */}
               <div>
-                <h3 className="mb-3 font-medium text-white">ðŸ† MÃ¡s Vendidas</h3>
+                <h3 className="mb-3 font-medium text-white">
+                  ðŸ† Más Vendidas
+                </h3>
                 <div className="space-y-2">
                   {metrics.topSelling.map((promo, idx) => (
                     <div
@@ -2056,7 +2053,7 @@ export default function Promotions() {
                   ))}
                   {metrics.topSelling.length === 0 && (
                     <p className="py-4 text-center text-gray-500">
-                      Sin datos aÃºn
+                      Sin datos aún
                     </p>
                   )}
                 </div>
@@ -2065,7 +2062,7 @@ export default function Promotions() {
               {/* Top Revenue */}
               <div>
                 <h3 className="mb-3 font-medium text-white">
-                  ðŸ’° MÃ¡s Rentables
+                  ðŸ’° Más Rentables
                 </h3>
                 <div className="space-y-2">
                   {metrics.topRevenue.map((promo, idx) => (
@@ -2091,7 +2088,7 @@ export default function Promotions() {
                   ))}
                   {metrics.topRevenue.length === 0 && (
                     <p className="py-4 text-center text-gray-500">
-                      Sin datos aÃºn
+                      Sin datos aún
                     </p>
                   )}
                 </div>
@@ -2100,7 +2097,7 @@ export default function Promotions() {
               {/* Top Products */}
               <div>
                 <h3 className="mb-3 font-medium text-white">
-                  ðŸ“¦ Productos MÃ¡s Usados
+                  ðŸ“¦ Productos Más Usados
                 </h3>
                 <div className="space-y-2">
                   {metrics.topProducts.map((product, idx) => (
@@ -2126,7 +2123,7 @@ export default function Promotions() {
                   ))}
                   {metrics.topProducts.length === 0 && (
                     <p className="py-4 text-center text-gray-500">
-                      Sin datos aÃºn
+                      Sin datos aún
                     </p>
                   )}
                 </div>
@@ -2147,4 +2144,3 @@ export default function Promotions() {
     </div>
   );
 }
-

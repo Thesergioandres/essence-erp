@@ -43,12 +43,12 @@ export const businessContext = async (req, res, next) => {
     addDebugLog(`[businessContext] User ID: ${req.user?._id || req.user?.id}`);
     addDebugLog(`[businessContext] User role: ${req.user?.role}`);
 
-    // Fallback: Si no hay ID explÃ­cito, intentar resolver por el usuario logueado (Auto-Select Default Business)
+    // Fallback: Si no hay ID explícito, intentar resolver por el usuario logueado (Auto-Select Default Business)
     if (!businessId && req.user) {
       const defaultMembership = await Membership.findOne({
         user: req.user._id || req.user.id,
         ...ACCESSIBLE_MEMBERSHIP_STATUS_QUERY,
-      }).sort({ createdAt: 1 }); // Preferir el mÃ¡s antiguo/principal
+      }).sort({ createdAt: 1 }); // Preferir el más antiguo/principal
 
       addDebugLog(
         `[businessContext] Auto-resolved membership: ${defaultMembership ? `Found (business: ${defaultMembership.business}, role: ${defaultMembership.role})` : "NOT FOUND"}`,
@@ -68,7 +68,7 @@ export const businessContext = async (req, res, next) => {
       req.membership = null;
       return next();
     }
-    // Incluso super_admin debe indicar el negocio explÃ­citamente (o resolverse automÃ¡ticamente arriba)
+    // Incluso super_admin debe indicar el negocio explícitamente (o resolverse automáticamente arriba)
     if (!businessId) {
       addDebugLog(`[businessContext] âŒ ERROR: No businessId found`);
       return res.status(400).json({
@@ -114,7 +114,7 @@ export const businessContext = async (req, res, next) => {
           business.createdBy?.toString() === req.user?.id?.toString();
         addDebugLog(`[businessContext] Is business owner: ${isOwner}`);
 
-        // Permitir al creador del negocio actuar como admin aunque no exista membership explÃ­cita
+        // Permitir al creador del negocio actuar como admin aunque no exista membership explícita
         if (isOwner) {
           membership = new Membership({
             user: req.user?.id,
@@ -143,11 +143,11 @@ export const businessContext = async (req, res, next) => {
       }
     }
 
-    // Si el creador (super admin) perdiÃ³ acceso, bloquear a los empleados del negocio
+    // Si el creador (super admin) perdió acceso, bloquear a los empleados del negocio
     if (isEmployeeRole(membership?.role) && !isGod) {
       addDebugLog(`[businessContext] Checking empleado's owner status...`);
 
-      // Resolver owner/admin principal: membership admin mÃ¡s antiguo o creador
+      // Resolver owner/admin principal: membership admin más antiguo o creador
       const primaryAdminMembership = await Membership.findOne({
         business: businessId,
         role: "admin",
@@ -244,7 +244,7 @@ export const requireRole = (roles = [], options = {}) => {
   };
 };
 
-// Permisos granulares por mÃ³dulo/acciÃ³n con soporte de sede
+// Permisos granulares por módulo/acción con soporte de sede
 export const requirePermission = ({ module, action, branchResolver } = {}) => {
   return (req, res, next) => {
     const debugLogs = [];
@@ -279,7 +279,7 @@ export const requirePermission = ({ module, action, branchResolver } = {}) => {
       return next();
     }
 
-    // Si no hay membership, usar el rol del usuario como fallback (Ãºtil para tests)
+    // Si no hay membership, usar el rol del usuario como fallback (útil para tests)
     const membership =
       req.membership ||
       (req.user
@@ -331,7 +331,7 @@ export const requirePermission = ({ module, action, branchResolver } = {}) => {
       });
     }
 
-    // Validar sede si el membership estÃ¡ restringido
+    // Validar sede si el membership está restringido
     const branchId =
       branchResolver?.(req) ||
       req.params?.branchId ||
@@ -368,7 +368,7 @@ export const requirePermission = ({ module, action, branchResolver } = {}) => {
   };
 };
 
-// Verifica que la feature estÃ© activa para el negocio seleccionado
+// Verifica que la feature esté activa para el negocio seleccionado
 export const requireFeature = (featureKey) => {
   return async (req, res, next) => {
     const debugLogs = [];
@@ -421,7 +421,7 @@ export const requireFeature = (featureKey) => {
           `[requireFeature] âŒ Assistant blocked: current plan has no access`,
         );
         return res.status(403).json({
-          message: "Business Assistant no estÃ¡ disponible para el plan actual",
+          message: "Business Assistant no está disponible para el plan actual",
           code: "FEATURE_RESTRICTED_BY_PLAN",
           feature: "assistant",
         });
@@ -436,7 +436,7 @@ export const requireFeature = (featureKey) => {
       `[requireFeature] Feature '${normalizedFeatureKey}' enabled: ${isEnabled}`,
     );
 
-    // Si no estÃ¡ definido, asumir habilitado para no bloquear rutas por config incompleta
+    // Si no está definido, asumir habilitado para no bloquear rutas por config incompleta
     if (isEnabled !== false) {
       addDebugLog(
         `[requireFeature] âœ… Feature not explicitly disabled, allowing`,
@@ -471,14 +471,14 @@ export const checkPlanLimits = (resourceKey) => {
       if (!businessId) {
         return res.status(400).json({
           success: false,
-          message: "Falta contexto de negocio para validar lÃ­mites",
+          message: "Falta contexto de negocio para validar límites",
         });
       }
 
       if (!["branches", "employees"].includes(resourceKey)) {
         return res.status(500).json({
           success: false,
-          message: "Recurso de lÃ­mite invÃ¡lido",
+          message: "Recurso de límite inválido",
         });
       }
 
@@ -500,8 +500,8 @@ export const checkPlanLimits = (resourceKey) => {
         resource: resourceKey,
         message:
           resourceKey === "branches"
-            ? "Has alcanzado el lÃ­mite de sedes de tu plan"
-            : "Has alcanzado el lÃ­mite de empleados de tu plan",
+            ? "Has alcanzado el límite de sedes de tu plan"
+            : "Has alcanzado el límite de empleados de tu plan",
         plan,
         limits,
         usage,
@@ -510,7 +510,7 @@ export const checkPlanLimits = (resourceKey) => {
     } catch (error) {
       return res.status(500).json({
         success: false,
-        message: "Error validando lÃ­mites del plan",
+        message: "Error validando límites del plan",
         error: error.message,
       });
     }

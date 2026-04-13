@@ -85,12 +85,12 @@ export const refreshAccessToken = async (req, res) => {
     try {
       decoded = jwtTokenService.verifyRefreshToken(refreshToken);
     } catch {
-      return res.status(401).json({ message: "Refresh token invÃ¡lido" });
+      return res.status(401).json({ message: "Refresh token inválido" });
     }
 
     const userId = decoded?.id || decoded?.userId;
     if (!userId) {
-      return res.status(401).json({ message: "Refresh token invÃ¡lido" });
+      return res.status(401).json({ message: "Refresh token inválido" });
     }
 
     const user = await userRepository.findById(userId);
@@ -133,7 +133,7 @@ export const refreshAccessToken = async (req, res) => {
  * Logout endpoint (stateless token model)
  */
 export const logout = async (_req, res) => {
-  return res.json({ success: true, message: "SesiÃ³n cerrada" });
+  return res.json({ success: true, message: "Sesión cerrada" });
 };
 
 /**
@@ -149,7 +149,7 @@ export const selectPlan = async (req, res) => {
     }
 
     if (!VALID_BUSINESS_PLANS.includes(plan)) {
-      return res.status(400).json({ success: false, message: "Plan invÃ¡lido" });
+      return res.status(400).json({ success: false, message: "Plan inválido" });
     }
 
     const user = await User.findById(userId);
@@ -215,7 +215,7 @@ export const impersonateEmployee = async (req, res) => {
     if (!employee || employee.role !== "employee") {
       return res.status(404).json({
         success: false,
-        message: "Usuario destino invÃ¡lido para suplantaciÃ³n",
+        message: "Usuario destino inválido para suplantación",
       });
     }
 
@@ -236,12 +236,12 @@ export const impersonateEmployee = async (req, res) => {
     );
 
     console.warn("[Essence Debug]", 
-      `[IMPERSONATION] Admin ${requesterId} estÃ¡ suplantando al empleado ${employee._id} en negocio ${businessId}`,
+      `[IMPERSONATION] Admin ${requesterId} está suplantando al empleado ${employee._id} en negocio ${businessId}`,
     );
 
     return res.json({
       success: true,
-      message: "SuplantaciÃ³n iniciada",
+      message: "Suplantación iniciada",
       token,
       user: {
         _id: employee._id,
@@ -279,7 +279,7 @@ export const revertImpersonation = async (req, res) => {
     if (!adminId) {
       return res
         .status(401)
-        .json({ success: false, message: "Token original invÃ¡lido" });
+        .json({ success: false, message: "Token original inválido" });
     }
 
     const adminUser = await User.findById(adminId).select("-password").lean();
@@ -315,7 +315,7 @@ export const revertImpersonation = async (req, res) => {
 
     return res.json({
       success: true,
-      message: "SesiÃ³n de administrador restaurada",
+      message: "Sesión de administrador restaurada",
       token: restoredToken,
       user: {
         _id: adminUser._id,
@@ -332,7 +332,7 @@ export const revertImpersonation = async (req, res) => {
     console.error("âŒ ERROR reverting impersonation:", error);
     return res.status(401).json({
       success: false,
-      message: "No se pudo restaurar la sesiÃ³n original",
+      message: "No se pudo restaurar la sesión original",
     });
   }
 };

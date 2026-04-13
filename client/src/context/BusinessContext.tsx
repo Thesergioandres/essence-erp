@@ -66,6 +66,7 @@ const defaultAssistantByPlan: AssistantPlanMap = {
 const TRANSIENT_SERVER_STATUS = new Set([500, 502, 503, 504]);
 
 const OBJECT_ID_REGEX = /^[a-f\d]{24}$/i;
+const OBJECT_ID_WRAPPER_REGEX = /ObjectId\(["']?([a-f\d]{24})["']?\)/i;
 const BUSINESS_CONTEXT_DEBUG_PREFIX = "[Essence Debug] | BusinessContext |";
 
 const logBusinessContextWarn = (action: string, details?: unknown) => {
@@ -81,6 +82,34 @@ const resolveEntityId = (value: unknown): string | null => {
     const trimmed = value.trim();
     if (!trimmed || trimmed === "[object Object]") {
       return null;
+    }
+
+    const objectIdWrapperMatch = trimmed.match(OBJECT_ID_WRAPPER_REGEX);
+    if (objectIdWrapperMatch?.[1]) {
+      return objectIdWrapperMatch[1];
+    }
+
+    if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+      try {
+        const parsed = JSON.parse(trimmed) as {
+          $oid?: unknown;
+          _id?: unknown;
+          id?: unknown;
+          businessId?: unknown;
+        };
+
+        const parsedId =
+          resolveEntityId(parsed.$oid) ||
+          resolveEntityId(parsed._id) ||
+          resolveEntityId(parsed.id) ||
+          resolveEntityId(parsed.businessId);
+
+        if (parsedId) {
+          return parsedId;
+        }
+      } catch {
+        // Ignore invalid JSON-like strings and fall back to the original value.
+      }
     }
 
     return trimmed;
@@ -123,20 +152,101 @@ const resolveEntityId = (value: unknown): string | null => {
   return null;
 };
 
+const resolveEntityIdDeep = (
+  value: unknown,
+  depth = 0,
+  visited: WeakSet<object> = new WeakSet()
+): string | null => {
+  if (depth > 5) {
+    return null;
+  }
+
+  const direct = resolveEntityId(value);
+  if (direct) {
+    return direct;
+  }
+
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  if (visited.has(value)) {
+    return null;
+  }
+  visited.add(value);
+
+  const recordValue = value as Record<string, unknown>;
+  const priorityKeys = [
+    "_id",
+    "id",
+    "$oid",
+    "businessId",
+    "business_id",
+    "business",
+  ];
+
+  for (const key of priorityKeys) {
+    if (!(key in recordValue)) continue;
+    const nested = resolveEntityIdDeep(recordValue[key], depth + 1, visited);
+    if (nested) {
+      return nested;
+    }
+  }
+
+  return null;
+};
+
+const resolveMembershipBusinessReference = (
+  membership: Membership
+): unknown => {
+  const runtimeMembership = membership as Membership & {
+    businessId?: unknown;
+    business_id?: unknown;
+  };
+
+  return (
+    runtimeMembership.business ??
+    runtimeMembership.businessId ??
+    runtimeMembership.business_id ??
+    null
+  );
+};
+
 const normalizeMembership = (membership: Membership): Membership => {
-  const businessId = resolveEntityId(membership.business);
+  const runtimeMembership = membership as Membership & {
+    businessName?: unknown;
+    name?: unknown;
+  };
+  const businessReference = resolveMembershipBusinessReference(membership);
+  const businessId = resolveEntityIdDeep(businessReference);
+  const fallbackBusinessName =
+    (typeof runtimeMembership.businessName === "string" &&
+      runtimeMembership.businessName.trim()) ||
+    (typeof runtimeMembership.name === "string" &&
+      runtimeMembership.name.trim()) ||
+    "Negocio";
 
   const normalizedBusiness =
-    typeof membership.business === "string"
+    typeof businessReference === "string"
       ? {
-          _id: businessId || membership.business,
-          name: "Negocio",
+          _id: businessId || businessReference,
+          name: fallbackBusinessName,
         }
-      : {
-          ...membership.business,
-          _id: businessId || membership.business?._id || "",
-          name: membership.business?.name || "Negocio",
-        };
+      : businessReference && typeof businessReference === "object"
+        ? {
+            ...businessReference,
+            _id:
+              businessId ||
+              resolveEntityId((businessReference as { _id?: unknown })._id) ||
+              "",
+            name:
+              (businessReference as { name?: string }).name ||
+              fallbackBusinessName,
+          }
+        : {
+            _id: businessId || "",
+            name: fallbackBusinessName,
+          };
 
   return {
     ...membership,
@@ -149,7 +259,7 @@ const normalizeMemberships = (memberships: Membership[]): Membership[] =>
   memberships.map(normalizeMembership);
 
 const getMembershipBusinessId = (membership: Membership): string =>
-  resolveEntityId(membership.business) || "";
+  resolveEntityIdDeep(resolveMembershipBusinessReference(membership)) || "";
 
 const hasSameMembershipSnapshot = (
   current: Membership[],
@@ -253,9 +363,11 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       const activeMemberships = storedMemberships.filter(
         membership => membership.status === "active"
       );
+      const availableMemberships =
+        activeMemberships.length > 0 ? activeMemberships : storedMemberships;
       const selectedStillValid =
         selectedBusinessId &&
-        activeMemberships.some(
+        availableMemberships.some(
           membership =>
             getMembershipBusinessId(membership) === selectedBusinessId
         );
@@ -265,8 +377,8 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       }
 
       const autoSelectedBusinessId =
-        activeMemberships.length === 1
-          ? getMembershipBusinessId(activeMemberships[0]) || null
+        availableMemberships.length > 0
+          ? getMembershipBusinessId(availableMemberships[0]) || null
           : null;
 
       if (autoSelectedBusinessId) {
@@ -339,7 +451,8 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
           });
         }
 
-        console.warn("[Essence Debug]", 
+        console.warn(
+          "[Essence Debug]",
           "[BusinessContext] Fetched memberships:",
           fetched?.length,
           fetched
@@ -361,7 +474,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
             : effectiveMemberships
         );
 
-        // Safe Retry Logic: Si devuelve vacÃ­o y no hemos reintentado, prueba una vez mÃ¡s
+        // Safe Retry Logic: Si devuelve vacío y no hemos reintentado, prueba una vez más
         if ((!fetched || fetched.length === 0) && retryRef.current < 1) {
           logBusinessContextWarn(
             "Refresh devolvio membresias vacias; se reintentara una vez",
@@ -378,7 +491,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        // Si Ã©xito, limpiar reintentos
+        // Si éxito, limpiar reintentos
         if (fetched && fetched.length > 0) {
           retryRef.current = 0;
         }
@@ -387,21 +500,20 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
         const activeMemberships = effectiveMemberships.filter(
           membership => membership.status === "active"
         );
+        const availableMemberships =
+          activeMemberships.length > 0
+            ? activeMemberships
+            : effectiveMemberships;
         const hasStored =
           Boolean(stored) &&
-          activeMemberships.some(
+          availableMemberships.some(
             membership => getMembershipBusinessId(membership) === stored
           );
-        const onlyOneActive =
-          activeMemberships.length === 1
-            ? getMembershipBusinessId(activeMemberships[0]) || null
+        const firstAvailableBusinessId =
+          availableMemberships.length > 0
+            ? getMembershipBusinessId(availableMemberships[0]) || null
             : null;
-        const onlyOneTotal =
-          effectiveMemberships.length === 1
-            ? getMembershipBusinessId(effectiveMemberships[0]) || null
-            : null;
-        const nextId =
-          (hasStored ? stored : onlyOneActive || onlyOneTotal) || null;
+        const nextId = (hasStored ? stored : firstAvailableBusinessId) || null;
 
         syncBusinessId(nextId);
 
@@ -422,8 +534,8 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
           status === 429 ||
           isTransientServerError;
 
-        // Si el token quedÃ³ viejo/ilegal y el backend responde 401, limpia sesiÃ³n
-        // Para 403, solo limpiar si NO es "owner_inactive" ni "pending" (usuario reciÃ©n registrado)
+        // Si el token quedó viejo/ilegal y el backend responde 401, limpia sesión
+        // Para 403, solo limpiar si NO es "owner_inactive" ni "pending" (usuario recién registrado)
         const isPendingUser = code === "pending";
         const isOwnerInactive = code === "owner_inactive";
 
@@ -478,7 +590,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
           syncBusinessId(null);
           setMemberships(prev => (prev.length > 0 ? [] : prev));
         } else if (status === 403 && !isOwnerInactive && !isPendingUser) {
-          // 403 por otras razones (token invÃ¡lido, etc) - limpiar sesiÃ³n
+          // 403 por otras razones (token inválido, etc) - limpiar sesión
           logBusinessContextWarn(
             "Refresh denegado (403) fuera de owner_inactive/pending; limpiando sesion",
             { code }
@@ -488,7 +600,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
           syncBusinessId(null);
           setMemberships(prev => (prev.length > 0 ? [] : prev));
         }
-        // Si es usuario pending (reciÃ©n registrado), NO limpiar token - solo marcar memberships vacÃ­as
+        // Si es usuario pending (recién registrado), NO limpiar token - solo marcar memberships vacías
         if (!silent && (isPendingUser || status === 403)) {
           logBusinessContextWarn(
             "Refresh sin membresias por estado pending/403; se mantiene sesion",
@@ -520,15 +632,77 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
 
   const selectBusiness = useCallback(
     (id: string | null) => {
-      const normalizedBusinessId = resolveEntityId(id);
-      syncBusinessId(normalizedBusinessId);
-      setError(null);
+      try {
+        const normalizedBusinessId = resolveEntityId(id);
+        syncBusinessId(normalizedBusinessId);
+        setError(null);
 
-      // Background refresh to keep memberships/features fresh without bloquear UI.
-      void refresh({ silent: true });
+        // Background refresh to keep memberships/features fresh without bloquear UI.
+        void refresh({ silent: true }).catch(refreshErr => {
+          logBusinessContextError(
+            "Error silencioso tras selectBusiness en refresh()",
+            refreshErr
+          );
+        });
+      } catch (error) {
+        logBusinessContextError("Error crítico en selectBusiness", {
+          error,
+          id,
+        });
+      }
     },
     [refresh, syncBusinessId]
   );
+
+  const autoSelectAttemptedRef = useRef<Record<string, boolean>>({});
+
+  // Efecto de Auto-selección de negocio seguro
+  useEffect(() => {
+    if (initializing || loading || memberships.length === 0) {
+      return;
+    }
+
+    const activeMemberships = memberships.filter(
+      membership => membership.status === "active"
+    );
+    const availableMemberships =
+      activeMemberships.length > 0 ? activeMemberships : memberships;
+    const selectedBusinessId = resolveEntityId(businessId);
+    const selectedBusinessStillValid =
+      Boolean(selectedBusinessId) &&
+      availableMemberships.some(
+        membership => getMembershipBusinessId(membership) === selectedBusinessId
+      );
+
+    if (selectedBusinessStillValid) {
+      // Reset block si por algun motivo vuelve a ser válido
+      autoSelectAttemptedRef.current = {};
+      return;
+    }
+
+    const fallbackBusinessId =
+      getMembershipBusinessId(availableMemberships[0]) || null;
+
+    if (
+      !fallbackBusinessId ||
+      autoSelectAttemptedRef.current[fallbackBusinessId]
+    ) {
+      return; // Evita loop de auto-selección
+    }
+
+    autoSelectAttemptedRef.current[fallbackBusinessId] = true;
+
+    logBusinessContextWarn(
+      "Auto-seleccion de negocio aplicada por ausencia de negocio activo valido",
+      {
+        selectedBusinessId,
+        fallbackBusinessId,
+        membershipsLength: memberships.length,
+      }
+    );
+
+    selectBusiness(fallbackBusinessId);
+  }, [businessId, memberships, selectBusiness, initializing, loading]);
 
   useEffect(() => {
     const run = async () => {
@@ -583,14 +757,31 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
     };
   }, [assistantByPlan, selectedMembership]);
 
+  const selectedBusiness = useMemo<Business | null>(() => {
+    if (!selectedMembership) {
+      return null;
+    }
+
+    if (typeof selectedMembership.business === "string") {
+      const selectedBusinessId = getMembershipBusinessId(selectedMembership);
+      if (!selectedBusinessId) {
+        return null;
+      }
+
+      return {
+        _id: selectedBusinessId,
+        name: "Negocio",
+      };
+    }
+
+    return selectedMembership.business || null;
+  }, [selectedMembership]);
+
   const value: BusinessContextValue = {
     businessId: selectedMembership
       ? getMembershipBusinessId(selectedMembership)
       : null,
-    business:
-      selectedMembership && typeof selectedMembership.business !== "string"
-        ? selectedMembership.business
-        : null,
+    business: selectedBusiness,
     features,
     memberships,
     hydrating: initializing,
@@ -620,4 +811,3 @@ export const useBusiness = () => {
   }
   return ctx;
 };
-

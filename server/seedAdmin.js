@@ -21,7 +21,7 @@ const createAdminUser = async () => {
       return;
     }
 
-    // Hash de la contraseÃ±a
+    // Hash de la contraseña
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash("Serra_1707", salt);
 
@@ -42,7 +42,7 @@ const createAdminUser = async () => {
     });
 
     await mongoose.connection.close();
-    console.warn("[Essence Debug]", "âœ… ConexiÃ³n cerrada");
+    console.warn("[Essence Debug]", "âœ… Conexión cerrada");
   } catch (error) {
     console.error("âŒ Error:", error.message);
     process.exit(1);

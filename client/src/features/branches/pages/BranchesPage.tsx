@@ -57,9 +57,9 @@ export default function Branches({ hideFinancialData = false }: BranchesProps) {
   );
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [limitDetails, setLimitDetails] = useState({
-    title: "LÃ­mite de sedes alcanzado",
+    title: "Límite de sedes alcanzado",
     description:
-      "Tu plan actual ya alcanzÃ³ el mÃ¡ximo de sedes permitidas. Actualiza tu plan para crear nuevas sedes.",
+      "Tu plan actual ya alcanzó el máximo de sedes permitidas. Actualiza tu plan para crear nuevas sedes.",
     usage: 0,
     limit: 0,
   });
@@ -141,9 +141,9 @@ export default function Branches({ hideFinancialData = false }: BranchesProps) {
 
     if (planSnapshot && planSnapshot.remaining.branches <= 0) {
       setLimitDetails({
-        title: "LÃ­mite de sedes alcanzado",
+        title: "Límite de sedes alcanzado",
         description:
-          "Tu plan actual ya alcanzÃ³ el mÃ¡ximo de sedes permitidas. Actualiza tu plan para crear nuevas sedes.",
+          "Tu plan actual ya alcanzó el máximo de sedes permitidas. Actualiza tu plan para crear nuevas sedes.",
         usage: planSnapshot.usage.branches,
         limit: planSnapshot.limits.branches,
       });
@@ -196,10 +196,10 @@ export default function Branches({ hideFinancialData = false }: BranchesProps) {
         const usage = apiError.response?.data?.usage?.branches ?? 0;
         const limit = apiError.response?.data?.limits?.branches ?? 0;
         setLimitDetails({
-          title: "LÃ­mite de sedes alcanzado",
+          title: "Límite de sedes alcanzado",
           description:
             apiError.response?.data?.message ||
-            "Tu plan actual alcanzÃ³ su lÃ­mite de sedes.",
+            "Tu plan actual alcanzó su límite de sedes.",
           usage,
           limit,
         });
@@ -235,7 +235,7 @@ export default function Branches({ hideFinancialData = false }: BranchesProps) {
 
   const handleDelete = async (branch: Branch) => {
     const confirmDelete = window.confirm(
-      `Â¿Eliminar la sede "${branch.name}"? Esta acciÃ³n no se puede deshacer.`
+      `Â¿Eliminar la sede "${branch.name}"? Esta acción no se puede deshacer.`
     );
     if (!confirmDelete) return;
     setError("");
@@ -316,21 +316,21 @@ export default function Branches({ hideFinancialData = false }: BranchesProps) {
     0
   );
 
-  // Valor invertido: lo que costÃ³ comprar el inventario
+  // Valor invertido: lo que costó comprar el inventario
   const totalInvested = branchStock.reduce((sum, item) => {
     const product = typeof item.product === "object" ? item.product : null;
     const purchasePrice = product?.purchasePrice || 0;
     return sum + purchasePrice * (item.quantity || 0);
   }, 0);
 
-  // Valor de venta estimado: lo que se recibirÃ­a vendiendo todo
+  // Valor de venta estimado: lo que se recibiría vendiendo todo
   const totalSalesValue = branchStock.reduce((sum, item) => {
     const product = typeof item.product === "object" ? item.product : null;
     const clientPrice = product?.clientPrice || 0;
     return sum + clientPrice * (item.quantity || 0);
   }, 0);
 
-  // Ganancia estimada: diferencia entre venta e inversiÃ³n
+  // Ganancia estimada: diferencia entre venta e inversión
   const totalEstimatedProfit = totalSalesValue - totalInvested;
 
   return (
@@ -338,7 +338,7 @@ export default function Branches({ hideFinancialData = false }: BranchesProps) {
       <div>
         <h1 className="text-3xl font-bold text-white">Sedes</h1>
         <p className="mt-2 text-gray-400">
-          Crea y administra las sedes desde las que venderÃ¡s y llevarÃ¡s
+          Crea y administra las sedes desde las que venderás y llevarás
           inventario.
         </p>
       </div>
@@ -392,7 +392,7 @@ export default function Branches({ hideFinancialData = false }: BranchesProps) {
 
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-300">
-                DirecciÃ³n
+                Dirección
               </label>
               <input
                 type="text"
@@ -420,7 +420,7 @@ export default function Branches({ hideFinancialData = false }: BranchesProps) {
               </div>
               <div>
                 <label className="mb-2 block text-sm font-medium text-gray-300">
-                  TelÃ©fono
+                  Teléfono
                 </label>
                 <input
                   type="tel"
@@ -529,7 +529,7 @@ export default function Branches({ hideFinancialData = false }: BranchesProps) {
                         </span>
                       </div>
                       <p className="text-sm text-gray-400">
-                        {branch.address || "Sin direcciÃ³n"}
+                        {branch.address || "Sin dirección"}
                       </p>
                       <p className="text-xs text-gray-500">
                         {branch.contactName || "Sin contacto"}
@@ -593,7 +593,7 @@ export default function Branches({ hideFinancialData = false }: BranchesProps) {
                   Inventario - {selectedBranchInventory.name}
                 </h2>
                 <p className="mt-1 truncate text-xs text-gray-400 sm:text-sm">
-                  {selectedBranchInventory.address || "Sin direcciÃ³n"}
+                  {selectedBranchInventory.address || "Sin dirección"}
                 </p>
               </div>
               <button

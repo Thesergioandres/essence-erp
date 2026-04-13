@@ -1,4 +1,4 @@
-﻿import { BusinessPersistenceUseCase } from "../../../application/use-cases/repository-gateways/BusinessPersistenceUseCase.js";
+import { BusinessPersistenceUseCase } from "../../../application/use-cases/repository-gateways/BusinessPersistenceUseCase.js";
 import Membership from "../../database/models/Membership.js";
 import User from "../../database/models/User.js";
 
@@ -72,8 +72,18 @@ const sanitizePermissions = (permissions) => {
 export class BusinessController {
   async create(req, res) {
     try {
-      const business = await repository.create(req.body, req.user.id);
-      res.status(201).json({ success: true, data: business });
+      const created = await repository.create(req.body, req.user.id, {
+        userRole: req.user.role,
+      });
+
+      const payload =
+        created &&
+        typeof created === "object" &&
+        Object.prototype.hasOwnProperty.call(created, "business")
+          ? created
+          : { business: created, membership: null };
+
+      res.status(201).json({ success: true, data: payload });
     } catch (error) {
       const status = error.statusCode || 500;
       res.status(status).json({ success: false, message: error.message });
@@ -160,7 +170,7 @@ export class BusinessController {
       if (!ALLOWED_MEMBER_ROLES.has(role)) {
         return res.status(400).json({
           success: false,
-          message: "Rol invÃ¡lido para miembro del equipo",
+          message: "Rol inv�lido para miembro del equipo",
         });
       }
 
@@ -201,7 +211,7 @@ export class BusinessController {
       if (!normalizedEmail || !normalizedEmail.includes("@")) {
         return res.status(400).json({
           success: false,
-          message: "Email invÃ¡lido",
+          message: "Email inv�lido",
         });
       }
 
@@ -260,7 +270,7 @@ export class BusinessController {
       if (requestedRole && !ALLOWED_MEMBER_ROLES.has(requestedRole)) {
         return res.status(400).json({
           success: false,
-          message: "Rol invÃ¡lido para miembro del equipo",
+          message: "Rol inv�lido para miembro del equipo",
         });
       }
 
@@ -272,7 +282,7 @@ export class BusinessController {
         return res.status(403).json({
           success: false,
           message:
-            "Solo admin, super_admin o god pueden modificar comisiÃ³n fija blindada",
+            "Solo admin, super_admin o god pueden modificar comisi�n fija blindada",
         });
       }
 
@@ -316,10 +326,12 @@ export class BusinessController {
           : {}),
       };
 
-      console.warn("[Essence Debug]", 
+      console.warn(
+        "[Essence Debug]",
         `[BusinessController] updateMember calling for business: ${req.businessId}, member: ${req.params.membershipId}`,
       );
-      console.warn("[Essence Debug]", 
+      console.warn(
+        "[Essence Debug]",
         `[BusinessController] Payload:`,
         JSON.stringify(updatePayload),
       );
@@ -446,11 +458,10 @@ export class BusinessController {
       const memberships = await repository.getUserMemberships(req.user.id);
       res.json({ success: true, data: { memberships } });
     } catch (error) {
-      console.error("âŒ CRITICAL ERROR in getMyMemberships:", error);
+      console.error("❌ CRITICAL ERROR in getMyMemberships:", error);
       console.error("User ID:", req.user?._id);
       console.error("Stack:", error.stack);
       res.status(500).json({ success: false, message: error.message });
     }
   }
 }
-

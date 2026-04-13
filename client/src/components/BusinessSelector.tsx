@@ -4,15 +4,44 @@ import { useBusiness } from "../context/BusinessContext";
 type MembershipLike = {
   _id: string;
   business: unknown;
+  businessId?: unknown;
+  businessName?: unknown;
 };
 
 const OBJECT_ID_REGEX = /^[a-f\d]{24}$/i;
+const OBJECT_ID_WRAPPER_REGEX = /ObjectId\(["']?([a-f\d]{24})["']?\)/i;
 
 const resolveEntityId = (value: unknown): string => {
   if (typeof value === "string") {
     const trimmed = value.trim();
     if (!trimmed || trimmed === "[object Object]") {
       return "";
+    }
+
+    const objectIdWrapperMatch = trimmed.match(OBJECT_ID_WRAPPER_REGEX);
+    if (objectIdWrapperMatch?.[1]) {
+      return objectIdWrapperMatch[1];
+    }
+
+    if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+      try {
+        const parsed = JSON.parse(trimmed) as {
+          $oid?: unknown;
+          _id?: unknown;
+          id?: unknown;
+          businessId?: unknown;
+        };
+
+        return (
+          resolveEntityId(parsed.$oid) ||
+          resolveEntityId(parsed._id) ||
+          resolveEntityId(parsed.id) ||
+          resolveEntityId(parsed.businessId) ||
+          trimmed
+        );
+      } catch {
+        return trimmed;
+      }
     }
 
     return trimmed;
@@ -55,24 +84,76 @@ const resolveEntityId = (value: unknown): string => {
   return "";
 };
 
+const resolveEntityIdDeep = (
+  value: unknown,
+  depth = 0,
+  visited: WeakSet<object> = new WeakSet()
+): string => {
+  if (depth > 5) {
+    return "";
+  }
+
+  const direct = resolveEntityId(value);
+  if (direct) {
+    return direct;
+  }
+
+  if (!value || typeof value !== "object") {
+    return "";
+  }
+
+  if (visited.has(value)) {
+    return "";
+  }
+  visited.add(value);
+
+  const recordValue = value as Record<string, unknown>;
+  const priorityKeys = [
+    "_id",
+    "id",
+    "$oid",
+    "businessId",
+    "business_id",
+    "business",
+  ];
+
+  for (const key of priorityKeys) {
+    if (!(key in recordValue)) continue;
+    const nested = resolveEntityIdDeep(recordValue[key], depth + 1, visited);
+    if (nested) {
+      return nested;
+    }
+  }
+
+  return "";
+};
+
 const resolveMembershipBusinessId = (membership: MembershipLike) => {
-  return resolveEntityId(membership.business);
+  const businessReference = membership.business ?? membership.businessId;
+  return resolveEntityIdDeep(businessReference);
 };
 
 const resolveMembershipBusinessName = (membership: MembershipLike) => {
-  const business = membership.business as unknown;
+  const business = (membership.business ?? membership.businessId) as unknown;
 
-  if (!business || typeof business !== "object") {
-    return "Sin nombre";
+  if (business && typeof business === "object") {
+    const candidate = business as { name?: unknown };
+    if (typeof candidate.name === "string") {
+      const trimmedName = candidate.name.trim();
+      if (trimmedName) {
+        return trimmedName;
+      }
+    }
   }
 
-  const candidate = business as { name?: unknown };
-  if (typeof candidate.name !== "string") {
-    return "Sin nombre";
+  if (typeof membership.businessName === "string") {
+    const trimmedName = membership.businessName.trim();
+    if (trimmedName) {
+      return trimmedName;
+    }
   }
 
-  const trimmedName = candidate.name.trim();
-  return trimmedName || "Sin nombre";
+  return "Sin nombre";
 };
 
 export default function BusinessSelector() {

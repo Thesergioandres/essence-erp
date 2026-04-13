@@ -311,7 +311,7 @@ export default function GodPanel() {
     const load = async () => {
       try {
         const data = await userAccessService.list();
-        setUsers(data.filter(u => u.role === "super_admin")); // Only super_admins can access the app
+        setUsers(data.filter(u => ["super_admin", "god"].includes(u.role))); // Only super_admins can access the app
       } catch (err) {
         console.error("god panel list error", err);
         setError("No se pudieron cargar los usuarios");
@@ -537,7 +537,7 @@ export default function GodPanel() {
                 setLoading(true);
                 try {
                   const data = await userAccessService.list();
-                  setUsers(data.filter(u => u.role === "super_admin"));
+                  setUsers(data.filter(u => ["super_admin", "god"].includes(u.role)));
                   setFeedback("Datos actualizados");
                 } catch (err) {
                   console.error("god panel refresh error", err);
@@ -612,7 +612,7 @@ export default function GodPanel() {
                 </select>
               </div>
               <p className="mt-2 text-xs text-gray-400">
-                Mostrando {filteredUsers.length} de {users.length} super admins.
+                Mostrando {filteredUsers.length} de {users.length} administradores.
               </p>
             </section>
 
@@ -662,7 +662,7 @@ export default function GodPanel() {
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-purple-200/80">
                     Usuarios
                   </p>
-                  <h2 className="text-lg font-bold text-white">Super admins</h2>
+                  <h2 className="text-lg font-bold text-white">Administradores</h2>
                   <p className="text-xs text-gray-400">
                     Ajusta vigencias y estado sin perder de vista la info clave.
                   </p>
@@ -1241,7 +1241,7 @@ export default function GodPanel() {
                           </div>
                           <div className="text-xs text-gray-300">
                             Uso sedes: {row.limits?.usage?.branches || 0}/
-                            {row.limits?.limits?.branches || 0} · Dist:{" "}
+                            {row.limits?.limits?.branches || 0} · Empleados:{" "}
                             {row.limits?.usage?.employees || 0}/
                             {row.limits?.limits?.employees || 0}
                           </div>

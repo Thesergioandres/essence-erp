@@ -53,8 +53,6 @@ const hasHideFinancialFlag = (user, membership) => {
   );
 };
 
-const isEmployeeRole = (role) => isEmployeeRole(role);
-
 const readExplicitFinancialViewPermission = ({ user, membership } = {}) => {
   const membershipPermissions = toRecord(membership?.permissions);
   const userPermissions = toRecord(

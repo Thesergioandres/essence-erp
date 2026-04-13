@@ -36,7 +36,7 @@ export const getDebtNotificationQueue = () => {
 };
 
 /**
- * Procesar un job de notificaciÃ³n de deuda vencida
+ * Procesar un job de notificación de deuda vencida
  */
 const processDebtNotification = async (job) => {
   const {
@@ -56,7 +56,7 @@ const processDebtNotification = async (job) => {
   });
 
   try {
-    // Verificar que el crÃ©dito sigue vencido
+    // Verificar que el crédito sigue vencido
     const credit = await Credit.findById(creditId);
     if (!credit || credit.status === "paid" || credit.status === "cancelled") {
       logWorkerJobFinished({
@@ -69,7 +69,7 @@ const processDebtNotification = async (job) => {
       return { skipped: true, reason: "credit_resolved" };
     }
 
-    // Crear notificaciÃ³n para admin
+    // Crear notificación para admin
     await Notification.create({
       business: businessId,
       targetRole: "admin",
@@ -77,7 +77,7 @@ const processDebtNotification = async (job) => {
       title: "Deuda vencida",
       message: `El cliente ${customerName} tiene una deuda vencida de $${amount.toFixed(
         2
-      )} (${daysOverdue} dÃ­as)`,
+      )} (${daysOverdue} días)`,
       priority: daysOverdue > 30 ? "high" : "medium",
       link: `/admin/credits?customer=${customerId}`,
       relatedEntity: { type: "Credit", id: creditId },
@@ -149,13 +149,13 @@ export const startDebtNotificationWorker = () => {
 };
 
 /**
- * Encolar notificaciÃ³n de deuda vencida
+ * Encolar notificación de deuda vencida
  */
 export const queueDebtNotification = async (data) => {
   const q = getDebtNotificationQueue();
   if (!q) {
-    console.warn("[WORKER WARN] Queue no disponible, ejecutando sÃ­ncronamente");
-    // Fallback sÃ­ncrono si no hay Redis
+    console.warn("[WORKER WARN] Queue no disponible, ejecutando síncronamente");
+    // Fallback síncrono si no hay Redis
     return processDebtNotification({ id: `sync-${Date.now()}`, data });
   }
 
@@ -195,7 +195,7 @@ export const checkAndQueueOverdueDebts = async (businessId, requestId) => {
         (now.getTime() - credit.dueDate.getTime()) / (1000 * 60 * 60 * 24)
       );
 
-      // Solo notificar cada 7 dÃ­as para evitar spam
+      // Solo notificar cada 7 días para evitar spam
       const shouldNotify =
         daysOverdue === 1 ||
         daysOverdue === 7 ||
@@ -215,13 +215,13 @@ export const checkAndQueueOverdueDebts = async (businessId, requestId) => {
         queuedCount++;
       }
 
-      // Actualizar estado si no estÃ¡ marcado como overdue
+      // Actualizar estado si no está marcado como overdue
       if (credit.status !== "overdue") {
         credit.status = "overdue";
         credit.statusHistory.push({
           status: "overdue",
           changedAt: now,
-          note: `Marcado como vencido automÃ¡ticamente (${daysOverdue} dÃ­as)`,
+          note: `Marcado como vencido automáticamente (${daysOverdue} días)`,
         });
         await credit.save();
       }

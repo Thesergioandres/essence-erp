@@ -110,7 +110,7 @@ export default function Providers() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Â¿EstÃ¡s seguro de eliminar este proveedor?")) return;
+    if (!confirm("Â¿Estás seguro de eliminar este proveedor?")) return;
 
     try {
       await providerService.delete(id);
@@ -156,7 +156,7 @@ export default function Providers() {
             Proveedores
           </h1>
           <p className="text-gray-500 dark:text-gray-400">
-            Gestiona tus proveedores y sus mÃ©tricas
+            Gestiona tus proveedores y sus métricas
           </p>
         </div>
         <button
@@ -252,7 +252,7 @@ export default function Providers() {
               )}
             </div>
 
-            {/* MÃ©tricas */}
+            {/* Métricas */}
             <div className="mt-4 flex gap-4 border-t border-gray-100 pt-4 dark:border-gray-700">
               <div className="flex items-center gap-2">
                 <Package className="h-4 w-4 text-blue-500" />
@@ -277,7 +277,7 @@ export default function Providers() {
           <p className="text-gray-500 dark:text-gray-400">
             {searchTerm
               ? "No se encontraron proveedores"
-              : "AÃºn no hay proveedores registrados"}
+              : "Aún no hay proveedores registrados"}
           </p>
         </div>
       )}
@@ -322,7 +322,7 @@ export default function Providers() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    TelÃ©fono
+                    Teléfono
                   </label>
                   <input
                     type="tel"
@@ -349,7 +349,7 @@ export default function Providers() {
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  DirecciÃ³n
+                  Dirección
                 </label>
                 <input
                   type="text"

@@ -8,7 +8,7 @@ import { pushSubscriptionService } from "./notification.service";
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || "";
 
 /**
- * Obtiene la clave VAPID del servidor si no estÃ¡ configurada localmente
+ * Obtiene la clave VAPID del servidor si no está configurada localmente
  */
 async function getVapidPublicKey(): Promise<string> {
   if (VAPID_PUBLIC_KEY) {
@@ -178,7 +178,7 @@ export async function unsubscribeFromPush(
 }
 
 /**
- * EnvÃ­a la suscripciÃ³n al servidor
+ * Envía la suscripción al servidor
  */
 async function sendSubscriptionToServer(
   subscription: PushSubscription
@@ -203,7 +203,7 @@ async function sendSubscriptionToServer(
 }
 
 /**
- * Elimina la suscripciÃ³n del servidor
+ * Elimina la suscripción del servidor
  */
 async function removeSubscriptionFromServer(
   subscription: PushSubscription
@@ -218,7 +218,7 @@ async function removeSubscriptionFromServer(
 }
 
 /**
- * Muestra una notificaciÃ³n local (sin push server)
+ * Muestra una notificación local (sin push server)
  */
 export function showLocalNotification(
   title: string,

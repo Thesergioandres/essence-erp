@@ -395,7 +395,7 @@ export const analyticsService = {
           byPaymentMethod: [], // Would need separate endpoint
           byCategory: Array.isArray(categories)
             ? categories.map((c: any) => ({
-                category: c.category || c.categoryName || "Sin categorÃ­a",
+                category: c.category || c.categoryName || "Sin categoría",
                 revenue: c.revenue || c.totalRevenue || 0,
                 profit: c.profit || c.totalProfit || 0,
                 quantity: c.quantity || c.totalQuantity || 0,
@@ -676,8 +676,8 @@ export const advancedAnalyticsService = {
 
       const categories = data.map((item: any) => {
         const transformed = {
-          name: item.category || "Sin categorÃ­a",
-          category: item.category || "Sin categorÃ­a",
+          name: item.category || "Sin categoría",
+          category: item.category || "Sin categoría",
           totalSales: item.sales || 0,
           sales: item.sales || 0,
           totalRevenue: item.revenue || 0,
@@ -778,7 +778,7 @@ export const advancedAnalyticsService = {
             item.product?.category?.name ||
             item.product?.category ||
             item.category ||
-            "Sin categorÃ­a",
+            "Sin categoría",
           quantity: item.totalQuantity || 0,
           revenue: item.totalRevenue || 0,
           rank: index + 1,
@@ -888,7 +888,7 @@ export const advancedAnalyticsService = {
       const products = data.map((item: any) => ({
         productId: item._id || item.productId,
         name: item.product?.name || item.name || "Sin nombre",
-        category: item.product?.category?.name || "Sin categorÃ­a",
+        category: item.product?.category?.name || "Sin categoría",
         salesCount: item.totalQuantity || 0,
         revenue: item.totalRevenue || 0,
         profit: item.totalProfit || 0,

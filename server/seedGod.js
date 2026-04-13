@@ -82,7 +82,7 @@ const seedGodUser = async () => {
     }
 
     await mongoose.connection.close();
-    console.warn("[Essence Debug]", "âœ… ConexiÃ³n cerrada");
+    console.warn("[Essence Debug]", "âœ… Conexión cerrada");
     process.exit(0);
   } catch (error) {
     console.error("âŒ Error seeding usuario god:", error);

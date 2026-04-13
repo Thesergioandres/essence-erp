@@ -38,11 +38,11 @@ dotenv.config();
 
 /**
  * Crear backup local completo en JSON (sin mongodump)
- * VENTAJA: No requiere herramientas externas, mÃ¡s rÃ¡pido
+ * VENTAJA: No requiere herramientas externas, más rápido
  */
 export const createBackup = async () => {
   try {
-    // Directorio de backups en la raÃ­z del proyecto
+    // Directorio de backups en la raíz del proyecto
     const backupDir = path.join(process.cwd(), "..", "backups");
     const timestamp = new Date()
       .toISOString()
@@ -55,7 +55,7 @@ export const createBackup = async () => {
 
     console.warn("[Essence Debug]", `ðŸ“¦ Creando backup local en: ${backupPath}`);
 
-    // Conectar a MongoDB si no estÃ¡ conectado
+    // Conectar a MongoDB si no está conectado
     if (mongoose.connection.readyState !== 1) {
       const mongoUri = process.env.MONGO_URI || process.env.MONGODB_URI;
       await mongoose.connect(mongoUri);
@@ -110,7 +110,7 @@ export const createBackup = async () => {
           totalDocuments += documents.length;
           totalCollections++;
         } else {
-          console.warn("[Essence Debug]", `   âšª ${name}: vacÃ­a`);
+          console.warn("[Essence Debug]", `   âšª ${name}: vacía`);
         }
       } catch (error) {
         console.warn("[Essence Debug]", `   âŒ ${name}: Error - ${error.message}`);
@@ -135,13 +135,13 @@ export const createBackup = async () => {
     );
 
     console.warn("[Essence Debug]", `\nâœ… Backup creado exitosamente`);
-    console.warn("[Essence Debug]", `   ðŸ“‚ UbicaciÃ³n: ${backupPath}`);
+    console.warn("[Essence Debug]", `   ðŸ“‚ Ubicación: ${backupPath}`);
     console.warn("[Essence Debug]", 
       `   ðŸ“Š ${totalCollections} colecciones, ${totalDocuments} documentos\n`
     );
 
     // Limpiar backups antiguos
-    await cleanOldBackups(backupDir, 30); // Mantener 30 dÃ­as
+    await cleanOldBackups(backupDir, 30); // Mantener 30 días
 
     return backupPath;
   } catch (error) {
@@ -189,7 +189,7 @@ export const restoreBackup = async (backupPath) => {
   try {
     console.warn("[Essence Debug]", `ðŸ“¥ Restaurando backup desde: ${backupPath}\n`);
 
-    // Conectar a MongoDB si no estÃ¡ conectado
+    // Conectar a MongoDB si no está conectado
     if (mongoose.connection.readyState !== 1) {
       const mongoUri = process.env.MONGO_URI || process.env.MONGODB_URI;
       await mongoose.connect(mongoUri);
@@ -262,7 +262,7 @@ export const restoreBackup = async (backupPath) => {
           const Model = modelMap[collectionName];
 
           if (Model) {
-            // Borrar colecciÃ³n existente
+            // Borrar colección existente
             await Model.deleteMany({});
 
             // Insertar datos del backup
@@ -279,7 +279,7 @@ export const restoreBackup = async (backupPath) => {
       }
     }
 
-    console.warn("[Essence Debug]", `\nâœ… RestauraciÃ³n completada: ${totalRestored} documentos\n`);
+    console.warn("[Essence Debug]", `\nâœ… Restauración completada: ${totalRestored} documentos\n`);
 
     return true;
   } catch (error) {

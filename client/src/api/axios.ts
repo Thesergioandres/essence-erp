@@ -243,7 +243,7 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    // Intentar refresh automÃ¡tico en 401 (excepto en rutas de auth)
+    // Intentar refresh automático en 401 (excepto en rutas de auth)
     const isPublicSettings401 = originalRequest.url?.includes(
       "/global-settings/public"
     );
@@ -321,7 +321,7 @@ api.interceptors.response.use(
           isRefreshing = false;
         }
       } else {
-        // No hay refresh token, limpiar y redirigir a login si habÃ­a token
+        // No hay refresh token, limpiar y redirigir a login si había token
         const token = localStorage.getItem("token");
         if (token) {
           logAxiosWarn("401 sin refresh token disponible; limpiando sesion", {

@@ -338,7 +338,7 @@ async function rollbackPromotionMetricsForGroup({
  * Delete a single sale
  */
 export async function deleteSale(req, res) {
-  console.warn("[Essence Debug]", "ðŸ—‘ï¸  [DELETE SALE] FunciÃ³n llamada");
+  console.warn("[Essence Debug]", "ðŸ—‘ï¸  [DELETE SALE] Función llamada");
   const runDelete = async (useTransaction) => {
     const session = useTransaction ? await mongoose.startSession() : null;
 
@@ -472,7 +472,7 @@ export async function deleteSale(req, res) {
  * Delete all sales in a group (cart transaction)
  */
 export async function deleteSaleGroup(req, res) {
-  console.warn("[Essence Debug]", "ðŸ—‘ï¸  [DELETE GROUP] FunciÃ³n llamada");
+  console.warn("[Essence Debug]", "ðŸ—‘ï¸  [DELETE GROUP] Función llamada");
   const runDelete = async (useTransaction) => {
     const session = useTransaction ? await mongoose.startSession() : null;
 

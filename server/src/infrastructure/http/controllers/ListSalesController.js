@@ -41,13 +41,13 @@ export async function listSales(req, res) {
     // If no employeeId in params, check effective role (membership first)
     // so employee users with admin membership can view team sales.
     const effectiveRole = req.membership?.role || req.user?.role;
-    const isEmployeeRole = isEmployeeRole(effectiveRole);
+    const isEmpRole = isEmployeeRole(effectiveRole);
     const canViewTeamSalesByMembership =
       req.membership?.role === "admin" ||
       req.membership?.permissions?.sales?.update === true ||
       req.membership?.permissions?.sales?.delete === true;
 
-    if (!employeeId && isEmployeeRole && !canViewTeamSalesByMembership) {
+    if (!employeeId && isEmpRole && !canViewTeamSalesByMembership) {
       employeeId = req.user.id;
     }
 

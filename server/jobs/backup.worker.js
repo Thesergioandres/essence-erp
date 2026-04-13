@@ -1,6 +1,6 @@
 ﻿/**
- * Worker de Backup AutomÃ¡tico
- * Ejecuta backups cada 6 horas y mantiene los Ãºltimos 30 dÃ­as
+ * Worker de Backup Automático
+ * Ejecuta backups cada 6 horas y mantiene los últimos 30 días
  */
 
 import dotenv from "dotenv";
@@ -45,9 +45,9 @@ import User from "../src/infrastructure/database/models/User.js";
 
 dotenv.config();
 
-// ConfiguraciÃ³n
+// Configuración
 const BACKUP_INTERVAL_HOURS = 6; // Cada 6 horas
-const BACKUP_RETENTION_DAYS = 30; // Mantener 30 dÃ­as
+const BACKUP_RETENTION_DAYS = 30; // Mantener 30 días
 const BACKUP_DIR = path.join(process.cwd(), "..", "backups");
 
 // Estado del worker
@@ -96,14 +96,17 @@ const getCollections = () => [
 ];
 
 /**
- * Crear backup automÃ¡tico
+ * Crear backup automático
  */
 const createAutomaticBackup = async () => {
   const startTime = Date.now();
 
   try {
     console.warn("[Essence Debug]", "\n" + "â•".repeat(60));
-    console.warn("[Essence Debug]", "ðŸ”„ [BACKUP AUTOMÃTICO] Iniciando backup...");
+    console.warn(
+      "[Essence Debug]",
+      "ðŸ”„ [BACKUP AUTOMÁTICO] Iniciando backup...",
+    );
     console.warn("[Essence Debug]", "â•".repeat(60));
 
     // Timestamp con hora para backups cada 6 horas
@@ -114,9 +117,12 @@ const createAutomaticBackup = async () => {
     // Crear directorio de backup
     await fs.mkdir(backupPath, { recursive: true });
 
-    // Verificar conexiÃ³n a MongoDB
+    // Verificar conexión a MongoDB
     if (mongoose.connection.readyState !== 1) {
-      console.warn("[Essence Debug]", "âš ï¸  MongoDB no conectado, saltando backup");
+      console.warn(
+        "[Essence Debug]",
+        "âš ï¸  MongoDB no conectado, saltando backup",
+      );
       return null;
     }
 
@@ -126,7 +132,10 @@ const createAutomaticBackup = async () => {
     let errors = [];
 
     console.warn("[Essence Debug]", `ðŸ“‚ Destino: ${backupPath}`);
-    console.warn("[Essence Debug]", `ðŸ“¦ Respaldando ${collections.length} colecciones...\n`);
+    console.warn(
+      "[Essence Debug]",
+      `ðŸ“¦ Respaldando ${collections.length} colecciones...\n`,
+    );
 
     for (const { model, name } of collections) {
       try {
@@ -135,7 +144,10 @@ const createAutomaticBackup = async () => {
         if (documents.length > 0) {
           const filePath = path.join(backupPath, `${name}.json`);
           await fs.writeFile(filePath, JSON.stringify(documents, null, 2));
-          console.warn("[Essence Debug]", `   âœ… ${name}: ${documents.length} docs`);
+          console.warn(
+            "[Essence Debug]",
+            `   âœ… ${name}: ${documents.length} docs`,
+          );
           totalDocuments += documents.length;
           totalCollections++;
         }
@@ -178,11 +190,18 @@ const createAutomaticBackup = async () => {
 
     console.warn("[Essence Debug]", "\n" + "â”€".repeat(60));
     console.warn("[Essence Debug]", `âœ… [BACKUP COMPLETADO]`);
-    console.warn("[Essence Debug]", 
+    console.warn(
+      "[Essence Debug]",
       `   ðŸ“Š ${totalCollections} colecciones, ${totalDocuments} documentos`,
     );
-    console.warn("[Essence Debug]", `   â±ï¸  DuraciÃ³n: ${Date.now() - startTime}ms`);
-    console.warn("[Essence Debug]", `   ðŸ• PrÃ³ximo backup: ${getNextBackupTime()}`);
+    console.warn(
+      "[Essence Debug]",
+      `   â±ï¸  Duración: ${Date.now() - startTime}ms`,
+    );
+    console.warn(
+      "[Essence Debug]",
+      `   ðŸ• Próximo backup: ${getNextBackupTime()}`,
+    );
     console.warn("[Essence Debug]", "â”€".repeat(60) + "\n");
 
     return backupPath;
@@ -198,7 +217,7 @@ const createAutomaticBackup = async () => {
 };
 
 /**
- * Limpiar backups antiguos (mÃ¡s de 30 dÃ­as)
+ * Limpiar backups antiguos (más de 30 días)
  */
 const cleanOldBackups = async () => {
   try {
@@ -221,7 +240,10 @@ const cleanOldBackups = async () => {
         if (folderDate < cutoffDate) {
           const folderPath = path.join(BACKUP_DIR, folder);
           await fs.rm(folderPath, { recursive: true, force: true });
-          console.warn("[Essence Debug]", `   ðŸ—‘ï¸  Eliminado backup antiguo: ${folder}`);
+          console.warn(
+            "[Essence Debug]",
+            `   ðŸ—‘ï¸  Eliminado backup antiguo: ${folder}`,
+          );
           deleted++;
         }
       } catch (err) {
@@ -230,7 +252,10 @@ const cleanOldBackups = async () => {
     }
 
     if (deleted > 0) {
-      console.warn("[Essence Debug]", `   ðŸ“‹ ${deleted} backup(s) antiguo(s) eliminado(s)`);
+      console.warn(
+        "[Essence Debug]",
+        `   ðŸ“‹ ${deleted} backup(s) antiguo(s) eliminado(s)`,
+      );
     }
   } catch (error) {
     console.error("âš ï¸  Error limpiando backups antiguos:", error.message);
@@ -238,7 +263,7 @@ const cleanOldBackups = async () => {
 };
 
 /**
- * Calcular prÃ³ximo tiempo de backup
+ * Calcular próximo tiempo de backup
  */
 const getNextBackupTime = () => {
   const next = new Date();
@@ -247,33 +272,48 @@ const getNextBackupTime = () => {
 };
 
 /**
- * Iniciar worker de backup automÃ¡tico
+ * Iniciar worker de backup automático
  */
 export const startBackupWorker = () => {
   if (isRunning) {
-    console.warn("[Essence Debug]", "âš ï¸  Backup worker ya estÃ¡ corriendo");
+    console.warn("[Essence Debug]", "âš ï¸  Backup worker ya está corriendo");
     return;
   }
 
   // No ejecutar en entorno de test
   if (process.env.NODE_ENV === "test") {
-    console.warn("[Essence Debug]", "ðŸ§ª Backup worker deshabilitado en modo test");
+    console.warn(
+      "[Essence Debug]",
+      "ðŸ§ª Backup worker deshabilitado en modo test",
+    );
     return;
   }
 
   console.warn("[Essence Debug]", "\n" + "â•".repeat(60));
-  console.warn("[Essence Debug]", "ðŸš€ [BACKUP WORKER] Iniciando sistema de backups automÃ¡ticos");
+  console.warn(
+    "[Essence Debug]",
+    "ðŸš€ [BACKUP WORKER] Iniciando sistema de backups automáticos",
+  );
   console.warn("[Essence Debug]", "â•".repeat(60));
-  console.warn("[Essence Debug]", `   â° Intervalo: cada ${BACKUP_INTERVAL_HOURS} horas`);
-  console.warn("[Essence Debug]", `   ðŸ“… RetenciÃ³n: Ãºltimos ${BACKUP_RETENTION_DAYS} dÃ­as`);
+  console.warn(
+    "[Essence Debug]",
+    `   â° Intervalo: cada ${BACKUP_INTERVAL_HOURS} horas`,
+  );
+  console.warn(
+    "[Essence Debug]",
+    `   ðŸ“… Retención: últimos ${BACKUP_RETENTION_DAYS} días`,
+  );
   console.warn("[Essence Debug]", `   ðŸ“‚ Directorio: ${BACKUP_DIR}`);
   console.warn("[Essence Debug]", "â•".repeat(60) + "\n");
 
   isRunning = true;
 
-  // Ejecutar primer backup despuÃ©s de 1 minuto (dar tiempo a que MongoDB conecte)
+  // Ejecutar primer backup después de 1 minuto (dar tiempo a que MongoDB conecte)
   setTimeout(async () => {
-    console.warn("[Essence Debug]", "ðŸ”„ [BACKUP WORKER] Ejecutando backup inicial...");
+    console.warn(
+      "[Essence Debug]",
+      "ðŸ”„ [BACKUP WORKER] Ejecutando backup inicial...",
+    );
     await createAutomaticBackup();
   }, 60 * 1000); // 1 minuto
 
@@ -283,7 +323,10 @@ export const startBackupWorker = () => {
     await createAutomaticBackup();
   }, intervalMs);
 
-  console.warn("[Essence Debug]", `âœ… [BACKUP WORKER] Activo - PrÃ³ximo backup en 1 minuto`);
+  console.warn(
+    "[Essence Debug]",
+    `âœ… [BACKUP WORKER] Activo - Próximo backup en 1 minuto`,
+  );
 };
 
 /**
@@ -315,7 +358,10 @@ export const getBackupWorkerStatus = () => ({
  * Ejecutar backup manual (para API)
  */
 export const triggerManualBackup = async () => {
-  console.warn("[Essence Debug]", "ðŸ“¦ [BACKUP MANUAL] Solicitado por usuario");
+  console.warn(
+    "[Essence Debug]",
+    "ðŸ“¦ [BACKUP MANUAL] Solicitado por usuario",
+  );
   return await createAutomaticBackup();
 };
 
@@ -325,4 +371,3 @@ export default {
   getBackupWorkerStatus,
   triggerManualBackup,
 };
-

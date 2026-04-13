@@ -202,7 +202,7 @@ describe("Auth routes v2", () => {
 
     expect(response.status).toBe(401);
     expect(response.body.message).toMatch(
-      /inválido|invalido|invÃ¡lido|invÃƒÂ¡lido/i,
+      /inválido|invalido|inv\u00C3\u00A1lido|inv\u00C3\u0192\u00C2\u00A1lido/i,
     );
   });
 

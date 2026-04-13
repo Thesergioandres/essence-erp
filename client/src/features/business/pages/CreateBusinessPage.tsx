@@ -109,12 +109,21 @@ export default function CreateBusiness() {
 
       setSuccess(true);
 
-      // Refrescar memberships y seleccionar el nuevo negocio
-      await refresh();
-      setTimeout(() => {
-        selectBusiness(business._id);
-        navigate("/admin/analytics");
-      }, 1500);
+      const newBusinessId = business?._id ? String(business._id) : null;
+
+      try {
+        await refresh({ silent: false });
+        if (newBusinessId) {
+          selectBusiness(newBusinessId);
+        }
+      } catch (refreshErr) {
+        console.error(
+          "[Essence Debug] | Error al refrescar contexto tras crear negocio:",
+          refreshErr
+        );
+      }
+
+      navigate("/admin/analytics", { replace: true });
     } catch (err: unknown) {
       const errorMessage =
         (err as { response?: { data?: { message?: string } } })?.response?.data
@@ -128,7 +137,7 @@ export default function CreateBusiness() {
   if (success) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center p-6">
-        <div className="rounded-2xl border border-emerald-800/50 bg-gradient-to-br from-emerald-900/40 to-gray-900 p-8 text-center shadow-xl">
+        <div className="bg-linear-to-br rounded-2xl border border-emerald-800/50 from-emerald-900/40 to-gray-900 p-8 text-center shadow-xl">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/20">
             <Check className="h-8 w-8 text-emerald-400" />
           </div>

@@ -27,13 +27,13 @@ export const protect = async (req, res, next) => {
 
       if (!userId) {
         logAuthError({
-          message: "Token invÃ¡lido: falta ID de usuario",
+          message: "Token inválido: falta ID de usuario",
           module: "auth",
           requestId: req.reqId,
         });
         return res
           .status(401)
-          .json({ message: "Token invÃ¡lido: falta ID de usuario" });
+          .json({ message: "Token inválido: falta ID de usuario" });
       }
 
       const user = await User.findById(userId).select("-password");
@@ -48,7 +48,7 @@ export const protect = async (req, res, next) => {
         return res.status(401).json({ message: "Usuario no encontrado" });
       }
 
-      // Agregar informaciÃ³n del usuario a req.user
+      // Agregar información del usuario a req.user
       req.user = {
         userId: user._id.toString(),
         id: user._id.toString(),
@@ -64,7 +64,7 @@ export const protect = async (req, res, next) => {
         hideFinancialData: user.hideFinancialData === true,
       };
 
-      // En entorno de pruebas no bloquear por estado/expiraciÃ³n
+      // En entorno de pruebas no bloquear por estado/expiración
       if (process.env.NODE_ENV === "test") {
         req.user.status = "active";
         return next();
@@ -72,7 +72,7 @@ export const protect = async (req, res, next) => {
 
       // Si es rol god, siempre permitir
       if (user.role !== "god") {
-        // ExpiraciÃ³n automÃ¡tica
+        // Expiración automática
         if (
           user.subscriptionExpiresAt &&
           new Date(user.subscriptionExpiresAt).getTime() < Date.now() &&
@@ -83,11 +83,11 @@ export const protect = async (req, res, next) => {
           req.user.status = "expired";
         }
 
-        // Permitir usuarios pending solo para rutas pÃºblicas y account-hold
+        // Permitir usuarios pending solo para rutas públicas y account-hold
         if (user.status === "pending") {
           // Usuarios pending solo tienen acceso limitado - deben ir a account-hold
           req.user.status = "pending";
-          // Continuar con la autenticaciÃ³n - el ProtectedRoute manejarÃ¡ el redirect
+          // Continuar con la autenticación - el ProtectedRoute manejará el redirect
         } else if (user.status !== "active") {
           logAuthError({
             message: "Acceso restringido por estado de cuenta",
@@ -103,12 +103,12 @@ export const protect = async (req, res, next) => {
           });
         }
 
-        // Para empleados, verificar tambiÃ©n el estado del owner del negocio
+        // Para empleados, verificar también el estado del owner del negocio
         if (isEmployeeRole(user.role)) {
           const ownerCheck = await checkBusinessOwnerAccess(user._id);
           if (!ownerCheck.hasAccess) {
             logAuthError({
-              message: "Acceso restringido: el negocio no estÃ¡ activo",
+              message: "Acceso restringido: el negocio no está activo",
               module: "auth",
               requestId: req.reqId,
               userId: user._id?.toString(),
@@ -118,7 +118,7 @@ export const protect = async (req, res, next) => {
               },
             });
             return res.status(403).json({
-              message: "El negocio al que perteneces no estÃ¡ activo",
+              message: "El negocio al que perteneces no está activo",
               code: ownerCheck.reason,
               ownerExpiresAt: ownerCheck.ownerExpiresAt,
             });
@@ -126,7 +126,8 @@ export const protect = async (req, res, next) => {
         }
       }
 
-      console.warn("[Essence Debug]", 
+      console.warn(
+        "[Essence Debug]",
         "âœ… Usuario autenticado:",
         req.user.name,
         `(${req.user.role})`,
@@ -135,16 +136,16 @@ export const protect = async (req, res, next) => {
       next();
     } catch (error) {
       logAuthError({
-        message: "Token invÃ¡lido",
+        message: "Token inválido",
         module: "auth",
         requestId: req.reqId,
         stack: error.stack,
       });
-      res.status(401).json({ message: "No autorizado, token invÃ¡lido" });
+      res.status(401).json({ message: "No autorizado, token inválido" });
     }
   } else {
     logAuthError({
-      message: "No se proporcionÃ³ token",
+      message: "No se proporcionó token",
       module: "auth",
       requestId: req.reqId,
     });
@@ -153,8 +154,8 @@ export const protect = async (req, res, next) => {
 };
 
 /**
- * Middleware de protecciÃ³n que permite usuarios con status "pending".
- * Ãštil para endpoints como /profile donde el frontend necesita
+ * Middleware de protección que permite usuarios con status "pending".
+ * Útil para endpoints como /profile donde el frontend necesita
  * sincronizar el estado actualizado del usuario.
  */
 export const protectAllowPending = async (req, res, next) => {
@@ -170,7 +171,7 @@ export const protectAllowPending = async (req, res, next) => {
       if (!userId) {
         return res
           .status(401)
-          .json({ message: "Token invÃ¡lido: falta ID de usuario" });
+          .json({ message: "Token inválido: falta ID de usuario" });
       }
 
       const user = await User.findById(userId).select("-password");
@@ -179,7 +180,7 @@ export const protectAllowPending = async (req, res, next) => {
         return res.status(401).json({ message: "Usuario no encontrado" });
       }
 
-      // Agregar informaciÃ³n del usuario a req.user (sin bloquear por status)
+      // Agregar información del usuario a req.user (sin bloquear por status)
       req.user = {
         userId: user._id.toString(),
         id: user._id.toString(),
@@ -203,12 +204,12 @@ export const protectAllowPending = async (req, res, next) => {
       next();
     } catch (error) {
       logAuthError({
-        message: "Token invÃ¡lido (protectAllowPending)",
+        message: "Token inválido (protectAllowPending)",
         module: "auth",
         requestId: req.reqId,
         stack: error.stack,
       });
-      res.status(401).json({ message: "No autorizado, token invÃ¡lido" });
+      res.status(401).json({ message: "No autorizado, token inválido" });
     }
   } else {
     res.status(401).json({ message: "No autorizado, sin token" });
@@ -295,4 +296,3 @@ export const adminOrEmployee = (req, res, next) => {
     res.status(403).json({ message: "Acceso denegado" });
   }
 };
-

@@ -37,6 +37,119 @@ let myMembershipsCache: {
   fetchedAt: number;
   token: string | null;
 } | null = null;
+let myMembershipsRequestSequence = 0;
+
+const resolveBusinessId = (value: unknown): string | null => {
+  if (!value) {
+    return null;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed || null;
+  }
+
+  if (typeof value === "object") {
+    const recordValue = value as { _id?: unknown; id?: unknown };
+    if (typeof recordValue._id === "string" && recordValue._id.trim()) {
+      return recordValue._id;
+    }
+    if (typeof recordValue.id === "string" && recordValue.id.trim()) {
+      return recordValue.id;
+    }
+  }
+
+  return null;
+};
+
+const normalizeMembershipWithBusiness = (
+  business: Business,
+  membership?: BusinessMembership
+): (BusinessMembership & { business: Business }) | null => {
+  if (!membership) {
+    return null;
+  }
+
+  return {
+    ...membership,
+    business,
+  };
+};
+
+const primeMembershipsAfterCreate = (
+  business: Business,
+  membership?: BusinessMembership
+): MembershipsResponse | null => {
+  const normalizedMembership = normalizeMembershipWithBusiness(
+    business,
+    membership
+  );
+
+  if (!normalizedMembership) {
+    return null;
+  }
+
+  let nextMemberships: Array<BusinessMembership & { business: Business }> = [
+    normalizedMembership,
+  ];
+
+  if (typeof localStorage !== "undefined") {
+    const rawUser = localStorage.getItem("user");
+
+    if (rawUser) {
+      try {
+        const parsedUser = JSON.parse(rawUser) as {
+          memberships?: Array<BusinessMembership & { business: Business }>;
+        } & Record<string, unknown>;
+
+        const currentMemberships = Array.isArray(parsedUser.memberships)
+          ? parsedUser.memberships
+          : [];
+
+        const createdBusinessId = resolveBusinessId(business);
+        const withoutCreatedBusiness = currentMemberships.filter(existing => {
+          const existingBusinessId = resolveBusinessId(existing.business);
+
+          if (createdBusinessId && existingBusinessId) {
+            return existingBusinessId !== createdBusinessId;
+          }
+
+          return existing._id !== normalizedMembership._id;
+        });
+
+        nextMemberships = [normalizedMembership, ...withoutCreatedBusiness];
+
+        localStorage.setItem(
+          "user",
+          JSON.stringify({
+            ...parsedUser,
+            memberships: nextMemberships,
+          })
+        );
+      } catch {
+        nextMemberships = [normalizedMembership];
+      }
+    }
+  }
+
+  const activeMembership =
+    nextMemberships.find(candidate => candidate.status === "active") ||
+    nextMemberships[0] ||
+    undefined;
+
+  return {
+    memberships: nextMemberships,
+    activeMembership,
+  };
+};
+
+const invalidateMembershipCacheState = () => {
+  myMembershipsRequestSequence += 1;
+  myMembershipsInFlight = null;
+  myMembershipsInFlightToken = null;
+  myMembershipsRateLimitedUntil = 0;
+  myMembershipsCache = null;
+};
 
 const isMembershipCacheFresh = (currentToken: string | null) =>
   Boolean(
@@ -138,7 +251,7 @@ export const businessService = {
   }): Promise<{
     message: string;
     business: Business;
-    membership: BusinessMembership;
+    membership?: BusinessMembership;
   }> {
     const response = await api.post("/business", data);
     const payload = response.data as {
@@ -150,29 +263,43 @@ export const businessService = {
         | { business?: Business; membership?: BusinessMembership };
     };
 
-    if (payload.business) {
-      return {
-        message: payload.message || "Negocio creado",
-        business: payload.business,
-        membership: payload.membership as BusinessMembership,
-      };
-    }
-
     const dataPayload = payload.data as
       | Business
       | { business?: Business; membership?: BusinessMembership }
       | undefined;
 
     const business =
+      payload.business ||
       (dataPayload as { business?: Business } | undefined)?.business ||
       (dataPayload as Business | undefined);
 
+    if (!business || !business._id) {
+      throw new Error("No se pudo resolver el negocio creado");
+    }
+
+    const membership =
+      payload.membership ||
+      (dataPayload as { membership?: BusinessMembership } | undefined)
+        ?.membership;
+
+    invalidateMembershipCacheState();
+
+    const primedMemberships = primeMembershipsAfterCreate(business, membership);
+    if (primedMemberships) {
+      myMembershipsCache = {
+        value: primedMemberships,
+        fetchedAt: Date.now(),
+        token:
+          typeof localStorage === "undefined"
+            ? null
+            : localStorage.getItem("token"),
+      };
+    }
+
     return {
       message: payload.message || "Negocio creado",
-      business: business as Business,
-      membership: (
-        dataPayload as { membership?: BusinessMembership } | undefined
-      )?.membership as BusinessMembership,
+      business,
+      membership,
     };
   },
 
@@ -203,6 +330,7 @@ export const businessService = {
       }
     }
 
+    const requestSequence = ++myMembershipsRequestSequence;
     myMembershipsInFlightToken = currentToken;
     myMembershipsInFlight = api
       .get<{
@@ -211,7 +339,11 @@ export const businessService = {
       }>("/business/my-memberships")
       .then(response => {
         const activeToken = localStorage.getItem("token");
-        if (activeToken !== myMembershipsInFlightToken) {
+        const isStaleRequest =
+          requestSequence !== myMembershipsRequestSequence ||
+          activeToken !== myMembershipsInFlightToken;
+
+        if (isStaleRequest) {
           return readMembershipsFromStoredSession() || response.data.data;
         }
 
@@ -224,6 +356,19 @@ export const businessService = {
         return response.data.data;
       })
       .catch(error => {
+        const activeToken = localStorage.getItem("token");
+        const isStaleRequest =
+          requestSequence !== myMembershipsRequestSequence ||
+          activeToken !== myMembershipsInFlightToken;
+
+        if (isStaleRequest) {
+          const fallback = readMembershipsFromStoredSession();
+          if (fallback) {
+            return fallback;
+          }
+          throw error;
+        }
+
         const status = (error as { response?: { status?: number } })?.response
           ?.status;
 
@@ -274,8 +419,10 @@ export const businessService = {
         throw error;
       })
       .finally(() => {
-        myMembershipsInFlight = null;
-        myMembershipsInFlightToken = null;
+        if (requestSequence === myMembershipsRequestSequence) {
+          myMembershipsInFlight = null;
+          myMembershipsInFlightToken = null;
+        }
       });
 
     return myMembershipsInFlight;

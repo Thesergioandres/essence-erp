@@ -121,14 +121,26 @@ export class BusinessRepository {
       customLimits: data.customLimits,
     });
 
-    await Membership.create({
+    const membership = await Membership.create({
       user: creatorId,
       business: business._id,
       role: "admin",
       status: "active",
     });
 
-    return business;
+    await User.findByIdAndUpdate(creatorId, {
+      $addToSet: { businesses: business._id },
+    });
+
+    const businessPayload = business.toObject();
+
+    return {
+      business: businessPayload,
+      membership: {
+        ...membership.toObject(),
+        business: businessPayload,
+      },
+    };
   }
 
   async findAll() {

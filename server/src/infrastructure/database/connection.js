@@ -53,7 +53,7 @@ const resolveMongoUris = () => {
   return { prodUri, devUri, testUri };
 };
 
-// Cargar el .env correcto segÃºn el entorno
+// Cargar el .env correcto según el entorno
 // Ajustamos paths para que busque en la raiz del servidor
 if (process.env.NODE_ENV === "test") {
   dotenv.config({ path: path.join(SERVER_ROOT, ".env.test") });
@@ -84,7 +84,7 @@ const resolveAutoIndex = () => {
   return true;
 };
 
-// Loggers de estado de conexiÃ³n (se ejecutan una sola vez por proceso)
+// Loggers de estado de conexión (se ejecutan una sola vez por proceso)
 mongoose.connection.on("connected", () => {
   console.warn("[Essence Debug]", "âœ… Evento connected: MongoDB activo");
 });
@@ -121,7 +121,7 @@ export const connectDB = async () => {
 
     if (!mongoUri) {
       throw new Error(
-        "No se encontrÃ³ URI de MongoDB para el entorno actual (MONGO_URI_PROD / MONGO_URI_DEV / MONGO_URI_TEST)",
+        "No se encontró URI de MongoDB para el entorno actual (MONGO_URI_PROD / MONGO_URI_DEV / MONGO_URI_TEST)",
       );
     }
 
@@ -130,23 +130,23 @@ export const connectDB = async () => {
 
     if (nonProductionPointsToProd) {
       console.warn(
-        "âš ï¸  Entorno no productivo conectado a URI de producciÃ³n: se forzarÃ¡ modo READ-ONLY estricto.",
+        "âš ï¸  Entorno no productivo conectado a URI de producción: se forzará modo READ-ONLY estricto.",
       );
     }
 
     let dbName = resolveDbName(mongoUri);
 
-    // SEGURIDAD: Verificar que en producciÃ³n no se use la BD de test
+    // SEGURIDAD: Verificar que en producción no se use la BD de test
     if (
       nodeEnv === "production" &&
       (mongoUri.includes("_test") || dbName.includes("_test"))
     ) {
       throw new Error(
-        "âŒ PELIGRO: Intentando usar base de datos de test en producciÃ³n",
+        "âŒ PELIGRO: Intentando usar base de datos de test en producción",
       );
     }
 
-    // SEGURIDAD: Verificar que en test no se use la BD de producciÃ³n
+    // SEGURIDAD: Verificar que en test no se use la BD de producción
     if (nodeEnv === "test" && !dbName.includes("_test")) {
       console.warn(
         "âš ï¸ URI de test sin sufijo _test detectada. Forzando dbName=essence_test para aislamiento.",
@@ -156,11 +156,11 @@ export const connectDB = async () => {
 
     const autoIndex = resolveAutoIndex();
 
-    // Opciones explÃ­citas para diagnosticar timeouts y limitar pool
+    // Opciones explícitas para diagnosticar timeouts y limitar pool
     const mongoOptions = {
       dbName,
       autoIndex,
-      serverSelectionTimeoutMS: 10000, // falla rÃ¡pido si no se conecta
+      serverSelectionTimeoutMS: 10000, // falla rápido si no se conecta
       socketTimeoutMS: 45000,
       maxPoolSize: 10,
     };
@@ -172,7 +172,7 @@ export const connectDB = async () => {
         nodeEnv,
       });
       console.warn(
-        "ðŸ›¡ï¸ Muro de ProducciÃ³n activo: escritura bloqueada en esta conexiÃ³n.",
+        "ðŸ›¡ï¸ Muro de Producción activo: escritura bloqueada en esta conexión.",
       );
     }
 

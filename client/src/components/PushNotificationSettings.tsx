@@ -71,20 +71,20 @@ export default function PushNotificationSettings() {
   const subscribe = async () => {
     setLoading(true);
     try {
-      // Registrar service worker si no estÃ¡ registrado
+      // Registrar service worker si no está registrado
       const registration = await navigator.serviceWorker.register("/sw.js");
       await navigator.serviceWorker.ready;
 
-      // Obtener la clave pÃºblica VAPID del servidor
+      // Obtener la clave pública VAPID del servidor
       const config = await pushSubscriptionService.getVapidPublicKey();
 
-      // Crear suscripciÃ³n push
+      // Crear suscripción push
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(config.publicKey),
       });
 
-      // Enviar suscripciÃ³n al servidor
+      // Enviar suscripción al servidor
       await pushSubscriptionService.subscribe({
         subscription: subscription.toJSON(),
         preferences,
@@ -161,7 +161,7 @@ export default function PushNotificationSettings() {
         <div className="flex items-center gap-3 text-gray-500">
           <BellOff className="h-5 w-5" />
           <span className="text-sm">
-            Las notificaciones push no estÃ¡n soportadas en este navegador
+            Las notificaciones push no están soportadas en este navegador
           </span>
         </div>
       </div>
@@ -183,7 +183,7 @@ export default function PushNotificationSettings() {
             </h3>
             <p className="text-sm text-gray-500">
               {subscribed
-                ? "RecibirÃ¡s alertas en tiempo real"
+                ? "Recibirás alertas en tiempo real"
                 : permission === "denied"
                   ? "Notificaciones bloqueadas en el navegador"
                   : "Activa para recibir alertas importantes"}
@@ -241,8 +241,8 @@ export default function PushNotificationSettings() {
             {[
               { key: "sales", label: "Nuevas ventas", icon: "ðŸ’°" },
               { key: "stock", label: "Stock bajo", icon: "ðŸ“¦" },
-              { key: "credits", label: "CrÃ©ditos por vencer", icon: "ðŸ’³" },
-              { key: "subscriptions", label: "MembresÃ­as", icon: "ðŸ‘¤" },
+              { key: "credits", label: "Créditos por vencer", icon: "ðŸ’³" },
+              { key: "subscriptions", label: "Membresías", icon: "ðŸ‘¤" },
               { key: "gamification", label: "Logros y metas", icon: "ðŸ†" },
             ].map(({ key, label, icon }) => (
               <label

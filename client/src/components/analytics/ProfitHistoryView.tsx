@@ -254,7 +254,7 @@ export default function ProfitHistoryView({
     return (
       <div className="flex h-64 items-center justify-center p-6">
         <div className="text-lg text-gray-200">
-          Solo los administradores pueden ver este mÃ³dulo.
+          Solo los administradores pueden ver este módulo.
         </div>
       </div>
     );
@@ -264,7 +264,7 @@ export default function ProfitHistoryView({
     <div className="space-y-6">
       {/* Removed standalone header with date controls as parent handles it */}
 
-      {/* CÃ¡lculos de gastos y utilidad neta */}
+      {/* Cálculos de gastos y utilidad neta */}
       {(() => {
         // Validar que overview exista
         if (!overview) {
@@ -272,9 +272,9 @@ export default function ProfitHistoryView({
         }
 
         // Filtrar gastos de defectuosos para evitar doble conteo
-        // (ya se cuentan vÃ­a defectiveStats.totalLoss)
+        // (ya se cuentan vía defectiveStats.totalLoss)
         // Filtrar gastos de defectuosos para evitar doble conteo.
-        // "Costo de Venta" ya estÃ¡ filtrado desde el Backend.
+        // "Costo de Venta" ya está filtrado desde el Backend.
         // "Publicidad" y otros deben pasar.
         const nonDefectiveExpenses = expenses.filter(e => {
           const t = (e.type || "").toLowerCase();
@@ -436,7 +436,7 @@ export default function ProfitHistoryView({
                     Desglose de gastos por tipo
                   </h3>
                   <span className="text-xs text-gray-500">
-                    En el perÃ­odo seleccionado
+                    En el período seleccionado
                   </span>
                 </div>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
@@ -464,11 +464,11 @@ export default function ProfitHistoryView({
               </div>
             )}
 
-            {/* PÃ©rdidas por Productos Defectuosos */}
+            {/* Pérdidas por Productos Defectuosos */}
             <div className="bg-linear-to-br rounded-xl border border-orange-900/50 from-orange-950/40 to-gray-900 p-4">
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-sm font-medium text-orange-300">
-                  âš ï¸ PÃ©rdidas por Productos Defectuosos
+                  âš ï¸ Pérdidas por Productos Defectuosos
                 </h3>
                 <span className="text-xs text-gray-500">
                   Historial completo
@@ -476,14 +476,14 @@ export default function ProfitHistoryView({
               </div>
               {loadingEstimated ? (
                 <div className="py-4 text-center text-gray-400">
-                  Cargando estadÃ­sticas...
+                  Cargando estadísticas...
                 </div>
               ) : defectiveStats && defectiveStats.totalReports > 0 ? (
                 <>
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
                     <div className="rounded-lg border border-red-700/30 bg-red-900/20 p-3">
                       <p className="text-xs text-red-300">
-                        Total PÃ©rdidas
+                        Total Pérdidas
                         <InfoTooltip
                           text="Perdida total por productos defectuosos en el periodo."
                           tone="danger"
@@ -513,7 +513,7 @@ export default function ProfitHistoryView({
                     </div>
                     <div className="rounded-lg bg-gray-800/50 p-3">
                       <p className="text-xs text-gray-400">
-                        Con GarantÃ­a
+                        Con Garantía
                         <InfoTooltip text="Reportes con garantia asociada." />
                       </p>
                       <p className="mt-1 text-lg font-semibold text-amber-300">
@@ -549,8 +549,8 @@ export default function ProfitHistoryView({
                     âœ… No hay productos defectuosos reportados
                   </p>
                   <p className="mt-1 text-xs text-gray-500">
-                    Cuando se reporten productos defectuosos, las estadÃ­sticas
-                    aparecerÃ¡n aquÃ­
+                    Cuando se reporten productos defectuosos, las estadísticas
+                    aparecerán aquí
                   </p>
                 </div>
               )}
@@ -599,7 +599,7 @@ export default function ProfitHistoryView({
                     </div>
                     <div className="rounded-lg border border-gray-700 bg-gray-900/50 p-3">
                       <p className="text-xs text-gray-400">
-                        InversiÃ³n Total
+                        Inversión Total
                         <InfoTooltip text="Costo total del inventario actual." />
                       </p>
                       <p className="mt-1 text-xl font-bold text-amber-300">
@@ -674,7 +674,7 @@ export default function ProfitHistoryView({
                         %
                       </p>
                       <p className="mt-0.5 text-[10px] text-gray-500">
-                        Ganancia / InversiÃ³n
+                        Ganancia / Inversión
                       </p>
                     </div>
                   </div>
@@ -695,7 +695,7 @@ export default function ProfitHistoryView({
                         </p>
                         <div className="grid grid-cols-3 gap-2 text-xs">
                           <div>
-                            <span className="text-gray-400">InversiÃ³n:</span>
+                            <span className="text-gray-400">Inversión:</span>
                             <span className="ml-1 font-semibold text-amber-300">
                               {formatCurrency(
                                 estimatedProfit.warehouse.investment
@@ -831,12 +831,12 @@ export default function ProfitHistoryView({
                 </>
               ) : (
                 <div className="text-center text-gray-400">
-                  No se pudo cargar la informaciÃ³n de ganancia estimada
+                  No se pudo cargar la información de ganancia estimada
                 </div>
               )}
             </div>
 
-            {/* MÃ©tricas de CrÃ©ditos */}
+            {/* Métricas de Créditos */}
             {creditsEnabled &&
               creditMetrics &&
               (creditMetrics.total.totalCredits > 0 ||
@@ -845,7 +845,7 @@ export default function ProfitHistoryView({
                   <div className="mb-4 flex items-center justify-between">
                     <div>
                       <h3 className="text-lg font-semibold text-orange-200">
-                        ðŸ’³ MÃ©tricas de CrÃ©ditos
+                        ðŸ’³ Métricas de Créditos
                       </h3>
                       <p className="text-xs text-gray-400">
                         Resumen de cuentas por cobrar
@@ -861,13 +861,13 @@ export default function ProfitHistoryView({
                       >
                         {(creditMetrics.overdue.count || 0) > 0
                           ? `${creditMetrics.overdue.count} vencidos`
-                          : "Al dÃ­a"}
+                          : "Al día"}
                       </span>
                     )}
                   </div>
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
                     <div className="rounded-lg border border-gray-700 bg-gray-900/50 p-3">
-                      <p className="text-xs text-gray-400">CrÃ©ditos activos</p>
+                      <p className="text-xs text-gray-400">Créditos activos</p>
                       <p className="mt-1 text-xl font-bold text-orange-300">
                         {creditMetrics.total.totalCredits || 0}
                       </p>
@@ -913,7 +913,7 @@ export default function ProfitHistoryView({
                       </p>
                     </div>
                     <div className="rounded-lg border border-gray-700 bg-gray-900/50 p-3">
-                      <p className="text-xs text-gray-400">Tasa recuperaciÃ³n</p>
+                      <p className="text-xs text-gray-400">Tasa recuperación</p>
                       <p
                         className={`mt-1 text-xl font-bold ${
                           Number(creditMetrics.recoveryRate || 0) >= 70 ||
@@ -950,7 +950,7 @@ export default function ProfitHistoryView({
                                     {debtor.customerName || "Cliente"}
                                   </p>
                                   <p className="text-xs text-gray-500">
-                                    {debtor.creditsCount} crÃ©dito
+                                    {debtor.creditsCount} crédito
                                     {debtor.creditsCount !== 1 ? "s" : ""}
                                   </p>
                                 </div>
@@ -1025,7 +1025,7 @@ export default function ProfitHistoryView({
 
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-300">
-              MÃ¡x. ventas
+              Máx. ventas
             </label>
             <input
               type="number"
@@ -1216,7 +1216,7 @@ export default function ProfitHistoryView({
             </table>
           </div>
 
-          {/* Vista mÃ³vil en tarjetas */}
+          {/* Vista móvil en tarjetas */}
           <div className="space-y-3 md:hidden">
             {loading && (
               <div className="rounded-lg border border-gray-800 bg-gray-900 px-4 py-3 text-center text-gray-300">
@@ -1354,7 +1354,7 @@ export default function ProfitHistoryView({
             <div className="space-y-3">
               {employees.length === 0 && (
                 <p className="text-sm text-gray-400">
-                  AÃºn no hay ventas registradas en este rango.
+                  Aún no hay ventas registradas en este rango.
                 </p>
               )}
 
@@ -1378,7 +1378,7 @@ export default function ProfitHistoryView({
                       <p className="text-sm font-bold text-cyan-300">
                         {formatCurrency(dist.employeeProfit)}
                       </p>
-                      <p className="text-xs text-gray-400">ComisiÃ³n</p>
+                      <p className="text-xs text-gray-400">Comisión</p>
                     </div>
                   </div>
                 ))}
