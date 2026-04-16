@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
-  ProfitHistoryAdminEmployee,
-  ProfitHistoryAdminEntry,
-  ProfitHistoryAdminOverview,
+    ProfitHistoryAdminEmployee,
+    ProfitHistoryAdminEntry,
+    ProfitHistoryAdminOverview,
 } from "../../features/analytics/types/analytics.types";
 import { profitHistoryService } from "../../features/common/services";
 import { useFeature } from "../FeatureSection";
@@ -103,7 +103,7 @@ export default function ProfitHistoryTable({
         {employeesEnabled && !hideFinancialData && (
           <div className="min-w-[200px] flex-1">
             <label className="mb-1 block text-sm font-medium text-gray-300">
-              Filtrar por Employee
+              Filtrar por Empleado
             </label>
             <select
               value={selectedEmployee}
@@ -165,8 +165,8 @@ export default function ProfitHistoryTable({
                 </th>
                 {employeesEnabled && !hideFinancialData && (
                   <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">
-                    Employee
-                    <InfoTooltip text="Employee asociado a la venta." />
+                    Empleado
+                    <InfoTooltip text="Empleado asociado a la venta." />
                   </th>
                 )}
                 <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">
@@ -176,7 +176,7 @@ export default function ProfitHistoryTable({
                 {employeesEnabled && !hideFinancialData && (
                   <th className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-400">
                     Ganancia Dist
-                    <InfoTooltip text="Comision del employee en la transaccion." />
+                    <InfoTooltip text="Comision del empleado en la transaccion." />
                   </th>
                 )}
                 <th className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-400">
@@ -185,14 +185,14 @@ export default function ProfitHistoryTable({
                     text={
                       hideFinancialData
                         ? "Ganancia personal del usuario actual."
-                        : "Suma de la utilidad de tus ventas directas + la diferencia del precio B2B de tus employees."
+                        : "Suma de la utilidad de tus ventas directas + la diferencia del precio B2B de tus empleados."
                     }
                   />
                 </th>
                 {!hideFinancialData && (
                   <th className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-400">
                     Total
-                    <InfoTooltip text="Suma de ganancia admin y comision de employee." />
+                    <InfoTooltip text="Suma de ganancia admin y comision de empleado." />
                   </th>
                 )}
               </tr>

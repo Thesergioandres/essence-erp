@@ -8,7 +8,7 @@ export default function OperativoTransferHistoryPage() {
   return (
     <OperativoModuleShell
       title="Operativo · Historial de transferencias"
-      description="Consulta operativa de transferencias entre almacén, sedes y employees."
+      description="Consulta operativa de transferencias entre almacén, sedes y empleados."
       allow={canViewTransferHistory}
     >
       <TransferHistoryPage />

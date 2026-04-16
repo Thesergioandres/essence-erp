@@ -7,11 +7,11 @@
 import api from "../../../api/axios";
 import { normalizeEmployeeRole } from "../../../shared/utils/roleAliases";
 import type {
-  AuthResponse,
-  Membership,
-  RefreshTokenResponse,
-  RegisterCredentials,
-  User,
+    AuthResponse,
+    Membership,
+    RefreshTokenResponse,
+    RegisterCredentials,
+    User,
 } from "../types/auth.types";
 
 const ADMIN_ORIGINAL_TOKEN_KEY = "admin_original_token";
@@ -320,7 +320,7 @@ export const authService = {
 
     const payload = (response.data as any)?.data ?? response.data;
     if (!payload?.token || !payload?.user) {
-      throw new Error("Respuesta inválida al suplantar employee");
+      throw new Error("Respuesta inválida al suplantar empleado");
     }
 
     applySession({ token: payload.token, user: payload.user });
@@ -445,8 +445,9 @@ export const userService = {
 
 // Re-export types for convenience
 export type {
-  AuthResponse,
-  LoginCredentials,
-  RegisterCredentials,
-  User,
+    AuthResponse,
+    LoginCredentials,
+    RegisterCredentials,
+    User
 } from "../types/auth.types";
+

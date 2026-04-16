@@ -6,19 +6,19 @@ import { businessAssistantService } from "../../business/services";
 import { creditService } from "../../credits/services";
 import type { CreditMetrics } from "../../credits/types/credit.types";
 import {
-  categoryService,
-  productService,
-  stockService,
+    categoryService,
+    productService,
+    stockService,
 } from "../../inventory/services/inventory.service";
 import type { Category, Product } from "../../inventory/types/product.types";
 import { promotionService } from "../../settings/services";
 import type {
-  BusinessAssistantConfig,
-  BusinessAssistantJobStatus,
-  BusinessAssistantPromotion,
-  BusinessAssistantRecommendationAction,
-  BusinessAssistantRecommendationItem,
-  BusinessAssistantRecommendationsResponse,
+    BusinessAssistantConfig,
+    BusinessAssistantJobStatus,
+    BusinessAssistantPromotion,
+    BusinessAssistantRecommendationAction,
+    BusinessAssistantRecommendationItem,
+    BusinessAssistantRecommendationsResponse,
 } from "../types/business.types";
 
 const formatCurrencyCOP = (value: number) => {
@@ -1584,7 +1584,7 @@ export default function BusinessAssistant() {
 
     if (inventorySnapshot) {
       lines.push(
-        `Stock total: ${inventorySnapshot.total} (Bodega ${inventorySnapshot.warehouse} · Sedes ${inventorySnapshot.branches} · Employees ${inventorySnapshot.employees})`
+        `Stock total: ${inventorySnapshot.total} (Bodega ${inventorySnapshot.warehouse} · Sedes ${inventorySnapshot.branches} · Empleados ${inventorySnapshot.employees})`
       );
       if (inventorySnapshot.unassigned > 0) {
         lines.push(`Sin asignar: ${inventorySnapshot.unassigned}`);
@@ -1593,7 +1593,7 @@ export default function BusinessAssistant() {
       const branches = item.stock.branchesStock ?? 0;
       const employees = item.stock.employeesStock ?? 0;
       lines.push(
-        `Stock total: ${item.stock.totalStock} (Bodega ${item.stock.warehouseStock} · Sedes ${branches} · Employees ${employees})`
+        `Stock total: ${item.stock.totalStock} (Bodega ${item.stock.warehouseStock} · Sedes ${branches} · Empleados ${employees})`
       );
       if ((item.stock.unassignedStock || 0) > 0) {
         lines.push(`Sin asignar: ${item.stock.unassignedStock}`);

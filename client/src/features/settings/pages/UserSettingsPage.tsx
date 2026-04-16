@@ -2,8 +2,8 @@ import { Link } from "react-router-dom";
 import Footer from "../../../components/Footer";
 import Navbar from "../../../components/Navbar";
 import {
-  MOTION_MODE_OPTIONS,
-  useMotionProfile,
+    MOTION_MODE_OPTIONS,
+    useMotionProfile,
 } from "../../../shared/config/motion.config";
 
 export default function UserSettings() {
@@ -31,9 +31,9 @@ export default function UserSettings() {
               to="/admin/employees"
               className="rounded-lg border border-blue-500/40 bg-blue-500/10 px-4 py-4 text-left text-white transition hover:border-blue-500 hover:bg-blue-500/20"
             >
-              <h3 className="text-lg font-semibold">Employees</h3>
+              <h3 className="text-lg font-semibold">Empleados</h3>
               <p className="mt-1 text-sm text-gray-200">
-                Crea, edita y gestiona employees.
+                Crea, edita y gestiona empleados.
               </p>
             </Link>
             <Link

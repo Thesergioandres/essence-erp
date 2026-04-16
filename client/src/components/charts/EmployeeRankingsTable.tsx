@@ -124,8 +124,8 @@ export const EmployeeRankingsTable: React.FC<
                 <InfoTooltip text="Ranking por rendimiento en el periodo." />
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-300">
-                Employee
-                <InfoTooltip text="Nombre y contacto del employee." />
+                Empleado
+                <InfoTooltip text="Nombre y contacto del empleado." />
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-300">
                 Ventas
@@ -133,7 +133,7 @@ export const EmployeeRankingsTable: React.FC<
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-300">
                 Ingresos
-                <InfoTooltip text="Ingresos confirmados generados por el employee." />
+                <InfoTooltip text="Ingresos confirmados generados por el empleado." />
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-300">
                 Ganancia

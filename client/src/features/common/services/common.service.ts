@@ -7,18 +7,18 @@
 import api from "../../../api/axios";
 import type { ProfitHistoryAdminOverview } from "../../analytics/types/analytics.types";
 import type {
-  Achievement,
-  EmployeeStats,
-  EmployeeStatsResponse,
-  GamificationConfig,
-  PeriodWinner,
-  RankingResponse,
-  WinnersResponse,
+    Achievement,
+    EmployeeStats,
+    EmployeeStatsResponse,
+    GamificationConfig,
+    PeriodWinner,
+    RankingResponse,
+    WinnersResponse,
 } from "../../analytics/types/gamification.types";
 import type { User } from "../../auth/types/auth.types";
 import type {
-  BusinessPlanSnapshot,
-  PlanLimits,
+    BusinessPlanSnapshot,
+    PlanLimits,
 } from "../../business/types/business.types";
 import type { ProductImage } from "../../inventory/types/product.types";
 import type { Expense } from "../types/common.types";
@@ -414,7 +414,7 @@ export const gamificationService = {
   ): Promise<EmployeeStatsResponse> {
     const resolvedEmployeeId = resolveEntityId(employeeId);
     if (!resolvedEmployeeId) {
-      throw new Error("Identificador de employee inválido");
+      throw new Error("Identificador de empleado inválido");
     }
 
     const response = await api.get<EmployeeStatsResponse>(
@@ -484,7 +484,7 @@ export const gamificationService = {
   }> {
     const resolvedEmployeeId = resolveEntityId(employeeId);
     if (!resolvedEmployeeId) {
-      throw new Error("Identificador de employee inválido");
+      throw new Error("Identificador de empleado inválido");
     }
 
     const response = await api.get(

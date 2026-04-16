@@ -350,7 +350,7 @@ export default function SaleDetailModal({
     sale.sourceLocation === "branch"
       ? "Sede"
       : sale.sourceLocation === "employee"
-        ? "Employee"
+        ? "Empleado"
         : "Bodega";
 
   const paymentStatusLabel =

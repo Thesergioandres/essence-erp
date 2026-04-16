@@ -14,6 +14,7 @@ import type { EmployeeStats } from "../../analytics/types/gamification.types";
 import { authService } from "../../auth/services";
 import { dispatchService } from "../../branches/services";
 import { gamificationService } from "../../common/services";
+import NotificationPopup from "../../notifications/components/NotificationPopup";
 import PriceCatalogModal from "../components/PriceCatalogModal";
 
 const navLinkClasses = (isActive: boolean): string =>
@@ -35,8 +36,9 @@ export default function EmployeeDashboardLayout() {
   const [isMobileViewport, setIsMobileViewport] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth < 1024 : true
   );
-  const [employeeStats, setEmployeeStats] =
-    useState<EmployeeStats | null>(null);
+  const [employeeStats, setEmployeeStats] = useState<EmployeeStats | null>(
+    null
+  );
   const [pendingReceptionCount, setPendingReceptionCount] = useState(0);
   const isImpersonating = authService.isImpersonating();
   const viewAnimationKey = `${location.pathname}${location.search}`;
@@ -577,6 +579,26 @@ export default function EmployeeDashboardLayout() {
               🏆 Mi Nivel
             </NavLink>
 
+            <NavLink
+              to="/staff/notifications"
+              className={({ isActive }): string => navLinkClasses(isActive)}
+            >
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
+                />
+              </svg>
+              Notificaciones
+            </NavLink>
+
             <FeatureNavLink
               to="/staff/defective-reports"
               feature="defectiveProducts"
@@ -948,9 +970,7 @@ export default function EmployeeDashboardLayout() {
                 <p className="truncate text-xs font-medium text-white sm:text-sm">
                   {user?.name}
                 </p>
-                <p className="text-[10px] text-gray-400 sm:text-xs">
-                  Employee
-                </p>
+                <p className="text-[10px] text-gray-400 sm:text-xs">Employee</p>
               </div>
             </div>
             <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -1020,7 +1040,7 @@ export default function EmployeeDashboardLayout() {
       {/* Main Content */}
       <main
         className={`content-with-safe-header duration-400 h-screen overflow-y-auto overflow-x-hidden transition-all lg:pt-0 ${
-          isMobileViewport ? "pb-24 pb-32" : "pb-12"
+          isMobileViewport ? "pb-32" : "pb-12"
         } ${desktopSidebarOpen ? "lg:ml-72" : "lg:ml-0"}`}
       >
         <div className="safe-x p-4 pb-28 sm:p-6 sm:pb-28 md:p-8 lg:p-10 lg:pb-32">
@@ -1175,6 +1195,8 @@ export default function EmployeeDashboardLayout() {
           </NavLink>
         </div>
       </div>
+
+      <NotificationPopup />
 
       <ReportIssueButton />
     </div>

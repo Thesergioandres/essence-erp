@@ -1,35 +1,36 @@
 import { endOfMonth, format, startOfMonth, subDays } from "date-fns";
 import { m as motion } from "framer-motion";
 import {
-  BarChart3,
-  Download,
-  FileText,
-  RefreshCw,
-  Search,
-  TrendingUp,
+    BarChart3,
+    Download,
+    FileText,
+    RefreshCw,
+    Search,
+    TrendingUp,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useFeature } from "../../../components/FeatureSection";
 import InfoTooltip from "../../../components/InfoTooltip";
 import ProfitHistoryView from "../../../components/analytics/ProfitHistoryView";
 import {
-  CategoryDistributionChart,
-  ComparativeAnalysisView,
-  EmployeeRankingsTable,
-  FinancialKPICards,
-  LowStockAlertsVisual,
-  SalesTimelineChart,
-  TopProductsChart,
+    CategoryDistributionChart,
+    ComparativeAnalysisView,
+    EmployeeRankingsTable,
+    FinancialKPICards,
+    LowStockAlertsVisual,
+    SalesTimelineChart,
+    TopProductsChart,
 } from "../../../components/charts";
 import { formatCurrency } from "../../../utils";
 import {
-  exportKPIsToPDF,
-  exportRankingsToExcel,
-  exportRankingsToPDF,
+    exportKPIsToPDF,
+    exportRankingsToExcel,
+    exportRankingsToPDF,
 } from "../../../utils/exportUtils";
 import {
-  advancedAnalyticsService,
-  analyticsService,
+    advancedAnalyticsService,
+    analyticsService,
 } from "../../analytics/services";
 import { useFinancialPrivacy } from "../../auth/utils/financialPrivacy";
 import { expenseService } from "../../common/services";
@@ -40,6 +41,7 @@ import { stockService } from "../../inventory/services/inventory.service";
 import { saleService } from "../../sales/services/sales.service";
 
 export default function AdvancedDashboard() {
+  const navigate = useNavigate();
   const { hideFinancialData } = useFinancialPrivacy();
   // Feature flags
   const employeesEnabled = useFeature("employees");
@@ -396,12 +398,9 @@ export default function AdvancedDashboard() {
   };
 
   // State for export loading
-  const [isExporting, setIsExporting] = useState(false);
   const [isMasterExporting, setIsMasterExporting] = useState(false);
   const [masterExportNotice, setMasterExportNotice] = useState("");
   const [masterExportError, setMasterExportError] = useState("");
-  const [fullExportData, setFullExportData] = useState<unknown>(null);
-  const [fullExportError, setFullExportError] = useState("");
 
   const appendSheet = (
     workbook: any,
@@ -431,26 +430,22 @@ export default function AdvancedDashboard() {
       setMasterExportNotice("");
       setMasterExportError("");
 
-      const [
-        salesResponse,
-        inventoryResponse,
-        employeePerf,
-        expensesResult,
-      ] = await Promise.all([
-        saleService.getAllSales({
-          startDate: overviewRange.startDate || undefined,
-          endDate: overviewRange.endDate || undefined,
-          limit: 5000,
-        }),
-        stockService.getGlobalInventory(),
-        analyticsService.getProfitByEmployee({
-          startDate: employeesRange.startDate || undefined,
-          endDate: employeesRange.endDate || undefined,
-        }),
-        expenses.length > 0
-          ? Promise.resolve({ expenses })
-          : expenseService.getAll(),
-      ]);
+      const [salesResponse, inventoryResponse, employeePerf, expensesResult] =
+        await Promise.all([
+          saleService.getAllSales({
+            startDate: overviewRange.startDate || undefined,
+            endDate: overviewRange.endDate || undefined,
+            limit: 5000,
+          }),
+          stockService.getGlobalInventory(),
+          analyticsService.getProfitByEmployee({
+            startDate: employeesRange.startDate || undefined,
+            endDate: employeesRange.endDate || undefined,
+          }),
+          expenses.length > 0
+            ? Promise.resolve({ expenses })
+            : expenseService.getAll(),
+        ]);
 
       const salesRows = (salesResponse?.sales || []).map(sale => {
         const quantity = Number(sale.quantity || 0);
@@ -498,9 +493,7 @@ export default function AdvancedDashboard() {
                 0
               )
             : Number(item?.branches || item?.branchStock || 0);
-          const employees = Number(
-            item?.employees || item?.employeeStock || 0
-          );
+          const employees = Number(item?.employees || item?.employeeStock || 0);
           const total = Number(
             item?.total || warehouse + branchTotal + employees
           );
@@ -517,7 +510,7 @@ export default function AdvancedDashboard() {
             Producto: productName,
             Bodega: warehouse,
             Sedes: branchTotal,
-            Employees: employees,
+            Empleados: employees,
             Total: total,
             "Detalle Sedes": branchDetail,
           };
@@ -543,16 +536,14 @@ export default function AdvancedDashboard() {
         }
       );
 
-      const employeeRows = (employeePerf?.employees || []).map(
-        dist => ({
-          Employee: dist.employeeName || "Sin nombre",
-          "Total Ventas": Number(dist.totalSales || 0),
-          Ingresos: Number(dist.totalRevenue || 0),
-          "Profit Total": Number(dist.totalProfit || 0),
-          "Profit Admin": Number(dist.adminProfit || 0),
-          "Profit Employee": Number(dist.employeeProfit || 0),
-        })
-      );
+      const employeeRows = (employeePerf?.employees || []).map(dist => ({
+        Empleado: dist.employeeName || "Sin nombre",
+        "Total Ventas": Number(dist.totalSales || 0),
+        Ingresos: Number(dist.totalRevenue || 0),
+        "Profit Total": Number(dist.totalProfit || 0),
+        "Profit Admin": Number(dist.adminProfit || 0),
+        "Ganancia Empleado": Number(dist.employeeProfit || 0),
+      }));
 
       const XLSX = await import("xlsx");
       const workbook = XLSX.utils.book_new();
@@ -560,7 +551,7 @@ export default function AdvancedDashboard() {
       appendSheet(workbook, XLSX, "Ventas Totales", salesRows);
       appendSheet(workbook, XLSX, "Inventario Actual", inventoryRows);
       appendSheet(workbook, XLSX, "Gastos y Garantias", expenseRows);
-      appendSheet(workbook, XLSX, "Employees", employeeRows);
+      appendSheet(workbook, XLSX, "Empleados", employeeRows);
 
       XLSX.writeFile(
         workbook,
@@ -580,35 +571,8 @@ export default function AdvancedDashboard() {
     }
   };
 
-  /**
-   * Export full business data as JSON backup
-   */
-  const handleExportFullData = async () => {
-    try {
-      setIsExporting(true);
-      setFullExportError("");
-      const data = await analyticsService.getFullDataExport();
-      setFullExportData(data);
-
-      const blob = new Blob([JSON.stringify(data, null, 2)], {
-        type: "application/json",
-      });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `backup_empresa_${new Date().toISOString().slice(0, 10)}.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error("Error al exportar datos:", error);
-      setFullExportError(
-        "No se pudo cargar la informacion completa de la empresa. Revisa tu conexion o permisos."
-      );
-    } finally {
-      setIsExporting(false);
-    }
+  const handleOpenBusinessFullInfo = () => {
+    navigate("/admin/business-full-info");
   };
 
   if (hideFinancialData) {
@@ -740,22 +704,14 @@ export default function AdvancedDashboard() {
             Actualizar
           </button>
           <button
-            onClick={handleExportFullData}
-            disabled={isExporting}
+            onClick={handleOpenBusinessFullInfo}
             className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-white transition hover:bg-emerald-700 disabled:opacity-50"
           >
             <Download className="h-4 w-4" />
-            {isExporting
-              ? "Exportando..."
-              : "📥 Exportar Backup Completo (JSON)"}
+            👁️ Ver Información Completa del Negocio
           </button>
         </div>
       </div>
-      {fullExportError && (
-        <div className="rounded-lg border border-red-500 bg-red-500/10 p-4 text-sm text-red-300">
-          {fullExportError}
-        </div>
-      )}
       {masterExportError && (
         <div className="rounded-lg border border-rose-500 bg-rose-500/10 p-4 text-sm text-rose-300">
           {masterExportError}
@@ -764,25 +720,6 @@ export default function AdvancedDashboard() {
       {masterExportNotice && (
         <div className="rounded-lg border border-emerald-500 bg-emerald-500/10 p-4 text-sm text-emerald-300">
           {masterExportNotice}
-        </div>
-      )}
-      {fullExportData && (
-        <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/40 p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-emerald-200">
-              Informacion completa de la empresa
-            </h2>
-            <button
-              type="button"
-              onClick={() => setFullExportData(null)}
-              className="text-xs font-medium text-emerald-300 hover:text-emerald-200"
-            >
-              Cerrar
-            </button>
-          </div>
-          <pre className="max-h-[420px] overflow-auto rounded-lg bg-black/40 p-4 text-xs text-emerald-100">
-            {JSON.stringify(fullExportData, null, 2)}
-          </pre>
         </div>
       )}
       <div className="space-y-12">
@@ -1671,14 +1608,14 @@ export default function AdvancedDashboard() {
           <section>
             <div className="mb-4 flex items-center gap-2 border-b border-gray-800 pb-2">
               <TrendingUp className="h-6 w-6 text-orange-500" />
-              <h2 className="text-2xl font-bold text-white">Employees</h2>
+              <h2 className="text-2xl font-bold text-white">Empleados</h2>
             </div>
             <div className="space-y-8">
               <div className="rounded-xl border border-gray-800 bg-gray-900/70 p-4">
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                   <div>
                     <label className="mb-1 block text-sm text-gray-300">
-                      Fecha inicio (Employees)
+                      Fecha inicio (Empleados)
                     </label>
                     <input
                       type="date"
@@ -1710,7 +1647,7 @@ export default function AdvancedDashboard() {
                   </div>
                   <div>
                     <label className="mb-1 block text-sm text-gray-300">
-                      Buscar employee
+                      Buscar empleado
                     </label>
                     <div className="relative">
                       <Search className="absolute left-3 top-3 h-4 w-4 text-gray-500" />

@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import type {
-  ActiveMultiplier,
-  LevelConfig,
-  SalesTarget,
+    ActiveMultiplier,
+    LevelConfig,
+    SalesTarget,
 } from "../../analytics/types/gamification.types";
 import { gamificationService } from "../../common/services";
 
@@ -97,7 +97,7 @@ const GamificationConfigPage = () => {
     warnings.push("Reset con carry alto: puede inflar el ranking.");
   }
   if ((baseCommissionPercentage || 0) <= 0) {
-    warnings.push("Comision base en 0: employees sin ganancia.");
+    warnings.push("Comision base en 0: empleados sin ganancia.");
   }
   if ((baseCommissionPercentage || 0) > 50) {
     warnings.push("Comision base alta: revisa la rentabilidad.");
@@ -107,7 +107,7 @@ const GamificationConfigPage = () => {
     baseCommissionPercentage !== baseCommissionInitial
   ) {
     warnings.push(
-      "Comision base cambiada: el precio employee se recalcula por precio cliente si no hay override manual."
+      "Comision base cambiada: el precio empleado se recalcula por precio cliente si no hay override manual."
     );
   }
   for (let i = 1; i < sortedLevels.length; i += 1) {
@@ -222,7 +222,7 @@ const GamificationConfigPage = () => {
       await gamificationService.recalculatePoints();
       if (baseCommissionChanged) {
         alert(
-          "Comision base cambiada: el precio employee se recalcula por precio cliente si no hay override manual."
+          "Comision base cambiada: el precio empleado se recalcula por precio cliente si no hay override manual."
         );
       } else {
         alert("Configuración guardada correctamente");

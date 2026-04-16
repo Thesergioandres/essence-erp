@@ -100,7 +100,7 @@ export default function SpecialSaleForm({
       );
       setEmployees(employeeUsers);
     } catch (error) {
-      console.error("Error al cargar employees:", error);
+      console.error("Error al cargar empleados:", error);
     } finally {
       setLoadingEmployees(false);
     }
@@ -288,7 +288,7 @@ export default function SpecialSaleForm({
     }
 
     if (distribution.some(d => !d.name || d.name.trim() === "")) {
-      alert("Todos los employees deben tener un nombre");
+      alert("Todos los empleados deben tener un nombre");
       return;
     }
 

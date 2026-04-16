@@ -311,7 +311,7 @@ export default function EmployeeCatalog() {
 
     try {
       await navigator.share({
-        title: "Catalogo de employee",
+        title: "Catalogo de empleado",
         text: shareText,
         url: publicCatalogUrl,
       });
@@ -348,7 +348,7 @@ export default function EmployeeCatalog() {
           image: product.image?.url || null,
         })),
         {
-          businessName: business?.name || "Catalogo de employee",
+          businessName: business?.name || "Catalogo de empleado",
           logoUrl: business?.logoUrl?.trim() || brandLogo,
           title: "Catalogo de Venta",
         }

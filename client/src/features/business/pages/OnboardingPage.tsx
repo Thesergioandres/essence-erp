@@ -371,7 +371,7 @@ export default function Onboarding() {
                       desc: "Gestión de sucursales y puntos de venta.",
                     },
                     employees: {
-                      label: "Employees",
+                      label: "Empleados",
                       desc: "Red de distribución y comisiones.",
                     },
                     rankings: {

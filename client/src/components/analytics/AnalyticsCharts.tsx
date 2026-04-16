@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { analyticsService } from "../../features/analytics/services";
 import type {
-  EmployeeProfit,
-  TimelineData,
+    EmployeeProfit,
+    TimelineData,
 } from "../../features/analytics/types/analytics.types";
 import type { ProductProfit } from "../../features/inventory/types/product.types";
 
@@ -334,7 +334,7 @@ export default function AnalyticsCharts({
         />
 
         <RankingTable
-          title="Top Employees"
+          title="Top Empleados"
           subtitle={
             hideFinancialData ? "Por volumen de ventas" : "Por ganancia"
           }

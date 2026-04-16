@@ -8,7 +8,7 @@ export default function OperativoCustomersPage() {
   return (
     <OperativoModuleShell
       title="Operativo · Clientes"
-      description="Gestión operativa de clientes del negocio dentro del entorno de employee."
+      description="Gestión operativa de clientes del negocio dentro del entorno de empleado."
       allow={canViewCustomers}
     >
       <CustomersPage />

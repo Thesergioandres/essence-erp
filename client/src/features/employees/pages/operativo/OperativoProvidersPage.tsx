@@ -8,7 +8,7 @@ export default function OperativoProvidersPage() {
   return (
     <OperativoModuleShell
       title="Operativo · Proveedores"
-      description="Gestión operativa de proveedores del negocio dentro del entorno de employee."
+      description="Gestión operativa de proveedores del negocio dentro del entorno de empleado."
       allow={canViewProviders}
     >
       <ProvidersPage />

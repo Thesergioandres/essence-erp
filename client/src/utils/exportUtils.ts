@@ -404,7 +404,7 @@ export const exportKPIsToPDF = async (kpis: any) => {
         `$${(kpis.monthNetProfit ?? kpis.monthProfit).toFixed(2)}`,
       ],
       ["Ticket Promedio", `$${kpis.averageTicket.toFixed(2)}`],
-      ["Employees Activos", kpis.totalActiveEmployees.toString()],
+      ["Empleados Activos", kpis.totalActiveEmployees.toString()],
     ],
     theme: "grid",
     headStyles: { fillColor: [139, 92, 246] },
@@ -426,10 +426,10 @@ export const exportRankingsToPDF = async (rankings: any[]) => {
 
   await exportToPDF(
     rankings,
-    "Ranking de Employees",
+    "Ranking de Empleados",
     [
       "Pos",
-      "Employee",
+      "Empleado",
       "Ventas",
       "Ingresos",
       "Ganancia",

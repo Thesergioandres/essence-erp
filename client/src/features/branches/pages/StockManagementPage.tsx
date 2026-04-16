@@ -7,12 +7,12 @@ import { branchService, branchTransferService } from "../../branches/services";
 import type { Branch } from "../../business/types/business.types";
 import { employeeService } from "../../employees/services";
 import {
-  productService,
-  stockService,
+    productService,
+    stockService,
 } from "../../inventory/services/inventory.service";
 import type {
-  EmployeeStock,
-  Product,
+    EmployeeStock,
+    Product,
 } from "../../inventory/types/product.types";
 
 type OperationType = "assign" | "withdraw";
@@ -153,7 +153,7 @@ const StockManagement = () => {
         setEmployees((distList || []).filter((d: User) => d.active));
       } else {
         console.error(
-          "Error al cargar employees:",
+          "Error al cargar empleados:",
           employeesResult.reason
         );
         setEmployees([]);
@@ -192,8 +192,8 @@ const StockManagement = () => {
       setError(
         getPermissionAwareMessage(
           err,
-          "No se pudo cargar el inventario del employee",
-          "No tienes permisos para consultar inventario de employees"
+          "No se pudo cargar el inventario del empleado",
+          "No tienes permisos para consultar inventario de empleados"
         )
       );
       setEmployeeStock([]);
@@ -366,7 +366,7 @@ const StockManagement = () => {
     }
 
     if (!selectedEmployee) {
-      setError("Selecciona un employee");
+      setError("Selecciona un empleado");
       return;
     }
 
@@ -966,7 +966,7 @@ const StockManagement = () => {
                     onChange={id => setSelectedProductId(id)}
                     placeholder={
                       operation === "withdraw"
-                        ? "Selecciona un producto del employee"
+                        ? "Selecciona un producto del empleado"
                         : "Buscar y seleccionar producto..."
                     }
                     showStock={true}
@@ -1006,7 +1006,7 @@ const StockManagement = () => {
                             <span className="rounded-full bg-green-500/20 px-3 py-1 text-xs font-bold text-green-400">
                               {operation === "assign"
                                 ? `Bodega: ${item.warehouseStock}`
-                                : `Employee: ${employeeStockByProduct.get(item.productId)?.quantity || 0}`}
+                                : `Empleado: ${employeeStockByProduct.get(item.productId)?.quantity || 0}`}
                             </span>
                           </div>
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { employeeService } from "../../employees/services";
 import { Button, LoadingSpinner } from "../../../shared/components/ui";
+import { employeeService } from "../../employees/services";
 
 interface FormState {
   name: string;
@@ -39,7 +39,7 @@ const EditEmployee = () => {
         });
         setError("");
       } catch (err: any) {
-        setError(err.response?.data?.message || "Error al cargar employee");
+        setError(err.response?.data?.message || "Error al cargar empleado");
       } finally {
         setLoadingData(false);
       }
@@ -77,13 +77,13 @@ const EditEmployee = () => {
       setLoading(true);
       if (!id) return;
       await employeeService.update(id, formData);
-      setSuccess("Employee actualizado correctamente");
+      setSuccess("Empleado actualizado correctamente");
       setTimeout(() => {
         navigate(`/admin/employees/${id}`);
       }, 1500);
     } catch (err: any) {
       setError(
-        err.response?.data?.message || "Error al actualizar employee"
+        err.response?.data?.message || "Error al actualizar empleado"
       );
     } finally {
       setLoading(false);
@@ -93,7 +93,7 @@ const EditEmployee = () => {
   if (loadingData) {
     return (
       <div className="flex h-96 items-center justify-center">
-        <LoadingSpinner size="lg" message="Cargando employee..." />
+        <LoadingSpinner size="lg" message="Cargando empleado..." />
       </div>
     );
   }
@@ -101,9 +101,9 @@ const EditEmployee = () => {
   return (
     <div className="mx-auto max-w-2xl p-6">
       <div className="mb-6">
-        <h1 className="text-4xl font-bold text-white">Editar Employee</h1>
+        <h1 className="text-4xl font-bold text-white">Editar Empleado</h1>
         <p className="mt-2 text-gray-400">
-          Actualiza la información del employee
+          Actualiza la información del empleado
         </p>
       </div>
 
@@ -205,7 +205,7 @@ const EditEmployee = () => {
         <div className="rounded-xl border border-gray-700 bg-gray-900/40 p-4">
           <p className="text-sm text-gray-300">
             <span className="font-semibold text-white">Nota:</span> Para cambiar
-            la contraseña del employee, contacta al administrador del
+            la contraseña del empleado, contacta al administrador del
             sistema.
           </p>
         </div>
@@ -217,7 +217,7 @@ const EditEmployee = () => {
             disabled={loading}
             className="flex-1 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600"
           >
-            {loading ? "Actualizando..." : "Actualizar Employee"}
+            {loading ? "Actualizando..." : "Actualizar Empleado"}
           </Button>
           <Button
             type="button"

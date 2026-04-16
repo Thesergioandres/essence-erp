@@ -4,6 +4,21 @@ import mongoose from "mongoose";
  * Modelo Notification
  * Sistema de notificaciones internas de la aplicación
  */
+const viewedBySchema = new mongoose.Schema(
+  {
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    viewedAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { _id: false },
+);
+
 const notificationSchema = new mongoose.Schema(
   {
     // Negocio al que pertenece
@@ -12,15 +27,35 @@ const notificationSchema = new mongoose.Schema(
       ref: "Business",
       required: [true, "El negocio es obligatorio"],
     },
+    // Emisor de la notificación (admin/super_admin/god)
+    sender: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    // Destinatarios explícitos (employee IDs)
+    targetEmployees: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+    // Historial de visualización por usuario
+    viewedBy: {
+      type: [viewedBySchema],
+      default: [],
+    },
     // Usuario destinatario (null = todos los del negocio)
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
+      default: null,
     },
     // Rol destinatario (si aplica a un rol específico)
     targetRole: {
       type: String,
       enum: ["admin", "employee", "all"],
+      default: "employee",
     },
     // Tipo de notificación
     type: {
@@ -40,6 +75,7 @@ const notificationSchema = new mongoose.Schema(
         "reminder", // Recordatorio
       ],
       required: true,
+      default: "system",
     },
     // Título de la notificación
     title: {
@@ -107,14 +143,41 @@ const notificationSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 // Índices para consultas eficientes
+notificationSchema.index({ business: 1, targetEmployees: 1, createdAt: -1 });
+notificationSchema.index({ business: 1, "viewedBy.user": 1, createdAt: -1 });
+notificationSchema.index({ business: 1, sender: 1, createdAt: -1 });
 notificationSchema.index({ business: 1, user: 1, read: 1, createdAt: -1 });
 notificationSchema.index({ business: 1, targetRole: 1, read: 1 });
 notificationSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 notificationSchema.index({ type: 1, business: 1 });
+
+notificationSchema.methods.isViewedBy = function (userId) {
+  if (!userId) return false;
+  return this.viewedBy.some((entry) => String(entry.user) === String(userId));
+};
+
+notificationSchema.methods.markViewedBy = function (userId) {
+  if (!userId || this.isViewedBy(userId)) {
+    return this;
+  }
+
+  this.viewedBy.push({ user: userId, viewedAt: new Date() });
+
+  // Mantener read/readAt solo para notificaciones legacy de destinatario unico.
+  const hasExplicitTargets =
+    Array.isArray(this.targetEmployees) && this.targetEmployees.length > 0;
+
+  if (!hasExplicitTargets) {
+    this.read = true;
+    this.readAt = new Date();
+  }
+
+  return this;
+};
 
 // Método estático para crear notificación con log
 notificationSchema.statics.createWithLog = async function (data, requestId) {
@@ -124,6 +187,7 @@ notificationSchema.statics.createWithLog = async function (data, requestId) {
     requestId,
     businessId: data.business?.toString(),
     type: data.type,
+    senderId: data.sender?.toString(),
     userId: data.user?.toString(),
   });
   return notification;

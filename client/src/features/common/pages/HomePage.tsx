@@ -1,19 +1,19 @@
 import { m as motion } from "framer-motion";
 import {
-  ArrowUpRight,
-  BarChart3,
-  BookOpen,
-  Building2,
-  Check,
-  Clock3,
-  CreditCard,
-  Megaphone,
-  Package,
-  ShieldCheck,
-  ShoppingCart,
-  Truck,
-  Users,
-  Zap,
+    ArrowUpRight,
+    BarChart3,
+    BookOpen,
+    Building2,
+    Check,
+    Clock3,
+    CreditCard,
+    Megaphone,
+    Package,
+    ShieldCheck,
+    ShoppingCart,
+    Truck,
+    Users,
+    Zap,
 } from "lucide-react";
 import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { useNavigate } from "react-router-dom";
@@ -110,7 +110,7 @@ const painPoints = [
 ];
 
 const solutionOutcomes = [
-  "Inventario unificado por bodega, sede y employee.",
+  "Inventario unificado por bodega, sede y empleado.",
   "Precios y promociones alineados con rentabilidad real.",
   "Cobranza, cartera y comisiones bajo un mismo flujo.",
   "Tablero ejecutivo para actuar el mismo dia.",
@@ -138,7 +138,7 @@ const operatingPillars: Array<{
   {
     title: "Ventas Omnicanal",
     description:
-      "Gestiona ventas de mostrador, employees y promociones con una sola trazabilidad.",
+      "Gestiona ventas de mostrador, empleados y promociones con una sola trazabilidad.",
     icon: ShoppingCart,
     tag: "Ventas",
     highlights: ["Precio por canal", "Carrito agil", "Control de descuentos"],
@@ -228,7 +228,7 @@ const testimonials = [
   },
   {
     name: "Luis Perez",
-    role: "Employee",
+    role: "Empleado",
     quote:
       "El catalogo compartible nos ayudo a cerrar pedidos sin llamadas eternas.",
     metric: "-35% tiempo operativo",
@@ -640,7 +640,7 @@ export default function Home() {
           </h2>
           <p className="mx-auto mt-2 max-w-3xl text-sm text-slate-300 sm:text-base">
             Elige un plan segun tu operacion actual y expande sedes o
-            employees cuando el negocio lo necesite.
+            empleados cuando el negocio lo necesite.
           </p>
 
           <div className="mt-5 inline-flex rounded-full border border-white/15 bg-white/5 p-1">
@@ -721,7 +721,7 @@ export default function Home() {
                   <li className="flex items-start gap-2">
                     <Check className="mt-0.5 h-4 w-4 text-emerald-300" />
                     <span>
-                      {plan.limits.employees} employees incluidos
+                      {plan.limits.employees} empleados incluidos
                     </span>
                   </li>
                   <li className="flex items-start gap-2">

@@ -4,14 +4,14 @@ import { useSession } from "../../../hooks/useSession";
 import { Button } from "../../../shared/components/ui";
 import { branchService } from "../../branches/services";
 import {
-  productService,
-  stockService,
+    productService,
+    stockService,
 } from "../../inventory/services/inventory.service";
 import type {
-  Branch,
-  BranchStock,
-  EmployeeStock,
-  Product,
+    Branch,
+    BranchStock,
+    EmployeeStock,
+    Product,
 } from "../../inventory/types/product.types";
 import { saleService, warrantyService } from "../../sales/services";
 import type { Sale } from "../../sales/types/sales.types";
@@ -300,9 +300,9 @@ export default function CustomerWarrantyPage() {
     sales.forEach(sale => {
       if (sale.employee) {
         if (typeof sale.employee === "object") {
-          map.set(sale.employee._id, sale.employee.name || "Employee");
+          map.set(sale.employee._id, sale.employee.name || "Empleado");
         } else {
-          map.set(sale.employee, "Employee");
+          map.set(sale.employee, "Empleado");
         }
         return;
       }
@@ -741,8 +741,8 @@ export default function CustomerWarrantyPage() {
                   const resolvedSaleId = sale.saleId || sale._id;
                   const responsibleName = sale.employee
                     ? typeof sale.employee === "object"
-                      ? sale.employee.name || "Employee"
-                      : "Employee"
+                      ? sale.employee.name || "Empleado"
+                      : "Empleado"
                     : typeof sale.createdBy === "object"
                       ? sale.createdBy.name || "Admin"
                       : "Admin";
@@ -794,7 +794,7 @@ export default function CustomerWarrantyPage() {
               </p>
             </div>
             <div className="text-sm text-gray-300">
-              {saleData.seller?.role === "employee" ? "Employee" : "Admin"}:{" "}
+              {saleData.seller?.role === "employee" ? "Empleado" : "Admin"}:{" "}
               {typeof saleData.seller?.user === "object"
                 ? saleData.seller.user?.name
                 : "-"}

@@ -19,16 +19,32 @@ export type NotificationType =
 
 export type NotificationPriority = "low" | "medium" | "high" | "urgent";
 
+export interface NotificationUserRef {
+  _id: string;
+  name?: string;
+  email?: string;
+  role?: string;
+}
+
+export interface NotificationViewedBy {
+  user: string | NotificationUserRef;
+  viewedAt?: string;
+}
+
 export interface Notification {
   _id: string;
   business: string;
+  sender?: string | NotificationUserRef | null;
+  targetEmployees?: Array<string | NotificationUserRef>;
+  viewedBy?: NotificationViewedBy[];
+  viewed?: boolean;
   user?: string;
   targetRole?: "admin" | "employee" | "all";
-  type: NotificationType;
+  type?: NotificationType;
   title: string;
   message: string;
-  priority: NotificationPriority;
-  read: boolean;
+  priority?: NotificationPriority;
+  read?: boolean;
   readAt?: string;
   link?: string;
   relatedEntity?: {
@@ -40,4 +56,23 @@ export interface Notification {
   pushSent: boolean;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface NotificationListResult {
+  notifications: Notification[];
+  unreadCount: number;
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
+}
+
+export interface SendNotificationPayload {
+  title: string;
+  message: string;
+  sendToAll: boolean;
+  targetEmployees: string[];
+  priority?: NotificationPriority;
 }

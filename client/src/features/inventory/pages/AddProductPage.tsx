@@ -3,8 +3,8 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { gamificationService } from "../../common/services";
 import {
-  categoryService,
-  productService,
+    categoryService,
+    productService,
 } from "../../inventory/services/inventory.service";
 import type { Category } from "../types/product.types";
 
@@ -215,7 +215,7 @@ export default function AddProduct() {
       }
 
       if (Number.isNaN(employeePrice) || employeePrice < 0) {
-        throw new Error("El precio de employee debe ser un número válido");
+        throw new Error("El precio de empleado debe ser un número válido");
       }
 
       if (Number.isNaN(totalStock) || totalStock < 0) {

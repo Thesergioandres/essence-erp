@@ -3,9 +3,9 @@ import { Navigate, useNavigate } from "react-router-dom";
 import { authService } from "../../auth/services";
 import type { User } from "../../auth/types/auth.types";
 import {
-  globalSettingsService,
-  issueService,
-  userAccessService,
+    globalSettingsService,
+    issueService,
+    userAccessService,
 } from "../../common/services";
 import type { IssueReport } from "../types/common.types";
 
@@ -473,7 +473,7 @@ export default function GodPanel() {
           setUsers(prev => prev.filter(u => u._id !== userId));
           setFeedback(
             `✅ Eliminado: ${deleteStats.deletedBusinesses} empresas, ` +
-              `${deleteStats.deletedEmployeeUsers} employees, ` +
+              `${deleteStats.deletedEmployeeUsers} empleados, ` +
               `${deleteStats.deletedProducts} productos, ` +
               `${deleteStats.deletedSales} ventas, ` +
               `${deleteStats.deletedCustomers} clientes, ` +

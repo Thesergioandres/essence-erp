@@ -7,10 +7,10 @@ import type { Expense } from "../../common/types/common.types";
 import { creditService } from "../../credits/services";
 import { defectiveProductService } from "../../sales/services";
 import type {
-  CreditMetrics,
-  ProfitHistoryAdminEmployee,
-  ProfitHistoryAdminEntry,
-  ProfitHistoryAdminOverview,
+    CreditMetrics,
+    ProfitHistoryAdminEmployee,
+    ProfitHistoryAdminEntry,
+    ProfitHistoryAdminOverview,
 } from "../types/analytics.types";
 
 interface DefectiveStats {
@@ -336,7 +336,7 @@ export default function ProfitHistory() {
                   {formatCurrency(totalProfit)}
                 </p>
                 <p className="text-xs text-purple-100/80">
-                  {employeesEnabled ? "Admin + Employees" : "Total ventas"}
+                  {employeesEnabled ? "Admin + Empleados" : "Total ventas"}
                 </p>
               </div>
               <div className="rounded-xl border border-gray-800 bg-gray-900/60 p-4 text-white">
@@ -356,9 +356,7 @@ export default function ProfitHistory() {
               </div>
               {employeesEnabled && (
                 <div className="rounded-xl border border-gray-800 bg-gray-900/60 p-4 text-white">
-                  <p className="text-sm text-gray-300">
-                    Comisiones de employees
-                  </p>
+                  <p className="text-sm text-gray-300">Comisiones de empleados</p>
                   <p className="mt-2 text-xl font-semibold text-cyan-300">
                     {formatCurrency(overview?.totalEmployeeCommissions ?? 0)}
                   </p>

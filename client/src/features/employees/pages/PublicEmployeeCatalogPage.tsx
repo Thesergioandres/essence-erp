@@ -4,8 +4,8 @@ import { useBusiness } from "../../../context/BusinessContext";
 import { useBrandLogo } from "../../../hooks/useBrandLogo";
 import { LoadingSpinner } from "../../../shared/components/ui";
 import { exportCatalogToPDF } from "../../../utils/exportUtils";
-import { employeeService } from "../services/employee.service";
 import type { Product } from "../../inventory/types/product.types";
+import { employeeService } from "../services/employee.service";
 
 interface EmployeeInfo {
   name: string;
@@ -154,7 +154,7 @@ export default function PublicEmployeeCatalog() {
           businessName:
             catalogBusiness?.name?.trim() ||
             business?.name ||
-            `Catalogo de ${employee?.name || "employee"}`,
+            `Catalogo de ${employee?.name || "empleado"}`,
           logoUrl:
             catalogBusiness?.logoUrl?.trim() ||
             business?.logoUrl?.trim() ||

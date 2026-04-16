@@ -1,11 +1,11 @@
 import { m as motion } from "framer-motion";
 import {
-  DollarSign,
-  ShoppingCart,
-  Target,
-  TrendingDown,
-  TrendingUp,
-  Users,
+    DollarSign,
+    ShoppingCart,
+    Target,
+    TrendingDown,
+    TrendingUp,
+    Users,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { advancedAnalyticsService } from "../../features/analytics/services";
@@ -117,7 +117,7 @@ export const FinancialKPICards: React.FC<{
           id: "rangeProfit",
           label: "Ganancia neta (rango)",
           tooltip:
-            "Ganancia neta de ventas en el rango (ventas - costo producto - costos adicionales - comision employee - garantias).",
+            "Ganancia neta de ventas en el rango (ventas - costo producto - costos adicionales - comision de empleado - garantias).",
           value: formatMoney(
             range.netProfit ??
               range.grossProfit ??
@@ -145,8 +145,8 @@ export const FinancialKPICards: React.FC<{
         },
         {
           id: "activeEmployees",
-          label: "Employees activos",
-          tooltip: "Employees con al menos una venta en el periodo.",
+          label: "Empleados activos",
+          tooltip: "Empleados con al menos una venta en el periodo.",
           value: safeNumber(summary.totalActiveEmployees),
           icon: <Users className="h-8 w-8" />,
           color: "bg-gray-600",
@@ -261,8 +261,8 @@ export const FinancialKPICards: React.FC<{
         },
         {
           id: "activeEmployees",
-          label: "Employees activos",
-          tooltip: "Employees con al menos una venta en el periodo.",
+          label: "Empleados activos",
+          tooltip: "Empleados con al menos una venta en el periodo.",
           value: safeNumber(summary.totalActiveEmployees),
           icon: <Users className="h-8 w-8" />,
           color: "bg-gray-600",

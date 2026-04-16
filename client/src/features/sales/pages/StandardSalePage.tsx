@@ -9,16 +9,16 @@ import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import ProductSelector from "../../../components/ProductSelector";
 import type {
-  RegisterSaleResponse,
-  RegisterStandardSaleInput,
+    RegisterSaleResponse,
+    RegisterStandardSaleInput,
 } from "../../../core/domain/sales/sales.types";
 import { useSession } from "../../../hooks/useSession";
 import { Button, Card } from "../../../shared/components/ui";
 import LoadingSpinner from "../../../shared/components/ui/LoadingSpinner";
 import type {
-  EmployeeStats,
-  GamificationConfig,
-  LevelConfig,
+    EmployeeStats,
+    GamificationConfig,
+    LevelConfig,
 } from "../../analytics/types/gamification.types";
 import { branchService } from "../../branches/services/branch.service";
 import type { Branch } from "../../business/types/business.types";
@@ -28,22 +28,22 @@ import { productsService } from "../../inventory/api/products.service";
 import { stockService } from "../../inventory/services/inventory.service";
 import type { Product } from "../../inventory/types/product.types";
 import {
-  CustomerSelector,
-  FinancialPanel,
-  InventoryGrid,
-  LocationSelector,
-  OrderCart,
-  OrderSummary,
-  WarrantySection,
+    CustomerSelector,
+    FinancialPanel,
+    InventoryGrid,
+    LocationSelector,
+    OrderCart,
+    OrderSummary,
+    WarrantySection,
 } from "../components/admin-order";
 import { initialOrderState, orderReducer } from "../reducers/orderReducer";
 import {
-  defectiveProductService,
-  saleService,
+    defectiveProductService,
+    saleService,
 } from "../services/sales.service";
 import type {
-  AdminOrderPayload,
-  ProductWithStock,
+    AdminOrderPayload,
+    ProductWithStock,
 } from "../types/admin-order.types";
 
 type RegisterStandardSaleHandler = (
@@ -868,13 +868,13 @@ export default function StandardSalePage({
                 </h1>
                 <p className="mt-1 text-sm text-slate-300">
                   {isEmployee
-                    ? "Panel de Employee"
+                    ? "Panel de Empleado"
                     : "Panel de Administrador"}
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2 text-xs">
                 <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-emerald-200">
-                  {isEmployee ? "Employee" : "Administrador"}
+                  {isEmployee ? "Empleado" : "Administrador"}
                 </span>
                 <span className="rounded-full border border-slate-600/60 bg-slate-900/60 px-3 py-1 text-slate-200">
                   Items: {order.items.length}

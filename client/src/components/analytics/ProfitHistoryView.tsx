@@ -2,13 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useBusiness } from "../../context/BusinessContext";
 import { analyticsService } from "../../features/analytics/services";
 import type {
-  ProfitHistoryAdminEmployee,
-  ProfitHistoryAdminEntry,
-  ProfitHistoryAdminOverview,
+    ProfitHistoryAdminEmployee,
+    ProfitHistoryAdminEntry,
+    ProfitHistoryAdminOverview,
 } from "../../features/analytics/types/analytics.types";
 import {
-  expenseService,
-  profitHistoryService,
+    expenseService,
+    profitHistoryService,
 } from "../../features/common/services";
 import type { Expense } from "../../features/common/types/common.types";
 import { creditService } from "../../features/credits/services";
@@ -378,14 +378,14 @@ export default function ProfitHistoryView({
                   {formatCurrency(grossProfit)}
                 </p>
                 <p className="text-xs text-gray-400">
-                  {employeesEnabled ? "Admin + Employees" : "Total ventas"}
+                  {employeesEnabled ? "Admin + Empleados" : "Total ventas"}
                 </p>
               </div>
               {employeesEnabled && (
                 <div className="rounded-xl border border-gray-800 bg-gray-900/60 p-4 text-white">
                   <p className="text-sm text-gray-300">
-                    Comisiones de employees
-                    <InfoTooltip text="Total pagado a employees por ventas confirmadas." />
+                    Comisiones de empleados
+                    <InfoTooltip text="Total pagado a empleados por ventas confirmadas." />
                   </p>
                   <p className="mt-2 text-xl font-semibold text-cyan-300">
                     {formatCurrency(commissions)}
@@ -558,7 +558,7 @@ export default function ProfitHistoryView({
                   <h3 className="text-lg font-semibold text-teal-200">
                     📦 Utilidad Potencial del Inventario
                     <InfoTooltip
-                      text="Calculo teorico con reglas por ubicacion: bodega/sedes usan precio cliente; employees usan precio B2B."
+                      text="Calculo teorico con reglas por ubicacion: bodega/sedes usan precio cliente; empleados usan precio B2B."
                       tone="neutral"
                       className="border-teal-200/70 text-teal-200"
                     />
@@ -584,7 +584,7 @@ export default function ProfitHistoryView({
                     <div className="rounded-lg border border-gray-700 bg-gray-900/50 p-3">
                       <p className="text-xs text-gray-400">
                         Tu Ganancia Admin
-                        <InfoTooltip text="Bodega/sedes: precio cliente - costo. Employees: precio B2B - costo." />
+                        <InfoTooltip text="Bodega/sedes: precio cliente - costo. Empleados: precio B2B - costo." />
                       </p>
                       <p className="mt-1 text-xl font-bold text-emerald-400">
                         {formatCurrency(
@@ -768,7 +768,7 @@ export default function ProfitHistoryView({
                         estimatedProfit.employees.employees.length > 0 && (
                           <div className="rounded-lg border border-gray-700 bg-gray-800/30 p-3">
                             <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold text-white">
-                              👥 Employees (
+                              👥 Empleados (
                               {estimatedProfit.employees.employees.length})
                               <span className="rounded-full bg-gray-700 px-2 py-0.5 text-xs font-normal text-gray-300">
                                 {estimatedProfit.employees.totalUnits} unidades
@@ -808,7 +808,7 @@ export default function ProfitHistoryView({
                             </div>
                             <div className="mt-2 flex justify-end border-t border-gray-700 pt-2 text-xs">
                               <span className="text-gray-400">
-                                Tu ganancia de employees:
+                                Tu ganancia de empleados:
                               </span>
                               <span className="ml-2 font-bold text-emerald-400">
                                 {formatCurrency(
@@ -967,7 +967,7 @@ export default function ProfitHistoryView({
           {employeesEnabled && (
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-300">
-                Employees
+                Empleados
               </label>
               <select
                 value={selectedEmployee}
@@ -1064,7 +1064,7 @@ export default function ProfitHistoryView({
                   </th>
                   {employeesEnabled && (
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">
-                      Employee
+                      Empleado
                     </th>
                   )}
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">
@@ -1287,7 +1287,7 @@ export default function ProfitHistoryView({
                     <div className="mt-3 space-y-2 text-sm text-gray-200">
                       {employeesEnabled && (
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-gray-400">Employee</span>
+                          <span className="text-gray-400">Empleado</span>
                           <span className="text-right font-semibold text-white">
                             {entry.employeeName}
                           </span>
@@ -1330,7 +1330,7 @@ export default function ProfitHistoryView({
           <div className="rounded-xl border border-gray-800 bg-gray-900/70 p-4 shadow-lg">
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-400">Ranking employees</p>
+                <p className="text-sm text-gray-400">Ranking empleados</p>
                 <p className="text-lg font-semibold text-white">
                   Top comisiones
                 </p>
@@ -1376,7 +1376,7 @@ export default function ProfitHistoryView({
             <div className="mt-5 rounded-lg border border-gray-800 bg-gray-950/60 p-3">
               <p className="text-sm font-semibold text-white">Ventas admin</p>
               <p className="text-xs text-gray-400">
-                Incluye ventas directas y margen de cada venta de employee.
+                Incluye ventas directas y margen de cada venta de empleado.
               </p>
               <div className="mt-2 flex items-center justify-between">
                 <span className="text-sm text-gray-300">Total admin</span>

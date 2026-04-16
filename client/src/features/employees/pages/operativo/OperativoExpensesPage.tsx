@@ -8,7 +8,7 @@ export default function OperativoExpensesPage() {
   return (
     <OperativoModuleShell
       title="Operativo · Gastos"
-      description="Control operativo de gastos del negocio sin salir del entorno employee."
+      description="Control operativo de gastos del negocio sin salir del entorno de empleado."
       allow={canViewExpenses}
     >
       <ExpensesPage />

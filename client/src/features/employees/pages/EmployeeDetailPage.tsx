@@ -52,7 +52,7 @@ const EmployeeDetail = () => {
         setEmployee(response.employee);
         setError("");
       } catch (err: any) {
-        setError(err.response?.data?.message || "Error al cargar employee");
+        setError(err.response?.data?.message || "Error al cargar empleado");
       } finally {
         setLoading(false);
       }
@@ -181,7 +181,7 @@ const EmployeeDetail = () => {
   if (loading) {
     return (
       <div className="flex h-96 items-center justify-center">
-        <LoadingSpinner size="lg" message="Cargando employee..." />
+        <LoadingSpinner size="lg" message="Cargando empleado..." />
       </div>
     );
   }
@@ -190,7 +190,7 @@ const EmployeeDetail = () => {
     return (
       <div className="space-y-4 p-6">
         <div className="rounded-lg border border-red-500 bg-red-500/10 p-4 text-sm text-red-400">
-          {error || "Employee no encontrado"}
+          {error || "Empleado no encontrado"}
         </div>
         <div>
           <Button
@@ -198,7 +198,7 @@ const EmployeeDetail = () => {
             variant="outline"
             className="border-gray-700 bg-transparent text-gray-200 hover:bg-gray-800"
           >
-            Volver a Employees
+            Volver a empleados
           </Button>
         </div>
       </div>
@@ -339,7 +339,7 @@ const EmployeeDetail = () => {
                         Cantidad
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium uppercase text-gray-400">
-                        Precio Employee
+                        Precio Empleado
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium uppercase text-gray-400">
                         Alerta Stock Bajo

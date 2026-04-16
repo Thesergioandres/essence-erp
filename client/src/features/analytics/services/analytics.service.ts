@@ -192,8 +192,7 @@ export const analyticsService = {
 
       const employees = data.map((item: any) => ({
         employeeId: item._id || item.employeeId,
-        employeeName:
-          item.employee?.name || item.employeeName || "Sin nombre",
+        employeeName: item.employee?.name || item.employeeName || "Sin nombre",
         totalSales: item.totalSales || 0,
         totalRevenue: item.totalRevenue || 0,
         totalCost: 0,
@@ -588,10 +587,14 @@ export const analyticsService = {
    * Export full business data as JSON backup
    * Returns all collections related to the business
    */
-  async getFullDataExport(): Promise<any> {
+  async exportFullData(): Promise<unknown> {
     const response = await api.get("/business/export-full-data");
     // V2 API returns { success: true, data: {...} }
     return response.data.data || response.data;
+  },
+
+  async getFullDataExport(): Promise<any> {
+    return analyticsService.exportFullData();
   },
 };
 
@@ -932,10 +935,9 @@ export const advancedAnalyticsService = {
       totalContribution: number;
     };
   }> {
-    const response = await api.get(
-      "/advanced-analytics/employee-performance",
-      { params }
-    );
+    const response = await api.get("/advanced-analytics/employee-performance", {
+      params,
+    });
     return response.data;
   },
 
@@ -1268,12 +1270,9 @@ export const advancedAnalyticsService = {
     };
   }> {
     try {
-      const response = await api.get(
-        "/advanced-analytics/employee-rankings",
-        {
-          params,
-        }
-      );
+      const response = await api.get("/advanced-analytics/employee-rankings", {
+        params,
+      });
       const payload =
         response.data?.data ?? response.data?.rankings ?? response.data;
       const rawRankings = Array.isArray(payload)

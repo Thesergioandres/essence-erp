@@ -1,13 +1,38 @@
 import { AnimatePresence, m } from "framer-motion";
 import { gsap } from "gsap";
-import { BarChart3 } from "lucide-react";
-import { type ChangeEvent, useEffect, useMemo, useState } from "react";
 import {
-  Navigate,
-  NavLink,
-  Outlet,
-  useLocation,
-  useNavigate,
+    Activity,
+    AlertTriangle,
+    BarChart3,
+    Bell,
+    BookOpen,
+    Building2,
+    ChevronDown,
+    ChevronRight,
+    CreditCard,
+    FileText,
+    Globe,
+    Menu,
+    Package,
+    Plus,
+    Search,
+    Settings,
+    Shield,
+    ShoppingBag,
+    Star,
+    Tag,
+    Target,
+    Trophy,
+    Users,
+    type LucideIcon,
+} from "lucide-react";
+import { useEffect, useMemo, useState, type ChangeEvent } from "react";
+import {
+    Navigate,
+    NavLink,
+    Outlet,
+    useLocation,
+    useNavigate,
 } from "react-router-dom";
 import BusinessGate from "../../../components/BusinessGate";
 import BusinessSelector from "../../../components/BusinessSelector";
@@ -15,7 +40,6 @@ import FeatureNavLink from "../../../components/FeatureNavLink";
 import ReportIssueButton from "../../../components/ReportIssueButton";
 import { useBusiness } from "../../../context/BusinessContext";
 import { useBrandLogo } from "../../../hooks/useBrandLogo";
-import { Button } from "../../../shared/components/ui";
 import { useMotionProfile } from "../../../shared/config/motion.config";
 import { authService } from "../../auth/services";
 import type { User } from "../../auth/types/auth.types";
@@ -23,20 +47,42 @@ import { dispatchService } from "../../branches/services";
 import DemoModeTour from "../../demo/DemoModeTour";
 import DemoSandboxBanner from "../../demo/DemoSandboxBanner";
 import { employeeService } from "../../employees/services";
+import type { BusinessFeatures } from "../types/business.types";
 
 const navLinkClasses = (isActive: boolean): string =>
   [
-    "magnetic-nav-link group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
+    "magnetic-nav-link group flex min-h-11 items-center gap-3 rounded-xl border px-3 py-2.5 text-sm font-medium transition-all duration-300",
     isActive
-      ? "bg-purple-600/20 text-white border border-purple-500/50 shadow-lg shadow-purple-700/20"
-      : "text-gray-300 hover:bg-white/5 hover:text-purple-200",
+      ? "border-purple-500/55 bg-purple-600/20 text-white shadow-lg shadow-purple-700/20"
+      : "border-white/0 text-gray-300 hover:border-white/15 hover:bg-white/5 hover:text-purple-200",
   ].join(" ");
 
-const SectionTitle = ({ label }: { label: string }) => (
-  <p className="px-3 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
-    {label}
-  </p>
-);
+interface SidebarItem {
+  id: string;
+  label: string;
+  to: string;
+  icon: LucideIcon;
+  feature?: keyof BusinessFeatures;
+  showDispatchBadge?: boolean;
+}
+
+interface SidebarSection {
+  id: string;
+  label: string;
+  items: SidebarItem[];
+}
+
+interface VisibleSidebarSection extends SidebarSection {
+  filteredItems: SidebarItem[];
+  forceExpand: boolean;
+}
+
+const normalizeSearchValue = (value: string) =>
+  String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
 
 export default function DashboardLayout() {
   const navigate = useNavigate();
@@ -53,12 +99,349 @@ export default function DashboardLayout() {
   const brandName = business?.name || "Selecciona un negocio";
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isDesktopViewport, setIsDesktopViewport] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth >= 1024 : true
+  );
+  const [expandedSections, setExpandedSections] = useState<
+    Record<string, boolean>
+  >({
+    principal: true,
+    "ventas-clientes": true,
+    "inventario-catalogo": true,
+    operaciones: true,
+    "marketing-engagement": true,
+    "administracion-equipo": true,
+    configuracion: true,
+  });
   const [employees, setEmployees] = useState<User[]>([]);
   const [loadingImpersonation, setLoadingImpersonation] = useState(false);
   const [pendingDispatchCount, setPendingDispatchCount] = useState(0);
   const isImpersonating = authService.isImpersonating();
+  const floatingToggleTopClass = isImpersonating ? "top-56" : "top-44";
   const viewAnimationKey = `${location.pathname}${location.search}`;
   const { motionProfile } = useMotionProfile();
+
+  const menuSections = useMemo<SidebarSection[]>(
+    () => [
+      {
+        id: "principal",
+        label: "Principal",
+        items: [
+          {
+            id: "business-assistant",
+            label: "Business Assistant",
+            to: "/admin/business-assistant",
+            icon: BookOpen,
+            feature: "assistant",
+          },
+          {
+            id: "analytics",
+            label: "Análisis",
+            to: "/admin/analytics",
+            icon: BarChart3,
+            feature: "reports",
+          },
+          {
+            id: "public-page",
+            label: "Mi Página Pública",
+            to: "/admin/public-page",
+            icon: Globe,
+          },
+        ],
+      },
+      {
+        id: "ventas-clientes",
+        label: "Ventas & Clientes",
+        items: [
+          {
+            id: "register-sale",
+            label: "Registrar Venta",
+            to: "/admin/register-sale",
+            icon: Plus,
+          },
+          {
+            id: "register-promotion",
+            label: "Venta Promoción",
+            to: "/admin/register-promotion",
+            icon: Tag,
+          },
+          {
+            id: "sales",
+            label: "Ventas",
+            to: "/admin/sales",
+            icon: ShoppingBag,
+          },
+          {
+            id: "special-sales",
+            label: "Ventas Especiales",
+            to: "/admin/special-sales",
+            icon: Star,
+            feature: "sales",
+          },
+          {
+            id: "customers",
+            label: "Clientes",
+            to: "/admin/customers",
+            icon: Users,
+          },
+          {
+            id: "credits",
+            label: "Fiados / Créditos",
+            to: "/admin/credits",
+            icon: CreditCard,
+            feature: "credits",
+          },
+          {
+            id: "warranties",
+            label: "Garantías",
+            to: "/admin/warranties",
+            icon: Shield,
+            feature: "defectiveProducts",
+          },
+        ],
+      },
+      {
+        id: "inventario-catalogo",
+        label: "Inventario & Catálogo",
+        items: [
+          {
+            id: "catalog",
+            label: "Catálogo Completo",
+            to: "/catalog",
+            icon: BookOpen,
+          },
+          {
+            id: "products",
+            label: "Productos",
+            to: "/admin/products",
+            icon: Package,
+          },
+          {
+            id: "add-product",
+            label: "Agregar Producto",
+            to: "/admin/add-product",
+            icon: Plus,
+          },
+          {
+            id: "price-list",
+            label: "Lista de Precios",
+            to: "/admin/price-list",
+            icon: FileText,
+          },
+          {
+            id: "categories",
+            label: "Categorías",
+            to: "/admin/categories",
+            icon: Tag,
+          },
+          {
+            id: "providers",
+            label: "Proveedores",
+            to: "/admin/providers",
+            icon: Building2,
+          },
+          {
+            id: "defective-products",
+            label: "Productos Defectuosos",
+            to: "/admin/defective-products",
+            icon: AlertTriangle,
+            feature: "defectiveProducts",
+          },
+        ],
+      },
+      {
+        id: "operaciones",
+        label: "Operaciones",
+        items: [
+          {
+            id: "branches",
+            label: "Sedes",
+            to: "/admin/branches",
+            icon: Building2,
+            feature: "branches",
+          },
+          {
+            id: "inventory-entries",
+            label: "Recepción de Mercancía",
+            to: "/admin/inventory-entries",
+            icon: FileText,
+            feature: "inventory",
+          },
+          {
+            id: "stock-management",
+            label: "Gestión de Stock",
+            to: "/admin/stock-management",
+            icon: Package,
+            feature: "inventory",
+          },
+          {
+            id: "transfer-history",
+            label: "Historial de Transferencias",
+            to: "/admin/transfer-history",
+            icon: Activity,
+            feature: "transfers",
+          },
+          {
+            id: "dispatch",
+            label: "Central de Despachos",
+            to: "/admin/dispatch",
+            icon: ShoppingBag,
+            feature: "transfers",
+            showDispatchBadge: true,
+          },
+          {
+            id: "expenses",
+            label: "Gastos",
+            to: "/admin/expenses",
+            icon: CreditCard,
+            feature: "expenses",
+          },
+        ],
+      },
+      {
+        id: "marketing-engagement",
+        label: "Marketing & Engagement",
+        items: [
+          {
+            id: "promotions",
+            label: "Promociones",
+            to: "/admin/promotions",
+            icon: Tag,
+            feature: "promotions",
+          },
+          {
+            id: "advertising",
+            label: "Publicidad",
+            to: "/admin/advertising",
+            icon: Star,
+          },
+          {
+            id: "gamification",
+            label: "Gamificación",
+            to: "/admin/gamification",
+            icon: Target,
+            feature: "gamification",
+          },
+          {
+            id: "rankings",
+            label: "Rankings",
+            to: "/admin/rankings",
+            icon: Trophy,
+            feature: "gamification",
+          },
+        ],
+      },
+      {
+        id: "administracion-equipo",
+        label: "Administración & Equipo",
+        items: [
+          {
+            id: "employees",
+            label: "Empleados",
+            to: "/admin/employees",
+            icon: Users,
+            feature: "employees",
+          },
+          {
+            id: "team",
+            label: "Equipo y Permisos",
+            to: "/admin/team",
+            icon: Shield,
+          },
+          {
+            id: "notifications",
+            label: "Notificaciones",
+            to: "/admin/notifications",
+            icon: Bell,
+          },
+          {
+            id: "audit",
+            label: "Auditoría",
+            to: "/admin/audit",
+            icon: Activity,
+            feature: "reports",
+          },
+          {
+            id: "payment-methods",
+            label: "Métodos de Pago",
+            to: "/admin/payment-methods",
+            icon: CreditCard,
+            feature: "sales",
+          },
+          {
+            id: "delivery-methods",
+            label: "Métodos de Entrega",
+            to: "/admin/delivery-methods",
+            icon: ShoppingBag,
+            feature: "sales",
+          },
+        ],
+      },
+      {
+        id: "configuracion",
+        label: "Configuración",
+        items: [
+          {
+            id: "business-settings",
+            label: "Configurar negocio",
+            to: "/admin/business-settings",
+            icon: Settings,
+          },
+          {
+            id: "user-settings",
+            label: "Preferencias de animación",
+            to: "/admin/user-settings",
+            icon: Settings,
+          },
+          {
+            id: "create-business",
+            label: "Crear nuevo negocio",
+            to: "/admin/create-business",
+            icon: Plus,
+          },
+        ],
+      },
+    ],
+    []
+  );
+
+  const normalizedSearchTerm = useMemo(
+    () => normalizeSearchValue(searchTerm),
+    [searchTerm]
+  );
+
+  const visibleSections = useMemo<VisibleSidebarSection[]>(
+    () =>
+      menuSections
+        .map(section => {
+          const sectionLabel = normalizeSearchValue(section.label);
+          const sectionMatches =
+            normalizedSearchTerm.length > 0 &&
+            sectionLabel.includes(normalizedSearchTerm);
+
+          const filteredItems =
+            normalizedSearchTerm.length === 0 || sectionMatches
+              ? section.items
+              : section.items.filter(item =>
+                  normalizeSearchValue(item.label).includes(
+                    normalizedSearchTerm
+                  )
+                );
+
+          return {
+            ...section,
+            filteredItems,
+            forceExpand:
+              normalizedSearchTerm.length > 0 && filteredItems.length > 0,
+          };
+        })
+        .filter(section => section.filteredItems.length > 0),
+    [menuSections, normalizedSearchTerm]
+  );
+
+  const showNoResults =
+    normalizedSearchTerm.length > 0 && visibleSections.length === 0;
 
   const currentMembership = useMemo(
     () =>
@@ -82,6 +465,25 @@ export default function DashboardLayout() {
       canReadTransfersFromMembership);
 
   useEffect(() => {
+    const syncViewport = () => {
+      setIsDesktopViewport(window.innerWidth >= 1024);
+    };
+
+    syncViewport();
+    window.addEventListener("resize", syncViewport);
+
+    return () => {
+      window.removeEventListener("resize", syncViewport);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isDesktopViewport) {
+      setSidebarOpen(false);
+    }
+  }, [isDesktopViewport]);
+
+  useEffect(() => {
     if (!userRole || !businessId) {
       setEmployees([]);
       return;
@@ -97,7 +499,7 @@ export default function DashboardLayout() {
           )
         );
       } catch (error) {
-        console.error("Error cargando employees para suplantación:", error);
+        console.error("Error cargando empleados para suplantación:", error);
         setEmployees([]);
       }
     };
@@ -191,7 +593,23 @@ export default function DashboardLayout() {
     return () => {
       cleanups.forEach(cleanup => cleanup());
     };
-  }, [desktopSidebarOpen, sidebarOpen]);
+  }, [desktopSidebarOpen, sidebarOpen, visibleSections, searchTerm]);
+
+  const handleSidebarVisibilityToggle = () => {
+    if (isDesktopViewport) {
+      setDesktopSidebarOpen(prev => !prev);
+      return;
+    }
+
+    setSidebarOpen(prev => !prev);
+  };
+
+  const handleSectionToggle = (sectionId: string) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [sectionId]: !(prev[sectionId] ?? true),
+    }));
+  };
 
   const handleLogout = () => {
     authService.logout();
@@ -215,6 +633,45 @@ export default function DashboardLayout() {
       );
       setLoadingImpersonation(false);
     }
+  };
+
+  const renderSidebarItem = (item: SidebarItem) => {
+    const Icon = item.icon;
+
+    const content = (
+      <>
+        <Icon className="h-4 w-4 shrink-0" />
+        <span className="flex-1 truncate text-left">{item.label}</span>
+        {item.showDispatchBadge && pendingDispatchCount > 0 && (
+          <span className="rounded-full bg-amber-500 px-2 py-0.5 text-xs font-semibold text-gray-900">
+            {pendingDispatchCount}
+          </span>
+        )}
+      </>
+    );
+
+    if (item.feature) {
+      return (
+        <FeatureNavLink
+          key={item.id}
+          to={item.to}
+          feature={item.feature}
+          className={(isActive: boolean): string => navLinkClasses(isActive)}
+        >
+          {content}
+        </FeatureNavLink>
+      );
+    }
+
+    return (
+      <NavLink
+        key={item.id}
+        to={item.to}
+        className={({ isActive }): string => navLinkClasses(isActive)}
+      >
+        {content}
+      </NavLink>
+    );
   };
 
   if (!user) {
@@ -259,720 +716,82 @@ export default function DashboardLayout() {
               </div>
             </div>
             <BusinessSelector />
+
+            <div className="mt-4 space-y-3">
+              <button
+                type="button"
+                onClick={handleSidebarVisibilityToggle}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-gray-200 transition duration-300 hover:border-purple-400/60 hover:text-purple-200"
+              >
+                <Menu className="h-4 w-4" />
+                {isDesktopViewport
+                  ? desktopSidebarOpen
+                    ? "Ocultar menú"
+                    : "Mostrar menú"
+                  : sidebarOpen
+                    ? "Ocultar menú"
+                    : "Mostrar menú"}
+              </button>
+
+              <label className="relative block">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="search"
+                  value={searchTerm}
+                  onChange={event => setSearchTerm(event.target.value)}
+                  placeholder="Filtrar secciones..."
+                  className="focus:outline-hidden h-11 w-full rounded-xl border border-white/10 bg-white/5 pl-10 pr-3 text-sm text-gray-100 placeholder:text-gray-500 focus:border-purple-400/60"
+                />
+              </label>
+            </div>
           </div>
 
-          {/* Navigation - Scrollable with better mobile handling */}
+          {/* Navigation */}
           <nav
-            className="scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent flex-1 space-y-1 overflow-y-auto px-3 py-3 sm:px-4 sm:py-4"
+            className="scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent flex-1 space-y-3 overflow-y-auto px-3 py-3 sm:px-4 sm:py-4"
             style={{
-              maxHeight: "calc(100vh - 220px)",
               WebkitOverflowScrolling: "touch",
             }}
           >
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setDesktopSidebarOpen(false)}
-              className="mb-2 hidden w-full items-center justify-center gap-2 rounded-xl border-white/10 bg-white/5 text-gray-300 hover:border-purple-400/60 hover:text-purple-200 lg:inline-flex"
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 6h16M4 12h16M4 18h16"
-                />
-              </svg>
-              Ocultar menú
-            </Button>
-            <SectionTitle label="Ventas" />
-            <NavLink
-              to="/admin/register-sale"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 4v16m8-8H4"
-                />
-              </svg>
-              Registrar Venta
-            </NavLink>
-            <NavLink
-              to="/admin/register-promotion"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M5 12h14M12 5l7 7-7 7"
-                />
-              </svg>
-              Venta Promocion
-            </NavLink>
-            <NavLink
-              to="/admin/sales"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                />
-              </svg>
-              Ventas
-            </NavLink>
-            <FeatureNavLink
-              to="/admin/special-sales"
-              feature="sales"
-              className={(isActive: boolean): string =>
-                navLinkClasses(isActive)
-              }
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
-                />
-              </svg>
-              Ventas Especiales
-            </FeatureNavLink>
-            <FeatureNavLink
-              to="/admin/payment-methods"
-              feature="sales"
-              className={(isActive: boolean): string =>
-                navLinkClasses(isActive)
-              }
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
-                />
-              </svg>
-              Métodos de Pago
-            </FeatureNavLink>
-            <FeatureNavLink
-              to="/admin/delivery-methods"
-              feature="sales"
-              className={(isActive: boolean): string =>
-                navLinkClasses(isActive)
-              }
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"
-                />
-              </svg>
-              Métodos de Entrega
-            </FeatureNavLink>
-            <FeatureNavLink
-              to="/admin/expenses"
-              feature="expenses"
-              className={(isActive: boolean): string =>
-                navLinkClasses(isActive)
-              }
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-10V6m0 12v-2m9-4a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              Gastos
-            </FeatureNavLink>
+            {showNoResults ? (
+              <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-6 text-center text-sm text-gray-400">
+                No encontramos coincidencias para tu búsqueda.
+              </div>
+            ) : (
+              visibleSections.map(section => {
+                const isExpanded =
+                  section.forceExpand || (expandedSections[section.id] ?? true);
 
-            <SectionTitle label="General" />
-            <FeatureNavLink
-              to="/admin/business-assistant"
-              feature="assistant"
-              className={(isActive: boolean): string =>
-                navLinkClasses(isActive)
-              }
-              id="demo-business-assistant"
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9.663 17h4.673M12 3a7 7 0 00-4 12.742V17a2 2 0 002 2h4a2 2 0 002-2v-1.258A7 7 0 0012 3z"
-                />
-              </svg>
-              Business Assistant
-            </FeatureNavLink>
-            <FeatureNavLink
-              to="/admin/global-inventory"
-              feature="inventory"
-              className={(isActive: boolean): string =>
-                navLinkClasses(isActive)
-              }
-              id="demo-global-inventory"
-            >
-              <BarChart3 className="h-5 w-5" />
-              Inventario Global
-            </FeatureNavLink>
-            <FeatureNavLink
-              to="/admin/gamification-config"
-              feature="gamification"
-              className={(isActive: boolean): string =>
-                navLinkClasses(isActive)
-              }
-              id="demo-gamification"
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 11l3 3L22 4M2 20h20"
-                />
-              </svg>
-              Gamificacion
-            </FeatureNavLink>
+                return (
+                  <section
+                    key={section.id}
+                    className="bg-white/3 rounded-2xl border border-white/10"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleSectionToggle(section.id)}
+                      disabled={section.forceExpand}
+                      className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left"
+                    >
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                        {section.label}
+                      </span>
+                      {isExpanded ? (
+                        <ChevronDown className="h-4 w-4 text-gray-400" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4 text-gray-400" />
+                      )}
+                    </button>
 
-            <SectionTitle label="Productos" />
-            <NavLink
-              to="/admin/products"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
-                />
-              </svg>
-              Productos
-            </NavLink>
-            <NavLink
-              to="/admin/price-list"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 14l2 2 4-4m5 0a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              Lista de Precios
-            </NavLink>
-            <NavLink
-              to="/admin/add-product"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 4v16m8-8H4"
-                />
-              </svg>
-              Agregar Producto
-            </NavLink>
-            <NavLink
-              to="/admin/categories"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
-                />
-              </svg>
-              Categorías
-            </NavLink>
-            <NavLink
-              to="/admin/providers"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"
-                />
-              </svg>
-              Proveedores
-            </NavLink>
-            <NavLink
-              to="/admin/customers"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-                />
-              </svg>
-              Clientes
-            </NavLink>
-            <FeatureNavLink
-              to="/admin/credits"
-              feature="credits"
-              className={(isActive: boolean): string =>
-                navLinkClasses(isActive)
-              }
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
-                />
-              </svg>
-              Fiados / Créditos
-            </FeatureNavLink>
-            <NavLink
-              to="/catalog"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-                />
-              </svg>
-              Catálogo Completo
-            </NavLink>
-            <FeatureNavLink
-              to="/admin/branches"
-              feature="branches"
-              className={(isActive: boolean): string =>
-                navLinkClasses(isActive)
-              }
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"
-                />
-              </svg>
-              Sedes
-            </FeatureNavLink>
-            <FeatureNavLink
-              to="/admin/inventory-entries"
-              feature="inventory"
-              className={(isActive: boolean): string =>
-                navLinkClasses(isActive)
-              }
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
-                />
-              </svg>
-              Recepción de Mercancía
-            </FeatureNavLink>
-            <FeatureNavLink
-              to="/admin/stock-management"
-              feature="inventory"
-              className={(isActive: boolean): string =>
-                navLinkClasses(isActive)
-              }
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"
-                />
-              </svg>
-              Gestión de Stock
-            </FeatureNavLink>
-            <FeatureNavLink
-              to="/admin/transfer-history"
-              feature="transfers"
-              className={(isActive: boolean): string =>
-                navLinkClasses(isActive)
-              }
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
-                />
-              </svg>
-              Historial de Transferencias
-            </FeatureNavLink>
-            <FeatureNavLink
-              to="/admin/dispatch"
-              feature="transfers"
-              className={(isActive: boolean): string =>
-                navLinkClasses(isActive)
-              }
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 17H7a2 2 0 01-2-2V7a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2h-2m-2 4h.01M9 21h6"
-                />
-              </svg>
-              <span className="flex items-center gap-2">
-                Central de Despachos
-                {pendingDispatchCount > 0 && (
-                  <span className="rounded-full bg-amber-500 px-2 py-0.5 text-xs font-semibold text-gray-900">
-                    {pendingDispatchCount}
-                  </span>
-                )}
-              </span>
-            </FeatureNavLink>
-            <FeatureNavLink
-              to="/admin/defective-products"
-              feature="defectiveProducts"
-              className={(isActive: boolean): string =>
-                navLinkClasses(isActive)
-              }
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                />
-              </svg>
-              Productos Defectuosos
-            </FeatureNavLink>
-            <FeatureNavLink
-              to="/admin/warranties"
-              feature="defectiveProducts"
-              className={(isActive: boolean): string =>
-                navLinkClasses(isActive)
-              }
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 6v6l4 2m6-2a10 10 0 11-20 0 10 10 0 0120 0z"
-                />
-              </svg>
-              Garantias
-            </FeatureNavLink>
-
-            <SectionTitle label="Reportes" />
-
-            <FeatureNavLink
-              to="/admin/analytics"
-              feature="reports"
-              className={(isActive: boolean): string =>
-                navLinkClasses(isActive)
-              }
-              id="demo-dashboard"
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                />
-              </svg>
-              Análisis
-            </FeatureNavLink>
-
-            <SectionTitle label="Marketing" />
-            <FeatureNavLink
-              to="/admin/promotions"
-              feature="promotions"
-              className={(isActive: boolean): string =>
-                navLinkClasses(isActive)
-              }
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
-                />
-              </svg>
-              Promociones
-            </FeatureNavLink>
-            <NavLink
-              to="/admin/advertising"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                />
-              </svg>
-              Publicidad
-            </NavLink>
-
-            <SectionTitle label="Configuración" />
-            <NavLink
-              to="/admin/team"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-                />
-              </svg>
-              Equipo y Permisos
-            </NavLink>
-            <NavLink
-              to="/admin/business-settings"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 6v6l4 2"
-                />
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              Configurar negocio
-            </NavLink>
-            <NavLink
-              to="/admin/user-settings"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l.7 2.155a1 1 0 00.95.69h2.264c.969 0 1.371 1.24.588 1.81l-1.832 1.331a1 1 0 00-.364 1.118l.7 2.155c.3.921-.755 1.688-1.538 1.118l-1.832-1.331a1 1 0 00-1.176 0l-1.832 1.331c-.783.57-1.838-.197-1.538-1.118l.7-2.155a1 1 0 00-.364-1.118L5.347 7.582c-.783-.57-.38-1.81.588-1.81h2.264a1 1 0 00.95-.69l.7-2.155z"
-                />
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 14v7m-3-3h6"
-                />
-              </svg>
-              Preferencias de animación
-            </NavLink>
-            <NavLink
-              to="/admin/create-business"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-                />
-              </svg>
-              Crear nuevo negocio
-            </NavLink>
+                    {isExpanded && (
+                      <div className="space-y-1 px-2 pb-2">
+                        {section.filteredItems.map(renderSidebarItem)}
+                      </div>
+                    )}
+                  </section>
+                );
+              })
+            )}
           </nav>
 
           {/* User Info & Logout - Always visible at bottom */}
@@ -1015,6 +834,28 @@ export default function DashboardLayout() {
         </div>
       </aside>
 
+      {!desktopSidebarOpen && (
+        <button
+          type="button"
+          onClick={() => setDesktopSidebarOpen(true)}
+          className={`fixed left-0 ${floatingToggleTopClass} bg-app-admin-sidebar z-50 hidden h-12 w-12 items-center justify-center rounded-r-xl border border-l-0 border-white/20 text-gray-200 shadow-lg shadow-black/35 transition duration-300 hover:text-purple-200 lg:flex`}
+          aria-label="Mostrar sidebar"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+      )}
+
+      {!sidebarOpen && (
+        <button
+          type="button"
+          onClick={() => setSidebarOpen(true)}
+          className={`fixed left-0 ${floatingToggleTopClass} bg-app-admin-sidebar z-50 flex h-12 w-12 items-center justify-center rounded-r-xl border border-l-0 border-white/20 text-gray-200 shadow-lg shadow-black/35 transition duration-300 hover:text-purple-200 lg:hidden`}
+          aria-label="Mostrar sidebar"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+      )}
+
       {/* Header (mobile + desktop) */}
       <div
         className={`bg-app-admin-header mobile-header-safe fixed left-0 right-0 z-30 border-b border-gray-800 backdrop-blur-lg lg:h-16 ${
@@ -1027,25 +868,6 @@ export default function DashboardLayout() {
           }`}
         >
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="-ml-2 rounded-lg p-2 text-gray-300 transition hover:bg-white/5 hover:text-purple-200 lg:hidden"
-              aria-label="Open menu"
-            >
-              <svg
-                className="h-6 w-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 6h16M4 12h16M4 18h16"
-                />
-              </svg>
-            </button>
             <div className="flex items-center gap-2">
               <img
                 src={brandLogo}
@@ -1087,20 +909,6 @@ export default function DashboardLayout() {
               <span className="inline-block h-2 w-2 rounded-full bg-green-400" />
               Multi-negocio activo
             </div>
-            {!desktopSidebarOpen && (
-              <button
-                onClick={() => setDesktopSidebarOpen(true)}
-                className="hidden rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-gray-200 transition hover:border-purple-400/60 hover:text-white lg:block"
-              >
-                Mostrar menú
-              </button>
-            )}
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-gray-200 transition hover:border-purple-400/60 hover:text-white lg:hidden"
-            >
-              Menú
-            </button>
           </div>
         </div>
       </div>

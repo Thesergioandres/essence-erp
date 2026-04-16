@@ -171,7 +171,7 @@ export const ProductForm = ({
             required
           />
           <Input
-            label="Precio Employee"
+            label="Precio Empleado"
             name="employeePrice"
             type="number"
             value={formData.employeePrice}

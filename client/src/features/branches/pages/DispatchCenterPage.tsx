@@ -3,8 +3,8 @@ import { employeeService } from "../../employees/services";
 import { productService } from "../../inventory/services/inventory.service";
 import type { Product } from "../../inventory/types/product.types";
 import {
-  type DispatchRequest,
-  dispatchService,
+    type DispatchRequest,
+    dispatchService,
 } from "../services/dispatch.service";
 
 interface EmployeeOption {
@@ -207,7 +207,7 @@ export default function DispatchCenterPage() {
   const submitDraftRequest = async () => {
     try {
       if (!draftEmployeeId) {
-        alert("Selecciona un employee para crear la solicitud");
+        alert("Selecciona un empleado para crear la solicitud");
         return;
       }
 

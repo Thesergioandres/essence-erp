@@ -8,7 +8,7 @@ export default function OperativoTeamPage() {
   return (
     <OperativoModuleShell
       title="Operativo · Equipo y permisos"
-      description="Administración operativa del equipo dentro del entorno de employee."
+      description="Administración operativa del equipo dentro del entorno de empleado."
       allow={canManageTeam}
     >
       <TeamManagementPage />

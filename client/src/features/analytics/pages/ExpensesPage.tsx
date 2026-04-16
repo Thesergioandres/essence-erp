@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import ProductSelector from "../../../components/ProductSelector";
 import { Button } from "../../../shared/components/ui";
 import {
-  buildCacheKey,
-  readSessionCache,
-  writeSessionCache,
+    buildCacheKey,
+    readSessionCache,
+    writeSessionCache,
 } from "../../../utils/requestCache";
 import { authService } from "../../auth/services";
 import { branchService } from "../../branches/services";
@@ -806,7 +806,7 @@ export default function Expenses() {
                       </optgroup>
                     )}
                     {withdrawalEmployees.length > 0 && (
-                      <optgroup label="Employees">
+                      <optgroup label="Empleados">
                         {withdrawalEmployees.map(dist => (
                           <option
                             key={dist._id}

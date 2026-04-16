@@ -1,17 +1,17 @@
 import {
-  ArrowDownToLine,
-  Building2,
-  Calendar,
-  Edit2,
-  Filter,
-  Loader2,
-  Package,
-  Plus,
-  Search,
-  Trash2,
-  Truck,
-  Warehouse,
-  X,
+    ArrowDownToLine,
+    Building2,
+    Calendar,
+    Edit2,
+    Filter,
+    Loader2,
+    Package,
+    Plus,
+    Search,
+    Trash2,
+    Truck,
+    Warehouse,
+    X,
 } from "lucide-react";
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
@@ -20,9 +20,9 @@ import ProductSelector from "../../../components/ProductSelector";
 import { branchService } from "../../branches/services";
 import { gamificationService } from "../../common/services";
 import {
-  categoryService,
-  inventoryService,
-  productService,
+    categoryService,
+    inventoryService,
+    productService,
 } from "../../inventory/services/inventory.service";
 import { providerService } from "../../settings/services";
 import type { Product } from "../types/product.types";
@@ -360,7 +360,7 @@ export default function InventoryEntries() {
       }
 
       if (Number.isNaN(employeePrice) || employeePrice < 0) {
-        throw new Error("El precio de employee debe ser un número válido");
+        throw new Error("El precio de empleado debe ser un número válido");
       }
 
       if (Number.isNaN(totalStock) || totalStock < 0) {

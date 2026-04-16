@@ -221,6 +221,12 @@ const DashboardLayout = lazy(
 const BusinessSettings = lazy(
   () => import("./features/business/pages/BusinessSettingsPage")
 );
+const PublicPageSettings = lazy(
+  () => import("./features/business/pages/PublicPageSettingsPage")
+);
+const BusinessFullInfo = lazy(
+  () => import("./features/business/pages/BusinessFullInfoPage")
+);
 const CreateBusiness = lazy(
   () => import("./features/business/pages/CreateBusinessPage")
 );
@@ -549,6 +555,14 @@ export default function App() {
                       }
                     />
                     <Route
+                      path="business-full-info"
+                      element={
+                        <BusinessGate requiredFeature="reports">
+                          <BusinessFullInfo />
+                        </BusinessGate>
+                      }
+                    />
+                    <Route
                       path="profit-history"
                       element={
                         <BusinessGate requiredFeature="reports">
@@ -574,6 +588,14 @@ export default function App() {
                       }
                     />
                     <Route
+                      path="public-page"
+                      element={
+                        <BusinessGate>
+                          <PublicPageSettings />
+                        </BusinessGate>
+                      }
+                    />
+                    <Route
                       path="business-settings"
                       element={<BusinessSettings />}
                     />
@@ -592,11 +614,21 @@ export default function App() {
                       }
                     />
                     <Route
+                      path="audit"
+                      element={<Navigate to="/admin/audit-logs" replace />}
+                    />
+                    <Route
                       path="gamification-config"
                       element={
                         <BusinessGate requiredFeature="gamification">
                           <GamificationConfig />
                         </BusinessGate>
+                      }
+                    />
+                    <Route
+                      path="gamification"
+                      element={
+                        <Navigate to="/admin/gamification-config" replace />
                       }
                     />
                     <Route
@@ -928,6 +960,14 @@ export default function App() {
                       element={
                         <BusinessGate requiredFeature="gamification">
                           <EmployeeLevel />
+                        </BusinessGate>
+                      }
+                    />
+                    <Route
+                      path="notifications"
+                      element={
+                        <BusinessGate>
+                          <Notifications />
                         </BusinessGate>
                       }
                     />

@@ -8,7 +8,7 @@ export default function OperativoPromotionsPage() {
   return (
     <OperativoModuleShell
       title="Operativo · Promociones"
-      description="Gestión operativa de promociones del negocio dentro del entorno de employee."
+      description="Gestión operativa de promociones del negocio dentro del entorno de empleado."
       allow={canViewPromotions}
     >
       <PromotionsPage />

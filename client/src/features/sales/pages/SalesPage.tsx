@@ -6,9 +6,9 @@ import SaleDetailModal from "../../../components/SaleDetailModal";
 import { LoadingSpinner } from "../../../shared/components/ui";
 import { exportToExcel, exportToPDF } from "../../../utils/exportUtils";
 import {
-  buildCacheKey,
-  readSessionCache,
-  writeSessionCache,
+    buildCacheKey,
+    readSessionCache,
+    writeSessionCache,
 } from "../../../utils/requestCache";
 import { authService } from "../../auth/services";
 import type { User } from "../../auth/types/auth.types";
@@ -260,7 +260,7 @@ export default function Sales({ hideAdminProfit = false }: SalesPageProps) {
         const list = Array.isArray(response) ? response : response.data || [];
         setEmployees(list.filter((d: User) => d.active));
       } catch (error) {
-        console.error("Error cargando employees", error);
+        console.error("Error cargando empleados", error);
         setEmployees([]);
       }
     };
@@ -580,7 +580,7 @@ export default function Sales({ hideAdminProfit = false }: SalesPageProps) {
 
   const getSaleSourceLabel = (sale: Sale) => {
     const source = sale.sourceLocation;
-    if (source === "employee") return "Inventario employee";
+    if (source === "employee") return "Inventario empleado";
     if (source === "branch") {
       const branchName =
         sale.branchName ||
@@ -592,7 +592,7 @@ export default function Sales({ hideAdminProfit = false }: SalesPageProps) {
     if (sale.branchName) return `Sede: ${sale.branchName}`;
     if (typeof sale.branch === "object" && sale.branch?.name)
       return `Sede: ${sale.branch.name}`;
-    if (sale.employee) return "Inventario employee";
+    if (sale.employee) return "Inventario empleado";
     return "Bodega central";
   };
 

@@ -1,13 +1,31 @@
-import { NotificationPersistenceUseCase } from "../../../application/use-cases/repository-gateways/NotificationPersistenceUseCase.js";
+import { notificationUseCases } from "../../../application/use-cases/notifications/buildNotificationUseCases.js";
 
-const repository = new NotificationPersistenceUseCase();
+const {
+  sendNotificationUseCase,
+  getPendingNotificationsUseCase,
+  markAsViewedUseCase,
+  markAllAsViewedUseCase,
+  getNotificationHistoryUseCase,
+} = notificationUseCases;
+
+const resolveBusinessId = (req) =>
+  req.businessId || req.headers["x-business-id"];
+const resolveUserId = (req) => String(req.user?._id || req.user?.id || "");
+const resolveRole = (req) =>
+  String(req.membership?.role || req.user?.role || "");
+
+const resolveErrorStatus = (error) => {
+  if (error?.statusCode) return error.statusCode;
+  if (error?.name === "ValidationError") return 400;
+  if (error?.name === "CastError") return 400;
+  return 500;
+};
 
 export class NotificationController {
-  async getAll(req, res) {
+  async getPending(req, res) {
     try {
-      const businessId = req.businessId;
-      const userId = req.user?.id;
-      const userRole = req.user?.role;
+      const businessId = resolveBusinessId(req);
+      const userId = resolveUserId(req);
 
       if (!businessId) {
         return res
@@ -15,12 +33,13 @@ export class NotificationController {
           .json({ success: false, message: "Falta x-business-id" });
       }
 
-      const result = await repository.findByUser(
+      const result = await getPendingNotificationsUseCase.execute({
         businessId,
-        userId,
-        userRole,
-        req.query,
-      );
+        employeeId: userId,
+        page: req.query?.page,
+        limit: req.query?.limit,
+      });
+
       res.json({
         success: true,
         data: result.notifications,
@@ -28,71 +47,129 @@ export class NotificationController {
         pagination: result.pagination,
       });
     } catch (error) {
-      res.status(500).json({ success: false, message: error.message });
+      const status = resolveErrorStatus(error);
+      res.status(status).json({ success: false, message: error.message });
     }
   }
 
-  async create(req, res) {
+  async getHistory(req, res) {
     try {
-      const businessId = req.businessId;
+      const businessId = resolveBusinessId(req);
+      const userId = resolveUserId(req);
+      const userRole = resolveRole(req);
+
       if (!businessId) {
         return res
           .status(400)
           .json({ success: false, message: "Falta x-business-id" });
       }
 
-      const notification = await repository.create({
-        ...req.body,
-        business: businessId,
-      });
-      res.status(201).json({ success: true, data: notification });
-    } catch (error) {
-      res.status(500).json({ success: false, message: error.message });
-    }
-  }
-
-  async markAsRead(req, res) {
-    try {
-      const businessId = req.businessId;
-      const userId = req.user?.id;
-
-      const notification = await repository.markAsRead(
-        req.params.id,
-        businessId,
-        userId,
-      );
-      res.json({ success: true, data: notification });
-    } catch (error) {
-      const status = error.statusCode || 500;
-      res.status(status).json({ success: false, message: error.message });
-    }
-  }
-
-  async markAllAsRead(req, res) {
-    try {
-      const businessId = req.businessId;
-      const userId = req.user?.id;
-      const userRole = req.user?.role;
-
-      const result = await repository.markAllAsRead(
+      const result = await getNotificationHistoryUseCase.execute({
         businessId,
         userId,
         userRole,
-      );
-      res.json({ success: true, data: result });
+        page: req.query?.page,
+        limit: req.query?.limit,
+      });
+
+      res.json({
+        success: true,
+        data: result.notifications,
+        unreadCount: result.unreadCount,
+        pagination: result.pagination,
+      });
     } catch (error) {
-      res.status(500).json({ success: false, message: error.message });
+      const status = resolveErrorStatus(error);
+      res.status(status).json({ success: false, message: error.message });
     }
   }
 
-  async delete(req, res) {
+  async send(req, res) {
     try {
-      const businessId = req.businessId;
-      await repository.delete(req.params.id, businessId);
-      res.json({ success: true, message: "Notificación eliminada" });
+      const businessId = resolveBusinessId(req);
+      const senderId = resolveUserId(req);
+      const senderRole = resolveRole(req);
+
+      if (!businessId) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Falta x-business-id" });
+      }
+
+      const result = await sendNotificationUseCase.execute({
+        businessId,
+        senderId,
+        senderRole,
+        payload: req.body || {},
+      });
+
+      res.status(201).json({
+        success: true,
+        message: "Notificación enviada exitosamente",
+        data: result.notification,
+        targetCount: result.targetCount,
+      });
     } catch (error) {
-      const status = error.statusCode || 500;
+      const status = resolveErrorStatus(error);
       res.status(status).json({ success: false, message: error.message });
     }
+  }
+
+  async markAsViewed(req, res) {
+    try {
+      const businessId = resolveBusinessId(req);
+      const userId = resolveUserId(req);
+
+      const notification = await markAsViewedUseCase.execute({
+        businessId,
+        employeeId: userId,
+        notificationId: req.params.id,
+      });
+
+      res.json({ success: true, data: notification });
+    } catch (error) {
+      const status = resolveErrorStatus(error);
+      res.status(status).json({ success: false, message: error.message });
+    }
+  }
+
+  async markAllAsViewed(req, res) {
+    try {
+      const businessId = resolveBusinessId(req);
+      const userId = resolveUserId(req);
+      const userRole = resolveRole(req);
+
+      const result = await markAllAsViewedUseCase.execute({
+        businessId,
+        userId,
+        userRole,
+      });
+
+      res.json({ success: true, data: result });
+    } catch (error) {
+      const status = resolveErrorStatus(error);
+      res.status(status).json({ success: false, message: error.message });
+    }
+  }
+
+  // Legacy handlers (compatibilidad con frontend previo)
+  async getAll(req, res) {
+    if (req.query?.read === "false" || req.query?.unreadOnly === "true") {
+      return this.getPending(req, res);
+    }
+
+    return this.getHistory(req, res);
+  }
+
+  async create(req, res) {
+    return this.send(req, res);
+  }
+
+  async markAsRead(req, res) {
+    return this.markAsViewed(req, res);
+  }
+
+  async markAllAsRead(req, res) {
+    return this.markAllAsViewed(req, res);
   }
 }

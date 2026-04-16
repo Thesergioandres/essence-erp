@@ -140,7 +140,7 @@ export default function TransferStock() {
       if (!selectedEmployee) {
         setMessage({
           type: "error",
-          text: "Selecciona un employee",
+          text: "Selecciona un empleado",
         });
         return;
       }
@@ -396,12 +396,12 @@ export default function TransferStock() {
               </p>
               <p>
                 <strong>Tipo:</strong>{" "}
-                {transferType === "employee" ? "Employee" : "Sede"}
+                {transferType === "employee" ? "Empleado" : "Sede"}
               </p>
               <p className="mt-4 text-sm text-amber-300">
                 ⚠️ Esta acción no se puede deshacer. El stock se restará de tu
                 inventario y se agregará al inventario del{" "}
-                {transferType === "employee" ? "employee" : "sede"}{" "}
+                {transferType === "employee" ? "empleado" : "sede"}{" "}
                 seleccionado{transferType === "employee" ? "" : "."}.
               </p>
             </div>
