@@ -73,9 +73,10 @@ const userSchema = new mongoose.Schema(
     },
     selectedPlan: {
       type: String,
-      enum: ["starter", "pro", "enterprise"],
       default: null,
       index: true,
+      trim: true,
+      lowercase: true,
     },
     selectedPlanAt: {
       type: Date,

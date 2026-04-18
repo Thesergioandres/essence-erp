@@ -1,3 +1,4 @@
+import { resolvePlanForAssignment } from "../../services/planLimits.service.js";
 import Business from "../models/Business.js";
 import Membership from "../models/Membership.js";
 import User from "../models/User.js";
@@ -90,11 +91,9 @@ export class BusinessRepository {
       .select("selectedPlan role")
       .lean();
     const selectedPlan = creatorUser?.selectedPlan;
-    const effectivePlan =
-      data.plan ||
-      (selectedPlan && ["starter", "pro", "enterprise"].includes(selectedPlan)
-        ? selectedPlan
-        : "starter");
+    const effectivePlan = await resolvePlanForAssignment(
+      data.plan || selectedPlan,
+    );
 
     const business = await Business.create({
       name: data.name,

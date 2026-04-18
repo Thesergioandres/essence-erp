@@ -18,7 +18,7 @@ export interface User {
   business?: string;
   memberships?: Membership[];
   assignedProducts?: string[];
-  selectedPlan?: "starter" | "pro" | "enterprise" | null;
+  selectedPlan?: string | null;
   selectedPlanAt?: string | null;
   HIDE_FINANCIAL_DATA?: boolean;
   hideFinancialData?: boolean;

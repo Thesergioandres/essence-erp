@@ -16,8 +16,7 @@ import type {
 } from "../features/business/types/business.types";
 import { globalSettingsService } from "../features/common/services";
 
-type PlanKey = "starter" | "pro" | "enterprise";
-type AssistantPlanMap = Record<PlanKey, boolean>;
+type AssistantPlanMap = Record<string, boolean>;
 
 interface BusinessContextValue {
   businessId: string | null;
@@ -154,14 +153,25 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       ]);
 
       if (publicSettings?.plans) {
-        setAssistantByPlan({
-          starter:
-            publicSettings.plans.starter?.features?.businessAssistant ?? false,
-          pro: publicSettings.plans.pro?.features?.businessAssistant ?? false,
-          enterprise:
-            publicSettings.plans.enterprise?.features?.businessAssistant ??
-            true,
-        });
+        const assistantMap = Object.values(
+          publicSettings.plans as Record<
+            string,
+            {
+              id?: string;
+              features?: { businessAssistant?: boolean };
+            }
+          >,
+        ).reduce<AssistantPlanMap>((acc, planConfig) => {
+            const planId = String(planConfig?.id || "")
+              .trim()
+              .toLowerCase();
+            if (!planId) return acc;
+
+            acc[planId] = planConfig?.features?.businessAssistant === true;
+            return acc;
+          }, { ...defaultAssistantByPlan });
+
+        setAssistantByPlan(assistantMap);
       }
 
       console.log(
@@ -277,14 +287,18 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
   );
 
   const features = useMemo<BusinessFeatures>(() => {
-    const selectedPlan = (selectedMembership?.business?.plan ||
-      "starter") as PlanKey;
+    const selectedPlan = String(
+      selectedMembership?.business?.plan || "starter",
+    )
+      .trim()
+      .toLowerCase();
     const baseFeatures = selectedMembership?.business?.config?.features || {};
+    const fallbackAssistant = assistantByPlan.starter ?? false;
 
     return {
       ...defaultFeatures,
       ...baseFeatures,
-      assistant: assistantByPlan[selectedPlan] === true,
+      assistant: assistantByPlan[selectedPlan] ?? fallbackAssistant,
     };
   }, [assistantByPlan, selectedMembership]);
 

@@ -66,26 +66,28 @@ interface IssueReport {
   updatedAt: Date;
 }
 
-interface PublicPlan {
-  id: "starter" | "pro" | "enterprise";
+export interface PublicPlan {
+  id: string;
   name: string;
   description?: string;
   monthlyPrice: number;
   yearlyPrice: number;
   currency: string;
+  status?: "active" | "archived";
   limits: PlanLimits;
   features: {
     businessAssistant: boolean;
   };
+  featuresList?: string[];
 }
 
-interface PublicGlobalSettingsResponse {
+export interface PublicGlobalSettingsResponse {
   maintenanceMode: boolean;
-  defaultPlan: "starter" | "pro" | "enterprise";
-  plans: Record<"starter" | "pro" | "enterprise", PublicPlan>;
+  defaultPlan: string;
+  plans: Record<string, PublicPlan>;
 }
 
-interface BusinessSubscriptionRow {
+export interface BusinessSubscriptionRow {
   _id: string;
   name: string;
   status?: string;
@@ -96,7 +98,7 @@ interface BusinessSubscriptionRow {
     email: string;
     status?: string;
   } | null;
-  plan: "starter" | "pro" | "enterprise";
+  plan: string;
   customLimits?: Partial<PlanLimits> | null;
   limits: BusinessPlanSnapshot | null;
 }
@@ -315,7 +317,7 @@ export const globalSettingsService = {
   async updateBusinessSubscription(
     businessId: string,
     payload: {
-      plan?: "starter" | "pro" | "enterprise";
+      plan?: string;
       customLimits?: Partial<PlanLimits>;
     }
   ) {
@@ -329,10 +331,9 @@ export const globalSettingsService = {
 
   async updateGlobalSettings(payload: {
     maintenanceMode?: boolean;
-    defaultPlan?: "starter" | "pro" | "enterprise";
-    plans?: Partial<
-      Record<"starter" | "pro" | "enterprise", Partial<PublicPlan>>
-    >;
+    defaultPlan?: string;
+    plans?: Record<string, Partial<PublicPlan> & { deleted?: boolean }>;
+    removedPlanIds?: string[];
   }) {
     const response = await api.put<{
       success: boolean;

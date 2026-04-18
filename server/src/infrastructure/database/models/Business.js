@@ -117,9 +117,10 @@ const businessSchema = new mongoose.Schema(
     },
     plan: {
       type: String,
-      enum: ["starter", "pro", "enterprise"],
       default: "starter",
       index: true,
+      trim: true,
+      lowercase: true,
     },
     customLimits: {
       type: customLimitsSchema,

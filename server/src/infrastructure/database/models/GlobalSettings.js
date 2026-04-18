@@ -1,5 +1,48 @@
 import mongoose from "mongoose";
 
+const defaultPlanSeed = {
+  starter: {
+    id: "starter",
+    name: "Starter",
+    description: "Para negocios en etapa inicial",
+    monthlyPrice: 19,
+    yearlyPrice: 190,
+    currency: "USD",
+    limits: { branches: 1, employees: 2 },
+    features: { businessAssistant: false },
+    featuresList: ["Panel base", "Inventario inicial", "Ventas esenciales"],
+    status: "active",
+  },
+  pro: {
+    id: "pro",
+    name: "Pro",
+    description: "Para equipos que escalan ventas",
+    monthlyPrice: 49,
+    yearlyPrice: 490,
+    currency: "USD",
+    limits: { branches: 3, employees: 10 },
+    features: { businessAssistant: false },
+    featuresList: ["Multi-sede", "Gestión de equipo", "Reportes avanzados"],
+    status: "active",
+  },
+  enterprise: {
+    id: "enterprise",
+    name: "Enterprise",
+    description: "Para operaciones multi-sede avanzadas",
+    monthlyPrice: 99,
+    yearlyPrice: 990,
+    currency: "USD",
+    limits: { branches: 10, employees: 50 },
+    features: { businessAssistant: true },
+    featuresList: [
+      "Business Assistant",
+      "Operación avanzada",
+      "Automatización premium",
+    ],
+    status: "active",
+  },
+};
+
 const planLimitsSchema = new mongoose.Schema(
   {
     branches: { type: Number, default: 1, min: 1 },
@@ -23,8 +66,17 @@ const planSchema = new mongoose.Schema(
     monthlyPrice: { type: Number, default: 0, min: 0 },
     yearlyPrice: { type: Number, default: 0, min: 0 },
     currency: { type: String, default: "USD", trim: true },
+    status: {
+      type: String,
+      enum: ["active", "archived"],
+      default: "active",
+    },
     limits: { type: planLimitsSchema, default: () => ({}) },
     features: { type: planFeaturesSchema, default: () => ({}) },
+    featuresList: {
+      type: [String],
+      default: () => [],
+    },
   },
   { _id: false },
 );
@@ -43,49 +95,13 @@ const globalSettingsSchema = new mongoose.Schema(
     },
     defaultPlan: {
       type: String,
-      enum: ["starter", "pro", "enterprise"],
       default: "starter",
+      trim: true,
     },
     plans: {
-      starter: {
-        type: planSchema,
-        default: () => ({
-          id: "starter",
-          name: "Starter",
-          description: "Para negocios en etapa inicial",
-          monthlyPrice: 19,
-          yearlyPrice: 190,
-          currency: "USD",
-          limits: { branches: 1, employees: 2 },
-          features: { businessAssistant: false },
-        }),
-      },
-      pro: {
-        type: planSchema,
-        default: () => ({
-          id: "pro",
-          name: "Pro",
-          description: "Para equipos que escalan ventas",
-          monthlyPrice: 49,
-          yearlyPrice: 490,
-          currency: "USD",
-          limits: { branches: 3, employees: 10 },
-          features: { businessAssistant: false },
-        }),
-      },
-      enterprise: {
-        type: planSchema,
-        default: () => ({
-          id: "enterprise",
-          name: "Enterprise",
-          description: "Para operaciones multi-sede avanzadas",
-          monthlyPrice: 99,
-          yearlyPrice: 990,
-          currency: "USD",
-          limits: { branches: 10, employees: 50 },
-          features: { businessAssistant: true },
-        }),
-      },
+      type: Map,
+      of: planSchema,
+      default: () => ({ ...defaultPlanSeed }),
     },
     updatedBy: {
       type: mongoose.Schema.Types.ObjectId,

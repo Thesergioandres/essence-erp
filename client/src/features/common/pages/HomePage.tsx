@@ -25,7 +25,7 @@ import { globalSettingsService } from "../services";
 type IconType = ComponentType<{ className?: string }>;
 
 type PricingPlan = {
-  id: "starter" | "pro" | "enterprise";
+  id: string;
   name: string;
   description?: string;
   monthlyPrice: number;

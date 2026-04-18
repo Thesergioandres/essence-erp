@@ -188,11 +188,11 @@ export const authService = {
     return response.data;
   },
 
-  async selectPlan(plan: "starter" | "pro" | "enterprise") {
+  async selectPlan(plan: string) {
     const response = await api.patch<{
       success: boolean;
       data: {
-        selectedPlan: "starter" | "pro" | "enterprise";
+        selectedPlan: string;
         selectedPlanAt: string;
       };
     }>("/auth/select-plan", { plan });

@@ -4,7 +4,10 @@ import { UserPersistenceUseCase } from "../../../application/use-cases/repositor
 import Membership from "../../database/models/Membership.js";
 import User from "../../database/models/User.js";
 import { jwtTokenService } from "../../services/jwtToken.service.js";
-import { VALID_BUSINESS_PLANS } from "../../services/planLimits.service.js";
+import {
+  isBusinessPlanAssignable,
+  sanitizePlanIdentifier,
+} from "../../services/planLimits.service.js";
 
 const userRepository = new UserPersistenceUseCase();
 
@@ -143,12 +146,18 @@ export const selectPlan = async (req, res) => {
   try {
     const userId = req.user?.id || req.user?.userId;
     const { plan } = req.body || {};
+    const normalizedPlanId = sanitizePlanIdentifier(plan);
 
     if (!userId) {
       return res.status(401).json({ success: false, message: "No autorizado" });
     }
 
-    if (!VALID_BUSINESS_PLANS.includes(plan)) {
+    if (!normalizedPlanId) {
+      return res.status(400).json({ success: false, message: "Plan inválido" });
+    }
+
+    const isAssignablePlan = await isBusinessPlanAssignable(normalizedPlanId);
+    if (!isAssignablePlan) {
       return res.status(400).json({ success: false, message: "Plan inválido" });
     }
 
@@ -159,7 +168,7 @@ export const selectPlan = async (req, res) => {
         .json({ success: false, message: "Usuario no encontrado" });
     }
 
-    user.selectedPlan = plan;
+    user.selectedPlan = normalizedPlanId;
     user.selectedPlanAt = new Date();
     await user.save();
 
@@ -208,9 +217,7 @@ export const impersonateEmployee = async (req, res) => {
       });
     }
 
-    const employee = await User.findById(employeeId)
-      .select("-password")
-      .lean();
+    const employee = await User.findById(employeeId).select("-password").lean();
 
     if (!employee || employee.role !== "employee") {
       return res.status(404).json({

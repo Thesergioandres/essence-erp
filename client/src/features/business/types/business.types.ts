@@ -32,7 +32,7 @@ export interface PlanLimits {
 }
 
 export interface BusinessPlanSnapshot {
-  plan: "starter" | "pro" | "enterprise";
+  plan: string;
   source: "plan" | "custom" | "default";
   limits: PlanLimits;
   usage: PlanLimits;
@@ -52,7 +52,7 @@ export interface Business {
   logoUrl?: string;
   logoPublicId?: string;
   status?: "active" | "archived";
-  plan?: "starter" | "pro" | "enterprise";
+  plan?: string;
   customLimits?: Partial<PlanLimits>;
   config?: BusinessConfig;
   createdAt?: string;
@@ -106,7 +106,7 @@ export interface Membership {
     slug?: string;
     landingTemplate?: "modern" | "minimal" | "bold";
     description?: string;
-    plan?: "starter" | "pro" | "enterprise";
+    plan?: string;
     config?: BusinessConfig;
     status?: Business["status"];
     logoUrl?: string;
