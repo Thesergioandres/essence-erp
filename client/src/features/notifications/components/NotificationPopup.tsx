@@ -29,10 +29,37 @@ const formatTimestamp = (rawDate?: string): string => {
   });
 };
 
+const resolveEntityId = (value: unknown): string => {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed && trimmed !== "[object Object]" ? trimmed : "";
+  }
+
+  if (!value || typeof value !== "object") {
+    return "";
+  }
+
+  const candidate = value as {
+    _id?: unknown;
+    id?: unknown;
+    $oid?: unknown;
+  };
+
+  return (
+    resolveEntityId(candidate._id) ||
+    resolveEntityId(candidate.id) ||
+    resolveEntityId(candidate.$oid) ||
+    ""
+  );
+};
+
 export default function NotificationPopup() {
   const navigate = useNavigate();
   const { business, businessId: contextBusinessId, hydrating } = useBusiness();
-  const businessId = business?._id || contextBusinessId || null;
+  const businessId =
+    resolveEntityId((business as { _id?: unknown } | null)?._id) ||
+    resolveEntityId(contextBusinessId) ||
+    null;
   const user = authService.getCurrentUser();
   const isEmployeeSession = isEmployeeRole(user?.role);
 
@@ -43,7 +70,12 @@ export default function NotificationPopup() {
   const dismissedIdsRef = useRef<Set<string>>(new Set());
 
   const loadPendingNotification = useCallback(async () => {
-    if (!businessId || !isEmployeeSession || hydrating) {
+    if (
+      !authService.hasToken() ||
+      !businessId ||
+      !isEmployeeSession ||
+      hydrating
+    ) {
       setCurrentNotification(null);
       return;
     }
@@ -54,9 +86,14 @@ export default function NotificationPopup() {
         limit: 5,
         businessId,
       });
-      const nextNotification = response.notifications.find(
-        notification => !dismissedIdsRef.current.has(notification._id)
-      );
+      const nextNotification = response.notifications.find(notification => {
+        const notificationId = resolveEntityId(
+          (notification as { _id?: unknown })._id
+        );
+        return notificationId
+          ? !dismissedIdsRef.current.has(notificationId)
+          : false;
+      });
       setCurrentNotification(nextNotification || null);
     } catch {
       setCurrentNotification(null);
@@ -76,20 +113,6 @@ export default function NotificationPopup() {
     void loadPendingNotification();
   }, [loadPendingNotification]);
 
-  useEffect(() => {
-    const refreshPopup = () => {
-      void loadPendingNotification();
-    };
-
-    window.addEventListener("auth-changed", refreshPopup);
-    window.addEventListener("session-refresh", refreshPopup);
-
-    return () => {
-      window.removeEventListener("auth-changed", refreshPopup);
-      window.removeEventListener("session-refresh", refreshPopup);
-    };
-  }, [loadPendingNotification]);
-
   const senderName = useMemo(
     () =>
       currentNotification
@@ -99,24 +122,46 @@ export default function NotificationPopup() {
   );
 
   const closeAndMarkViewed = async () => {
-    if (!currentNotification || closing || !businessId) return;
+    if (
+      !currentNotification ||
+      closing ||
+      !businessId ||
+      !authService.hasToken()
+    )
+      return;
 
-    const notificationId = currentNotification._id;
+    const notificationId = resolveEntityId(currentNotification._id);
+    const notificationBusinessId =
+      resolveEntityId(
+        (currentNotification as { business?: unknown }).business
+      ) || businessId;
+
+    if (!notificationId) {
+      setCurrentNotification(null);
+      return;
+    }
+
     dismissedIdsRef.current.add(notificationId);
     setClosing(true);
 
     try {
-      await notificationService.markAsViewed(notificationId, businessId);
+      await notificationService.markAsViewed(
+        notificationId,
+        notificationBusinessId
+      );
     } catch {
       // Evita bloquear el flujo del usuario si falla la red momentáneamente.
     } finally {
       setClosing(false);
       setCurrentNotification(null);
-      void loadPendingNotification();
+      if (authService.hasToken()) {
+        void loadPendingNotification();
+      }
     }
   };
 
   if (
+    !authService.hasToken() ||
     !businessId ||
     !isEmployeeSession ||
     hydrating ||

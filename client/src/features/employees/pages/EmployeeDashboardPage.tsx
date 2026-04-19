@@ -1,6 +1,7 @@
 import { gsap } from "gsap";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useBusiness } from "../../../context/BusinessContext";
 import { ConfidentialBadge } from "../../../shared/components/ui";
 import { authService } from "../../auth/services";
 import { useFinancialPrivacy } from "../../auth/utils/financialPrivacy";
@@ -45,6 +46,7 @@ interface RankingInfo {
 export default function EmployeeDashboard() {
   const navigate = useNavigate();
   const { hideFinancialData } = useFinancialPrivacy();
+  const { businessId, hydrating } = useBusiness();
   const dashboardRef = useRef<HTMLDivElement | null>(null);
   const [stats, setStats] = useState<DashboardStats>({
     totalSales: 0,
@@ -75,8 +77,12 @@ export default function EmployeeDashboard() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadDashboardData();
-  }, []);
+    if (hydrating) {
+      return;
+    }
+
+    void loadDashboardData(businessId);
+  }, [businessId, hydrating]);
 
   useEffect(() => {
     let isActive = true;
@@ -107,6 +113,13 @@ export default function EmployeeDashboard() {
 
   useEffect(() => {
     if (loading) return;
+    const scopeElement = dashboardRef.current;
+    if (!scopeElement) return;
+
+    const statCards = scopeElement.querySelectorAll<HTMLElement>(
+      ".dashboard-stat-card"
+    );
+    if (statCards.length === 0) return;
 
     const counters = {
       salesToday: 0,
@@ -118,7 +131,7 @@ export default function EmployeeDashboard() {
 
     const context = gsap.context(() => {
       gsap.fromTo(
-        ".dashboard-stat-card",
+        statCards,
         { autoAlpha: 0, y: 28, scale: 0.97 },
         {
           autoAlpha: 1,
@@ -149,7 +162,7 @@ export default function EmployeeDashboard() {
           });
         },
       });
-    }, dashboardRef);
+    }, scopeElement);
 
     return () => {
       context.revert();
@@ -163,12 +176,12 @@ export default function EmployeeDashboard() {
     stats.totalSales,
   ]);
 
-  const loadDashboardData = async () => {
+  const loadDashboardData = async (currentBusinessId: string | null) => {
     try {
       setLoading(true);
       setError(null);
-      const businessId = localStorage.getItem("businessId");
-      if (!businessId) {
+
+      if (!currentBusinessId) {
         setError("Debes seleccionar un negocio antes de continuar.");
         setLoading(false);
         return;

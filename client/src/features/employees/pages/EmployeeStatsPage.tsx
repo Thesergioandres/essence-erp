@@ -4,6 +4,7 @@ import {
   SalesTimelineChart,
   TopProductsChart,
 } from "../../../components/charts";
+import { useBusiness } from "../../../context/BusinessContext";
 import { ConfidentialBadge } from "../../../shared/components/ui";
 import { analyticsService } from "../../analytics/services";
 import type {
@@ -60,6 +61,7 @@ interface ProductSalesItem {
 export default function EmployeeStats() {
   const { hideFinancialData, isEmployeeRole, canViewCosts } =
     useFinancialPrivacy();
+  const { businessId, hydrating } = useBusiness();
   const pageRef = useRef<HTMLDivElement | null>(null);
 
   const [sales, setSales] = useState<Sale[]>([]);
@@ -94,8 +96,27 @@ export default function EmployeeStats() {
       avgTicket: 0,
     }
   );
+  const effectiveBusinessId = useMemo(
+    () => businessId || localStorage.getItem("businessId"),
+    [businessId]
+  );
+
+  useEffect(() => {
+    if (!businessId) return;
+
+    if (localStorage.getItem("businessId") !== businessId) {
+      localStorage.setItem("businessId", businessId);
+    }
+  }, [businessId]);
 
   const loadStats = React.useCallback(async () => {
+    if (hydrating || !effectiveBusinessId) {
+      setLoading(false);
+      setSales([]);
+      setPreviousStats({ totalSales: 0, totalRevenue: 0, totalProfit: 0 });
+      return;
+    }
+
     try {
       setLoading(true);
 
@@ -150,9 +171,15 @@ export default function EmployeeStats() {
     } finally {
       setLoading(false);
     }
-  }, [dateRange.endDate, dateRange.startDate]);
+  }, [dateRange.endDate, dateRange.startDate, effectiveBusinessId, hydrating]);
 
   const loadEstimatedProfit = React.useCallback(async () => {
+    if (hydrating || !effectiveBusinessId) {
+      setLoadingEstimated(false);
+      setEstimatedProfit(null);
+      return;
+    }
+
     try {
       setLoadingEstimated(true);
       const response = await analyticsService.getEmployeeEstimatedProfit();
@@ -162,15 +189,20 @@ export default function EmployeeStats() {
     } finally {
       setLoadingEstimated(false);
     }
-  }, []);
+  }, [effectiveBusinessId, hydrating]);
 
   const loadRanking = React.useCallback(async () => {
+    if (hydrating || !effectiveBusinessId) {
+      setRankingData([]);
+      setGamificationConfig(null);
+      return;
+    }
+
     try {
-      const businessId = localStorage.getItem("businessId") || undefined;
       const [configRes, rankingRes] = await Promise.all([
         gamificationService.getConfig().catch(() => null),
         gamificationService
-          .getRanking({ period: "current", businessId })
+          .getRanking({ period: "current", businessId: effectiveBusinessId })
           .catch(() => null),
       ]);
       setGamificationConfig(configRes as GamificationConfig | null);
@@ -178,7 +210,7 @@ export default function EmployeeStats() {
     } catch (error) {
       console.error("Error al cargar ranking:", error);
     }
-  }, []);
+  }, [effectiveBusinessId, hydrating]);
 
   useEffect(() => {
     void loadStats();

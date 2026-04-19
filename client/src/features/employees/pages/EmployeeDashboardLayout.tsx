@@ -1,6 +1,29 @@
 import { AnimatePresence, m } from "framer-motion";
 import { gsap } from "gsap";
-import { useEffect, useState } from "react";
+import {
+  Activity,
+  AlertTriangle,
+  BarChart3,
+  Bell,
+  BookOpen,
+  Building2,
+  ChevronDown,
+  ChevronRight,
+  CreditCard,
+  FileText,
+  Menu,
+  Package,
+  Plus,
+  Search,
+  Shield,
+  ShoppingBag,
+  Star,
+  Tag,
+  Trophy,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import BusinessGate from "../../../components/BusinessGate";
 import BusinessSelector from "../../../components/BusinessSelector";
@@ -8,11 +31,11 @@ import FeatureNavLink from "../../../components/FeatureNavLink";
 import ReportIssueButton from "../../../components/ReportIssueButton";
 import { useBusiness } from "../../../context/BusinessContext";
 import { useBrandLogo } from "../../../hooks/useBrandLogo";
-import { Button } from "../../../shared/components/ui";
 import { useMotionProfile } from "../../../shared/config/motion.config";
 import type { EmployeeStats } from "../../analytics/types/gamification.types";
 import { authService } from "../../auth/services";
 import { dispatchService } from "../../branches/services";
+import type { BusinessFeatures } from "../../business/types/business.types";
 import { gamificationService } from "../../common/services";
 import NotificationPopup from "../../notifications/components/NotificationPopup";
 import PriceCatalogModal from "../components/PriceCatalogModal";
@@ -25,11 +48,79 @@ const navLinkClasses = (isActive: boolean): string =>
       : "border-white/0 text-gray-300 hover:border-white/15 hover:bg-white/5 hover:text-cyan-100 active:scale-[0.985]",
   ].join(" ");
 
+interface SidebarItem {
+  id: string;
+  label: string;
+  to: string;
+  icon: LucideIcon;
+  feature?: keyof BusinessFeatures;
+  showPendingReceptionBadge?: boolean;
+}
+
+interface SidebarSection {
+  id: string;
+  label: string;
+  items: SidebarItem[];
+}
+
+interface VisibleSidebarSection extends SidebarSection {
+  filteredItems: SidebarItem[];
+  forceExpand: boolean;
+}
+
+const normalizeSearchValue = (value: string) =>
+  String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
+const resolveEntityId = (value: unknown): string => {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed && trimmed !== "[object Object]" ? trimmed : "";
+  }
+
+  if (!value || typeof value !== "object") {
+    return "";
+  }
+
+  const candidate = value as {
+    _id?: unknown;
+    id?: unknown;
+    $oid?: unknown;
+  };
+
+  return (
+    resolveEntityId(candidate._id) ||
+    resolveEntityId(candidate.id) ||
+    resolveEntityId(candidate.$oid) ||
+    ""
+  );
+};
+
+const resolveMembershipBusinessId = (membership: {
+  business?: unknown;
+}): string => {
+  return resolveEntityId(membership.business);
+};
+
+const resolveMembershipBusinessName = (membership: {
+  business?: unknown;
+}): string => {
+  if (!membership.business || typeof membership.business !== "object") {
+    return "";
+  }
+
+  const business = membership.business as { name?: unknown };
+  return typeof business.name === "string" ? business.name : "";
+};
+
 export default function EmployeeDashboardLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const user = authService.getCurrentUser();
-  const { businessId, memberships } = useBusiness();
+  const { businessId, memberships, hydrating } = useBusiness();
   const brandLogo = useBrandLogo();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
@@ -40,6 +131,17 @@ export default function EmployeeDashboardLayout() {
     null
   );
   const [pendingReceptionCount, setPendingReceptionCount] = useState(0);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [expandedSections, setExpandedSections] = useState<
+    Record<string, boolean>
+  >({
+    principal: true,
+    "inventario-catalogo": true,
+    operaciones: true,
+    "ventas-cobros": true,
+    postventa: true,
+    "operativo-equipo": true,
+  });
   const isImpersonating = authService.isImpersonating();
   const viewAnimationKey = `${location.pathname}${location.search}`;
   const { motionProfile } = useMotionProfile();
@@ -50,9 +152,10 @@ export default function EmployeeDashboardLayout() {
 
   const currentMembership =
     activeMemberships.find(
-      membership => membership.business?._id === businessId
+      membership => resolveMembershipBusinessId(membership) === businessId
     ) ?? (activeMemberships.length === 1 ? activeMemberships[0] : null);
-  const brandName = currentMembership?.business?.name?.trim() || "Essence";
+  const brandName =
+    resolveMembershipBusinessName(currentMembership || {}) || "Essence";
 
   const hasPermission = (module: string, action: string) =>
     currentMembership?.permissions?.[module]?.[action] === true;
@@ -70,13 +173,380 @@ export default function EmployeeDashboardLayout() {
   const canViewProvidersFromTeam = hasPermission("inventory", "read");
   const canViewCustomersFromTeam = hasPermission("clients", "read");
 
+  const menuSections = useMemo<SidebarSection[]>(() => {
+    const sections: SidebarSection[] = [
+      {
+        id: "principal",
+        label: "Principal",
+        items: [
+          {
+            id: "dashboard",
+            label: "Dashboard",
+            to: "/staff/dashboard",
+            icon: BarChart3,
+          },
+          {
+            id: "stats",
+            label: "Estadísticas",
+            to: "/staff/stats",
+            icon: Activity,
+          },
+          {
+            id: "level",
+            label: "Mi Nivel",
+            to: "/staff/level",
+            icon: Trophy,
+          },
+          {
+            id: "notifications",
+            label: "Notificaciones",
+            to: "/staff/notifications",
+            icon: Bell,
+          },
+        ],
+      },
+      {
+        id: "inventario-catalogo",
+        label: "Inventario & Catálogo",
+        items: [
+          {
+            id: "products",
+            label: "Mis Productos",
+            to: "/staff/products",
+            icon: Package,
+          },
+          {
+            id: "catalog",
+            label: "Mi Catálogo",
+            to: "/staff/catalog",
+            icon: BookOpen,
+          },
+          {
+            id: "advertising",
+            label: "Publicidad",
+            to: "/staff/advertising",
+            icon: Star,
+          },
+          {
+            id: "full-catalog",
+            label: "Catálogo Completo",
+            to: "/catalog",
+            icon: BookOpen,
+          },
+          {
+            id: "share-catalog",
+            label: "Compartir Catálogo",
+            to: "/staff/share-catalog",
+            icon: Tag,
+          },
+        ],
+      },
+      {
+        id: "operaciones",
+        label: "Operaciones",
+        items: [
+          {
+            id: "transfer-stock",
+            label: "Transferir Inventario",
+            to: "/staff/transfer-stock",
+            icon: Activity,
+          },
+          {
+            id: "request-dispatch",
+            label: "Solicitar Pedido",
+            to: "/staff/request-dispatch",
+            icon: FileText,
+          },
+          {
+            id: "my-shipments",
+            label: "Recibir Mercancía",
+            to: "/staff/my-shipments",
+            icon: ShoppingBag,
+            showPendingReceptionBadge: true,
+          },
+        ],
+      },
+      {
+        id: "ventas-cobros",
+        label: "Ventas & Cobros",
+        items: [
+          {
+            id: "register-sale",
+            label: "Registrar Venta",
+            to: "/staff/register-sale",
+            icon: Plus,
+          },
+          {
+            id: "register-promotion",
+            label: "Venta Promoción",
+            to: "/staff/register-promotion",
+            icon: Tag,
+          },
+          {
+            id: "sales",
+            label: "Mis Ventas",
+            to: "/staff/sales",
+            icon: FileText,
+          },
+          {
+            id: "credits",
+            label: "Mis Cobros",
+            to: "/staff/credits",
+            icon: CreditCard,
+          },
+        ],
+      },
+      {
+        id: "postventa",
+        label: "Postventa",
+        items: [
+          {
+            id: "defective-reports",
+            label: "Productos Defectuosos",
+            to: "/staff/defective-reports",
+            icon: AlertTriangle,
+            feature: "defectiveProducts",
+          },
+          {
+            id: "warranties",
+            label: "Garantias",
+            to: "/staff/warranties",
+            icon: Shield,
+            feature: "defectiveProducts",
+          },
+        ],
+      },
+    ];
+
+    const teamItems: SidebarItem[] = [];
+
+    if (canManageStockFromTeam && canViewInventoryFromTeam) {
+      teamItems.push({
+        id: "team-stock-management",
+        label: "Gestión de stock",
+        to: "/staff/operativo/stock-management",
+        icon: Package,
+      });
+    }
+
+    if (canViewInventoryFromTeam) {
+      teamItems.push(
+        {
+          id: "team-global-inventory",
+          label: "Inventario global",
+          to: "/staff/operativo/global-inventory",
+          icon: BarChart3,
+        },
+        {
+          id: "team-branches",
+          label: "Sedes",
+          to: "/staff/operativo/branches",
+          icon: Building2,
+        }
+      );
+    }
+
+    if (canViewTransferHistoryFromTeam) {
+      teamItems.push({
+        id: "team-transfer-history",
+        label: "Historial de transferencias",
+        to: "/staff/operativo/transfer-history",
+        icon: Activity,
+      });
+    }
+
+    if (canManageSalesFromTeam) {
+      teamItems.push({
+        id: "team-sales",
+        label: "Ventas del equipo",
+        to: "/staff/operativo/sales",
+        icon: ShoppingBag,
+      });
+    }
+
+    if (canViewPromotionsFromTeam) {
+      teamItems.push({
+        id: "team-promotions",
+        label: "Promociones",
+        to: "/staff/operativo/promotions",
+        icon: Tag,
+      });
+    }
+
+    if (canViewProvidersFromTeam) {
+      teamItems.push({
+        id: "team-providers",
+        label: "Proveedores",
+        to: "/staff/operativo/providers",
+        icon: Building2,
+      });
+    }
+
+    if (canViewCustomersFromTeam) {
+      teamItems.push({
+        id: "team-customers",
+        label: "Clientes",
+        to: "/staff/operativo/customers",
+        icon: Users,
+      });
+    }
+
+    if (canViewAnalyticsFromTeam) {
+      teamItems.push({
+        id: "team-analytics",
+        label: "Analíticas del negocio",
+        to: "/staff/operativo/analytics",
+        icon: BarChart3,
+      });
+    }
+
+    if (canViewExpensesFromTeam) {
+      teamItems.push({
+        id: "team-expenses",
+        label: "Gastos del negocio",
+        to: "/staff/operativo/expenses",
+        icon: CreditCard,
+      });
+    }
+
+    if (canManageTeamFromTeam) {
+      teamItems.push({
+        id: "team-permissions",
+        label: "Equipo y permisos",
+        to: "/staff/operativo/team",
+        icon: Shield,
+      });
+    }
+
+    if (teamItems.length > 0) {
+      sections.push({
+        id: "operativo-equipo",
+        label: "Operativo Equipo",
+        items: teamItems,
+      });
+    }
+
+    return sections;
+  }, [
+    canManageStockFromTeam,
+    canViewInventoryFromTeam,
+    canViewTransferHistoryFromTeam,
+    canManageSalesFromTeam,
+    canViewPromotionsFromTeam,
+    canViewProvidersFromTeam,
+    canViewCustomersFromTeam,
+    canViewAnalyticsFromTeam,
+    canViewExpensesFromTeam,
+    canManageTeamFromTeam,
+  ]);
+
+  const normalizedSearchTerm = useMemo(
+    () => normalizeSearchValue(searchTerm),
+    [searchTerm]
+  );
+
+  const visibleSections = useMemo<VisibleSidebarSection[]>(
+    () =>
+      menuSections
+        .map(section => {
+          const sectionLabel = normalizeSearchValue(section.label);
+          const sectionMatches =
+            normalizedSearchTerm.length > 0 &&
+            sectionLabel.includes(normalizedSearchTerm);
+
+          const filteredItems =
+            normalizedSearchTerm.length === 0 || sectionMatches
+              ? section.items
+              : section.items.filter(item =>
+                  normalizeSearchValue(item.label).includes(
+                    normalizedSearchTerm
+                  )
+                );
+
+          return {
+            ...section,
+            filteredItems,
+            forceExpand:
+              normalizedSearchTerm.length > 0 && filteredItems.length > 0,
+          };
+        })
+        .filter(section => section.filteredItems.length > 0),
+    [menuSections, normalizedSearchTerm]
+  );
+
+  const showNoResults =
+    normalizedSearchTerm.length > 0 && visibleSections.length === 0;
+
+  const handleSidebarVisibilityToggle = () => {
+    if (isMobileViewport) {
+      setSidebarOpen(prev => !prev);
+      return;
+    }
+
+    setDesktopSidebarOpen(prev => !prev);
+  };
+
+  const handleSectionToggle = (sectionId: string) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [sectionId]: !(prev[sectionId] ?? true),
+    }));
+  };
+
+  const renderSidebarItem = (item: SidebarItem) => {
+    const Icon = item.icon;
+
+    const content = (
+      <>
+        <Icon className="h-4 w-4 shrink-0" />
+        <span className="flex-1 truncate text-left">{item.label}</span>
+        {item.showPendingReceptionBadge && pendingReceptionCount > 0 && (
+          <span className="rounded-full bg-red-500 px-2 py-0.5 text-xs font-semibold text-white">
+            {pendingReceptionCount}
+          </span>
+        )}
+      </>
+    );
+
+    if (item.feature) {
+      return (
+        <FeatureNavLink
+          key={item.id}
+          to={item.to}
+          feature={item.feature}
+          className={(isActive: boolean): string => navLinkClasses(isActive)}
+        >
+          {content}
+        </FeatureNavLink>
+      );
+    }
+
+    return (
+      <NavLink
+        key={item.id}
+        to={item.to}
+        className={({ isActive }): string => navLinkClasses(isActive)}
+      >
+        {content}
+      </NavLink>
+    );
+  };
+
   const handleLogout = () => {
     authService.logout();
     navigate("/login", { replace: true });
   };
 
   useEffect(() => {
-    if (!user?._id) return;
+    if (hydrating) {
+      return;
+    }
+
+    if (!user?._id || !businessId) {
+      setEmployeeStats(null);
+      return;
+    }
+
     let isActive = true;
 
     const loadGamification = async () => {
@@ -96,7 +566,7 @@ export default function EmployeeDashboardLayout() {
     return () => {
       isActive = false;
     };
-  }, [user?._id]);
+  }, [businessId, hydrating, user?._id]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -112,6 +582,12 @@ export default function EmployeeDashboardLayout() {
       window.removeEventListener("resize", syncViewport);
     };
   }, []);
+
+  useEffect(() => {
+    if (!isMobileViewport) {
+      setSidebarOpen(false);
+    }
+  }, [isMobileViewport]);
 
   useEffect(() => {
     if (!businessId) {
@@ -195,7 +671,7 @@ export default function EmployeeDashboardLayout() {
     return () => {
       cleanups.forEach(cleanup => cleanup());
     };
-  }, [desktopSidebarOpen, sidebarOpen]);
+  }, [desktopSidebarOpen, sidebarOpen, visibleSections, searchTerm]);
 
   if (!user) {
     return null;
@@ -245,716 +721,77 @@ export default function EmployeeDashboardLayout() {
 
           {/* Navigation - Scrollable */}
           <nav
-            className="scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent flex-1 space-y-1 overflow-y-auto px-3 py-3 sm:px-4 sm:py-4"
+            className="scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent flex-1 space-y-3 overflow-y-auto px-3 py-3 sm:px-4 sm:py-4"
             style={{
-              maxHeight: "calc(100vh - 200px)",
               WebkitOverflowScrolling: "touch",
             }}
           >
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setDesktopSidebarOpen(false)}
-              className="mb-2 hidden w-full items-center justify-center gap-2 rounded-xl border-white/15 bg-white/5 text-gray-200 hover:border-cyan-400/50 hover:bg-cyan-500/10 hover:text-cyan-100 lg:inline-flex"
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={handleSidebarVisibilityToggle}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm font-semibold text-gray-200 transition duration-300 hover:border-cyan-400/60 hover:bg-cyan-500/10 hover:text-cyan-100"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 6h16M4 12h16M4 18h16"
-                />
-              </svg>
-              Ocultar menú
-            </Button>
-            <NavLink
-              to="/staff/dashboard"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
-                />
-              </svg>
-              Dashboard
-            </NavLink>
+                <Menu className="h-4 w-4" />
+                {isMobileViewport
+                  ? sidebarOpen
+                    ? "Ocultar menú"
+                    : "Mostrar menú"
+                  : desktopSidebarOpen
+                    ? "Ocultar menú"
+                    : "Mostrar menú"}
+              </button>
 
-            <NavLink
-              to="/staff/products"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+              <label className="relative block">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="search"
+                  value={searchTerm}
+                  onChange={event => setSearchTerm(event.target.value)}
+                  placeholder="Filtrar secciones..."
+                  className="focus:outline-hidden h-11 w-full rounded-xl border border-white/10 bg-white/5 pl-10 pr-3 text-sm text-gray-100 placeholder:text-gray-500 focus:border-cyan-400/60"
                 />
-              </svg>
-              Mis Productos
-            </NavLink>
+              </label>
+            </div>
 
-            <NavLink
-              to="/staff/catalog"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"
-                />
-              </svg>
-              Mi Catálogo
-            </NavLink>
+            {showNoResults ? (
+              <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-6 text-center text-sm text-gray-400">
+                No encontramos coincidencias para tu búsqueda.
+              </div>
+            ) : (
+              visibleSections.map(section => {
+                const isExpanded =
+                  section.forceExpand || (expandedSections[section.id] ?? true);
 
-            <NavLink
-              to="/staff/advertising"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                />
-              </svg>
-              Publicidad
-            </NavLink>
-
-            <NavLink
-              to="/catalog"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-                />
-              </svg>
-              Catálogo Completo
-            </NavLink>
-
-            <NavLink
-              to="/staff/share-catalog"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
-                />
-              </svg>
-              Compartir Catálogo
-            </NavLink>
-
-            <NavLink
-              to="/staff/transfer-stock"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
-                />
-              </svg>
-              Transferir Inventario
-            </NavLink>
-
-            <NavLink
-              to="/staff/request-dispatch"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                />
-              </svg>
-              Solicitar Pedido
-            </NavLink>
-
-            <NavLink
-              to="/staff/my-shipments"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 17H7a2 2 0 01-2-2V7a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2h-2m-2 4h.01M9 21h6"
-                />
-              </svg>
-              <span className="flex items-center gap-2">
-                Recibir Mercancía
-                {pendingReceptionCount > 0 && (
-                  <span className="rounded-full bg-red-500 px-2 py-0.5 text-xs font-semibold text-white">
-                    {pendingReceptionCount}
-                  </span>
-                )}
-              </span>
-            </NavLink>
-
-            <NavLink
-              to="/staff/register-sale"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 4v16m8-8H4"
-                />
-              </svg>
-              Registrar Venta
-            </NavLink>
-            <NavLink
-              to="/staff/register-promotion"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M5 12h14M12 5l7 7-7 7"
-                />
-              </svg>
-              Venta Promocion
-            </NavLink>
-
-            <NavLink
-              to="/staff/sales"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"
-                />
-              </svg>
-              Mis Ventas
-            </NavLink>
-
-            <NavLink
-              to="/staff/credits"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"
-                />
-              </svg>
-              Mis Cobros
-            </NavLink>
-
-            <NavLink
-              to="/staff/stats"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                />
-              </svg>
-              Estadísticas
-            </NavLink>
-
-            <NavLink
-              to="/staff/level"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 4l3 3 3-3m-6 5h6m-6 4h6m-6 4h6"
-                />
-              </svg>
-              🏆 Mi Nivel
-            </NavLink>
-
-            <NavLink
-              to="/staff/notifications"
-              className={({ isActive }): string => navLinkClasses(isActive)}
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-                />
-              </svg>
-              Notificaciones
-            </NavLink>
-
-            <FeatureNavLink
-              to="/staff/defective-reports"
-              feature="defectiveProducts"
-              className={(isActive: boolean): string =>
-                navLinkClasses(isActive)
-              }
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                />
-              </svg>
-              Productos Defectuosos
-            </FeatureNavLink>
-            <FeatureNavLink
-              to="/staff/warranties"
-              feature="defectiveProducts"
-              className={(isActive: boolean): string =>
-                navLinkClasses(isActive)
-              }
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 6v6l4 2m6-2a10 10 0 11-20 0 10 10 0 0120 0z"
-                />
-              </svg>
-              Garantias
-            </FeatureNavLink>
-
-            {(canManageSalesFromTeam ||
-              canViewInventoryFromTeam ||
-              canManageStockFromTeam ||
-              canViewTransferHistoryFromTeam ||
-              canViewAnalyticsFromTeam ||
-              canViewExpensesFromTeam ||
-              canManageTeamFromTeam ||
-              canViewPromotionsFromTeam ||
-              canViewProvidersFromTeam ||
-              canViewCustomersFromTeam) && (
-              <>
-                <p className="px-3 pb-0.5 pt-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-500 sm:pb-1 sm:pt-3 sm:text-[11px] sm:tracking-[0.18em]">
-                  Operativo equipo
-                </p>
-
-                {(canViewInventoryFromTeam ||
-                  canManageStockFromTeam ||
-                  canViewTransferHistoryFromTeam) && (
-                  <p className="px-3 pb-0.5 pt-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-gray-600 sm:pb-1 sm:pt-2 sm:text-[10px] sm:tracking-[0.14em]">
-                    Inventario
-                  </p>
-                )}
-
-                {canManageStockFromTeam && canViewInventoryFromTeam && (
-                  <NavLink
-                    to="/staff/operativo/stock-management"
-                    className={({ isActive }): string =>
-                      navLinkClasses(isActive)
-                    }
+                return (
+                  <section
+                    key={section.id}
+                    className="bg-white/3 rounded-2xl border border-white/10"
                   >
-                    <svg
-                      className="h-5 w-5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
+                    <button
+                      type="button"
+                      onClick={() => handleSectionToggle(section.id)}
+                      disabled={section.forceExpand}
+                      className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left"
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10"
-                      />
-                    </svg>
-                    Gestión de stock
-                  </NavLink>
-                )}
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                        {section.label}
+                      </span>
+                      {isExpanded ? (
+                        <ChevronDown className="h-4 w-4 text-gray-400" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4 text-gray-400" />
+                      )}
+                    </button>
 
-                {canViewInventoryFromTeam && (
-                  <NavLink
-                    to="/staff/operativo/global-inventory"
-                    className={({ isActive }): string =>
-                      navLinkClasses(isActive)
-                    }
-                  >
-                    <svg
-                      className="h-5 w-5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M3 7h18M3 12h18M3 17h18"
-                      />
-                    </svg>
-                    Inventario global
-                  </NavLink>
-                )}
-
-                {canViewInventoryFromTeam && (
-                  <NavLink
-                    to="/staff/operativo/branches"
-                    className={({ isActive }): string =>
-                      navLinkClasses(isActive)
-                    }
-                  >
-                    <svg
-                      className="h-5 w-5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M3 21h18M5 21V7l8-4 8 4v14M9 9h.01M9 13h.01M9 17h.01M13 9h.01M13 13h.01M13 17h.01M17 9h.01M17 13h.01M17 17h.01"
-                      />
-                    </svg>
-                    Sedes
-                  </NavLink>
-                )}
-
-                {canViewTransferHistoryFromTeam && (
-                  <NavLink
-                    to="/staff/operativo/transfer-history"
-                    className={({ isActive }): string =>
-                      navLinkClasses(isActive)
-                    }
-                  >
-                    <svg
-                      className="h-5 w-5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
-                      />
-                    </svg>
-                    Historial de transferencias
-                  </NavLink>
-                )}
-
-                {canManageSalesFromTeam && (
-                  <>
-                    <p className="px-3 pb-0.5 pt-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-gray-600 sm:pb-1 sm:pt-2 sm:text-[10px] sm:tracking-[0.14em]">
-                      Ventas
-                    </p>
-                    <NavLink
-                      to="/staff/operativo/sales"
-                      className={({ isActive }): string =>
-                        navLinkClasses(isActive)
-                      }
-                    >
-                      <svg
-                        className="h-5 w-5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2"
-                        />
-                      </svg>
-                      Ventas del equipo
-                    </NavLink>
-                  </>
-                )}
-
-                {(canViewPromotionsFromTeam ||
-                  canViewProvidersFromTeam ||
-                  canViewCustomersFromTeam) && (
-                  <p className="px-3 pb-0.5 pt-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-gray-600 sm:pb-1 sm:pt-2 sm:text-[10px] sm:tracking-[0.14em]">
-                    Clientes y promociones
-                  </p>
-                )}
-
-                {canViewPromotionsFromTeam && (
-                  <NavLink
-                    to="/staff/operativo/promotions"
-                    className={({ isActive }): string =>
-                      navLinkClasses(isActive)
-                    }
-                  >
-                    <svg
-                      className="h-5 w-5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M5 12h14M12 5l7 7-7 7"
-                      />
-                    </svg>
-                    Promociones
-                  </NavLink>
-                )}
-
-                {canViewProvidersFromTeam && (
-                  <NavLink
-                    to="/staff/operativo/providers"
-                    className={({ isActive }): string =>
-                      navLinkClasses(isActive)
-                    }
-                  >
-                    <svg
-                      className="h-5 w-5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M20 13V7a2 2 0 00-2-2h-4m-2 0H6a2 2 0 00-2 2v6m16 0v4a2 2 0 01-2 2h-4m-2 0H6a2 2 0 01-2-2v-4m16 0H4"
-                      />
-                    </svg>
-                    Proveedores
-                  </NavLink>
-                )}
-
-                {canViewCustomersFromTeam && (
-                  <NavLink
-                    to="/staff/operativo/customers"
-                    className={({ isActive }): string =>
-                      navLinkClasses(isActive)
-                    }
-                  >
-                    <svg
-                      className="h-5 w-5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.653-.084-1.284-.24-1.885M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.653.084-1.284.24-1.885m0 0a5.002 5.002 0 019.52 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
-                      />
-                    </svg>
-                    Clientes
-                  </NavLink>
-                )}
-
-                {(canViewAnalyticsFromTeam || canViewExpensesFromTeam) && (
-                  <p className="px-3 pb-0.5 pt-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-gray-600 sm:pb-1 sm:pt-2 sm:text-[10px] sm:tracking-[0.14em]">
-                    Analítica
-                  </p>
-                )}
-
-                {canViewAnalyticsFromTeam && (
-                  <NavLink
-                    to="/staff/operativo/analytics"
-                    className={({ isActive }): string =>
-                      navLinkClasses(isActive)
-                    }
-                  >
-                    <svg
-                      className="h-5 w-5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10"
-                      />
-                    </svg>
-                    Analíticas del negocio
-                  </NavLink>
-                )}
-
-                {canViewExpensesFromTeam && (
-                  <NavLink
-                    to="/staff/operativo/expenses"
-                    className={({ isActive }): string =>
-                      navLinkClasses(isActive)
-                    }
-                  >
-                    <svg
-                      className="h-5 w-5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2"
-                      />
-                    </svg>
-                    Gastos del negocio
-                  </NavLink>
-                )}
-
-                {canManageTeamFromTeam && (
-                  <>
-                    <p className="px-3 pb-0.5 pt-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-gray-600 sm:pb-1 sm:pt-2 sm:text-[10px] sm:tracking-[0.14em]">
-                      Configuración
-                    </p>
-                    <NavLink
-                      to="/staff/operativo/team"
-                      className={({ isActive }): string =>
-                        navLinkClasses(isActive)
-                      }
-                    >
-                      <svg
-                        className="h-5 w-5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7"
-                        />
-                      </svg>
-                      Equipo y permisos
-                    </NavLink>
-                  </>
-                )}
-              </>
+                    {isExpanded && (
+                      <div className="space-y-1 px-2 pb-2">
+                        {section.filteredItems.map(renderSidebarItem)}
+                      </div>
+                    )}
+                  </section>
+                );
+              })
             )}
           </nav>
 

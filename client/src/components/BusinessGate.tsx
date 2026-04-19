@@ -51,7 +51,7 @@ export default function BusinessGate({
     );
   }
 
-  if (!businessId || !business) {
+  if (!businessId) {
     if (
       !loading &&
       !hydrating &&

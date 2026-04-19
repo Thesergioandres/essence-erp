@@ -41,6 +41,14 @@ const withBusinessHeader = (businessId: string) => ({
   },
 });
 
+const hasActiveSession = (): boolean => {
+  if (typeof window === "undefined") return true;
+  return Boolean(localStorage.getItem("token"));
+};
+
+const resolveStatusCode = (error: unknown): number | undefined =>
+  (error as { response?: { status?: number } })?.response?.status;
+
 interface NotificationQueryParams {
   page?: number;
   limit?: number;
@@ -63,6 +71,10 @@ export const notificationService = {
   async getPending(
     params?: NotificationQueryParams
   ): Promise<NotificationListResult> {
+    if (!hasActiveSession()) {
+      return { notifications: [], unreadCount: 0 };
+    }
+
     const { businessId, ...queryParams } = params || {};
     const safeBusinessId = requireBusinessId(
       businessId,
@@ -79,6 +91,10 @@ export const notificationService = {
   async getHistory(
     params?: NotificationQueryParams
   ): Promise<NotificationListResult> {
+    if (!hasActiveSession()) {
+      return { notifications: [], unreadCount: 0 };
+    }
+
     const { businessId, ...queryParams } = params || {};
     const safeBusinessId = requireBusinessId(
       businessId,
@@ -111,34 +127,75 @@ export const notificationService = {
     notificationId: string,
     businessId?: string | null
   ): Promise<Notification> {
+    if (!hasActiveSession()) {
+      throw new Error("No hay sesión activa para marcar notificaciones");
+    }
+
     const safeBusinessId = requireBusinessId(
       businessId,
       "marcar notificación como vista"
     );
-    const response = await api.put(
-      `/notifications/${notificationId}/viewed`,
-      undefined,
-      withBusinessHeader(safeBusinessId)
-    );
-    return response.data?.data || response.data;
+
+    try {
+      const response = await api.put(
+        `/notifications/${notificationId}/viewed`,
+        undefined,
+        withBusinessHeader(safeBusinessId)
+      );
+      return response.data?.data || response.data;
+    } catch (error) {
+      if (resolveStatusCode(error) === 404) {
+        const fallbackResponse = await api.put(
+          `/notifications/${notificationId}/read`,
+          undefined,
+          withBusinessHeader(safeBusinessId)
+        );
+        return fallbackResponse.data?.data || fallbackResponse.data;
+      }
+
+      throw error;
+    }
   },
 
   async markAllAsViewed(
     businessId?: string | null
   ): Promise<{ modifiedCount: number }> {
+    if (!hasActiveSession()) {
+      return { modifiedCount: 0 };
+    }
+
     const safeBusinessId = requireBusinessId(
       businessId,
       "marcar todas las notificaciones como vistas"
     );
-    const response = await api.put(
-      "/notifications/viewed-all",
-      undefined,
-      withBusinessHeader(safeBusinessId)
-    );
-    const payload = response.data?.data || response.data;
-    return {
-      modifiedCount: Number(payload?.modifiedCount || payload?.count || 0),
-    };
+
+    try {
+      const response = await api.put(
+        "/notifications/viewed-all",
+        undefined,
+        withBusinessHeader(safeBusinessId)
+      );
+      const payload = response.data?.data || response.data;
+
+      return {
+        modifiedCount: Number(payload?.modifiedCount || payload?.count || 0),
+      };
+    } catch (error) {
+      if (resolveStatusCode(error) === 404) {
+        const fallbackResponse = await api.put(
+          "/notifications/read-all",
+          undefined,
+          withBusinessHeader(safeBusinessId)
+        );
+        const payload = fallbackResponse.data?.data || fallbackResponse.data;
+
+        return {
+          modifiedCount: Number(payload?.modifiedCount || payload?.count || 0),
+        };
+      }
+
+      throw error;
+    }
   },
 
   // Legacy compatibility

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useBusiness } from "../../../context/BusinessContext";
 import type {
   EmployeeStats,
   GamificationConfig,
@@ -10,6 +11,7 @@ import LeaderboardTable from "../components/LeaderboardTable";
 
 export default function EmployeeLevelPage() {
   const userId = authService.getCurrentUser()?._id || "";
+  const { businessId, hydrating } = useBusiness();
   const [loading, setLoading] = useState(true);
   const [config, setConfig] = useState<GamificationConfig | null>(null);
   const [stats, setStats] = useState<EmployeeStats | null>(null);
@@ -18,19 +20,41 @@ export default function EmployeeLevelPage() {
     bonusCommission: 0,
     position: null as number | null,
   });
+  const effectiveBusinessId = useMemo(
+    () => businessId || localStorage.getItem("businessId"),
+    [businessId]
+  );
 
   useEffect(() => {
-    if (!userId) {
+    if (!businessId) return;
+
+    if (localStorage.getItem("businessId") !== businessId) {
+      localStorage.setItem("businessId", businessId);
+    }
+  }, [businessId]);
+
+  useEffect(() => {
+    if (hydrating) {
+      return;
+    }
+
+    if (!userId || !effectiveBusinessId) {
+      setConfig(null);
+      setStats(null);
+      setRanking([]);
+      setCommissionInfo({
+        bonusCommission: 0,
+        position: null,
+      });
       setLoading(false);
       return;
     }
+
     let isActive = true;
 
     const loadData = async () => {
       try {
-        console.log("🚀 Iniciando carga de datos gamificación para:", userId);
         setLoading(true);
-        const businessId = localStorage.getItem("businessId") || undefined;
 
         // Cargar Config
         let configRes = null;
@@ -59,7 +83,7 @@ export default function EmployeeLevelPage() {
         try {
           rankingRes = await gamificationService.getRanking({
             period: "current",
-            businessId,
+            businessId: effectiveBusinessId,
           });
         } catch (e) {
           console.error("❌ Error loading ranking:", e);
@@ -77,8 +101,6 @@ export default function EmployeeLevelPage() {
         }
 
         if (!isActive) return;
-
-        console.log("✅ Datos cargados exitosamente (parcial o total)");
 
         setConfig(configRes);
         setStats((statsRes as any)?.stats ?? statsRes ?? null);
@@ -99,7 +121,6 @@ export default function EmployeeLevelPage() {
         );
       } finally {
         if (isActive) {
-          console.log("🛑 Finalizando estado de carga");
           setLoading(false);
         }
       }
@@ -109,7 +130,7 @@ export default function EmployeeLevelPage() {
     return () => {
       isActive = false;
     };
-  }, [userId]);
+  }, [effectiveBusinessId, hydrating, userId]);
 
   const levels = useMemo(() => {
     if (!config?.levels) return [];

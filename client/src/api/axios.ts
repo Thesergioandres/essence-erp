@@ -1,6 +1,93 @@
 import type { AxiosError, InternalAxiosRequestConfig } from "axios";
 import axios from "axios";
 
+const resolveEntityId = (value: unknown): string | null => {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const candidate = value as {
+    _id?: unknown;
+    id?: unknown;
+    $oid?: unknown;
+  };
+
+  return (
+    resolveEntityId(candidate._id) ||
+    resolveEntityId(candidate.id) ||
+    resolveEntityId(candidate.$oid) ||
+    null
+  );
+};
+
+const inferBusinessIdFromStoredUser = (): string | null => {
+  try {
+    const userRaw = localStorage.getItem("user");
+    if (!userRaw) {
+      return null;
+    }
+
+    const user = JSON.parse(userRaw) as {
+      business?: unknown;
+      memberships?: Array<{ business?: unknown; status?: unknown }>;
+    };
+
+    const membershipIds = (
+      Array.isArray(user.memberships)
+        ? user.memberships
+            .filter(membership => {
+              const status =
+                typeof membership?.status === "string"
+                  ? membership.status.toLowerCase()
+                  : "";
+              return status !== "pending" && status !== "suspended";
+            })
+            .map(membership => resolveEntityId(membership.business))
+            .filter((id): id is string => Boolean(id))
+        : []
+    ) as string[];
+
+    const uniqueMembershipIds = Array.from(new Set(membershipIds));
+    if (uniqueMembershipIds.length === 1) {
+      return uniqueMembershipIds[0];
+    }
+
+    if (uniqueMembershipIds.length > 1) {
+      return null;
+    }
+
+    return resolveEntityId(user.business);
+  } catch {
+    return null;
+  }
+};
+
+const resolveBusinessIdForRequest = (
+  explicitBusinessId: string | null
+): string | null => {
+  if (explicitBusinessId) {
+    return explicitBusinessId;
+  }
+
+  const storedBusinessId = localStorage.getItem("businessId");
+  if (storedBusinessId && storedBusinessId.trim().length > 0) {
+    return storedBusinessId.trim();
+  }
+
+  const inferredBusinessId = inferBusinessIdFromStoredUser();
+  if (inferredBusinessId) {
+    localStorage.setItem("businessId", inferredBusinessId);
+    return inferredBusinessId;
+  }
+
+  return null;
+};
+
 const getApiBaseUrl = () => {
   if (import.meta.env.VITE_API_URL) {
     return import.meta.env.VITE_API_URL;
@@ -103,7 +190,15 @@ const logApiError = (error: AxiosError | Error) => {
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const token = localStorage.getItem("token");
-    const businessId = localStorage.getItem("businessId");
+
+    const rawBusinessHeader =
+      (config.headers?.["x-business-id"] as string | undefined) ||
+      (config.headers?.["X-Business-Id"] as string | undefined);
+    const explicitBusinessId =
+      typeof rawBusinessHeader === "string" && rawBusinessHeader.trim().length
+        ? rawBusinessHeader.trim()
+        : null;
+    const businessId = resolveBusinessIdForRequest(explicitBusinessId);
 
     if (typeof FormData !== "undefined" && config.data instanceof FormData) {
       if (config.headers) {

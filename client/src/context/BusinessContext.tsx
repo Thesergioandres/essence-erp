@@ -58,10 +58,147 @@ const defaultAssistantByPlan: AssistantPlanMap = {
   enterprise: true,
 };
 
-const getMembershipBusinessId = (membership: Membership): string =>
-  typeof membership.business === "string"
-    ? membership.business
-    : membership.business?._id || "";
+const sanitizeIdString = (raw: string): string => {
+  const trimmed = String(raw || "").trim();
+  if (
+    !trimmed ||
+    trimmed === "[object Object]" ||
+    trimmed === "undefined" ||
+    trimmed === "null"
+  ) {
+    return "";
+  }
+
+  const objectIdMatch = trimmed.match(/[a-fA-F0-9]{24}/);
+  if (objectIdMatch) {
+    return objectIdMatch[0];
+  }
+
+  return trimmed;
+};
+
+const bytesToHexObjectId = (bytes: unknown): string => {
+  if (!Array.isArray(bytes) || bytes.length !== 12) {
+    return "";
+  }
+
+  const isValidByteArray = bytes.every(
+    item => typeof item === "number" && item >= 0 && item <= 255
+  );
+  if (!isValidByteArray) {
+    return "";
+  }
+
+  return bytes
+    .map(item => item.toString(16).padStart(2, "0"))
+    .join("")
+    .toLowerCase();
+};
+
+const resolveEntityId = (value: unknown): string => {
+  if (typeof value === "string") {
+    return sanitizeIdString(value);
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+
+  if (!value || typeof value !== "object") {
+    return "";
+  }
+
+  const candidate = value as {
+    _id?: unknown;
+    id?: unknown;
+    $oid?: unknown;
+    oid?: unknown;
+    businessId?: unknown;
+    business_id?: unknown;
+    toHexString?: () => string;
+    toString?: () => string;
+    buffer?: unknown;
+    data?: unknown;
+  };
+
+  const fromToHex =
+    typeof candidate.toHexString === "function"
+      ? sanitizeIdString(candidate.toHexString())
+      : "";
+
+  const nested =
+    resolveEntityId(candidate._id) ||
+    resolveEntityId(candidate.id) ||
+    resolveEntityId(candidate.$oid) ||
+    resolveEntityId(candidate.oid) ||
+    resolveEntityId(candidate.businessId) ||
+    resolveEntityId(candidate.business_id);
+
+  const fromBuffer =
+    bytesToHexObjectId(candidate.buffer) || bytesToHexObjectId(candidate.data);
+
+  if (fromToHex) {
+    return fromToHex;
+  }
+
+  if (fromBuffer) {
+    return fromBuffer;
+  }
+
+  if (nested) {
+    return nested;
+  }
+
+  if (typeof candidate.toString === "function") {
+    return sanitizeIdString(candidate.toString());
+  }
+
+  return "";
+};
+
+const getMembershipBusinessId = (membership: {
+  business?: unknown;
+  businessId?: unknown;
+  business_id?: unknown;
+}): string => {
+  return (
+    resolveEntityId(membership.business) ||
+    resolveEntityId(membership.businessId) ||
+    resolveEntityId(membership.business_id)
+  );
+};
+
+const normalizeMembershipBusiness = (membership: Membership): Membership => {
+  const resolvedBusinessId = getMembershipBusinessId(
+    membership as Membership & { businessId?: unknown; business_id?: unknown }
+  );
+
+  if (!resolvedBusinessId) {
+    return membership;
+  }
+
+  if (typeof membership.business === "string") {
+    return {
+      ...membership,
+      business: {
+        _id: resolvedBusinessId,
+        name: "Negocio",
+      } as Membership["business"],
+    };
+  }
+
+  if (membership.business && typeof membership.business === "object") {
+    return {
+      ...membership,
+      business: {
+        ...(membership.business as Record<string, unknown>),
+        _id: resolvedBusinessId,
+      } as Membership["business"],
+    };
+  }
+
+  return membership;
+};
 
 const hasSameMembershipSnapshot = (
   current: Membership[],
@@ -160,8 +297,9 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
               id?: string;
               features?: { businessAssistant?: boolean };
             }
-          >,
-        ).reduce<AssistantPlanMap>((acc, planConfig) => {
+          >
+        ).reduce<AssistantPlanMap>(
+          (acc, planConfig) => {
             const planId = String(planConfig?.id || "")
               .trim()
               .toLowerCase();
@@ -169,7 +307,9 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
 
             acc[planId] = planConfig?.features?.businessAssistant === true;
             return acc;
-          }, { ...defaultAssistantByPlan });
+          },
+          { ...defaultAssistantByPlan }
+        );
 
         setAssistantByPlan(assistantMap);
       }
@@ -180,7 +320,10 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
         fetched
       );
 
-      const fetchedMemberships = (fetched || []) as Membership[];
+      const fetchedMemberships = (Array.isArray(fetched) ? fetched : []).map(
+        membership => normalizeMembershipBusiness(membership as Membership)
+      );
+
       setMemberships(prev =>
         hasSameMembershipSnapshot(prev, fetchedMemberships)
           ? prev
@@ -188,7 +331,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       );
 
       // Safe Retry Logic: Si devuelve vacío y no hemos reintentado, prueba una vez más
-      if ((!fetched || fetched.length === 0) && retryRef.current < 1) {
+      if (fetchedMemberships.length === 0 && retryRef.current < 1) {
         console.log("[BusinessContext] Empty list, retrying once...");
         retryRef.current += 1;
         isFetchingRef.current = false; // Liberar lock para el reintento
@@ -197,14 +340,18 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       }
 
       // Si éxito, limpiar reintentos
-      if (fetched && fetched.length > 0) {
+      if (fetchedMemberships.length > 0) {
         retryRef.current = 0;
       }
 
-      const stored = localStorage.getItem("businessId");
-      const hasStored = stored && fetched.some(m => m.business?._id === stored);
+      const stored = resolveEntityId(localStorage.getItem("businessId"));
+      const hasStored =
+        stored.length > 0 &&
+        fetchedMemberships.some(m => getMembershipBusinessId(m) === stored);
       const onlyOne =
-        fetched.length === 1 ? (fetched[0].business?._id ?? null) : null;
+        fetchedMemberships.length === 1
+          ? getMembershipBusinessId(fetchedMemberships[0]) || null
+          : null;
       const nextId = hasStored ? stored : onlyOne;
 
       syncBusinessId(nextId);
@@ -256,19 +403,16 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
     void run();
   }, [refresh]);
 
-  // Escuchar evento session-refresh para actualizar cuando cambie el usuario/rol
+  // Escuchar cambios de sesión y refrescar membresías.
   useEffect(() => {
     const handleSessionRefresh = async () => {
-      console.log("[BusinessContext] Session refresh triggered");
       tokenRef.current = localStorage.getItem("token");
       await refresh();
     };
 
-    window.addEventListener("session-refresh", handleSessionRefresh);
     window.addEventListener("auth-changed", handleSessionRefresh);
 
     return () => {
-      window.removeEventListener("session-refresh", handleSessionRefresh);
       window.removeEventListener("auth-changed", handleSessionRefresh);
     };
   }, [refresh]);
@@ -282,17 +426,54 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   const selectedMembership = useMemo(
-    () => memberships.find(m => m.business?._id === businessId) ?? null,
+    () =>
+      memberships.find(m => getMembershipBusinessId(m) === businessId) ?? null,
     [memberships, businessId]
   );
 
+  useEffect(() => {
+    if (initializing) {
+      return;
+    }
+
+    if (businessId && selectedMembership) {
+      return;
+    }
+
+    const activeMembershipIds = Array.from(
+      new Set(
+        memberships
+          .filter(membership => membership.status === "active")
+          .map(getMembershipBusinessId)
+          .filter(Boolean)
+      )
+    );
+
+    if (!businessId && activeMembershipIds.length === 1) {
+      syncBusinessId(activeMembershipIds[0]);
+      return;
+    }
+
+    if (businessId && !selectedMembership && activeMembershipIds.length === 1) {
+      syncBusinessId(activeMembershipIds[0]);
+    }
+  }, [businessId, initializing, memberships, selectedMembership]);
+
+  const selectedBusiness = useMemo(() => {
+    if (!selectedMembership) {
+      return null;
+    }
+
+    return typeof selectedMembership.business === "object"
+      ? selectedMembership.business
+      : null;
+  }, [selectedMembership]);
+
   const features = useMemo<BusinessFeatures>(() => {
-    const selectedPlan = String(
-      selectedMembership?.business?.plan || "starter",
-    )
+    const selectedPlan = String(selectedBusiness?.plan || "starter")
       .trim()
       .toLowerCase();
-    const baseFeatures = selectedMembership?.business?.config?.features || {};
+    const baseFeatures = selectedBusiness?.config?.features || {};
     const fallbackAssistant = assistantByPlan.starter ?? false;
 
     return {
@@ -300,11 +481,11 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       ...baseFeatures,
       assistant: assistantByPlan[selectedPlan] ?? fallbackAssistant,
     };
-  }, [assistantByPlan, selectedMembership]);
+  }, [assistantByPlan, selectedBusiness]);
 
   const value: BusinessContextValue = {
-    businessId: selectedMembership?.business?._id || null,
-    business: selectedMembership?.business || null,
+    businessId: businessId || null,
+    business: selectedBusiness,
     features,
     memberships,
     hydrating: initializing,
