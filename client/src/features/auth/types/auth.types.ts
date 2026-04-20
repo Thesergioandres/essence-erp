@@ -61,6 +61,7 @@ export interface AuthResponse {
   name: string;
   email: string;
   role: User["role"];
+  isFirstUser?: boolean;
   status?: User["status"];
   active?: boolean;
   subscriptionExpiresAt?: string;

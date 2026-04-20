@@ -164,7 +164,16 @@ export default function RegisterPage() {
       const authData = await authService.register(payload);
       const pendingUser = { name: trimmedName, email: trimmedEmail };
 
-      if (authData.role === "god") {
+      const syncedProfile = await authService.syncSession().catch(() => null);
+      const resolvedRole = String(
+        syncedProfile?.role || authData.role || ""
+      ).trim();
+
+      const shouldBypassPlan =
+        authData.isFirstUser === true || resolvedRole === "god";
+
+      if (shouldBypassPlan) {
+        sessionStorage.removeItem(REGISTER_STEP_STORAGE_KEY);
         setSuccess("✅ Registro completado en modo Administrador Maestro.");
         navigate("/onboarding", { replace: true });
       } else {

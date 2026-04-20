@@ -15,6 +15,7 @@
     "dev:no-sync": "npx kill-port 5000 && nodemon server.js",
     "dev:sync-only": "node scripts/syncProdToLocal.js",
     "dev:sync-v2": "node src/infrastructure/jobs/syncProdToLocalV2.job.js",
+    "db:drop:local": "node scripts/dropLocalDatabase.js",
     "pretest": "node scripts/validate-test-config.js",
     "test": "cross-env NODE_ENV=test node --experimental-vm-modules node_modules/jest/bin/jest.js --detectOpenHandles --forceExit",
     "test:clean": "cross-env NODE_ENV=test node --no-warnings --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --silent",

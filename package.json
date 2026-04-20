@@ -9,6 +9,7 @@
     "dev": "concurrently \"npm run server:v2\" \"npm run client\"",
     "dev:v2": "npm run dev",
     "sync:v2": "cd server && npm run dev:sync-v2",
+    "db:drop:local": "cd server && npm run db:drop:local",
     "install-all": "npm install && cd client && npm install && cd ../server && npm install",
     "build": "npm run validate:backend && cd client && npm run build",
     "validate:backend": "node --check server/server.js",
