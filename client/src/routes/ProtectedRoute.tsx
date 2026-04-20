@@ -59,6 +59,9 @@ export default function ProtectedRoute({
     { prefix: "/admin/products", target: "/staff/products" },
     { prefix: "/admin/add-product", target: "/staff/products" },
     { prefix: "/admin/employees", target: "/staff/operativo/team" },
+    { prefix: "/admin/staff", target: "/staff/operativo/team" },
+    { prefix: "/admin/schedules", target: "/staff/schedule" },
+    { prefix: "/admin/contracts", target: "/staff/contracts" },
     { prefix: "/admin/credits", target: "/staff/credits" },
     { prefix: "/admin/register-sale", target: "/staff/register-sale" },
     {

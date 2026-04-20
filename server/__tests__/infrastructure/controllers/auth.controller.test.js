@@ -68,9 +68,13 @@ jest.unstable_mockModule(jwtServiceModulePath, () => ({
 
 jest.unstable_mockModule(planLimitsModulePath, () => ({
   VALID_BUSINESS_PLANS: ["starter", "pro", "enterprise"],
-  getBusinessUsage: jest
-    .fn()
-    .mockResolvedValue({ branches: 0, employees: 0 }),
+  sanitizePlanIdentifier: jest.fn((value) =>
+    String(value || "")
+      .trim()
+      .toLowerCase(),
+  ),
+  isBusinessPlanAssignable: jest.fn().mockResolvedValue(true),
+  getBusinessUsage: jest.fn().mockResolvedValue({ branches: 0, employees: 0 }),
   resolveBusinessLimits: jest.fn().mockResolvedValue({
     plan: "starter",
     limits: { branches: 1, employees: 2 },

@@ -95,6 +95,27 @@ export const employeeService = {
     return apiResponse.data || apiResponse;
   },
 
+  async updateBaseCommissionPercentage(
+    id: string,
+    baseCommissionPercentage: number
+  ): Promise<{
+    _id: string;
+    name: string;
+    email: string;
+    role: string;
+    active?: boolean;
+    baseCommissionPercentage: number;
+    fixedCommissionOnly?: boolean;
+    isCommissionFixed?: boolean;
+    customCommissionRate?: number | null;
+  }> {
+    const response = await api.patch(`/employees/${id}`, {
+      baseCommissionPercentage,
+    });
+    const apiResponse = response.data;
+    return apiResponse.data || apiResponse;
+  },
+
   async delete(id: string): Promise<{
     message: string;
     employeeNameSnapshot: string;

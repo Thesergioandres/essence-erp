@@ -160,6 +160,18 @@ const PublicEmployeeCatalog = lazy(
 const EmployeeAdvertising = lazy(
   () => import("./features/advertising/pages/EmployeeAdvertisingPage")
 );
+const EmployeeManagement = lazy(
+  () => import("./features/staff/pages/EmployeeManagementPage")
+);
+const EmployeeSchedule = lazy(
+  () => import("./features/scheduling/pages/EmployeeSchedulePage")
+);
+const AdminScheduleOverview = lazy(
+  () => import("./features/scheduling/pages/AdminScheduleOverviewPage")
+);
+const Contracts = lazy(
+  () => import("./features/contracts/pages/ContractsPage")
+);
 const OperativoStockManagement = lazy(
   () =>
     import("./features/employees/pages/operativo/OperativoStockManagementPage")
@@ -672,6 +684,30 @@ export default function App() {
                       }
                     />
                     <Route
+                      path="staff"
+                      element={
+                        <BusinessGate requiredFeature="employees">
+                          <EmployeeManagement />
+                        </BusinessGate>
+                      }
+                    />
+                    <Route
+                      path="schedules"
+                      element={
+                        <BusinessGate requiredFeature="employees">
+                          <AdminScheduleOverview />
+                        </BusinessGate>
+                      }
+                    />
+                    <Route
+                      path="contracts"
+                      element={
+                        <BusinessGate requiredFeature="employees">
+                          <Contracts />
+                        </BusinessGate>
+                      }
+                    />
+                    <Route
                       path="providers"
                       element={
                         <BusinessGate requiredFeature="inventory">
@@ -920,6 +956,22 @@ export default function App() {
                       element={
                         <BusinessGate>
                           <Notifications />
+                        </BusinessGate>
+                      }
+                    />
+                    <Route
+                      path="schedule"
+                      element={
+                        <BusinessGate requiredFeature="employees">
+                          <EmployeeSchedule />
+                        </BusinessGate>
+                      }
+                    />
+                    <Route
+                      path="contracts"
+                      element={
+                        <BusinessGate requiredFeature="employees">
+                          <Contracts />
                         </BusinessGate>
                       }
                     />

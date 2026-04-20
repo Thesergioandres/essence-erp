@@ -328,6 +328,27 @@ export default function DashboardLayout() {
         label: "Administración & Equipo",
         items: [
           {
+            id: "staff-center",
+            label: "Staff Centralizado",
+            to: "/admin/staff",
+            icon: Users,
+            feature: "employees",
+          },
+          {
+            id: "schedule-overview",
+            label: "Horarios por Sede",
+            to: "/admin/schedules",
+            icon: Activity,
+            feature: "employees",
+          },
+          {
+            id: "contracts",
+            label: "Contratos Digitales",
+            to: "/admin/contracts",
+            icon: FileText,
+            feature: "employees",
+          },
+          {
             id: "notifications",
             label: "Notificaciones",
             to: "/admin/notifications",

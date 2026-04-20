@@ -261,6 +261,18 @@ export default function EmployeeDashboardLayout() {
             icon: ShoppingBag,
             showPendingReceptionBadge: true,
           },
+          {
+            id: "weekly-schedule",
+            label: "Mi Disponibilidad",
+            to: "/staff/schedule",
+            icon: Activity,
+          },
+          {
+            id: "contracts",
+            label: "Mis Contratos",
+            to: "/staff/contracts",
+            icon: FileText,
+          },
         ],
       },
       {

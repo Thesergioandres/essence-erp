@@ -25,6 +25,7 @@ export interface User {
   fixedCommissionOnly?: boolean;
   isCommissionFixed?: boolean;
   customCommissionRate?: number | null;
+  baseCommissionPercentage?: number | null;
   token?: string;
 }
 
@@ -46,6 +47,7 @@ export interface Membership {
         fixedCommissionOnly?: boolean;
         isCommissionFixed?: boolean;
         customCommissionRate?: number | null;
+        baseCommissionPercentage?: number | null;
       }
     | string
     | null;

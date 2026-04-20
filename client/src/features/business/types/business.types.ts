@@ -137,6 +137,9 @@ export interface Employee {
   assignedProducts?: string[];
   createdAt?: string;
   updatedAt?: string;
+  baseCommissionPercentage?: number | null;
+  HIDE_FINANCIAL_DATA?: boolean;
+  fixedCommissionOnly?: boolean;
 }
 
 // ==================== BUSINESS ASSISTANT TYPES ====================
