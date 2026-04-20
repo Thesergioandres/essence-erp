@@ -1,5 +1,45 @@
 import inventoryPersistenceUseCase from "../../../application/use-cases/repository-gateways/InventoryPersistenceUseCase.js";
 
+const createHttpError = (message, statusCode = 400) => {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+};
+
+const normalizeCreateEntryPayload = (payload = {}) => {
+  const normalizedPayload = { ...payload };
+
+  const quantity = Number(payload.quantity);
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    throw createHttpError("Cantidad invalida", 400);
+  }
+  normalizedPayload.quantity = quantity;
+
+  if (payload.unitCost !== undefined && payload.unitCost !== "") {
+    const unitCost = Number(payload.unitCost);
+    if (!Number.isFinite(unitCost) || unitCost < 0) {
+      throw createHttpError("unitCost invalido", 400);
+    }
+    normalizedPayload.unitCost = unitCost;
+  } else {
+    delete normalizedPayload.unitCost;
+  }
+
+  if (payload.additionalCosts !== undefined && payload.additionalCosts !== "") {
+    if (!Array.isArray(payload.additionalCosts)) {
+      const additionalCosts = Number(payload.additionalCosts);
+      if (!Number.isFinite(additionalCosts) || additionalCosts < 0) {
+        throw createHttpError("additionalCosts invalido", 400);
+      }
+      normalizedPayload.additionalCosts = additionalCosts;
+    }
+  } else {
+    delete normalizedPayload.additionalCosts;
+  }
+
+  return normalizedPayload;
+};
+
 class InventoryController {
   async createEntry(req, res) {
     try {
@@ -7,14 +47,17 @@ class InventoryController {
       if (!businessId)
         return res.status(400).json({ message: "Falta x-business-id" });
 
+      const payload = normalizeCreateEntryPayload(req.body || {});
+
       const result = await inventoryPersistenceUseCase.createEntry(
         businessId,
-        req.body,
-        req.user.id,
+        payload,
+        req.user?.id || req.user?._id,
       );
       res.status(201).json({ success: true, data: result });
     } catch (error) {
-      res.status(500).json({ success: false, message: error.message });
+      const status = error.statusCode || 500;
+      res.status(status).json({ success: false, message: error.message });
     }
   }
 
@@ -33,7 +76,8 @@ class InventoryController {
       );
       res.json({ success: true, data: result });
     } catch (error) {
-      res.status(500).json({ success: false, message: error.message });
+      const status = error.statusCode || 500;
+      res.status(status).json({ success: false, message: error.message });
     }
   }
 
@@ -50,7 +94,8 @@ class InventoryController {
       );
       res.json({ success: true, data: result });
     } catch (error) {
-      res.status(500).json({ success: false, message: error.message });
+      const status = error.statusCode || 500;
+      res.status(status).json({ success: false, message: error.message });
     }
   }
 
@@ -67,7 +112,8 @@ class InventoryController {
       );
       res.json({ success: true, data: result });
     } catch (error) {
-      res.status(500).json({ success: false, message: error.message });
+      const status = error.statusCode || 500;
+      res.status(status).json({ success: false, message: error.message });
     }
   }
 }

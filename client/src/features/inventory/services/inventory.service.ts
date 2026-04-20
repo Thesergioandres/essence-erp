@@ -503,29 +503,41 @@ export const inventoryService = {
     product: string;
     quantity: number;
     unitCost?: number;
+    additionalCosts?: number;
     branch?: string;
     provider?: string;
     notes?: string;
     purchaseGroupId?: string;
   }): Promise<{
     entry: InventoryEntry;
-    product: { totalStock: number; warehouseStock: number };
+    costInfo?: {
+      previousAverageCost: number;
+      newAverageCost: number;
+      totalInventoryValue: number;
+      additionalCostsTotal?: number;
+    };
   }> {
     const response = await api.post("/inventory/entry", payload);
-    return response.data;
+    return response.data?.data || response.data;
   },
 
   addEntry(payload: {
     product: string;
     quantity: number;
     unitCost?: number;
+    additionalCosts?: number;
     branch?: string;
     provider?: string;
     notes?: string;
     purchaseGroupId?: string;
   }): Promise<{
     entry: InventoryEntry;
-    product: { totalStock: number; warehouseStock: number };
+    costInfo?: {
+      previousAverageCost: number;
+      newAverageCost: number;
+      totalInventoryValue: number;
+      additionalCostsTotal?: number;
+    };
   }> {
     return this.createEntry(payload);
   },

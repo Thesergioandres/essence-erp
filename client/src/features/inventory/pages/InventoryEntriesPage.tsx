@@ -50,6 +50,9 @@ interface Branch {
   isWarehouse?: boolean;
 }
 
+const roundCurrency = (value: number) =>
+  Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
+
 export default function InventoryEntries() {
   const [entries, setEntries] = useState<InventoryEntry[]>([]);
   const [_products, setProducts] = useState<Product[]>([]);
@@ -113,6 +116,7 @@ export default function InventoryEntries() {
     provider: "",
     notes: "",
   });
+  const [orderAdditionalCosts, setOrderAdditionalCosts] = useState("");
 
   // New product form
   const [newProductData, setNewProductData] = useState({
@@ -286,6 +290,7 @@ export default function InventoryEntries() {
 
   const handleClearCart = () => {
     setCart([]);
+    setOrderAdditionalCosts("");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -296,6 +301,23 @@ export default function InventoryEntries() {
       return;
     }
 
+    const normalizedAdditionalCosts = Number(orderAdditionalCosts || 0);
+    if (
+      !Number.isFinite(normalizedAdditionalCosts) ||
+      normalizedAdditionalCosts < 0
+    ) {
+      setError(
+        "Los costos adicionales deben ser un numero valido mayor o igual a 0"
+      );
+      return;
+    }
+
+    const totalUnits = cart.reduce((sum, item) => sum + item.quantity, 0);
+    if (totalUnits <= 0) {
+      setError("La cantidad total del carrito debe ser mayor a 0");
+      return;
+    }
+
     setSaving(true);
     setError("");
 
@@ -303,12 +325,30 @@ export default function InventoryEntries() {
       // Generar un purchaseGroupId único para agrupar todas las entradas
       const purchaseGroupId = uuidv4();
 
+      let allocatedAdditionalCosts = 0;
+      const cartLastIndex = cart.length - 1;
+
       // Registrar cada entrada con el mismo purchaseGroupId
-      for (const item of cart) {
+      for (const [index, item] of cart.entries()) {
+        const proratedAdditionalCosts =
+          normalizedAdditionalCosts > 0
+            ? index === cartLastIndex
+              ? roundCurrency(
+                  normalizedAdditionalCosts - allocatedAdditionalCosts
+                )
+              : roundCurrency(
+                  (normalizedAdditionalCosts * item.quantity) / totalUnits
+                )
+            : 0;
+
+        allocatedAdditionalCosts += proratedAdditionalCosts;
+
         await inventoryService.addEntry({
           product: item.product,
           quantity: item.quantity,
           unitCost: item.unitCost || undefined,
+          additionalCosts:
+            proratedAdditionalCosts > 0 ? proratedAdditionalCosts : undefined,
           branch: item.branch || undefined,
           provider: item.provider || undefined,
           notes: item.notes || undefined,
@@ -326,6 +366,7 @@ export default function InventoryEntries() {
         provider: "",
         notes: "",
       });
+      setOrderAdditionalCosts("");
       loadData();
     } catch (err: unknown) {
       const message =
@@ -572,6 +613,18 @@ export default function InventoryEntries() {
   };
 
   const entryGroups = groupEntries();
+
+  const cartBaseInvestment = cart.reduce(
+    (sum, item) => sum + item.quantity * item.unitCost,
+    0
+  );
+  const parsedOrderAdditionalCosts = Number(orderAdditionalCosts || 0);
+  const safeOrderAdditionalCosts =
+    Number.isFinite(parsedOrderAdditionalCosts) &&
+    parsedOrderAdditionalCosts > 0
+      ? parsedOrderAdditionalCosts
+      : 0;
+  const cartFinancialTotal = cartBaseInvestment + safeOrderAdditionalCosts;
 
   const toggleGroup = (groupId: string) => {
     setExpandedGroups(prev => {
@@ -1102,6 +1155,25 @@ export default function InventoryEntries() {
                     />
                   </div>
 
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300">
+                      Costos Adicionales del Pedido
+                    </label>
+                    <input
+                      type="number"
+                      value={orderAdditionalCosts}
+                      onChange={e => setOrderAdditionalCosts(e.target.value)}
+                      min="0"
+                      step="1"
+                      placeholder="Ej: 180000 (flete, seguros, impuestos)"
+                      className="mt-1 w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-2.5 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Este valor se prorratea automaticamente por cantidad en el
+                      carrito.
+                    </p>
+                  </div>
+
                   <button
                     type="button"
                     onClick={handleAddToCart}
@@ -1190,13 +1262,19 @@ export default function InventoryEntries() {
                     <p className="text-sm text-gray-400">
                       Total inversión:{" "}
                       <span className="font-semibold text-green-400">
-                        $
-                        {cart
-                          .reduce(
-                            (sum, item) => sum + item.quantity * item.unitCost,
-                            0
-                          )
-                          .toLocaleString()}
+                        ${cartBaseInvestment.toLocaleString()}
+                      </span>
+                    </p>
+                    <p className="text-sm text-gray-400">
+                      Costos adicionales:{" "}
+                      <span className="font-semibold text-amber-300">
+                        ${safeOrderAdditionalCosts.toLocaleString()}
+                      </span>
+                    </p>
+                    <p className="text-sm text-gray-400">
+                      Total financiero:{" "}
+                      <span className="font-semibold text-cyan-300">
+                        ${cartFinancialTotal.toLocaleString()}
                       </span>
                     </p>
                   </div>

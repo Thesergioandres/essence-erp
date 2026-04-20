@@ -1,8 +1,24 @@
+import mongoose from "mongoose";
+import InventoryCalculationService from "../../../domain/services/InventoryCalculationService.js";
 import Branch from "../models/Branch.js";
 import BranchStock from "../models/BranchStock.js";
 import InventoryEntry from "../models/InventoryEntry.js";
 import Product from "../models/Product.js";
 import Provider from "../models/Provider.js";
+
+const TRANSACTION_UNSUPPORTED_PATTERNS = [
+  "Transaction numbers are only allowed",
+  "Transaction is not supported",
+  "replica set member",
+  "not a mongos",
+];
+
+const isTransactionUnsupportedError = (error) => {
+  const message = String(error?.message || "");
+  return TRANSACTION_UNSUPPORTED_PATTERNS.some((pattern) =>
+    message.includes(pattern),
+  );
+};
 
 class InventoryRepository {
   async createEntry(businessId, data, userId) {
@@ -13,104 +29,174 @@ class InventoryRepository {
       provider: providerId,
       notes,
       unitCost: rawUnitCost,
+      additionalCosts,
     } = data;
 
-    const product = await Product.findOne({
-      _id: productId,
-      business: businessId,
-    });
-    if (!product) throw new Error("Producto no encontrado");
-
-    let branch = null;
-    if (branchId) {
-      branch = await Branch.findOne({ _id: branchId, business: businessId });
-      if (!branch) throw new Error("Sede inválida");
+    const qty = Number(quantity);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      const error = new Error("Cantidad invalida");
+      error.statusCode = 400;
+      throw error;
     }
 
-    if (providerId) {
-      const provider = await Provider.findOne({
-        _id: providerId,
+    const runCreateEntry = async (session = null) => {
+      const productQuery = Product.findOne({
+        _id: productId,
         business: businessId,
       });
-      if (!provider) throw new Error("Proveedor no encontrado");
-    }
+      const product = session
+        ? await productQuery.session(session)
+        : await productQuery;
 
-    const destination = branch ? "branch" : "warehouse";
-    const qty = Number(quantity);
-    if (Number.isNaN(qty) || qty <= 0) throw new Error("Cantidad inválida");
+      if (!product) {
+        const error = new Error("Producto no encontrado");
+        error.statusCode = 404;
+        throw error;
+      }
 
-    const currentCost = product.averageCost || product.purchasePrice || 0;
-    const unitCost = Number(rawUnitCost) > 0 ? Number(rawUnitCost) : currentCost;
-    const totalCost = qty * unitCost;
+      let branch = null;
+      if (branchId) {
+        const branchQuery = Branch.findOne({
+          _id: branchId,
+          business: businessId,
+        });
+        branch = session
+          ? await branchQuery.session(session)
+          : await branchQuery;
 
-    const previousStock = product.totalStock || 0;
-    const previousValue =
-      product.totalInventoryValue && product.totalInventoryValue > 0
-        ? product.totalInventoryValue
-        : previousStock * currentCost;
+        if (!branch) {
+          const error = new Error("Sede invalida");
+          error.statusCode = 404;
+          throw error;
+        }
+      }
 
-    const newTotalStock = previousStock + qty;
-    const usesFixedCosting = product.costingMethod === "fixed";
-    const newTotalValue = usesFixedCosting
-      ? newTotalStock * currentCost
-      : previousValue + totalCost;
-    const newAverageCost = usesFixedCosting
-      ? currentCost
-      : newTotalStock > 0
-        ? newTotalValue / newTotalStock
-        : unitCost;
+      if (providerId) {
+        const providerQuery = Provider.findOne({
+          _id: providerId,
+          business: businessId,
+        });
+        const provider = session
+          ? await providerQuery.session(session)
+          : await providerQuery;
 
-    product.totalStock = newTotalStock;
-    product.totalInventoryValue = newTotalValue;
-    product.averageCost = newAverageCost;
-    product.lastCostUpdate = new Date();
+        if (!provider) {
+          const error = new Error("Proveedor no encontrado");
+          error.statusCode = 404;
+          throw error;
+        }
+      }
 
-    if (destination === "branch") {
-      await BranchStock.findOneAndUpdate(
-        { business: businessId, branch: branch._id, product: product._id },
-        { $inc: { quantity: qty } },
-        { upsert: true, new: true, setDefaultsOnInsert: true },
-      );
-    } else {
-      product.warehouseStock = (product.warehouseStock || 0) + qty;
-    }
+      const destination = branch ? "branch" : "warehouse";
+      const currentAverageCost =
+        product.averageCost || product.purchasePrice || 0;
 
-    await product.save({ validateBeforeSave: false });
+      const costCalculation =
+        InventoryCalculationService.calculateWeightedEntryCost({
+          previousStock: product.totalStock || 0,
+          previousAverageCost: currentAverageCost,
+          incomingQuantity: qty,
+          incomingUnitCost:
+            Number(rawUnitCost) > 0 ? Number(rawUnitCost) : currentAverageCost,
+          additionalCosts,
+          costingMethod: product.costingMethod || "average",
+        });
 
-    const requestId =
-      data.requestId ||
-      `REQ-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const entry = await InventoryEntry.create({
-      business: businessId,
-      branch: branch?._id || null,
-      product: product._id,
-      provider: providerId || null,
-      user: userId,
-      quantity: qty,
-      unitCost,
-      totalCost,
-      averageCostAfter: newAverageCost,
-      notes,
-      destination,
-      requestId,
-      purchaseGroupId: data.purchaseGroupId || null,
-      metadata: {
-        previousAverageCost: previousStock > 0 ? previousValue / previousStock : currentCost,
-        costingMethod: product.costingMethod || "average",
-      },
-    });
+      product.totalStock = costCalculation.newTotalStock;
+      product.totalInventoryValue = costCalculation.newTotalInventoryValue;
+      product.averageCost = costCalculation.newAverageCost;
+      product.lastCostUpdate = new Date();
 
-    return {
-      entry,
-      costInfo: {
-        previousAverageCost:
-          previousStock > 0
-            ? previousValue / previousStock
-            : product.purchasePrice,
-        newAverageCost,
-        totalInventoryValue: newTotalValue,
-      },
+      if (destination === "branch") {
+        const branchStockOptions = {
+          upsert: true,
+          new: true,
+          setDefaultsOnInsert: true,
+          ...(session ? { session } : {}),
+        };
+
+        await BranchStock.findOneAndUpdate(
+          { business: businessId, branch: branch._id, product: product._id },
+          { $inc: { quantity: qty } },
+          branchStockOptions,
+        );
+      } else {
+        product.warehouseStock = (product.warehouseStock || 0) + qty;
+      }
+
+      await product.save({
+        validateBeforeSave: false,
+        ...(session ? { session } : {}),
+      });
+
+      const requestId =
+        data.requestId ||
+        `REQ-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+      const entryPayload = {
+        business: businessId,
+        branch: branch?._id || null,
+        product: product._id,
+        provider: providerId || null,
+        user: userId,
+        quantity: qty,
+        unitCost: costCalculation.weightedUnitCost,
+        totalCost: costCalculation.totalEntryCost,
+        averageCostAfter: costCalculation.newAverageCost,
+        notes,
+        destination,
+        requestId,
+        purchaseGroupId: data.purchaseGroupId || null,
+        metadata: {
+          previousAverageCost: costCalculation.previousAverageCost,
+          costingMethod: product.costingMethod || "average",
+          baseUnitCost: costCalculation.baseUnitCost,
+          baseTotalCost: costCalculation.baseTotalCost,
+          additionalCostsTotal: costCalculation.additionalCostsTotal,
+          additionalCosts: costCalculation.additionalCostsBreakdown,
+        },
+      };
+
+      let entry = null;
+      if (session) {
+        const [createdEntry] = await InventoryEntry.create([entryPayload], {
+          session,
+        });
+        entry = createdEntry;
+      } else {
+        entry = await InventoryEntry.create(entryPayload);
+      }
+
+      return {
+        entry,
+        costInfo: {
+          previousAverageCost: costCalculation.previousAverageCost,
+          newAverageCost: costCalculation.newAverageCost,
+          totalInventoryValue: costCalculation.newTotalInventoryValue,
+          additionalCostsTotal: costCalculation.additionalCostsTotal,
+        },
+      };
     };
+
+    const session = await mongoose.startSession();
+    try {
+      session.startTransaction();
+      const result = await runCreateEntry(session);
+      await session.commitTransaction();
+      return result;
+    } catch (error) {
+      if (session.inTransaction()) {
+        await session.abortTransaction();
+      }
+
+      if (isTransactionUnsupportedError(error)) {
+        return runCreateEntry();
+      }
+
+      throw error;
+    } finally {
+      session.endSession();
+    }
   }
 
   async listEntries(businessId, filters, page, limit) {

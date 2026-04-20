@@ -258,69 +258,61 @@ export default function ContractsPage() {
     }
   };
 
-  const exportApaPdf = (contract: ContractRecord) => {
+  const exportToPDF = (contract: ContractRecord) => {
     const doc = new jsPDF({ unit: "pt", format: "a4" });
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
-    const margin = 72; // 2.54cm
-    const maxWidth = pageWidth - margin * 2;
-    const lineHeight = 24; // doble espacio APA
 
-    let cursorY = margin;
+    const APA_MARGIN = 72; // 2.54 cm
+    const APA_FONT_SIZE = 12;
+    const APA_LINE_HEIGHT = 24; // interlineado 2.0
+    const maxWidth = pageWidth - APA_MARGIN * 2;
+
+    let cursorY = APA_MARGIN;
     let pageNumber = 1;
+
+    const getImageType = (imageData: string): "PNG" | "JPEG" => {
+      if (String(imageData || "").startsWith("data:image/jpeg")) {
+        return "JPEG";
+      }
+      return "PNG";
+    };
 
     const paintHeader = () => {
       doc.setFont("times", "normal");
-      doc.setFontSize(12);
-      doc.text(String(pageNumber), pageWidth - margin, 40, { align: "right" });
+      doc.setFontSize(APA_FONT_SIZE);
+      doc.text(String(pageNumber), pageWidth - APA_MARGIN, 42, {
+        align: "right",
+      });
     };
 
     const ensureSpace = (neededHeight: number) => {
-      if (cursorY + neededHeight <= pageHeight - margin) {
+      if (cursorY + neededHeight <= pageHeight - APA_MARGIN) {
         return;
       }
 
       doc.addPage();
       pageNumber += 1;
       paintHeader();
-      cursorY = margin;
+      cursorY = APA_MARGIN;
     };
 
-    paintHeader();
-
-    doc.setFont("times", "bold");
-    doc.setFontSize(12);
-    doc.text(
-      String(contract.title || "CONTRATO").toUpperCase(),
-      pageWidth / 2,
-      cursorY,
-      {
-        align: "center",
+    const writeParagraph = (text: string) => {
+      const normalizedText = String(text || "").trim();
+      if (!normalizedText) {
+        return;
       }
-    );
-    cursorY += lineHeight * 2;
 
-    doc.setFont("times", "normal");
-    const contentLines = doc.splitTextToSize(contract.content || "", maxWidth);
-    for (const line of contentLines) {
-      ensureSpace(lineHeight);
-      doc.text(line, margin, cursorY);
-      cursorY += lineHeight;
-    }
+      const lines = doc.splitTextToSize(normalizedText, maxWidth);
+      for (const line of lines) {
+        ensureSpace(APA_LINE_HEIGHT);
+        doc.text(line, APA_MARGIN, cursorY);
+        cursorY += APA_LINE_HEIGHT;
+      }
+      cursorY += APA_LINE_HEIGHT;
+    };
 
-    cursorY += lineHeight;
-    ensureSpace(lineHeight * 4);
-
-    doc.text(`Firmado por: ${resolveSignerName(contract)}`, margin, cursorY);
-    cursorY += lineHeight;
-    doc.text(
-      `Fecha de firma: ${new Date(contract.signedAt).toLocaleString("es-CO")}`,
-      margin,
-      cursorY
-    );
-    cursorY += lineHeight;
-
-    const renderImage = (
+    const writeImageBlock = (
       label: string,
       imageData: string,
       width: number,
@@ -330,15 +322,60 @@ export default function ContractsPage() {
         return;
       }
 
-      ensureSpace(height + lineHeight * 2);
-      doc.text(label, margin, cursorY);
-      cursorY += lineHeight;
-      doc.addImage(imageData, "PNG", margin, cursorY, width, height);
-      cursorY += height + lineHeight;
+      ensureSpace(APA_LINE_HEIGHT + height + APA_LINE_HEIGHT);
+      doc.setFont("times", "bold");
+      doc.text(label, APA_MARGIN, cursorY);
+      doc.setFont("times", "normal");
+      cursorY += APA_LINE_HEIGHT;
+      doc.addImage(
+        imageData,
+        getImageType(imageData),
+        APA_MARGIN,
+        cursorY,
+        width,
+        height
+      );
+      cursorY += height + APA_LINE_HEIGHT;
     };
 
-    renderImage("Firma digital:", contract.signatureData, 180, 80);
-    renderImage("Registro fotografico:", contract.photoData, 180, 120);
+    paintHeader();
+
+    doc.setFont("times", "normal");
+    doc.setFontSize(APA_FONT_SIZE);
+
+    doc.setFont("times", "bold");
+    doc.text(
+      String(contract.title || "CONTRATO").toUpperCase(),
+      pageWidth / 2,
+      cursorY,
+      {
+        align: "center",
+      }
+    );
+    cursorY += APA_LINE_HEIGHT * 2;
+    doc.setFont("times", "normal");
+
+    const contentParagraphs = String(contract.content || "")
+      .split(/\n+/)
+      .map(paragraph => paragraph.trim())
+      .filter(Boolean);
+
+    if (contentParagraphs.length === 0) {
+      writeParagraph("Sin contenido contractual.");
+    } else {
+      contentParagraphs.forEach(paragraph => writeParagraph(paragraph));
+    }
+
+    const signedAtDate = new Date(contract.signedAt);
+    const signedAtLabel = Number.isNaN(signedAtDate.getTime())
+      ? "No disponible"
+      : signedAtDate.toLocaleString("es-CO");
+
+    writeParagraph(`Firmado por: ${resolveSignerName(contract)}`);
+    writeParagraph(`Fecha de firma: ${signedAtLabel}`);
+
+    writeImageBlock("Firma digital", contract.signatureData, 180, 80);
+    writeImageBlock("Registro fotografico", contract.photoData, 180, 120);
 
     const safeTitle =
       contract.title
@@ -425,7 +462,7 @@ export default function ContractsPage() {
           <div className="flex flex-wrap gap-2">
             {selectedContract && (
               <Button
-                onClick={() => exportApaPdf(selectedContract)}
+                onClick={() => exportToPDF(selectedContract)}
                 className="min-h-11 rounded-xl border border-slate-600 bg-slate-800 px-3 text-slate-100 hover:bg-slate-700"
               >
                 <Download className="mr-2 h-4 w-4" />

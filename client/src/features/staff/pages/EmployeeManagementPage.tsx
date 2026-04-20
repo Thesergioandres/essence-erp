@@ -1,5 +1,5 @@
-import { Activity, Lock, RefreshCw, Save, Search, Users } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Activity, Lock, RefreshCw, Search, Users } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useBusiness } from "../../../context/BusinessContext";
 import { Button, LoadingSpinner, toast } from "../../../shared/components/ui";
 import { staffService } from "../services";
@@ -41,6 +41,9 @@ export default function EmployeeManagementPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [savingRowId, setSavingRowId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const autoSaveTimersRef = useRef<
+    Record<string, ReturnType<typeof setTimeout>>
+  >({});
 
   const businessId = business?._id;
 
@@ -76,6 +79,16 @@ export default function EmployeeManagementPage() {
   useEffect(() => {
     loadRows("initial");
   }, [businessId]);
+
+  useEffect(
+    () => () => {
+      Object.values(autoSaveTimersRef.current).forEach(timer => {
+        clearTimeout(timer);
+      });
+      autoSaveTimersRef.current = {};
+    },
+    []
+  );
 
   const filteredRows = useMemo(() => {
     const normalizedSearchTerm = normalizeText(searchTerm);
@@ -117,12 +130,36 @@ export default function EmployeeManagementPage() {
     }));
   };
 
-  const saveRate = async (row: StaffMemberRow) => {
-    const rawValue = draftRates[row.employeeId];
+  const clearAutoSaveTimer = (employeeId: string) => {
+    const timer = autoSaveTimersRef.current[employeeId];
+    if (!timer) {
+      return;
+    }
+
+    clearTimeout(timer);
+    delete autoSaveTimersRef.current[employeeId];
+  };
+
+  const saveRate = async (
+    employeeId: string,
+    options: { rawValue?: string; notifyOnInvalid?: boolean } = {}
+  ) => {
+    const row = rows.find(item => item.employeeId === employeeId);
+    if (!row) {
+      return;
+    }
+
+    const rawValue = options.rawValue ?? draftRates[employeeId];
+    if (String(rawValue ?? "").trim() === "") {
+      return;
+    }
+
     const parsedRate = Number(rawValue);
 
     if (!Number.isFinite(parsedRate) || parsedRate < 0 || parsedRate > 95) {
-      toast.error("La comision base debe estar entre 0 y 95");
+      if (options.notifyOnInvalid !== false) {
+        toast.error("La comision base debe estar entre 0 y 95");
+      }
       return;
     }
 
@@ -133,15 +170,15 @@ export default function EmployeeManagementPage() {
     }
 
     try {
-      setSavingRowId(row.employeeId);
+      setSavingRowId(employeeId);
       const updatedRate = await staffService.updateBaseCommissionPercentage(
-        row.employeeId,
+        employeeId,
         parsedRate
       );
 
       setRows(previous =>
         previous.map(item =>
-          item.employeeId === row.employeeId
+          item.employeeId === employeeId
             ? {
                 ...item,
                 baseCommissionPercentage: updatedRate,
@@ -152,10 +189,8 @@ export default function EmployeeManagementPage() {
 
       setDraftRates(previous => ({
         ...previous,
-        [row.employeeId]: String(updatedRate),
+        [employeeId]: String(updatedRate),
       }));
-
-      toast.success(`Comision base actualizada para ${row.name}`);
     } catch (error: any) {
       toast.error(
         error?.response?.data?.message ||
@@ -164,6 +199,23 @@ export default function EmployeeManagementPage() {
     } finally {
       setSavingRowId(null);
     }
+  };
+
+  const scheduleRateAutoSave = (employeeId: string, value: string) => {
+    clearAutoSaveTimer(employeeId);
+
+    autoSaveTimersRef.current[employeeId] = setTimeout(() => {
+      void saveRate(employeeId, {
+        rawValue: value,
+        notifyOnInvalid: false,
+      });
+      clearAutoSaveTimer(employeeId);
+    }, 650);
+  };
+
+  const flushRateSave = (employeeId: string) => {
+    clearAutoSaveTimer(employeeId);
+    void saveRate(employeeId, { notifyOnInvalid: true });
   };
 
   if (loading) {
@@ -256,13 +308,19 @@ export default function EmployeeManagementPage() {
                 <th className="px-4 py-3">Estado</th>
                 <th className="px-4 py-3">Comision base %</th>
                 <th className="px-4 py-3">Politica</th>
-                <th className="px-4 py-3 text-right">Accion</th>
+                <th className="px-4 py-3 text-right">Sync</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/90 text-slate-200">
               {filteredRows.map(row => {
                 const isSaving = savingRowId === row.employeeId;
                 const isRateLocked = row.isCommissionFixed;
+                const draftValue = Number(draftRates[row.employeeId]);
+                const hasPendingChanges =
+                  Number.isFinite(draftValue) &&
+                  Math.abs(
+                    draftValue - Number(row.baseCommissionPercentage || 0)
+                  ) >= 0.001;
 
                 return (
                   <tr
@@ -293,9 +351,18 @@ export default function EmployeeManagementPage() {
                       <div className="flex min-h-11 w-36 items-center rounded-xl border border-slate-700 bg-slate-900/70 px-2">
                         <input
                           value={draftRates[row.employeeId] ?? ""}
-                          onChange={event =>
-                            handleRateChange(row.employeeId, event.target.value)
-                          }
+                          onChange={event => {
+                            const nextValue = event.target.value;
+                            handleRateChange(row.employeeId, nextValue);
+                            scheduleRateAutoSave(row.employeeId, nextValue);
+                          }}
+                          onBlur={() => flushRateSave(row.employeeId)}
+                          onKeyDown={event => {
+                            if (event.key === "Enter") {
+                              event.preventDefault();
+                              flushRateSave(row.employeeId);
+                            }
+                          }}
                           type="number"
                           min={0}
                           max={95}
@@ -320,14 +387,19 @@ export default function EmployeeManagementPage() {
                       )}
                     </td>
                     <td className="px-4 py-4 text-right align-middle">
-                      <Button
-                        onClick={() => saveRate(row)}
-                        disabled={isSaving}
-                        className="min-h-11 rounded-xl border border-cyan-300/40 bg-cyan-500/15 px-3 text-cyan-100 hover:bg-cyan-500/25"
-                      >
-                        <Save className="mr-2 h-4 w-4" />
-                        {isSaving ? "Guardando..." : "Guardar"}
-                      </Button>
+                      {isSaving ? (
+                        <span className="inline-flex min-h-11 items-center rounded-xl border border-cyan-300/40 bg-cyan-500/15 px-3 text-xs text-cyan-100">
+                          Guardando...
+                        </span>
+                      ) : hasPendingChanges ? (
+                        <span className="inline-flex min-h-11 items-center rounded-xl border border-amber-300/35 bg-amber-500/15 px-3 text-xs text-amber-100">
+                          Pendiente...
+                        </span>
+                      ) : (
+                        <span className="inline-flex min-h-11 items-center rounded-xl border border-emerald-300/35 bg-emerald-500/15 px-3 text-xs text-emerald-100">
+                          Sin cambios
+                        </span>
+                      )}
                     </td>
                   </tr>
                 );
