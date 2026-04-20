@@ -48,6 +48,7 @@ export class LoginUseCase {
     const memberships = user._doc?.memberships || user.memberships || [];
     const primaryMembership = memberships[0];
     const businessId = primaryMembership?.business?._id || null;
+    const isGod = user.role === "god";
 
     // 4. Generate Token
     const token = jwtTokenService.generateAccessToken(
@@ -67,9 +68,9 @@ export class LoginUseCase {
       name: user.name,
       email: user.email,
       role: user.role,
-      status: user.status,
-      active: user.active,
-      subscriptionExpiresAt: user.subscriptionExpiresAt,
+      status: isGod ? "active" : user.status,
+      active: isGod ? true : user.active,
+      subscriptionExpiresAt: isGod ? null : user.subscriptionExpiresAt,
       memberships, // 🔑 Frontend needs this to know user has businesses
       token,
       refreshToken,

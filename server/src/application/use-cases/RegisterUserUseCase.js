@@ -8,8 +8,7 @@ export class RegisterUserUseCase {
   }
 
   async execute(userData) {
-    const { name, email, password, role, businessId, phone, address } =
-      userData;
+    const { name, email, password, businessId, phone, address } = userData;
 
     if (!name || !email || !password) {
       throw new Error("Missing required fields: name, email, password");
@@ -26,10 +25,10 @@ export class RegisterUserUseCase {
 
     // 3. Count documents in User collection (Rule 1 & 2)
     const userCount = await this.userRepository.count();
-    const isGenesis = userCount === 0;
+    const isFirstUser = userCount === 0;
 
-    const assignedRole = isGenesis ? "god" : "super_admin";
-    const assignedStatus = isGenesis ? "active" : "pending";
+    const assignedRole = isFirstUser ? "god" : "super_admin";
+    const assignedStatus = isFirstUser ? "active" : "pending";
 
     // 4. Create User (Identity)
     // We assume Business check happens in Controller or Request Validation
@@ -65,6 +64,7 @@ export class RegisterUserUseCase {
       name: newUser.name,
       email: newUser.email,
       role: newUser.role,
+      isFirstUser,
       status: newUser.status,
       active: newUser.active,
       subscriptionExpiresAt: newUser.subscriptionExpiresAt,

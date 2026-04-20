@@ -18,6 +18,8 @@ export default function ProtectedRoute({
   const selectedBusinessId = localStorage.getItem("businessId");
   const { user: sessionUser, loading } = useSession();
   const user = sessionUser || authService.getCurrentUser();
+  const normalizedUserRole = normalizeEmployeeRole(user?.role);
+  const isGodUser = normalizedUserRole === "god";
 
   const activeMembershipRole =
     user?.memberships?.find(membership => {
@@ -36,9 +38,9 @@ export default function ProtectedRoute({
       );
     })?.role || null;
 
-  const effectiveRole = normalizeEmployeeRole(
-    activeMembershipRole || user?.role
-  );
+  const effectiveRole = isGodUser
+    ? "god"
+    : normalizeEmployeeRole(activeMembershipRole || normalizedUserRole);
 
   const operativoAdminToEmployeeMap: Record<string, string> = {
     "/admin/stock-management": "/staff/operativo/stock-management",
@@ -70,7 +72,7 @@ export default function ProtectedRoute({
     },
   ];
 
-  if (effectiveRole === "employee") {
+  if (!isGodUser && effectiveRole === "employee") {
     const employeeOperativoTarget =
       operativoAdminToEmployeeMap[location.pathname];
 
@@ -107,7 +109,7 @@ export default function ProtectedRoute({
   }
 
   // Si el usuario está pending, solo permitir acceso a account-hold
-  if (user.status === "pending") {
+  if (!isGodUser && user.status === "pending") {
     return (
       <Navigate
         to="/account-hold"
@@ -118,12 +120,11 @@ export default function ProtectedRoute({
   }
 
   const isExpired =
+    !isGodUser &&
     user.subscriptionExpiresAt &&
     new Date(user.subscriptionExpiresAt) < new Date();
 
-  const normalizedUserRole = normalizeEmployeeRole(user.role);
-
-  if (normalizedUserRole !== "god" && (user.status !== "active" || isExpired)) {
+  if (!isGodUser && (user.status !== "active" || isExpired)) {
     const reason = isExpired ? "expired" : user.status;
     return (
       <Navigate to="/account-hold" replace state={{ from: location, reason }} />
@@ -132,7 +133,11 @@ export default function ProtectedRoute({
 
   // If specific roles are required, check if user has the right role
   if (allowedRoles && allowedRoles.length > 0) {
-    if (!effectiveRole || !allowedRoles.includes(effectiveRole)) {
+    const normalizedAllowedRoles = allowedRoles.map(role =>
+      normalizeEmployeeRole(role)
+    );
+
+    if (!effectiveRole || !normalizedAllowedRoles.includes(effectiveRole)) {
       // Redirect to appropriate dashboard based on user's actual role
       const targetPath =
         effectiveRole === "employee"

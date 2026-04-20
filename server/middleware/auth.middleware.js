@@ -64,6 +64,12 @@ export const protect = async (req, res, next) => {
         hideFinancialData: user.hideFinancialData === true,
       };
 
+      if (user.role === "god") {
+        req.user.status = "active";
+        req.user.active = true;
+        req.user.subscriptionExpiresAt = null;
+      }
+
       // En entorno de pruebas no bloquear por estado/expiración
       if (process.env.NODE_ENV === "test") {
         req.user.status = "active";
@@ -214,6 +220,8 @@ export const protectAllowPending = async (req, res, next) => {
       // Si es god, siempre activo
       if (user.role === "god") {
         req.user.status = "active";
+        req.user.active = true;
+        req.user.subscriptionExpiresAt = null;
       }
 
       next();

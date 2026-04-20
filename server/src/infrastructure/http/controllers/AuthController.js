@@ -11,6 +11,19 @@ import {
 
 const userRepository = new UserPersistenceUseCase();
 
+const normalizeGodSessionState = (user) => {
+  if (!user || user.role !== "god") {
+    return user;
+  }
+
+  return {
+    ...user,
+    status: "active",
+    active: true,
+    subscriptionExpiresAt: null,
+  };
+};
+
 /**
  * Get current user profile
  */
@@ -26,7 +39,9 @@ export const getProfile = async (req, res) => {
         .status(404)
         .json({ success: false, message: "Usuario no encontrado" });
     }
-    res.json({ success: true, data: user });
+
+    const normalizedUser = normalizeGodSessionState(user);
+    res.json({ success: true, data: normalizedUser });
   } catch (error) {
     console.error("❌ CRITICAL ERROR in getProfile:", error);
     console.error("Stack:", error.stack);
@@ -121,11 +136,13 @@ export const refreshAccessToken = async (req, res) => {
       businessId,
     );
 
+    const normalizedUser = normalizeGodSessionState(user);
+
     return res.json({
       token,
       refreshToken: nextRefreshToken,
       refreshExpiresAt: jwtTokenService.getTokenExpirationIso(nextRefreshToken),
-      user,
+      user: normalizedUser,
     });
   } catch (error) {
     return res.status(500).json({ message: error.message });
@@ -320,18 +337,20 @@ export const revertImpersonation = async (req, res) => {
       businessId,
     );
 
+    const normalizedAdminUser = normalizeGodSessionState(adminUser);
+
     return res.json({
       success: true,
       message: "Sesión de administrador restaurada",
       token: restoredToken,
       user: {
-        _id: adminUser._id,
-        name: adminUser.name,
-        email: adminUser.email,
-        role: adminUser.role,
-        status: adminUser.status,
-        active: adminUser.active,
-        subscriptionExpiresAt: adminUser.subscriptionExpiresAt,
+        _id: normalizedAdminUser._id,
+        name: normalizedAdminUser.name,
+        email: normalizedAdminUser.email,
+        role: normalizedAdminUser.role,
+        status: normalizedAdminUser.status,
+        active: normalizedAdminUser.active,
+        subscriptionExpiresAt: normalizedAdminUser.subscriptionExpiresAt,
         memberships,
       },
     });
