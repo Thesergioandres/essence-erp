@@ -23,6 +23,12 @@ router.put(
   (req, res) => EmployeeScheduleController.saveMySchedule(req, res),
 );
 
+router.post(
+  "/availability",
+  requireRole(["employee", "admin", "super_admin"]),
+  (req, res) => EmployeeScheduleController.saveMyAvailability(req, res),
+);
+
 router.get("/overview", requireRole(["admin", "super_admin"]), (req, res) =>
   EmployeeScheduleController.getBranchOverview(req, res),
 );

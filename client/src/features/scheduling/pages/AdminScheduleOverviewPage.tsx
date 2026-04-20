@@ -6,48 +6,75 @@ import type { Branch } from "../../business/types/business.types";
 import { scheduleService } from "../services";
 import type {
   EmployeeScheduleEntry,
-  ScheduleDay,
+  ScheduleDayOfWeek,
+  ScheduleOverviewEmployee,
   ScheduleOverviewResponse,
 } from "../types/schedule.types";
 
-const DAYS: Array<{ key: ScheduleDay; label: string }> = [
-  { key: "monday", label: "Lunes" },
-  { key: "tuesday", label: "Martes" },
-  { key: "wednesday", label: "Miercoles" },
-  { key: "thursday", label: "Jueves" },
-  { key: "friday", label: "Viernes" },
-  { key: "saturday", label: "Sabado" },
-  { key: "sunday", label: "Domingo" },
+const DAYS: Array<{ key: ScheduleDayOfWeek; label: string }> = [
+  { key: 0, label: "Lunes" },
+  { key: 1, label: "Martes" },
+  { key: 2, label: "Miercoles" },
+  { key: 3, label: "Jueves" },
+  { key: 4, label: "Viernes" },
+  { key: 5, label: "Sabado" },
+  { key: 6, label: "Domingo" },
 ];
 
-const getEmployeeName = (entry: EmployeeScheduleEntry) => {
-  if (typeof entry.employeeId === "string") {
-    return "Colaborador";
-  }
-
-  return entry.employeeId?.name || "Colaborador";
-};
-
-const getBranchName = (entry: EmployeeScheduleEntry) => {
-  if (typeof entry.sedeId === "string") {
-    return "Sede";
-  }
-
-  return entry.sedeId?.name || "Sede";
-};
+const DAY_KEYS: ScheduleDayOfWeek[] = [0, 1, 2, 3, 4, 5, 6];
 
 const buildEmptyOverview = (): ScheduleOverviewResponse => ({
   schedules: [],
   groupedByDay: {
-    monday: [],
-    tuesday: [],
-    wednesday: [],
-    thursday: [],
-    friday: [],
-    saturday: [],
-    sunday: [],
+    0: [],
+    1: [],
+    2: [],
+    3: [],
+    4: [],
+    5: [],
+    6: [],
   },
   total: 0,
+  employees: [],
+});
+
+const isKnownDay = (value: number): value is ScheduleDayOfWeek =>
+  DAY_KEYS.includes(value as ScheduleDayOfWeek);
+
+const toEmployeeSummary = (
+  entry: EmployeeScheduleEntry
+): ScheduleOverviewEmployee => {
+  if (typeof entry.employeeId === "string") {
+    return {
+      _id: entry.employeeId,
+      name: "Colaborador",
+      email: "",
+    };
+  }
+
+  return {
+    _id: entry.employeeId?._id || "unknown",
+    name: entry.employeeId?.name || "Colaborador",
+    email: entry.employeeId?.email || "",
+  };
+};
+
+const getEmployeeId = (entry: EmployeeScheduleEntry) =>
+  typeof entry.employeeId === "string"
+    ? entry.employeeId
+    : entry.employeeId?._id || "unknown";
+
+const buildEmptyCells = (): Record<
+  ScheduleDayOfWeek,
+  EmployeeScheduleEntry[]
+> => ({
+  0: [],
+  1: [],
+  2: [],
+  3: [],
+  4: [],
+  5: [],
+  6: [],
 });
 
 export default function AdminScheduleOverviewPage() {
@@ -57,6 +84,17 @@ export default function AdminScheduleOverviewPage() {
     useState<ScheduleOverviewResponse>(buildEmptyOverview);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [lastLoadedBranchId, setLastLoadedBranchId] = useState<string | null>(
+    null
+  );
+
+  const fetchOverview = async (branchId: string) => {
+    const data = await scheduleService.getOverview(
+      branchId ? { sedeId: branchId } : undefined
+    );
+    setOverview(data);
+    setLastLoadedBranchId(branchId || "");
+  };
 
   const loadData = async (mode: "initial" | "refresh" = "initial") => {
     if (mode === "refresh") {
@@ -74,10 +112,7 @@ export default function AdminScheduleOverviewPage() {
         setSelectedBranchId(fallbackBranch);
       }
 
-      const data = await scheduleService.getOverview(
-        fallbackBranch ? { sedeId: fallbackBranch } : undefined
-      );
-      setOverview(data);
+      await fetchOverview(fallbackBranch);
     } catch (error: any) {
       toast.error(
         error?.response?.data?.message || "No se pudo cargar el calendario"
@@ -93,16 +128,17 @@ export default function AdminScheduleOverviewPage() {
   }, []);
 
   useEffect(() => {
-    if (!selectedBranchId || loading) {
+    if (loading) {
+      return;
+    }
+
+    if (selectedBranchId === lastLoadedBranchId) {
       return;
     }
 
     const reloadByBranch = async () => {
       try {
-        const data = await scheduleService.getOverview({
-          sedeId: selectedBranchId,
-        });
-        setOverview(data);
+        await fetchOverview(selectedBranchId);
       } catch (error: any) {
         toast.error(
           error?.response?.data?.message ||
@@ -112,19 +148,64 @@ export default function AdminScheduleOverviewPage() {
     };
 
     reloadByBranch();
-  }, [selectedBranchId]);
+  }, [selectedBranchId, loading, lastLoadedBranchId]);
 
-  const totalTeams = useMemo(() => {
-    const uniqueEmployees = new Set(
-      overview.schedules.map(entry =>
-        typeof entry.employeeId === "string"
-          ? entry.employeeId
-          : entry.employeeId?._id
-      )
-    );
+  const employeeRows = useMemo(() => {
+    const employees = overview.employees?.length
+      ? overview.employees
+      : Array.from(
+          new Map(
+            overview.schedules.map(entry => {
+              const employee = toEmployeeSummary(entry);
+              return [employee._id, employee] as const;
+            })
+          ).values()
+        );
 
-    return uniqueEmployees.size;
+    const matrix = new Map<
+      string,
+      Record<ScheduleDayOfWeek, EmployeeScheduleEntry[]>
+    >();
+
+    for (const employee of employees) {
+      matrix.set(employee._id, buildEmptyCells());
+    }
+
+    for (const entry of overview.schedules) {
+      const employeeId = getEmployeeId(entry);
+      const dayOfWeek = Number(entry.dayOfWeek);
+
+      if (!isKnownDay(dayOfWeek)) {
+        continue;
+      }
+
+      if (!matrix.has(employeeId)) {
+        matrix.set(employeeId, buildEmptyCells());
+      }
+
+      matrix.get(employeeId)?.[dayOfWeek].push(entry);
+    }
+
+    for (const row of matrix.values()) {
+      for (const day of DAY_KEYS) {
+        row[day].sort((left, right) =>
+          left.startTime.localeCompare(right.startTime)
+        );
+      }
+    }
+
+    return employees
+      .map(employee => ({
+        employee,
+        cells: matrix.get(employee._id) || buildEmptyCells(),
+      }))
+      .sort((left, right) =>
+        left.employee.name.localeCompare(right.employee.name)
+      );
   }, [overview]);
+
+  const selectedBranchName =
+    branches.find(branch => branch._id === selectedBranchId)?.name || "Todas";
 
   if (loading) {
     return (
@@ -143,13 +224,13 @@ export default function AdminScheduleOverviewPage() {
           <div>
             <p className="inline-flex items-center gap-2 rounded-full border border-cyan-300/30 bg-cyan-400/10 px-3 py-1 text-xs font-semibold tracking-wide text-cyan-200">
               <CalendarRange className="h-4 w-4" />
-              Vision Operativa
+              Matriz Consolidada
             </p>
             <h1 className="mt-3 text-2xl font-semibold text-white sm:text-3xl">
-              Horarios del Equipo por Sede
+              Disponibilidad del Equipo
             </h1>
             <p className="mt-2 text-sm text-slate-300 sm:text-base">
-              Vista consolidada para coordinacion semanal y cobertura por dia.
+              Filtra por sede y visualiza cobertura semanal por colaborador.
             </p>
           </div>
 
@@ -168,7 +249,7 @@ export default function AdminScheduleOverviewPage() {
         <div className="mt-6 grid gap-3 sm:grid-cols-3">
           <article className="rounded-2xl border border-white/10 bg-white/5 p-4">
             <p className="text-xs uppercase tracking-wide text-slate-400">
-              Turnos
+              Bloques
             </p>
             <p className="mt-1 text-2xl font-semibold text-white">
               {overview.total}
@@ -179,7 +260,7 @@ export default function AdminScheduleOverviewPage() {
               Colaboradores
             </p>
             <p className="mt-1 text-2xl font-semibold text-cyan-200">
-              {totalTeams}
+              {employeeRows.length}
             </p>
           </article>
           <article className="rounded-2xl border border-white/10 bg-white/5 p-4">
@@ -187,8 +268,7 @@ export default function AdminScheduleOverviewPage() {
               Sede filtrada
             </p>
             <p className="mt-1 text-base font-semibold text-white">
-              {branches.find(branch => branch._id === selectedBranchId)?.name ||
-                "Todas"}
+              {selectedBranchName}
             </p>
           </article>
         </div>
@@ -214,52 +294,89 @@ export default function AdminScheduleOverviewPage() {
         </label>
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-2">
-        {DAYS.map(day => {
-          const items = overview.groupedByDay?.[day.key] || [];
+      <section className="rounded-3xl border border-slate-800 bg-slate-950/90 p-4 shadow-xl sm:p-6">
+        <div className="overflow-x-auto">
+          <table className="min-w-[1000px] table-fixed border-separate border-spacing-y-2">
+            <thead>
+              <tr>
+                <th className="w-56 rounded-l-xl border border-slate-800 bg-slate-900 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-300">
+                  Colaborador
+                </th>
+                {DAYS.map(day => (
+                  <th
+                    key={`head-${day.key}`}
+                    className="border border-slate-800 bg-slate-900 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-300 last:rounded-r-xl"
+                  >
+                    {day.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
 
-          return (
-            <article
-              key={day.key}
-              className="rounded-3xl border border-slate-800 bg-slate-950/90 p-4 shadow-xl transition-all duration-300 hover:border-cyan-500/40 sm:p-5"
-            >
-              <div className="flex items-center justify-between gap-3 border-b border-slate-800 pb-3">
-                <h2 className="text-lg font-semibold text-white">
-                  {day.label}
-                </h2>
-                <span className="rounded-full border border-cyan-300/30 bg-cyan-500/15 px-3 py-1 text-xs text-cyan-100">
-                  {items.length} turnos
-                </span>
-              </div>
-
-              <div className="mt-3 space-y-2">
-                {items.length === 0 ? (
-                  <p className="rounded-xl border border-dashed border-slate-700 bg-slate-900/60 p-3 text-sm text-slate-400">
-                    Sin disponibilidad registrada.
-                  </p>
-                ) : (
-                  items.map(entry => (
-                    <div
-                      key={entry._id}
-                      className="rounded-xl border border-slate-800 bg-slate-900/60 p-3"
-                    >
-                      <p className="inline-flex items-center gap-2 text-sm font-medium text-slate-100">
+            <tbody>
+              {employeeRows.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={DAYS.length + 1}
+                    className="rounded-xl border border-dashed border-slate-700 bg-slate-900/60 px-4 py-8 text-center text-sm text-slate-400"
+                  >
+                    Sin colaboradores o disponibilidad para esta sede.
+                  </td>
+                </tr>
+              ) : (
+                employeeRows.map(row => (
+                  <tr key={`row-${row.employee._id}`}>
+                    <td className="rounded-l-xl border border-slate-800 bg-slate-900/70 px-3 py-3 align-top">
+                      <p className="inline-flex items-center gap-2 text-sm font-semibold text-slate-100">
                         <Users className="h-4 w-4 text-cyan-300" />
-                        {getEmployeeName(entry)}
+                        {row.employee.name}
                       </p>
-                      <p className="mt-1 text-xs text-slate-400">
-                        {getBranchName(entry)}
-                      </p>
-                      <p className="mt-2 text-sm text-cyan-200">
-                        {entry.startTime} - {entry.endTime}
-                      </p>
-                    </div>
-                  ))
-                )}
-              </div>
-            </article>
-          );
-        })}
+                      {row.employee.email && (
+                        <p className="mt-1 text-xs text-slate-400">
+                          {row.employee.email}
+                        </p>
+                      )}
+                    </td>
+
+                    {DAYS.map((day, dayIndex) => {
+                      const entries = row.cells[day.key];
+
+                      return (
+                        <td
+                          key={`cell-${row.employee._id}-${day.key}`}
+                          className={`border border-slate-800 bg-slate-900/60 px-2 py-2 align-top ${
+                            dayIndex === DAYS.length - 1 ? "rounded-r-xl" : ""
+                          }`}
+                        >
+                          {entries.length === 0 ? (
+                            <span className="inline-flex min-h-11 items-center rounded-lg border border-dashed border-slate-700 px-2.5 py-1 text-xs text-slate-500">
+                              -
+                            </span>
+                          ) : (
+                            <div className="flex flex-wrap gap-1.5">
+                              {entries.map(entry => (
+                                <span
+                                  key={entry._id}
+                                  className={`inline-flex min-h-11 items-center rounded-lg px-2.5 py-1 text-xs font-medium ${
+                                    entry.status === "booked"
+                                      ? "border border-amber-300/30 bg-amber-500/15 text-amber-100"
+                                      : "border border-cyan-300/30 bg-cyan-500/15 text-cyan-100"
+                                  }`}
+                                >
+                                  {entry.startTime}-{entry.endTime}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </section>
     </main>
   );

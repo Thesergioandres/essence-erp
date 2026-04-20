@@ -16,11 +16,17 @@ export const scheduleService = {
     return normalizePayload<EmployeeScheduleEntry[]>(response.data);
   },
 
+  async saveAvailability(
+    entries: ScheduleEntryInput[]
+  ): Promise<EmployeeScheduleEntry[]> {
+    const response = await api.post("/schedules/availability", { entries });
+    return normalizePayload<EmployeeScheduleEntry[]>(response.data);
+  },
+
   async saveMySchedule(
     entries: ScheduleEntryInput[]
   ): Promise<EmployeeScheduleEntry[]> {
-    const response = await api.put("/schedules/me", { entries });
-    return normalizePayload<EmployeeScheduleEntry[]>(response.data);
+    return scheduleService.saveAvailability(entries);
   },
 
   async getEmployeeSchedule(
@@ -42,7 +48,7 @@ export const scheduleService = {
 
   async getOverview(params?: {
     sedeId?: string;
-    day?: string;
+    day?: string | number;
   }): Promise<ScheduleOverviewResponse> {
     const response = await api.get("/schedules/overview", { params });
     return normalizePayload<ScheduleOverviewResponse>(response.data);

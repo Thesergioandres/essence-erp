@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 
-export const DAYS_OF_WEEK = [
+export const DAYS_OF_WEEK = Object.freeze([
   "monday",
   "tuesday",
   "wednesday",
@@ -8,7 +8,27 @@ export const DAYS_OF_WEEK = [
   "friday",
   "saturday",
   "sunday",
-];
+]);
+
+export const DAY_OF_WEEK_VALUES = Object.freeze(
+  DAYS_OF_WEEK.map((_, index) => index),
+);
+
+export const DAY_NAME_BY_INDEX = Object.freeze(
+  DAYS_OF_WEEK.reduce((accumulator, dayName, index) => {
+    accumulator[index] = dayName;
+    return accumulator;
+  }, {}),
+);
+
+export const DAY_INDEX_BY_NAME = Object.freeze(
+  DAYS_OF_WEEK.reduce((accumulator, dayName, index) => {
+    accumulator[dayName] = index;
+    return accumulator;
+  }, {}),
+);
+
+export const SCHEDULE_STATUSES = Object.freeze(["available", "booked"]);
 
 const HH_MM_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
@@ -32,10 +52,15 @@ const employeeScheduleSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    dayOfWeek: {
+      type: Number,
+      enum: DAY_OF_WEEK_VALUES,
+      required: true,
+      index: true,
+    },
     day: {
       type: String,
       enum: DAYS_OF_WEEK,
-      required: true,
       index: true,
     },
     startTime: {
@@ -48,24 +73,47 @@ const employeeScheduleSchema = new mongoose.Schema(
       required: true,
       match: HH_MM_PATTERN,
     },
+    status: {
+      type: String,
+      enum: SCHEDULE_STATUSES,
+      default: "available",
+      index: true,
+    },
   },
   {
     timestamps: true,
   },
 );
 
+employeeScheduleSchema.pre("validate", function setDayName(next) {
+  if (typeof this.dayOfWeek === "number") {
+    this.day = DAY_NAME_BY_INDEX[this.dayOfWeek];
+  }
+
+  if (!this.status) {
+    this.status = "available";
+  }
+
+  next();
+});
+
 employeeScheduleSchema.index(
   {
     business: 1,
     employeeId: 1,
-    day: 1,
+    dayOfWeek: 1,
     startTime: 1,
     endTime: 1,
   },
   { unique: true },
 );
 
-employeeScheduleSchema.index({ business: 1, sedeId: 1, day: 1, startTime: 1 });
+employeeScheduleSchema.index({
+  business: 1,
+  sedeId: 1,
+  dayOfWeek: 1,
+  startTime: 1,
+});
 
 export default mongoose.models.EmployeeSchedule ||
   mongoose.model("EmployeeSchedule", employeeScheduleSchema);

@@ -1,5 +1,17 @@
 import employeeSchedulePersistenceUseCase from "../../../application/use-cases/repository-gateways/EmployeeSchedulePersistenceUseCase.js";
 
+const resolveEntries = (payload) => {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  if (Array.isArray(payload?.entries)) {
+    return payload.entries;
+  }
+
+  return [];
+};
+
 class EmployeeScheduleController {
   async getMySchedule(req, res) {
     try {
@@ -20,11 +32,7 @@ class EmployeeScheduleController {
 
   async saveMySchedule(req, res) {
     try {
-      const entries = Array.isArray(req.body)
-        ? req.body
-        : Array.isArray(req.body?.entries)
-          ? req.body.entries
-          : [];
+      const entries = resolveEntries(req.body);
 
       const data =
         await employeeSchedulePersistenceUseCase.replaceEmployeeAvailability({
@@ -41,6 +49,10 @@ class EmployeeScheduleController {
         .status(status)
         .json({ success: false, message: error.message });
     }
+  }
+
+  async saveMyAvailability(req, res) {
+    return this.saveMySchedule(req, res);
   }
 
   async getEmployeeSchedule(req, res) {
@@ -62,11 +74,7 @@ class EmployeeScheduleController {
 
   async saveEmployeeSchedule(req, res) {
     try {
-      const entries = Array.isArray(req.body)
-        ? req.body
-        : Array.isArray(req.body?.entries)
-          ? req.body.entries
-          : [];
+      const entries = resolveEntries(req.body);
 
       const data =
         await employeeSchedulePersistenceUseCase.replaceEmployeeAvailability({

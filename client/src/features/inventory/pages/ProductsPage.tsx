@@ -1,18 +1,35 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { LoadingSpinner } from "../../../shared/components/ui";
+import {
+  ConfidentialBadge,
+  LoadingSpinner,
+} from "../../../shared/components/ui";
 import {
   buildCacheKey,
   readSessionCache,
   writeSessionCache,
 } from "../../../utils/requestCache";
+import { useFinancialPrivacy } from "../../auth/utils/financialPrivacy";
 import { categoryService, productService } from "../services/inventory.service";
 import type { Category, Product } from "../types/product.types";
 
 const PRODUCTS_CACHE_TTL_MS = 60 * 1000;
 const CATEGORIES_CACHE_TTL_MS = 5 * 60 * 1000;
 
+const formatCurrency = (value?: number | null) => {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return "-";
+  }
+
+  return new Intl.NumberFormat("es-MX", {
+    style: "currency",
+    currency: "MXN",
+    maximumFractionDigits: 2,
+  }).format(value);
+};
+
 export default function ProductsPage() {
+  const { hideFinancialData } = useFinancialPrivacy();
   const navigate = useNavigate();
   const location = useLocation();
   const firstSegment = location.pathname.split("/").filter(Boolean)[0] || "";
@@ -317,11 +334,40 @@ export default function ProductsPage() {
                     </p>
                     <div className="mt-2 flex items-center gap-3">
                       <p className="text-lg font-bold text-purple-400">
-                        ${product.clientPrice?.toFixed(2) || "0.00"}
+                        {formatCurrency(product.clientPrice)}
                       </p>
                       <p className="text-sm text-gray-400">
                         Stock: {product.totalStock || 0}
                       </p>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-1 gap-2 rounded-lg border border-gray-700/60 bg-gray-900/40 p-2.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-gray-400">Compra base</span>
+                        {hideFinancialData ? (
+                          <ConfidentialBadge compact />
+                        ) : (
+                          <span className="font-semibold text-gray-200">
+                            {formatCurrency(product.purchasePrice)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-gray-400">Costo ponderado</span>
+                        {hideFinancialData ? (
+                          <ConfidentialBadge compact />
+                        ) : (
+                          <span className="font-semibold text-gray-200">
+                            {formatCurrency(product.averageCost)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-gray-400">Distribuidor</span>
+                        <span className="font-semibold text-cyan-300">
+                          {formatCurrency(product.employeePrice)}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -389,7 +435,16 @@ export default function ProductsPage() {
                       Categoría
                     </th>
                     <th className="px-6 py-4 text-left text-sm font-semibold uppercase tracking-wider text-gray-400">
-                      Precio
+                      Precio público
+                    </th>
+                    <th className="px-6 py-4 text-left text-sm font-semibold uppercase tracking-wider text-gray-400">
+                      Compra base
+                    </th>
+                    <th className="px-6 py-4 text-left text-sm font-semibold uppercase tracking-wider text-gray-400">
+                      Costo ponderado
+                    </th>
+                    <th className="px-6 py-4 text-left text-sm font-semibold uppercase tracking-wider text-gray-400">
+                      Precio distribuidor
                     </th>
                     <th className="px-6 py-4 text-left text-sm font-semibold uppercase tracking-wider text-gray-400">
                       Stock
@@ -436,7 +491,28 @@ export default function ProductsPage() {
                           : product.category.name}
                       </td>
                       <td className="px-6 py-4 font-semibold text-purple-400">
-                        ${product.clientPrice?.toFixed(2) || "0.00"}
+                        {formatCurrency(product.clientPrice)}
+                      </td>
+                      <td className="px-6 py-4">
+                        {hideFinancialData ? (
+                          <ConfidentialBadge compact />
+                        ) : (
+                          <span className="font-semibold text-slate-200">
+                            {formatCurrency(product.purchasePrice)}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        {hideFinancialData ? (
+                          <ConfidentialBadge compact />
+                        ) : (
+                          <span className="font-semibold text-slate-200">
+                            {formatCurrency(product.averageCost)}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 font-semibold text-cyan-300">
+                        {formatCurrency(product.employeePrice)}
                       </td>
                       <td className="px-6 py-4 text-gray-300">
                         {product.totalStock || 0}
