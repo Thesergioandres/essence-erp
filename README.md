@@ -320,7 +320,8 @@ Un proyecto Railway con 3 servicios:
 - Configurar deploy hooks/secrets:
   - `RAILWAY_BACKEND_DEPLOY_HOOK_URL`
   - `RAILWAY_FRONTEND_DEPLOY_HOOK_URL`
-- Cada push a `main` dispara despliegue según pipeline configurado.
+- Cada push a `main` o `restore-*` dispara el pipeline de despliegue.
+- Si el push entra por `restore-*`, el workflow intenta sincronizar `main` por fast-forward antes de disparar Railway.
 
 ## Deploy manual (CLI)
 

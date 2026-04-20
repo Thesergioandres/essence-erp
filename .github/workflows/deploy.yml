@@ -1,23 +1,84 @@
 name: Deploy to Railway
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
+      - restore-*
+
+permissions:
+  contents: write
 
 concurrency:
-  group: railway-production-deploy
+  group: railway-production-deploy-${{ github.ref_name }}
   cancel-in-progress: true
 
 jobs:
+  sync-main:
+    if: github.ref_name != 'main' && github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    outputs:
+      main_synced: ${{ steps.sync.outputs.main_synced }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fast-forward main to current commit
+        id: sync
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          CURRENT_MAIN_SHA="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          TARGET_SHA="${GITHUB_SHA}"
+
+          if [ -z "$CURRENT_MAIN_SHA" ]; then
+            echo "main_synced=false" >> "$GITHUB_OUTPUT"
+            echo "::error::No se pudo resolver origin/main"
+            exit 1
+          fi
+
+          if [ "$CURRENT_MAIN_SHA" = "$TARGET_SHA" ]; then
+            echo "main_synced=true" >> "$GITHUB_OUTPUT"
+            echo "origin/main ya está en ${TARGET_SHA}"
+            exit 0
+          fi
+
+          git fetch --no-tags origin main
+
+          if ! git merge-base --is-ancestor origin/main "$TARGET_SHA"; then
+            echo "main_synced=false" >> "$GITHUB_OUTPUT"
+            echo "::error::No se puede hacer fast-forward de origin/main a ${TARGET_SHA}. Integra cambios a main y vuelve a hacer push."
+            exit 1
+          fi
+
+          git push origin "$TARGET_SHA:refs/heads/main"
+          echo "main_synced=true" >> "$GITHUB_OUTPUT"
+          echo "origin/main actualizado a ${TARGET_SHA}"
+
   deploy-railway:
+    needs:
+      - sync-main
+    if: always() && github.actor != 'github-actions[bot]' && (needs.sync-main.result == 'success' || needs.sync-main.result == 'skipped') && (github.ref_name == 'main' || needs.sync-main.outputs.main_synced == 'true')
     runs-on: ubuntu-latest
     env:
       RAILWAY_BACKEND_DEPLOY_HOOK_URL: ${{ secrets.RAILWAY_BACKEND_DEPLOY_HOOK_URL != '' && secrets.RAILWAY_BACKEND_DEPLOY_HOOK_URL || vars.RAILWAY_BACKEND_DEPLOY_HOOK_URL }}
       RAILWAY_FRONTEND_DEPLOY_HOOK_URL: ${{ secrets.RAILWAY_FRONTEND_DEPLOY_HOOK_URL != '' && secrets.RAILWAY_FRONTEND_DEPLOY_HOOK_URL || vars.RAILWAY_FRONTEND_DEPLOY_HOOK_URL }}
+      DEPLOY_SHA: ${{ github.sha }}
+      DEPLOY_REF: ${{ github.ref_name }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Print deploy target
+        run: |
+          echo "Deploy ref: ${DEPLOY_REF}"
+          echo "Deploy sha: ${DEPLOY_SHA}"
 
       - name: Validate Railway deploy hooks
         run: |
@@ -31,9 +92,17 @@ jobs:
       - name: Trigger backend deployment (Railway)
         if: env.RAILWAY_BACKEND_DEPLOY_HOOK_URL != ''
         run: |
-          curl -fsS -X POST "$RAILWAY_BACKEND_DEPLOY_HOOK_URL"
+          SEP="?"
+          case "$RAILWAY_BACKEND_DEPLOY_HOOK_URL" in
+            *\?*) SEP="&" ;;
+          esac
+          curl -fsS -X POST "${RAILWAY_BACKEND_DEPLOY_HOOK_URL}${SEP}sha=${DEPLOY_SHA}&ref=${DEPLOY_REF}"
 
       - name: Trigger frontend deployment (Railway)
         if: env.RAILWAY_FRONTEND_DEPLOY_HOOK_URL != ''
         run: |
-          curl -fsS -X POST "$RAILWAY_FRONTEND_DEPLOY_HOOK_URL"
+          SEP="?"
+          case "$RAILWAY_FRONTEND_DEPLOY_HOOK_URL" in
+            *\?*) SEP="&" ;;
+          esac
+          curl -fsS -X POST "${RAILWAY_FRONTEND_DEPLOY_HOOK_URL}${SEP}sha=${DEPLOY_SHA}&ref=${DEPLOY_REF}"
