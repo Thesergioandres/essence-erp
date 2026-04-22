@@ -38,7 +38,17 @@ router.get(
   (req, res) => controller.getEmployeeReports(req, res),
 );
 router.get(
+  "/staff/me",
+  requirePermission({ module: "defectiveProducts", action: "read" }),
+  (req, res) => controller.getEmployeeReports(req, res),
+);
+router.get(
   "/employee/:employeeId",
+  requirePermission({ module: "defectiveProducts", action: "read" }),
+  (req, res) => controller.getEmployeeReports(req, res),
+);
+router.get(
+  "/staff/:employeeId",
   requirePermission({ module: "defectiveProducts", action: "read" }),
   (req, res) => controller.getEmployeeReports(req, res),
 );

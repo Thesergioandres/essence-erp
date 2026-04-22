@@ -15,11 +15,42 @@ import {
   isActionAllowed,
 } from "../utils/permissions.js";
 
+const normalizeIdLikeValue = (value) => {
+  if (Array.isArray(value)) {
+    return normalizeIdLikeValue(value[0]);
+  }
+
+  if (value && typeof value === "object") {
+    return normalizeIdLikeValue(
+      value._id || value.id || value.$oid || value.businessId || value.value,
+    );
+  }
+
+  const normalized = String(value || "").trim();
+  if (
+    !normalized ||
+    normalized === "[object Object]" ||
+    normalized === "undefined" ||
+    normalized === "null"
+  ) {
+    return "";
+  }
+
+  const objectIdMatch = normalized.match(/[a-fA-F0-9]{24}/);
+  return objectIdMatch ? objectIdMatch[0].toLowerCase() : normalized;
+};
+
+const isMongoObjectId = (value) => /^[a-fA-F0-9]{24}$/.test(String(value));
+
 // Resuelve el contexto de negocio a partir del header/query y valida membership
 export const businessContext = async (req, res, next) => {
   try {
     const isTest = process.env.NODE_ENV === "test";
-    let businessId = req.headers["x-business-id"] || req.query.businessId;
+    let businessId = normalizeIdLikeValue(
+      req.headers["x-business-id"] || req.query.businessId,
+    );
+    const requesterUserId =
+      normalizeIdLikeValue(req.user?.id) || normalizeIdLikeValue(req.user?._id);
 
     // Array para logs de debug
     const debugLogs = [];
@@ -31,13 +62,13 @@ export const businessContext = async (req, res, next) => {
     addDebugLog(
       `[businessContext] Initial businessId from header/query: ${businessId}`,
     );
-    addDebugLog(`[businessContext] User ID: ${req.user?._id || req.user?.id}`);
+    addDebugLog(`[businessContext] User ID: ${requesterUserId}`);
     addDebugLog(`[businessContext] User role: ${req.user?.role}`);
 
     // Fallback: Si no hay ID explícito, intentar resolver por el usuario logueado (Auto-Select Default Business)
     if (!businessId && req.user) {
       const defaultMembership = await Membership.findOne({
-        user: req.user._id || req.user.id,
+        user: requesterUserId,
         status: "active",
       }).sort({ createdAt: 1 }); // Preferir el más antiguo/principal
 
@@ -68,6 +99,16 @@ export const businessContext = async (req, res, next) => {
       });
     }
 
+    if (!isMongoObjectId(businessId)) {
+      addDebugLog(
+        `[businessContext] ❌ Invalid businessId format: ${businessId}`,
+      );
+      return res.status(400).json({
+        message: "Identificador de negocio inválido",
+        debug: debugLogs,
+      });
+    }
+
     const business = await Business.findById(businessId);
     if (!business) {
       addDebugLog(
@@ -94,7 +135,7 @@ export const businessContext = async (req, res, next) => {
     if (!isSuperAdmin && !isGod) {
       membership = await Membership.findOne({
         business: businessId,
-        user: req.user?.id,
+        user: requesterUserId,
         status: "active",
       });
 
@@ -104,13 +145,13 @@ export const businessContext = async (req, res, next) => {
 
       if (!membership) {
         const isOwner =
-          business.createdBy?.toString() === req.user?.id?.toString();
+          business.createdBy?.toString() === requesterUserId?.toString();
         addDebugLog(`[businessContext] Is business owner: ${isOwner}`);
 
         // Permitir al creador del negocio actuar como admin aunque no exista membership explícita
         if (isOwner) {
           membership = new Membership({
-            user: req.user?.id,
+            user: requesterUserId,
             business: businessId,
             role: "admin",
             status: "active",
@@ -126,7 +167,7 @@ export const businessContext = async (req, res, next) => {
             message: "No tienes acceso a este negocio",
             module: "businessContext",
             requestId: req.reqId,
-            userId: req.user?.id,
+            userId: requesterUserId,
             businessId,
           });
           return res.status(403).json({

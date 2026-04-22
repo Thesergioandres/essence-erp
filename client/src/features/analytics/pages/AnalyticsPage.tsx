@@ -14,11 +14,14 @@ const currency = (n: number | undefined) =>
     maximumFractionDigits: 0,
   }).format(n || 0);
 
+type DateFilter = "today" | "30d" | "90d" | "custom";
+
 export default function Analytics() {
   const { hideFinancialData, scopeEmployeeId } = useFinancialPrivacy();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"charts" | "history">("charts");
+  const [activeDateFilter, setActiveDateFilter] = useState<DateFilter>("30d");
 
   const [monthly, setMonthly] = useState<MonthlyProfitData | null>(null);
 
@@ -65,6 +68,17 @@ export default function Analytics() {
     setDateRange({ startDate: toISO(start), endDate: toISO(end) });
   };
 
+  const setTodayFilter = () => {
+    const today = toISO(new Date());
+    setDateRange({ startDate: today, endDate: today });
+    setActiveDateFilter("today");
+  };
+
+  const setAllFilter = (days: number) => {
+    setQuickRange(days);
+    setActiveDateFilter(days === 30 ? "30d" : "90d");
+  };
+
   return (
     <div className="animate-fade-in space-y-6 overflow-hidden p-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -83,32 +97,52 @@ export default function Analytics() {
         {/* Date Controls */}
         <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={() => setQuickRange(30)}
-            className="rounded-md border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs text-gray-300 hover:border-purple-400 hover:text-white"
+            onClick={setTodayFilter}
+            className={`rounded-md border px-3 py-1.5 text-xs font-semibold transition-all duration-200 ${
+              activeDateFilter === "today"
+                ? "border-purple-400 bg-purple-600 text-white shadow-lg shadow-purple-500/25 ring-2 ring-purple-400/50"
+                : "border-gray-700 bg-gray-900 text-gray-300 hover:border-purple-400 hover:text-white"
+            }`}
+          >
+            ⚡ Venta Hoy
+          </button>
+          <button
+            onClick={() => setAllFilter(30)}
+            className={`rounded-md border px-3 py-1.5 text-xs transition-all duration-200 ${
+              activeDateFilter === "30d"
+                ? "border-purple-400 bg-purple-600/80 text-white ring-2 ring-purple-400/50"
+                : "border-gray-700 bg-gray-900 text-gray-300 hover:border-purple-400 hover:text-white"
+            }`}
           >
             30 días
           </button>
           <button
-            onClick={() => setQuickRange(90)}
-            className="rounded-md border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs text-gray-300 hover:border-purple-400 hover:text-white"
+            onClick={() => setAllFilter(90)}
+            className={`rounded-md border px-3 py-1.5 text-xs transition-all duration-200 ${
+              activeDateFilter === "90d"
+                ? "border-purple-400 bg-purple-600/80 text-white ring-2 ring-purple-400/50"
+                : "border-gray-700 bg-gray-900 text-gray-300 hover:border-purple-400 hover:text-white"
+            }`}
           >
             Trimestre
           </button>
           <input
             type="date"
             value={dateRange.startDate}
-            onChange={e =>
-              setDateRange({ ...dateRange, startDate: e.target.value })
-            }
+            onChange={e => {
+              setDateRange({ ...dateRange, startDate: e.target.value });
+              setActiveDateFilter("custom");
+            }}
             className="rounded-md border border-gray-700 bg-gray-950 px-3 py-1.5 text-sm text-gray-100 focus:outline-none focus:ring-1 focus:ring-purple-500"
           />
           <span className="text-gray-500">-</span>
           <input
             type="date"
             value={dateRange.endDate}
-            onChange={e =>
-              setDateRange({ ...dateRange, endDate: e.target.value })
-            }
+            onChange={e => {
+              setDateRange({ ...dateRange, endDate: e.target.value });
+              setActiveDateFilter("custom");
+            }}
             className="rounded-md border border-gray-700 bg-gray-950 px-3 py-1.5 text-sm text-gray-100 focus:outline-none focus:ring-1 focus:ring-purple-500"
           />
           <button

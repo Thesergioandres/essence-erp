@@ -71,13 +71,18 @@ const sanitizeAllowedBranchesInput = (allowedBranches) => {
 };
 
 const normalizeAllowedBranchesForOutput = (allowedBranches) => {
-  if (!Array.isArray(allowedBranches)) {
+  if (!allowedBranches || !Array.isArray(allowedBranches)) {
     return [];
   }
 
-  return allowedBranches
-    .map((branchId) => resolveIdValue(branchId))
-    .filter(Boolean);
+  try {
+    return allowedBranches
+      .map((branchId) => resolveIdValue(branchId))
+      .filter(Boolean);
+  } catch (error) {
+    console.warn("[EmployeeRepository] Fallo al mapear allowedBranches, asignando array vacío:", error);
+    return [];
+  }
 };
 
 const ensureAllowedBranchesBelongToBusiness = async (
@@ -165,11 +170,13 @@ export class EmployeeRepository {
       .lean();
 
     const membershipEmployeeIds = memberships
-      .map((m) => m.user)
+      .map((m) => resolveIdValue(m.user))
       .filter((id) => id && mongoose.isValidObjectId(id));
 
     const membershipByEmployeeId = new Map(
-      memberships.map((membership) => [String(membership.user), membership]),
+      memberships
+        .map((membership) => [resolveIdValue(membership.user), membership])
+        .filter(([employeeId]) => Boolean(employeeId)),
     );
 
     if (membershipEmployeeIds.length === 0) {
@@ -208,12 +215,23 @@ export class EmployeeRepository {
     ]);
 
     const employeeIds = employees
-      .map((d) => d._id)
+      .map((d) => resolveIdValue(d._id))
       .filter((id) => id && mongoose.isValidObjectId(id));
 
     if (employeeIds.length === 0) {
       return {
-        employees: [],
+        employees: employees.map((employee) => ({
+          ...employee,
+          allowedBranches: normalizeAllowedBranchesForOutput(
+            membershipByEmployeeId.get(String(employee._id))?.allowedBranches,
+          ),
+          stats: {
+            totalStock: 0,
+            totalSales: 0,
+            totalProfit: 0,
+            assignedProductsCount: employee.assignedProducts?.length || 0,
+          },
+        })),
         pagination: {
           page,
           limit,
@@ -224,37 +242,52 @@ export class EmployeeRepository {
       };
     }
 
+    if (!mongoose.isValidObjectId(businessId)) {
+      const err = new Error("businessId inválido");
+      err.statusCode = 400;
+      throw err;
+    }
+
     const businessObjectId = new mongoose.Types.ObjectId(businessId);
     const objectIds = employeeIds.map((id) => new mongoose.Types.ObjectId(id));
 
-    const [stockAgg, salesAgg] = await Promise.all([
-      EmployeeStock.aggregate([
-        {
-          $match: {
-            business: businessObjectId,
-            employee: { $in: objectIds },
+    let stockAgg = [];
+    let salesAgg = [];
+
+    try {
+      [stockAgg, salesAgg] = await Promise.all([
+        EmployeeStock.aggregate([
+          {
+            $match: {
+              business: businessObjectId,
+              employee: { $in: objectIds },
+            },
           },
-        },
-        { $group: { _id: "$employee", totalStock: { $sum: "$quantity" } } },
-      ]),
-      Sale.aggregate([
-        {
-          $match: {
-            business: businessObjectId,
-            employee: { $in: objectIds },
-            // 💰 CASH FLOW: Solo ventas confirmadas para profit
-            paymentStatus: "confirmado",
+          { $group: { _id: "$employee", totalStock: { $sum: "$quantity" } } },
+        ]),
+        Sale.aggregate([
+          {
+            $match: {
+              business: businessObjectId,
+              employee: { $in: objectIds },
+              // 💰 CASH FLOW: Solo ventas confirmadas para profit
+              paymentStatus: "confirmado",
+            },
           },
-        },
-        {
-          $group: {
-            _id: "$employee",
-            totalSales: { $sum: 1 },
-            totalProfit: { $sum: "$employeeProfit" },
+          {
+            $group: {
+              _id: "$employee",
+              totalSales: { $sum: 1 },
+              totalProfit: { $sum: "$employeeProfit" },
+            },
           },
-        },
-      ]),
-    ]);
+        ]),
+      ]);
+    } catch (error) {
+      console.error("[EmployeeRepository] stats aggregation failed:", error);
+      stockAgg = [];
+      salesAgg = [];
+    }
 
     const stockByEmployee = new Map(
       stockAgg.map((s) => [String(s._id), Number(s.totalStock) || 0]),

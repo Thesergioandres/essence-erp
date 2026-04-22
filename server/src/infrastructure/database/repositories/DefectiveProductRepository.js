@@ -1054,7 +1054,9 @@ export class DefectiveProductRepository {
       DefectiveProduct.countDocuments(query),
     ]);
 
-    await this.normalizeConfirmedLosses(businessId, reports);
+    // Filtrar reportes con producto huérfano (eliminado de BD)
+    const validReports = reports.filter((r) => r.product != null);
+    await this.normalizeConfirmedLosses(businessId, validReports);
 
     return {
       reports,
@@ -1258,7 +1260,7 @@ export class DefectiveProductRepository {
     report.warrantyStatus = hasWarranty ? "approved" : "not_applicable";
     report.lossAmount = lossAmount;
 
-    if (report.stockOrigin === "employee") {
+    if (report.stockOrigin === "employee" && report.employee) {
       const employeeStock = await EmployeeStock.findOne({
         employee: report.employee,
         product: report.product,
@@ -1266,7 +1268,7 @@ export class DefectiveProductRepository {
       });
 
       if (employeeStock) {
-        employeeStock.quantity -= report.quantity;
+        employeeStock.quantity = Math.max(0, employeeStock.quantity - report.quantity);
         await employeeStock.save();
       }
 

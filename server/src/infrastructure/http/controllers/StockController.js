@@ -1,4 +1,5 @@
 import stockPersistenceUseCase from "../../../application/use-cases/repository-gateways/StockPersistenceUseCase.js";
+import { isEmployeeRole } from "../../../utils/roleAliases.js";
 
 class StockController {
   async assignToEmployee(req, res) {
@@ -69,8 +70,7 @@ class StockController {
       if (!businessId)
         return res.status(400).json({ message: "Falta x-business-id" });
 
-      const fromEmployeeId =
-        req.user?._id || req.user?.id || req.user?.userId;
+      const fromEmployeeId = req.user?._id || req.user?.id || req.user?.userId;
       const { toEmployeeId, productId, quantity } = req.body;
 
       if (!fromEmployeeId || !toEmployeeId || !productId || !quantity) {
@@ -112,8 +112,7 @@ class StockController {
       if (!businessId)
         return res.status(400).json({ message: "Falta x-business-id" });
 
-      const fromEmployeeId =
-        req.user?._id || req.user?.id || req.user?.userId;
+      const fromEmployeeId = req.user?._id || req.user?.id || req.user?.userId;
       const { toBranchId, productId, quantity } = req.body;
 
       if (!fromEmployeeId || !toBranchId || !productId || !quantity) {
@@ -144,8 +143,7 @@ class StockController {
         return res.status(400).json({ message: "Falta x-business-id" });
 
       let { employeeId } = req.params;
-      if (employeeId === "me")
-        employeeId = req.user.userId || req.user.id;
+      if (employeeId === "me") employeeId = req.user.userId || req.user.id;
 
       const isAdmin = ["admin", "god", "super_admin"].includes(req.user.role);
       const currentUserId = req.user.userId || req.user.id;
@@ -210,7 +208,8 @@ class StockController {
       if (!businessId)
         return res.status(400).json({ message: "Falta x-business-id" });
 
-      const isEmployee = req.user?.role === "employee";
+      const effectiveRole = req.membership?.role || req.user?.role;
+      const isEmployee = isEmployeeRole(effectiveRole);
 
       const allowedBranches = Array.isArray(req.membership?.allowedBranches)
         ? req.membership.allowedBranches
@@ -238,7 +237,8 @@ class StockController {
         return res.status(400).json({ message: "Falta x-business-id" });
 
       // Usar el método dedicado para inventario global (Agregado)
-      const stock = await stockPersistenceUseCase.getGlobalInventory(businessId);
+      const stock =
+        await stockPersistenceUseCase.getGlobalInventory(businessId);
       res.json({ success: true, inventory: stock });
     } catch (error) {
       console.error("Error in getGlobalStock:", error);

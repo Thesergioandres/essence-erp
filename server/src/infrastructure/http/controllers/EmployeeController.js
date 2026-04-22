@@ -36,7 +36,8 @@ export class EmployeeController {
         pagination: result.pagination,
       });
     } catch (error) {
-      res.status(500).json({ success: false, message: error.message });
+      const status = error.statusCode || 500;
+      res.status(status).json({ success: false, message: error.message });
     }
   }
 

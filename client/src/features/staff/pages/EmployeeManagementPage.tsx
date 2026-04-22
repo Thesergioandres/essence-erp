@@ -459,15 +459,9 @@ export default function EmployeeManagementPage() {
                 const selectedBranches = Array.isArray(row.allowedBranches)
                   ? row.allowedBranches
                   : [];
-                const branchesLabel =
-                  selectedBranches.length === 0
-                    ? "Todas las sedes"
-                    : selectedBranches
-                        .map(
-                          branchId =>
-                            branchNameById.get(String(branchId)) || "Sede"
-                        )
-                        .join(", ");
+                const activeBranches = branches.filter(
+                  branch => branch.active !== false
+                );
                 const draftValue = Number(draftRates[row.employeeId]);
                 const hasPendingChanges =
                   canEditCommission &&
@@ -503,46 +497,81 @@ export default function EmployeeManagementPage() {
                     </td>
                     <td className="px-4 py-4 align-middle">
                       <div className="space-y-2">
-                        <p className="line-clamp-2 text-xs text-slate-400">
-                          {branchesLabel}
-                        </p>
+                        {/* Chip-based branch selector */}
+                        <div className="flex max-w-sm flex-wrap gap-1.5">
+                          {activeBranches.length === 0 ? (
+                            <span className="text-xs text-slate-500">
+                              No hay sedes activas para asignar.
+                            </span>
+                          ) : (
+                            activeBranches.map(branch => {
+                              const branchId = String(branch._id);
+                              const isSelected =
+                                selectedBranches.includes(branchId);
 
-                        <label
-                          className="sr-only"
-                          htmlFor={`branches-${row.employeeId}`}
-                        >
-                          Sedes permitidas de {row.name}
-                        </label>
-                        <select
-                          id={`branches-${row.employeeId}`}
-                          multiple
-                          value={selectedBranches}
-                          onChange={event => {
-                            const nextAllowedBranches = Array.from(
-                              event.target.selectedOptions
-                            ).map(option => option.value);
+                              return (
+                                <button
+                                  key={branchId}
+                                  type="button"
+                                  disabled={
+                                    !canEditBranches || isSavingBranches
+                                  }
+                                  onClick={() => {
+                                    const nextAllowedBranches = isSelected
+                                      ? selectedBranches.filter(
+                                          currentId => currentId !== branchId
+                                        )
+                                      : [...selectedBranches, branchId];
 
-                            void saveAllowedBranches(row, nextAllowedBranches);
-                          }}
-                          disabled={
-                            !canEditBranches ||
-                            isSavingBranches ||
-                            branches.length === 0
-                          }
-                          className="min-h-20 w-52 rounded-xl border border-slate-700 bg-slate-900/70 px-2 py-1 text-xs text-slate-100 outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {branches.map(branch => (
-                            <option key={branch._id} value={branch._id}>
-                              {branch.isWarehouse
-                                ? `${branch.name} (Bodega)`
-                                : branch.name}
-                            </option>
-                          ))}
-                        </select>
+                                    void saveAllowedBranches(
+                                      row,
+                                      nextAllowedBranches
+                                    );
+                                  }}
+                                  className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-medium transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${
+                                    isSelected
+                                      ? "bg-blue-600 text-white shadow-sm shadow-blue-500/30 hover:bg-blue-700"
+                                      : "bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"
+                                  }`}
+                                >
+                                  {isSelected && (
+                                    <span className="text-[10px]">✓</span>
+                                  )}
+                                  {branch.isWarehouse
+                                    ? `${branch.name} (Bodega)`
+                                    : branch.name}
+                                </button>
+                              );
+                            })
+                          )}
+
+                          {/* Reset to full access */}
+                          {activeBranches.length > 0 && (
+                            <button
+                              type="button"
+                              disabled={
+                                !canEditBranches ||
+                                isSavingBranches ||
+                                selectedBranches.length === 0
+                              }
+                              onClick={() => {
+                                void saveAllowedBranches(row, []);
+                              }}
+                              className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-medium transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${
+                                selectedBranches.length === 0
+                                  ? "border border-emerald-400/50 bg-emerald-500/20 text-emerald-200 shadow-sm shadow-emerald-500/20"
+                                  : "border border-amber-300/40 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20"
+                              }`}
+                            >
+                              {selectedBranches.length === 0 ? "✓ " : ""}Acceso
+                              total
+                            </button>
+                          )}
+                        </div>
 
                         {isSavingBranches ? (
                           <span className="inline-flex items-center gap-1 text-xs text-cyan-200">
-                            <Building2 className="h-3.5 w-3.5" />
+                            <Building2 className="h-3.5 w-3.5 animate-pulse" />
                             Guardando sedes...
                           </span>
                         ) : null}

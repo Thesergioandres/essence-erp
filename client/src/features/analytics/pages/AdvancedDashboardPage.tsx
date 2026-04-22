@@ -1,12 +1,12 @@
 import { endOfMonth, format, startOfMonth, subDays } from "date-fns";
 import { m as motion } from "framer-motion";
 import {
-    BarChart3,
-    Download,
-    FileText,
-    RefreshCw,
-    Search,
-    TrendingUp,
+  BarChart3,
+  Download,
+  FileText,
+  RefreshCw,
+  Search,
+  TrendingUp,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -14,23 +14,23 @@ import { useFeature } from "../../../components/FeatureSection";
 import InfoTooltip from "../../../components/InfoTooltip";
 import ProfitHistoryView from "../../../components/analytics/ProfitHistoryView";
 import {
-    CategoryDistributionChart,
-    ComparativeAnalysisView,
-    EmployeeRankingsTable,
-    FinancialKPICards,
-    LowStockAlertsVisual,
-    SalesTimelineChart,
-    TopProductsChart,
+  CategoryDistributionChart,
+  ComparativeAnalysisView,
+  EmployeeRankingsTable,
+  FinancialKPICards,
+  LowStockAlertsVisual,
+  SalesTimelineChart,
+  TopProductsChart,
 } from "../../../components/charts";
 import { formatCurrency } from "../../../utils";
 import {
-    exportKPIsToPDF,
-    exportRankingsToExcel,
-    exportRankingsToPDF,
+  exportKPIsToPDF,
+  exportRankingsToExcel,
+  exportRankingsToPDF,
 } from "../../../utils/exportUtils";
 import {
-    advancedAnalyticsService,
-    analyticsService,
+  advancedAnalyticsService,
+  analyticsService,
 } from "../../analytics/services";
 import { useFinancialPrivacy } from "../../auth/utils/financialPrivacy";
 import { expenseService } from "../../common/services";
@@ -130,6 +130,11 @@ export default function AdvancedDashboard() {
     return range.startDate === start && range.endDate === end;
   };
 
+  const isTodayRange = (range: { startDate: string; endDate: string }) => {
+    const today = format(new Date(), "yyyy-MM-dd");
+    return range.startDate === today && range.endDate === today;
+  };
+
   const rangeBtn = (active: boolean) =>
     `${active ? "border-purple-500 bg-purple-500/10 text-white" : "border-gray-700 text-gray-100"} rounded-md border px-3 py-2 text-sm transition hover:border-purple-500`;
 
@@ -149,6 +154,16 @@ export default function AdvancedDashboard() {
     setter({
       startDate: format(startOfMonth(new Date()), "yyyy-MM-dd"),
       endDate: format(endOfMonth(new Date()), "yyyy-MM-dd"),
+    });
+  };
+
+  const applyTodayRange = (
+    setter: (r: { startDate: string; endDate: string }) => void
+  ) => {
+    const today = format(new Date(), "yyyy-MM-dd");
+    setter({
+      startDate: today,
+      endDate: today,
     });
   };
 
@@ -640,6 +655,12 @@ export default function AdvancedDashboard() {
                 className="rounded-md border border-gray-700 bg-gray-950 px-3 py-2 text-sm text-gray-100 focus:border-purple-500"
               />
               <button
+                onClick={() => applyTodayRange(setTimelineRange)}
+                className={rangeBtn(isTodayRange(timelineRange))}
+              >
+                Hoy
+              </button>
+              <button
                 onClick={() => applyQuickRange(setTimelineRange, 7)}
                 className={rangeBtn(isSameRange(timelineRange, 7))}
               >
@@ -772,6 +793,12 @@ export default function AdvancedDashboard() {
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => applyTodayRange(setOverviewRange)}
+                    className={rangeBtn(isTodayRange(overviewRange))}
+                  >
+                    Hoy
+                  </button>
                   <button
                     onClick={() => applyQuickRange(setOverviewRange, 7)}
                     className={rangeBtn(isSameRange(overviewRange, 7))}
@@ -943,6 +970,12 @@ export default function AdvancedDashboard() {
                     }
                     className="rounded-md border border-gray-700 bg-gray-950 px-3 py-2 text-sm text-gray-100 focus:border-purple-500"
                   />
+                  <button
+                    onClick={() => applyTodayRange(setTimelineRange)}
+                    className={rangeBtn(isTodayRange(timelineRange))}
+                  >
+                    Hoy
+                  </button>
                   <button
                     onClick={() => applyQuickRange(setTimelineRange, 7)}
                     className={rangeBtn(isSameRange(timelineRange, 7))}

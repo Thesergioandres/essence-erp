@@ -249,13 +249,45 @@ const resolveBusinessIdFromSessionUser = (sessionUser: unknown): string => {
   return uniqueBusinessIds.length === 1 ? uniqueBusinessIds[0] : "";
 };
 
+const normalizeRole = (role: unknown): string =>
+  String(role || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_");
+
+const isEmployeeRole = (role: unknown): boolean => {
+  const normalized = normalizeRole(role);
+  return normalized === "employee" || normalized === "operativo";
+};
+
+const resolveSessionMembershipRole = (sessionUser: unknown): string => {
+  if (!sessionUser || typeof sessionUser !== "object") {
+    return "";
+  }
+
+  const candidate = sessionUser as {
+    memberships?: Array<{ role?: unknown; status?: unknown }>;
+  };
+
+  const activeMembership = Array.isArray(candidate.memberships)
+    ? candidate.memberships.find(membership => {
+        const status = normalizeRole(membership?.status);
+        return status === "active" || status === "invited";
+      })
+    : null;
+
+  return normalizeRole(activeMembership?.role);
+};
+
 export default function StandardSalePage({
   registerStandardSale,
 }: StandardSalePageProps = {}) {
   const { user, loading: userLoading } = useSession();
   const { businessId: contextBusinessId, hydrating: businessHydrating } =
     useBusiness();
-  const isEmployee = user?.role === "employee";
+  const isEmployee =
+    isEmployeeRole(user?.role) ||
+    isEmployeeRole(resolveSessionMembershipRole(user));
   const currentUserId =
     resolveEntityId(user?._id) ||
     resolveEntityId((user as { id?: unknown })?.id) ||

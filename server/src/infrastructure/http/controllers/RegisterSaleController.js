@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { RegisterPromotionSaleUseCase } from "../../../application/use-cases/sales/RegisterPromotionSaleUseCase.js";
 import { RegisterStandardSaleUseCase } from "../../../application/use-cases/sales/RegisterStandardSaleUseCase.js";
+import { isEmployeeRole } from "../../../utils/roleAliases.js";
 
 /**
  * Register Sale Controller
@@ -36,7 +37,7 @@ const resolveEmployeeId = (req) => {
   const userId = req.user?.id || req.user?._id;
   const membershipRole = req.membership?.role;
 
-  if (req.user?.role === "employee" || membershipRole === "employee") {
+  if (isEmployeeRole(req.user?.role) || isEmployeeRole(membershipRole)) {
     return userId;
   }
 

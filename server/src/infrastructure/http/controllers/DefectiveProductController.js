@@ -1,4 +1,5 @@
 import { DefectiveProductPersistenceUseCase } from "../../../application/use-cases/repository-gateways/DefectiveProductPersistenceUseCase.js";
+import { isEmployeeRole } from "../../../utils/roleAliases.js";
 
 const repository = new DefectiveProductPersistenceUseCase();
 
@@ -55,7 +56,7 @@ export class DefectiveProductController {
       }
 
       const role = req.membership?.role || req.user?.role;
-      const isEmployee = role === "employee";
+      const isEmployee = isEmployeeRole(role);
 
       if (isEmployee) {
         const allowedBranches = Array.isArray(req.membership?.allowedBranches)
@@ -92,8 +93,7 @@ export class DefectiveProductController {
           .json({ success: false, message: "Falta x-business-id" });
       }
 
-      const employeeId =
-        req.params.employeeId || req.user?._id || req.user?.id;
+      const employeeId = req.params.employeeId || req.user?._id || req.user?.id;
 
       if (!employeeId) {
         return res
@@ -230,8 +230,8 @@ export class DefectiveProductController {
           .json({ success: false, message: "Falta x-business-id" });
       }
 
-      const role = req.membership?.role;
-      const isEmployee = role === "employee";
+      const role = req.membership?.role || req.user?.role;
+      const isEmployee = isEmployeeRole(role);
       const replacementSource = req.body?.replacementSource;
 
       if (isEmployee && replacementSource === "warehouse") {
@@ -279,8 +279,8 @@ export class DefectiveProductController {
           .json({ success: false, message: "Falta x-business-id" });
       }
 
-      const role = req.membership?.role;
-      if (role === "employee") {
+      const role = req.membership?.role || req.user?.role;
+      if (isEmployeeRole(role)) {
         return res.status(403).json({
           success: false,
           message: "No tienes permiso para resolver garantias",

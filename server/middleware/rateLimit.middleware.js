@@ -67,9 +67,9 @@ const buildApiLimiterKey = (req) => {
 export const authLimiter = rateLimit({
   windowMs: resolveRateLimitWindowMs(
     "AUTH_RATE_LIMIT_WINDOW_MS",
-    15 * 60 * 1000,
-  ), // 15 minutos
-  max: resolveRateLimitMax("AUTH_RATE_LIMIT_MAX", 5, 20),
+    45 * 60 * 1000,
+  ), // 45 minutos (x3)
+  max: resolveRateLimitMax("AUTH_RATE_LIMIT_MAX", 45, 135),
   message: {
     message:
       "Demasiados intentos de autenticación. Intenta de nuevo en 15 minutos.",
@@ -106,8 +106,8 @@ export const authLimiter = rateLimit({
  * Menos restrictivo, para uso normal
  */
 export const apiLimiter = rateLimit({
-  windowMs: resolveRateLimitWindowMs("API_RATE_LIMIT_WINDOW_MS", 1 * 60 * 1000), // 1 minuto
-  max: resolveRateLimitMax("API_RATE_LIMIT_MAX", 180, 1200),
+  windowMs: resolveRateLimitWindowMs("API_RATE_LIMIT_WINDOW_MS", 3 * 60 * 1000), // 3 minutos (x3)
+  max: resolveRateLimitMax("API_RATE_LIMIT_MAX", 1620, 10800),
   message: {
     message: "Demasiadas solicitudes. Intenta de nuevo en un momento.",
     code: "RATE_LIMIT_API",
@@ -140,8 +140,8 @@ export const apiLimiter = rateLimit({
  * Muy restrictivo por el tamaño de las peticiones
  */
 export const uploadLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hora
-  max: 50, // 50 uploads por hora
+  windowMs: 3 * 60 * 60 * 1000, // 3 horas (x3)
+  max: 360, // 360 uploads por ventana (x3)
   message: {
     message: "Límite de uploads alcanzado. Intenta de nuevo más tarde.",
     code: "RATE_LIMIT_UPLOAD",
@@ -167,8 +167,8 @@ export const uploadLimiter = rateLimit({
  * Previene creación masiva de cuentas
  */
 export const registerLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hora
-  max: 5, // 5 registros por hora por IP
+  windowMs: 3 * 60 * 60 * 1000, // 3 horas (x3)
+  max: 36, // 36 registros por ventana por IP (x3)
   message: {
     message: "Demasiados registros desde esta IP. Intenta de nuevo más tarde.",
     code: "RATE_LIMIT_REGISTER",
@@ -193,8 +193,8 @@ export const registerLimiter = rateLimit({
  * Rate Limiter para endpoints sensibles (GOD panel, etc.)
  */
 export const sensitiveLimiter = rateLimit({
-  windowMs: 5 * 60 * 1000, // 5 minutos
-  max: 20, // 20 requests por 5 minutos
+  windowMs: 15 * 60 * 1000, // 15 minutos (x3)
+  max: 150, // 150 requests por ventana (x3)
   message: {
     message: "Acceso restringido temporalmente por exceso de solicitudes.",
     code: "RATE_LIMIT_SENSITIVE",

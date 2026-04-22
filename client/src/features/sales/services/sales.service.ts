@@ -575,8 +575,8 @@ export const defectiveProductService = {
     status?: "pendiente" | "confirmado" | "rechazado"
   ): Promise<DefectiveProduct[]> {
     const url = employeeId
-      ? `/defective-products/staff/${employeeId}`
-      : "/defective-products/staff/me";
+      ? `/defective-products/employee/${employeeId}`
+      : "/defective-products/employee/me";
     const response = await api.get(url, { params: { status } });
     const rawData = response.data;
     return rawData?.data || rawData?.reports || [];
