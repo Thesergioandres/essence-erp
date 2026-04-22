@@ -264,10 +264,6 @@ export const saleService = {
           totalAdminProfit: 0,
           totalEmployeeProfit: 0,
           totalQuantity: 0,
-          totalCredits: 0,
-          totalPendingCredits: 0,
-          averageTicket: 0,
-          count: 0,
         },
       };
     }
@@ -316,10 +312,6 @@ export const saleService = {
           totalAdminProfit: 0,
           totalEmployeeProfit: 0,
           totalQuantity: 0,
-          totalCredits: 0,
-          totalPendingCredits: 0,
-          averageTicket: 0,
-          count: 0,
         },
         pagination: {
           page: 1,
