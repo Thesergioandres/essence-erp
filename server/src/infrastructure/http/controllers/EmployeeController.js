@@ -36,8 +36,20 @@ export class EmployeeController {
         pagination: result.pagination,
       });
     } catch (error) {
+      const requestId = req.requestId || req.id || "N/A";
+      console.error(`[EmployeeController.getAll] [RequestID: ${requestId}] ERROR:`, {
+        message: error.message,
+        stack: error.stack,
+        businessId: req.businessId,
+        query: req.query,
+      });
+
       const status = error.statusCode || 500;
-      res.status(status).json({ success: false, message: error.message });
+      res.status(status).json({
+        success: false,
+        message: error.message || "Error interno al obtener empleados",
+        requestId, // Devolver el requestId ayuda a trackear logs en producción
+      });
     }
   }
 

@@ -29,11 +29,30 @@ const isCommissionEligibleRole = (role) =>
   COMMISSION_ELIGIBLE_ROLES.has(normalizeRole(role));
 
 const resolveIdValue = (value) => {
-  if (value && typeof value === "object") {
-    return resolveIdValue(value._id || value.id || value.$oid || "");
+  if (!value) return "";
+
+  // Si ya es un string, lo limpiamos y devolvemos
+  if (typeof value === "string") return value.trim();
+
+  // Si es un objeto (como ObjectId o un documento)
+  if (typeof value === "object") {
+    // Si tiene un método toString que devuelve un ID válido (24 hex)
+    // Los ObjectId de Mongoose/MongoDB devuelven su hex string al hacer toString()
+    if (typeof value.toString === "function") {
+      const str = value.toString();
+      if (/^[a-fA-F0-9]{24}$/.test(str)) return str;
+    }
+
+    // Si es un documento o objeto con _id, id o $oid
+    const nestedId = value._id || value.id || (value.$oid ? String(value.$oid) : null);
+    if (nestedId && nestedId !== value) {
+      return resolveIdValue(nestedId);
+    }
   }
 
-  return String(value || "").trim();
+  // Fallback final: intentar convertir a string
+  const finalStr = String(value).trim();
+  return /^[a-fA-F0-9]{24}$/.test(finalStr) ? finalStr : "";
 };
 
 const sanitizeAllowedBranchesInput = (allowedBranches) => {
@@ -158,180 +177,190 @@ export class EmployeeRepository {
   }
 
   async findByBusiness(businessId, filters = {}) {
-    const page = parseInt(filters.page) || 1;
-    const limit = parseInt(filters.limit) || 20;
+    try {
+      const page = Math.max(parseInt(filters.page) || 1, 1);
+      const limit = Math.min(parseInt(filters.limit) || 20, 100);
 
-    const memberships = await Membership.find({
-      business: businessId,
-      role: employeeRoleQuery,
-      status: "active",
-    })
-      .select("user allowedBranches")
-      .lean();
+      // Normalizar businessId al inicio
+      const normalizedBusinessId = resolveIdValue(businessId);
+      if (!normalizedBusinessId || !mongoose.isValidObjectId(normalizedBusinessId)) {
+        console.error("[EmployeeRepository] ID de negocio inválido:", businessId);
+        const err = new Error("ID de negocio inválido o ausente");
+        err.statusCode = 400;
+        throw err;
+      }
 
-    const membershipEmployeeIds = memberships
-      .map((m) => resolveIdValue(m.user))
-      .filter((id) => id && mongoose.isValidObjectId(id));
+      // 1. Buscar membresías activas del negocio con los roles adecuados
+      const memberships = await Membership.find({
+        business: normalizedBusinessId,
+        role: employeeRoleQuery,
+        status: "active",
+      })
+        .select("user role allowedBranches")
+        .lean();
 
-    const membershipByEmployeeId = new Map(
-      memberships
-        .map((membership) => [resolveIdValue(membership.user), membership])
-        .filter(([employeeId]) => Boolean(employeeId)),
-    );
+      // Extraer IDs únicos de usuarios de las membresías
+      const membershipEmployeeIds = [
+        ...new Set(
+          memberships
+            .map((m) => resolveIdValue(m.user))
+            .filter((id) => id && mongoose.isValidObjectId(id)),
+        ),
+      ];
 
-    if (membershipEmployeeIds.length === 0) {
-      return {
-        employees: [],
-        pagination: {
-          page,
-          limit,
-          total: 0,
-          pages: 0,
-          hasMore: false,
-        },
-      };
-    }
+      // Mapear membresía por ID de usuario para acceso rápido
+      const membershipByEmployeeId = new Map(
+        memberships
+          .map((m) => [resolveIdValue(m.user), m])
+          .filter(([uid]) => Boolean(uid)),
+      );
 
-    const filter = {
-      role: employeeRoleQuery,
-      _id: { $in: membershipEmployeeIds },
-    };
-
-    if (filters.active !== undefined) {
-      filter.active = filters.active === "true";
-    }
-
-    const skip = (page - 1) * limit;
-
-    const [employees, total] = await Promise.all([
-      User.find(filter)
-        .select(
-          "name email phone address role active assignedProducts baseCommissionPercentage fixedCommissionOnly isCommissionFixed customCommissionRate",
-        )
-        .skip(skip)
-        .limit(limit)
-        .lean(),
-      User.countDocuments(filter),
-    ]);
-
-    const employeeIds = employees
-      .map((d) => resolveIdValue(d._id))
-      .filter((id) => id && mongoose.isValidObjectId(id));
-
-    if (employeeIds.length === 0) {
-      return {
-        employees: employees.map((employee) => ({
-          ...employee,
-          allowedBranches: normalizeAllowedBranchesForOutput(
-            membershipByEmployeeId.get(String(employee._id))?.allowedBranches,
-          ),
-          stats: {
-            totalStock: 0,
-            totalSales: 0,
-            totalProfit: 0,
-            assignedProductsCount: employee.assignedProducts?.length || 0,
+      if (membershipEmployeeIds.length === 0) {
+        return {
+          employees: [],
+          pagination: {
+            page,
+            limit,
+            total: 0,
+            pages: 0,
+            hasMore: false,
           },
-        })),
+        };
+      }
+
+      // 2. Filtrar y paginar usuarios (User)
+      const userFilter = {
+        role: employeeRoleQuery,
+        _id: { $in: membershipEmployeeIds },
+      };
+
+      if (filters.active !== undefined) {
+        userFilter.active = filters.active === "true";
+      }
+
+      if (filters.search) {
+        userFilter.$or = [
+          { name: { $regex: filters.search, $options: "i" } },
+          { email: { $regex: filters.search, $options: "i" } },
+        ];
+      }
+
+      const skip = (page - 1) * limit;
+
+      const [employees, total] = await Promise.all([
+        User.find(userFilter)
+          .select(
+            "name email phone address role active assignedProducts baseCommissionPercentage fixedCommissionOnly isCommissionFixed customCommissionRate",
+          )
+          .sort({ name: 1 })
+          .skip(skip)
+          .limit(limit)
+          .lean(),
+        User.countDocuments(userFilter),
+      ]);
+
+      // IDs de los empleados de la PÁGINA ACTUAL para agregaciones
+      const currentPageEmployeeIds = employees
+        .map((emp) => resolveIdValue(emp._id))
+        .filter((id) => id && mongoose.isValidObjectId(id));
+
+      if (currentPageEmployeeIds.length === 0) {
+        return {
+          employees: [],
+          pagination: { page, limit, total, pages: Math.ceil(total / limit), hasMore: false },
+        };
+      }
+
+      const businessObjectId = new mongoose.Types.ObjectId(normalizedBusinessId);
+      const employeeObjectIds = currentPageEmployeeIds.map(
+        (id) => new mongoose.Types.ObjectId(id),
+      );
+
+      // 3. Agregaciones de Stock y Ventas en paralelo
+      let stockAgg = [];
+      let salesAgg = [];
+
+      try {
+        [stockAgg, salesAgg] = await Promise.all([
+          EmployeeStock.aggregate([
+            {
+              $match: {
+                business: businessObjectId,
+                employee: { $in: employeeObjectIds },
+              },
+            },
+            {
+              $group: {
+                _id: "$employee",
+                totalStock: { $sum: "$quantity" },
+              },
+            },
+          ]),
+          Sale.aggregate([
+            {
+              $match: {
+                business: businessObjectId,
+                employee: { $in: employeeObjectIds },
+                paymentStatus: "confirmado",
+              },
+            },
+            {
+              $group: {
+                _id: "$employee",
+                totalSales: { $sum: 1 },
+                totalProfit: { $sum: "$employeeProfit" },
+              },
+            },
+          ]),
+        ]);
+      } catch (aggError) {
+        console.error("[EmployeeRepository] Error en agregaciones de stats:", aggError);
+        // No fallar toda la petición si las estadísticas fallan
+      }
+
+      // Convertir resultados de agregación a Mapas para búsqueda rápida
+      const stockByEmployee = new Map(
+        stockAgg.map((item) => [String(item._id), item.totalStock]),
+      );
+      const salesByEmployee = new Map(
+        salesAgg.map((item) => [String(item._id), item]),
+      );
+
+      // 4. Combinar datos
+      const employeesWithStats = employees.map((employee) => {
+        const empId = resolveIdValue(employee._id);
+        const membership = membershipByEmployeeId.get(empId);
+        const stats = salesByEmployee.get(empId) || { totalSales: 0, totalProfit: 0 };
+
+        return {
+          ...employee,
+          role: membership?.role || employee.role,
+          allowedBranches: normalizeAllowedBranchesForOutput(membership?.allowedBranches),
+          stats: {
+            totalStock: stockByEmployee.get(empId) || 0,
+            totalSales: stats.totalSales,
+            totalProfit: stats.totalProfit,
+            assignedProductsCount: Array.isArray(employee.assignedProducts) 
+              ? employee.assignedProducts.length 
+              : 0,
+          },
+        };
+      });
+
+      return {
+        employees: employeesWithStats,
         pagination: {
           page,
           limit,
           total,
           pages: Math.ceil(total / limit),
-          hasMore: false,
+          hasMore: page < Math.ceil(total / limit),
         },
       };
-    }
-
-    if (!mongoose.isValidObjectId(businessId)) {
-      const err = new Error("businessId inválido");
-      err.statusCode = 400;
-      throw err;
-    }
-
-    const businessObjectId = new mongoose.Types.ObjectId(businessId);
-    const objectIds = employeeIds.map((id) => new mongoose.Types.ObjectId(id));
-
-    let stockAgg = [];
-    let salesAgg = [];
-
-    try {
-      [stockAgg, salesAgg] = await Promise.all([
-        EmployeeStock.aggregate([
-          {
-            $match: {
-              business: businessObjectId,
-              employee: { $in: objectIds },
-            },
-          },
-          { $group: { _id: "$employee", totalStock: { $sum: "$quantity" } } },
-        ]),
-        Sale.aggregate([
-          {
-            $match: {
-              business: businessObjectId,
-              employee: { $in: objectIds },
-              // 💰 CASH FLOW: Solo ventas confirmadas para profit
-              paymentStatus: "confirmado",
-            },
-          },
-          {
-            $group: {
-              _id: "$employee",
-              totalSales: { $sum: 1 },
-              totalProfit: { $sum: "$employeeProfit" },
-            },
-          },
-        ]),
-      ]);
     } catch (error) {
-      console.error("[EmployeeRepository] stats aggregation failed:", error);
-      stockAgg = [];
-      salesAgg = [];
+      console.error("[EmployeeRepository.findByBusiness] CRITICAL ERROR:", error);
+      throw error; // Propagar para que el controlador devuelva 500
     }
-
-    const stockByEmployee = new Map(
-      stockAgg.map((s) => [String(s._id), Number(s.totalStock) || 0]),
-    );
-    const salesByEmployee = new Map(
-      salesAgg.map((s) => [
-        String(s._id),
-        {
-          totalSales: Number(s.totalSales) || 0,
-          totalProfit: Number(s.totalProfit) || 0,
-        },
-      ]),
-    );
-
-    const employeesWithStats = employees.map((employee) => {
-      const salesStats = salesByEmployee.get(String(employee._id)) || {
-        totalSales: 0,
-        totalProfit: 0,
-      };
-
-      return {
-        ...employee,
-        allowedBranches: normalizeAllowedBranchesForOutput(
-          membershipByEmployeeId.get(String(employee._id))?.allowedBranches,
-        ),
-        stats: {
-          totalStock: stockByEmployee.get(String(employee._id)) || 0,
-          totalSales: salesStats.totalSales,
-          totalProfit: salesStats.totalProfit,
-          assignedProductsCount: employee.assignedProducts?.length || 0,
-        },
-      };
-    });
-
-    return {
-      employees: employeesWithStats,
-      pagination: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit),
-        hasMore: page < Math.ceil(total / limit),
-      },
-    };
   }
 
   async findById(id, businessId) {
