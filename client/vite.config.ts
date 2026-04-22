@@ -67,29 +67,33 @@ export default defineConfig({
             },
           },
           {
-            urlPattern: /^https:\/\/res\.cloudinary\.com\/.*/i,
+            urlPattern: /^https?:\/\/res\.cloudinary\.com\/.*/i,
             handler: "CacheFirst",
             options: {
               cacheName: "cloudinary-images-cache",
               expiration: {
-                maxEntries: 50,
+                maxEntries: 100,
                 maxAgeSeconds: 60 * 60 * 24 * 30, // 30 días
               },
               cacheableResponse: {
                 statuses: [0, 200],
               },
+              fetchOptions: {
+                mode: "cors",
+                credentials: "omit",
+              },
             },
           },
           {
-            urlPattern: /\/api\/(products|categories)/,
+            urlPattern: /\/api\/(products|categories|promotions|business|storefront)/,
             handler: "NetworkFirst",
             options: {
               cacheName: "api-cache",
               expiration: {
-                maxEntries: 20,
-                maxAgeSeconds: 60 * 5, // 5 minutos
+                maxEntries: 50,
+                maxAgeSeconds: 60 * 60, // 1 hora
               },
-              networkTimeoutSeconds: 10,
+              networkTimeoutSeconds: 5,
             },
           },
         ],

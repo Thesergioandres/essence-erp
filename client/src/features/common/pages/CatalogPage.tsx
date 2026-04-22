@@ -910,6 +910,7 @@ export default function Catalog() {
                                     alt={`Producto ${index + 1} de ${promo.name}`}
                                     className="h-full w-full object-cover"
                                     loading="lazy"
+                                    crossOrigin="anonymous"
                                   />
                                 </div>
                               ))
@@ -1351,6 +1352,7 @@ export default function Catalog() {
                               alt={product.name}
                               className="h-10 w-10 rounded-lg object-cover"
                               loading="lazy"
+                              crossOrigin="anonymous"
                             />
                           ) : (
                             <div className="h-10 w-10 rounded-lg bg-white/10" />
@@ -1395,6 +1397,7 @@ export default function Catalog() {
                             alt={product.name}
                             className="h-32 w-full bg-white/5 object-contain p-2"
                             loading="lazy"
+                            crossOrigin="anonymous"
                           />
                         ) : (
                           <div className="flex h-32 items-center justify-center text-xs text-gray-400">

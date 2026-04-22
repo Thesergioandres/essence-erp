@@ -317,6 +317,7 @@ export default function ProductsPage() {
                       alt={product.name}
                       className="h-20 w-20 shrink-0 rounded-lg object-cover"
                       loading="lazy"
+                      crossOrigin="anonymous"
                     />
                   ) : (
                     <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg border border-dashed border-gray-600 text-xs text-gray-500">
@@ -469,6 +470,7 @@ export default function ProductsPage() {
                               alt={product.name}
                               className="h-14 w-14 rounded-lg object-cover"
                               loading="lazy"
+                              crossOrigin="anonymous"
                             />
                           ) : (
                             <div className="flex h-14 w-14 items-center justify-center rounded-lg border border-dashed border-gray-600 text-gray-500">

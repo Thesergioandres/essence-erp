@@ -1424,6 +1424,7 @@ export default function Sales({ hideAdminProfit = false }: SalesPageProps) {
                                       src={firstSale.product.image.url}
                                       alt={firstSale.product.name}
                                       className="mr-3 h-10 w-10 rounded object-cover"
+                                      crossOrigin="anonymous"
                                     />
                                   )}
                                 <span className="text-sm text-gray-200">
@@ -1656,6 +1657,7 @@ export default function Sales({ hideAdminProfit = false }: SalesPageProps) {
                                         src={product.image.url}
                                         alt={product.name}
                                         className="mr-3 h-8 w-8 rounded object-cover"
+                                        crossOrigin="anonymous"
                                       />
                                     )}
                                     <span className="text-sm text-gray-300">

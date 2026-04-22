@@ -283,6 +283,7 @@ export default function PublicEmployeeCatalog() {
                       src={product.image.url}
                       alt={product.name}
                       className="h-full w-full object-cover"
+                      crossOrigin="anonymous"
                     />
                   ) : (
                     <div className="flex h-full items-center justify-center text-6xl">

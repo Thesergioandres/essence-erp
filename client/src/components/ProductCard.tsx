@@ -38,6 +38,7 @@ export default function ProductCard({
                 alt={product.name}
                 className="h-full w-full object-cover transition duration-500 group-hover:scale-110"
                 loading="lazy"
+                crossOrigin="anonymous"
               />
             ) : (
               <div className="flex h-full w-full items-center justify-center">
@@ -186,6 +187,7 @@ export default function ProductCard({
               alt={product.name}
               className="h-full w-full object-cover transition duration-500 group-hover:scale-110"
               loading="lazy"
+              crossOrigin="anonymous"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-gray-900/80 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"></div>
           </>

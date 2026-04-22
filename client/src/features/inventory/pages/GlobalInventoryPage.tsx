@@ -304,6 +304,7 @@ export default function GlobalInventoryPage() {
                             src={item.product.image.url}
                             alt={item.product.name}
                             className="h-full w-full object-cover"
+                            crossOrigin="anonymous"
                           />
                         ) : (
                           <Box className="h-full w-full p-2 text-gray-500" />

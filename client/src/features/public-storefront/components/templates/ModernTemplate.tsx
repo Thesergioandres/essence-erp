@@ -66,6 +66,7 @@ export default function ModernTemplate({
                     src={business.logoUrl}
                     alt={business.name}
                     className="h-full w-full object-cover"
+                    crossOrigin="anonymous"
                   />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center text-2xl font-bold text-white">
@@ -115,6 +116,7 @@ export default function ModernTemplate({
                       src={product.imageUrl}
                       alt={product.name}
                       className="h-full w-full object-cover transition-all duration-300 group-hover:scale-105"
+                      crossOrigin="anonymous"
                     />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center text-5xl text-slate-500">

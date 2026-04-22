@@ -674,6 +674,7 @@ export default function AddProduct() {
                   src={imagePreview}
                   alt="Vista previa"
                   className="h-56 w-full rounded-lg object-cover"
+                  crossOrigin="anonymous"
                 />
               ) : (
                 <div className="flex h-56 items-center justify-center rounded-lg border border-dashed border-gray-600 text-gray-500">

@@ -37,6 +37,7 @@ export default function Navbar({ logoUrlOverride }: NavbarProps) {
               alt="Essence ERP"
               className="h-12 w-auto sm:h-14"
               loading="lazy"
+              crossOrigin="anonymous"
             />
           </Link>
 

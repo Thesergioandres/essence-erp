@@ -692,6 +692,7 @@ export default function EditProduct() {
                     src={imagePreview}
                     alt="Vista previa"
                     className="h-56 w-full rounded-lg object-cover"
+                    crossOrigin="anonymous"
                   />
                   <button
                     type="button"

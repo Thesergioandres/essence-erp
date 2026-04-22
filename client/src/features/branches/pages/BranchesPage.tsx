@@ -814,6 +814,7 @@ export default function Branches({ hideFinancialData = false }: BranchesProps) {
                                     src={product.image.url}
                                     alt={product.name}
                                     className="h-8 w-8 shrink-0 rounded object-cover sm:h-10 sm:w-10"
+                                    crossOrigin="anonymous"
                                   />
                                 )}
                                 <div className="min-w-0">

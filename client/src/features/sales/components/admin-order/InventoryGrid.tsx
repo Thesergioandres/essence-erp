@@ -218,6 +218,7 @@ export function InventoryGrid({
                       src={product.image.url}
                       alt={product.name}
                       className="h-10 w-10 rounded-lg object-cover"
+                      crossOrigin="anonymous"
                     />
                   ) : (
                     <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-700">

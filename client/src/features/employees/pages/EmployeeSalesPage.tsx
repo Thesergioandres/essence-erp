@@ -550,6 +550,7 @@ export default function EmployeeSales() {
                                         src={product.image.url}
                                         alt={product.name}
                                         className="h-8 w-8 rounded object-cover"
+                                        crossOrigin="anonymous"
                                       />
                                     )}
                                     <div>
@@ -671,6 +672,7 @@ export default function EmployeeSales() {
                               src={product.image.url}
                               alt={product.name}
                               className="h-8 w-8 rounded object-cover"
+                              crossOrigin="anonymous"
                             />
                           )}
                           <div>

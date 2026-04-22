@@ -134,6 +134,7 @@ export default function ProductDetail() {
                 alt={product.name}
                 className="h-full w-full rounded-lg object-cover"
                 loading="lazy"
+                crossOrigin="anonymous"
               />
             </div>
           </div>

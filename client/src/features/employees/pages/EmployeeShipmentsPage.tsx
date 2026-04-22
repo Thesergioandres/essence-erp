@@ -502,6 +502,7 @@ export default function EmployeeShipmentsPage() {
                               alt="Guía de despacho"
                               className="h-32 w-full rounded-md object-cover"
                               loading="lazy"
+                              crossOrigin="anonymous"
                             />
                             <a
                               href={guideImage}
