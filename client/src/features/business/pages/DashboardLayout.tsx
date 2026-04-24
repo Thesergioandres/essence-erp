@@ -21,6 +21,7 @@ import {
   ShoppingBag,
   Star,
   Tag,
+  Trophy,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -333,6 +334,18 @@ export default function DashboardLayout() {
             to: "/admin/staff",
             icon: Users,
             feature: "employees",
+          },
+          {
+            id: "gamification",
+            label: "Gamificación & Puntos",
+            to: "/admin/gamification",
+            icon: Star,
+          },
+          {
+            id: "gamification-ranking",
+            label: "Ranking Global",
+            to: "/admin/gamification-ranking",
+            icon: Trophy,
           },
           {
             id: "schedule-overview",
