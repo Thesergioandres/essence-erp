@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { stockService } from "../../inventory/services/inventory.service";
 import type { EmployeeStock } from "../../inventory/types/product.types";
+import { useBusiness } from "../../../context/BusinessContext";
 
 const sanitizeIdString = (raw: string): string => {
   const trimmed = String(raw || "").trim();
@@ -79,13 +80,15 @@ const toStableListKey = (
 };
 
 export default function EmployeeProducts() {
+  const { businessId, hydrating } = useBusiness();
   const [stock, setStock] = useState<EmployeeStock[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "normal" | "low">("all");
 
   useEffect(() => {
+    if (hydrating) return;
     loadStock();
-  }, []);
+  }, [businessId, hydrating]);
 
   const loadStock = async () => {
     try {
