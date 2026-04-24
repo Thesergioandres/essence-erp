@@ -1,6 +1,6 @@
-﻿# DOCUMENTACIÓN MAESTRA — Essence ERP
+# DOCUMENTACIÓN MAESTRA — Essence ERP
 
-> Generado automáticamente. Última actualización: 18 de abril de 2026
+> Generado automáticamente. Última actualización: 24 de abril de 2026
 
 ## ÍNDICE
 
@@ -43,6 +43,7 @@ Fuentes: docs/COMPREHENSIVE_PROJECT_ANALYSIS.md, docs/DIAGRAMAS_DE_SECUENCIA.md,
 - Seguridad global activa antes de rutas: `helmet`, `express-mongo-sanitize`, `xss-clean`, `securityHeaders`, `sanitizeHeaders`, `suspiciousRequestDetector`, `productionWriteGuard`, `financialShield` y `requestId`.
 - El rate limit general se aplica en `/api` (`apiLimiter`), con endpoint público explícito para SaaS: `GET /api/v2/global-settings/public`.
 - La API real está consolidada en `/api/v2/*` y monta módulos de auth, business, sales, stock, analytics, notifications, push, dispatches, segments, points, uploads, etc.
+- **Business Context Fallback:** El sistema implementa una resolución automática de `businessId` para empleados. Si la cabecera falta o el estado global está vacío, el middleware inyecta el `businessId` del perfil activo para evitar errores de contexto en el POS.
 
 <!-- AGREGADO POR ANÁLISIS DE CÓDIGO -->
 
@@ -170,6 +171,8 @@ Fuentes: docs/DOCUMENTACION_MAESTRA_ESSENCE.md, docs/LOGIC_UPDATE_REPORT.md, doc
 - Servicio principal: `server/src/infrastructure/services/productPricing.service.js`.
 - Regla manual: si existe `employeePriceManualValue` válido, se usa como precio final empleado.
 - Regla automática: si no hay manual, se calcula con comisión base del negocio.
+- **Transparencia en UI:** El formulario de producto (`ProductForm.tsx`) muestra el precio calculado dinámicamente incluso en modo automático (campo deshabilitado pero con valor visible) para evitar la ambigüedad de valores en "0".
+- **Persistencia en Ventas:** El hook `pre-save` en el modelo `Sale.js` respeta el precio enviado por el controlador si este es manual, evitando que se sobrescriba por el porcentaje de comisión por defecto del 20%.
 - Fórmula aplicada por dominio (`FinanceService`):
   - `employeeCommission = salePrice * (commissionPercentage / 100)`
   - `employeePrice = salePrice - employeeCommission`
@@ -266,7 +269,25 @@ Fuente: docs/RAILWAY_DEPLOY.md
 
 ## 14. Secciones Adicionales
 
-### 14.1 Volcado íntegro consolidado previo (fuente principal sin pérdida de detalle)
+### 14.1 Constitución del Código (Manual de Arquitectura y Seguridad)
+
+Este apartado hereda las reglas dogmáticas de desarrollo del proyecto Essence ERP.
+
+#### 🏗️ Arquitectura Estricta (Backend Hexagonal & Frontend Clean)
+- **Backend (Node.js + Express):** Prohibida lógica de negocio o consultas directas en controladores. El flujo es: Rutas -> Controladores -> Casos de Uso -> Repositorios.
+- **Frontend (React + Tailwind):** Patrón basado en Features (`client/src/features/`). Separación total entre Hooks (lógica) y Componentes (UI).
+
+#### 🛡️ Seguridad y "La Fortaleza Fantasma"
+- **Aislamiento (Anti-IDOR):** Todas las consultas en repositorios DEBEN filtrar por `{ businessId }`.
+- **Modo Fantasma (Rol GOD):** El bypass de `businessId` es total y las acciones de este rol son invisibles para el sistema de auditoría.
+- **Precios Incorruptibles:** El backend SIEMPRE consulta el precio en BD para cálculos financieros; nunca confía en el `price` enviado por el cliente.
+
+#### 💰 Blindaje Financiero
+- **Atomicidad:** Todo flujo crítico (Ventas, Stock, Gamificación) debe envolverse en `session.startTransaction()`.
+- **Data Scrubbing:** Si `HIDE_FINANCIAL_DATA` es true, se limpian campos de costo (`purchasePrice`, `averageCost`, etc.) antes de responder.
+- **Ley del 30%:** El `customCommissionRate` tiene prioridad absoluta sobre cualquier otra regla si `isCommissionFixed` es true.
+
+### 14.2 Volcado íntegro consolidado previo (fuente principal sin pérdida de detalle)
 
 > Origen: docs/DOCUMENTACION_UNIFICADA_ESSENCE.md
 

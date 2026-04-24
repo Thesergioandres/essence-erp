@@ -319,6 +319,11 @@ app.use(requestLogger);
 // Blindaje financiero global: nullifica costos sensibles si el usuario no tiene view_costs
 app.use(financialShield);
 
+// Endpoint de Salud (Línea de vida para Railway/Docker)
+app.get("/health", (req, res) => {
+  res.status(200).send("OK");
+});
+
 // Rutas
 app.get("/", (req, res) => {
   res.json({
@@ -428,8 +433,10 @@ export default app;
 
 // Iniciar servidor (evitar escuchar en entorno de tests)
 if (process.env.NODE_ENV !== "test") {
-  app.listen(PORT, () => {
-    console.log(`Servidor corriendo en http://localhost:${PORT}`);
+  console.log("🚀 Iniciando listener del servidor...");
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`✅ Servidor corriendo en http://0.0.0.0:${PORT}`);
+    console.log(`📌 Modo: ${process.env.NODE_ENV}`);
   });
 
   // Capturar errores no manejados
