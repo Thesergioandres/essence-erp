@@ -285,15 +285,18 @@ Fuente: docs/RAILWAY_DEPLOY.md
 Este apartado hereda las reglas dogmáticas de desarrollo del proyecto Essence ERP.
 
 #### 🏗️ Arquitectura Estricta (Backend Hexagonal & Frontend Clean)
+
 - **Backend (Node.js + Express):** Prohibida lógica de negocio o consultas directas en controladores. El flujo es: Rutas -> Controladores -> Casos de Uso -> Repositorios.
 - **Frontend (React + Tailwind):** Patrón basado en Features (`client/src/features/`). Separación total entre Hooks (lógica) y Componentes (UI).
 
 #### 🛡️ Seguridad y "La Fortaleza Fantasma"
+
 - **Aislamiento (Anti-IDOR):** Todas las consultas en repositorios DEBEN filtrar por `{ businessId }`.
 - **Modo Fantasma (Rol GOD):** El bypass de `businessId` es total y las acciones de este rol son invisibles para el sistema de auditoría.
 - **Precios Incorruptibles:** El backend SIEMPRE consulta el precio en BD para cálculos financieros; nunca confía en el `price` enviado por el cliente.
 
 #### 💰 Blindaje Financiero
+
 - **Atomicidad:** Todo flujo crítico (Ventas, Stock, Gamificación) debe envolverse en `session.startTransaction()`.
 - **Data Scrubbing:** Si `HIDE_FINANCIAL_DATA` es true, se limpian campos de costo (`purchasePrice`, `averageCost`, etc.) antes de responder.
 - **Ley del 30%:** El `customCommissionRate` tiene prioridad absoluta sobre cualquier otra regla si `isCommissionFixed` es true.

@@ -1,6 +1,9 @@
 import stockPersistenceUseCase from "../../../application/use-cases/repository-gateways/StockPersistenceUseCase.js";
 import { isEmployeeRole } from "../../../utils/roleAliases.js";
-import { getBusinessBaseCommissionPercentage, applyDynamicEmployeePricingToProduct } from "../../services/productPricing.service.js";
+import {
+  applyDynamicEmployeePricingToProduct,
+  getBusinessBaseCommissionPercentage,
+} from "../../services/productPricing.service.js";
 
 class StockController {
   async assignToEmployee(req, res) {
@@ -167,10 +170,14 @@ class StockController {
         employeeId,
       );
 
-      const baseCommissionPercentage = await getBusinessBaseCommissionPercentage(businessId);
-      const stockWithDynamicPricing = stock.map(item => {
+      const baseCommissionPercentage =
+        await getBusinessBaseCommissionPercentage(businessId);
+      const stockWithDynamicPricing = stock.map((item) => {
         if (item.product) {
-          item.product = applyDynamicEmployeePricingToProduct(item.product, baseCommissionPercentage);
+          item.product = applyDynamicEmployeePricingToProduct(
+            item.product,
+            baseCommissionPercentage,
+          );
         }
         return item;
       });
@@ -194,10 +201,14 @@ class StockController {
         req.params.branchId,
       );
 
-      const baseCommissionPercentage = await getBusinessBaseCommissionPercentage(businessId);
-      const stockWithDynamicPricing = stock.map(item => {
+      const baseCommissionPercentage =
+        await getBusinessBaseCommissionPercentage(businessId);
+      const stockWithDynamicPricing = stock.map((item) => {
         if (item.product) {
-          item.product = applyDynamicEmployeePricingToProduct(item.product, baseCommissionPercentage);
+          item.product = applyDynamicEmployeePricingToProduct(
+            item.product,
+            baseCommissionPercentage,
+          );
         }
         return item;
       });
