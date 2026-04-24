@@ -6,6 +6,10 @@ import Membership from "../../database/models/Membership.js";
 import ProfitHistory from "../../database/models/ProfitHistory.js";
 import Promotion from "../../database/models/Promotion.js";
 import Sale from "../../database/models/Sale.js";
+import Product from "../../database/models/Product.js";
+import GamificationConfig from "../../database/models/GamificationConfig.js";
+import EmployeePoints from "../../database/models/EmployeePoints.js";
+import { GamificationService } from "../../../domain/services/GamificationService.js";
 
 export async function confirmSalePayment(req, res) {
   try {
@@ -110,6 +114,72 @@ export async function confirmSalePayment(req, res) {
               saleId: sale.saleId,
             },
           });
+        }
+      }
+    }
+
+    // === GAMIFICATION: Accrue points if not already accrued ===
+    if (sale.employee && sale.paymentStatus !== "confirmado") {
+      const [gamificationConfig, product, existingPointsHistory] = await Promise.all([
+        GamificationConfig.findOne({ business: businessId, enabled: true }).lean(),
+        Product.findById(sale.product).select("gamificationPointsMultiplier").lean(),
+        EmployeePoints.findOne({
+          employee: sale.employee,
+          business: businessId,
+          "history.sale": sale._id,
+        }).lean(),
+      ]);
+
+      if (gamificationConfig && product && !existingPointsHistory) {
+        const pointsMultiplier = product.gamificationPointsMultiplier || 1;
+        const amountPerPoint =
+          gamificationConfig.pointsRatio?.amountPerPoint || 1000;
+
+        const { points } = GamificationService.calculatePointsForSale(
+          sale.totalPrice || sale.salePrice * sale.quantity,
+          pointsMultiplier,
+          amountPerPoint,
+        );
+
+        if (points > 0) {
+          const pointsEntry = {
+            type: "earned",
+            points,
+            sale: sale._id,
+            saleGroupId: sale.saleGroupId,
+            productName: sale.productName || "Producto",
+            multiplier: pointsMultiplier,
+            saleAmount: sale.totalPrice || sale.salePrice * sale.quantity,
+            description: `+${points} pts por venta confirmada ${sale.saleId}`,
+            createdAt: new Date(),
+          };
+
+          const updatedPoints = await EmployeePoints.findOneAndUpdate(
+            { employee: sale.employee, business: businessId },
+            {
+              $inc: { currentPoints: points },
+              $push: {
+                history: {
+                  $each: [pointsEntry],
+                  $slice: -500,
+                },
+              },
+              $set: { lastPointsEarnedAt: new Date() },
+            },
+            { upsert: true, new: true },
+          );
+
+          if (updatedPoints) {
+            const tierResult = GamificationService.resolveTier(
+              updatedPoints.currentPoints,
+              gamificationConfig.tiers,
+            );
+            updatedPoints.currentTier = {
+              name: tierResult.tier?.name || null,
+              bonusPercentage: tierResult.bonusPercentage,
+            };
+            await updatedPoints.save();
+          }
         }
       }
     }

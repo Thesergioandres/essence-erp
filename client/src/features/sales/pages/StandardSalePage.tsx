@@ -40,6 +40,8 @@ import type {
   AdminOrderPayload,
   ProductWithStock,
 } from "../types/admin-order.types";
+import { gamificationService } from "../../gamification/services/gamification.service";
+import type { GamificationConfig } from "../../gamification/types/gamification.types";
 
 type RegisterStandardSaleHandler = (
   data: RegisterStandardSaleInput
@@ -333,6 +335,7 @@ export default function StandardSalePage({
   const [productSelectorId, setProductSelectorId] = useState("");
 
   // State: Loading/Error/Success
+  const [gamificationConfig, setGamificationConfig] = useState<GamificationConfig | null>(null);
   const [dataLoading, setDataLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -367,6 +370,11 @@ export default function StandardSalePage({
     const fetchData = async () => {
       setDataLoading(true);
       try {
+        // Fetch gamification config
+        gamificationService.getConfig()
+          .then(res => setGamificationConfig(res.enabled ? res : null))
+          .catch(() => setGamificationConfig(null));
+
         if (isEmployee) {
           // 1. Fetch Employee Inventory (Personal Stock)
           // 2. Fetch Allowed Branches (Company Stock)
@@ -596,7 +604,14 @@ export default function StandardSalePage({
     };
 
     fetchData();
-  }, [currentUserId, isEmployee, userLoading]);
+  }, [
+    currentUserId,
+    isEmployee,
+    userLoading,
+    businessHydrating,
+    effectiveBusinessId,
+    user,
+  ]);
 
   useEffect(() => {
     if (!isEmployee) {
@@ -1391,6 +1406,7 @@ export default function StandardSalePage({
                 order={order}
                 isSubmitting={isSubmitting}
                 onConfirm={handleConfirmOrder}
+                gamificationConfig={gamificationConfig}
               />
             </div>
           </div>

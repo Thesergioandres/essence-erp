@@ -3,19 +3,23 @@
  * Live metrics calculation and order totals
  */
 
-import { Calculator, CheckCircle, TrendingUp } from "lucide-react";
+import { useMemo } from "react";
+import { Calculator, CheckCircle, TrendingUp, Star } from "lucide-react";
 import type { OrderState } from "../../types/admin-order.types";
+import type { GamificationConfig } from "../../../gamification/types/gamification.types";
 
 interface OrderSummaryProps {
   order: OrderState;
   isSubmitting?: boolean;
   onConfirm: () => void;
+  gamificationConfig?: GamificationConfig | null;
 }
 
 export function OrderSummary({
   order,
   isSubmitting,
   onConfirm,
+  gamificationConfig,
 }: OrderSummaryProps) {
   const {
     items,
@@ -65,6 +69,17 @@ export function OrderSummary({
         return sum + unitDue * quantity;
       }, 0)
     : 0;
+
+  // Gamification: Estimated points
+  const estimatedPoints = useMemo(() => {
+    if (!gamificationConfig?.enabled || totalPayable <= 0) return 0;
+    
+    const amountPerPoint = gamificationConfig.pointsRatio?.amountPerPoint || 1000;
+    
+    // We assume default multiplier of 1 for preview (fetching per-product is complex here)
+    // but we can at least show the base points.
+    return Math.floor(totalPayable / amountPerPoint);
+  }, [gamificationConfig, totalPayable]);
 
   const canSubmit = items.length > 0 && !isSubmitting;
 
@@ -132,9 +147,17 @@ export function OrderSummary({
       <div className="mb-4 border-t border-gray-700 pt-4">
         <div className="flex items-end justify-between">
           <span className="text-gray-400">Total a Pagar</span>
-          <span className="text-3xl font-bold text-white">
-            ${totalPayable.toLocaleString()}
-          </span>
+          <div className="text-right">
+            {estimatedPoints > 0 && isEmployeeSale && (
+              <div className="mb-1 flex items-center justify-end gap-1 text-xs font-bold text-amber-400">
+                <Star className="h-3 w-3 fill-amber-400" />
+                +{estimatedPoints.toLocaleString()} pts estimados
+              </div>
+            )}
+            <span className="text-3xl font-bold text-white">
+              ${totalPayable.toLocaleString()}
+            </span>
+          </div>
         </div>
       </div>
 
