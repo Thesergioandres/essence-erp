@@ -235,7 +235,7 @@ export default function EmployeeProducts() {
                     src={product.image.url}
                     alt={product.name}
                     className="h-40 w-full rounded-lg object-cover"
-                    crossOrigin="anonymous"
+                    referrerPolicy="no-referrer"
                   />
                 ) : (
                   <div className="flex h-40 w-full items-center justify-center rounded-lg bg-gray-700">

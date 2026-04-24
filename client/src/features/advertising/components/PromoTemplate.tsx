@@ -74,7 +74,7 @@ const PromoTemplate = forwardRef<HTMLDivElement, TemplateProps>(
             <img
               src={logoUrl}
               alt="logo"
-              crossOrigin="anonymous"
+              referrerPolicy="no-referrer"
               className="h-14 w-14 rounded-full border-2 object-cover"
               style={{ borderColor: "rgba(255, 255, 255, 0.5)" }}
             />
@@ -120,7 +120,7 @@ const PromoTemplate = forwardRef<HTMLDivElement, TemplateProps>(
                       <img
                         src={image}
                         alt={product.name}
-                        crossOrigin="anonymous"
+                        referrerPolicy="no-referrer"
                         className="h-[190px] w-[190px] object-contain"
                         style={{
                           filter: "drop-shadow(0 14px 28px rgba(0,0,0,0.35))",
@@ -133,7 +133,7 @@ const PromoTemplate = forwardRef<HTMLDivElement, TemplateProps>(
                 <img
                   src={product.image}
                   alt={product.name}
-                  crossOrigin="anonymous"
+                  referrerPolicy="no-referrer"
                   className="h-[440px] w-[440px] rounded-3xl object-contain"
                   style={{
                     filter: "drop-shadow(0 18px 36px rgba(0,0,0,0.35))",

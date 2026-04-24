@@ -266,7 +266,7 @@ export default function ProductSelector({
                   src={selectedProduct.image.url}
                   alt=""
                   className="h-6 w-6 rounded object-cover"
-                  crossOrigin="anonymous"
+                  referrerPolicy="no-referrer"
                 />
               ) : (
                 <Package className="h-5 w-5 text-gray-400" />
@@ -477,7 +477,7 @@ export default function ProductSelector({
                           alt=""
                           className="h-8 w-8 rounded object-cover"
                           loading="lazy"
-                          crossOrigin="anonymous"
+                          referrerPolicy="no-referrer"
                         />
                       ) : (
                         <div className="flex h-8 w-8 items-center justify-center rounded bg-gray-700">

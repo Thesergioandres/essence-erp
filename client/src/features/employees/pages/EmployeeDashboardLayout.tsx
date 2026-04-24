@@ -681,7 +681,7 @@ export default function EmployeeDashboardLayout() {
                 src={brandLogo}
                 alt={`Logo de ${brandName}`}
                 className="h-10 w-10 rounded-lg bg-white/5 p-1 drop-shadow-lg sm:h-12 sm:w-12"
-                crossOrigin="anonymous"
+                referrerPolicy="no-referrer"
               />
               <div>
                 <h1 className="bg-linear-to-r from-cyan-300 via-blue-300 to-slate-200 bg-clip-text text-2xl font-bold text-transparent sm:text-3xl">

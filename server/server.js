@@ -286,7 +286,9 @@ app.use(requestIdMiddleware);
 app.use(withResponseRequestId);
 
 // Middlewares de seguridad
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: false,
+}));
 app.use(helmet.hidePoweredBy());
 app.use(mongoSanitize());
 app.use(xss());

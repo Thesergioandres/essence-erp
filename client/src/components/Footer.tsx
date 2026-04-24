@@ -63,7 +63,7 @@ export default function Footer({ logoUrlOverride }: FooterProps) {
               alt="Essence ERP"
               className="mx-auto h-16 w-auto sm:mx-0 sm:h-20"
               loading="lazy"
-              crossOrigin="anonymous"
+              referrerPolicy="no-referrer"
             />
             <p className="mt-3 px-2 text-sm leading-relaxed text-slate-300 sm:mt-4 sm:px-0 sm:text-base">
               ERP modular para operar múltiples negocios con inventario,

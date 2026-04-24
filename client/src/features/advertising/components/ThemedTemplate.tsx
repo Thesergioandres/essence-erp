@@ -325,7 +325,7 @@ const ThemedTemplate = forwardRef<HTMLDivElement, ThemedTemplateProps>(
             <img
               src={logoUrl}
               alt="logo"
-              crossOrigin="anonymous"
+              referrerPolicy="no-referrer"
               className="h-14 w-14 rounded-full object-cover"
               style={{ border: `2px solid ${theme.frameBorder}` }}
             />
@@ -365,7 +365,7 @@ const ThemedTemplate = forwardRef<HTMLDivElement, ThemedTemplateProps>(
               <img
                 src={product.image}
                 alt={product.name}
-                crossOrigin="anonymous"
+                referrerPolicy="no-referrer"
                 className="rounded-3xl object-contain"
                 style={{
                   width: imageInner,

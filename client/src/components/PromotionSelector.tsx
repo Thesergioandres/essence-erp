@@ -226,7 +226,7 @@ export default function PromotionSelector({
                           alt=""
                           className="h-8 w-8 rounded object-cover"
                           loading="lazy"
-                          crossOrigin="anonymous"
+                          referrerPolicy="no-referrer"
                         />
                       ) : (
                         <div className="flex h-8 w-8 items-center justify-center rounded bg-gray-700">

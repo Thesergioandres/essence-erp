@@ -1098,7 +1098,7 @@ export default function PromotionSalePage() {
                             src={promoImage}
                             alt={promo.name}
                             className="h-12 w-12 rounded-lg object-cover"
-                            crossOrigin="anonymous"
+                            referrerPolicy="no-referrer"
                           />
                         ) : (
                           <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gray-700">
@@ -1218,7 +1218,7 @@ export default function PromotionSalePage() {
                       src={order.paymentProof}
                       alt="Comprobante"
                       className="h-36 w-full rounded-lg object-cover"
-                      crossOrigin="anonymous"
+                      referrerPolicy="no-referrer"
                     />
                     <button
                       type="button"

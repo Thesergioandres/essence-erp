@@ -32,7 +32,7 @@ const FeedTemplate = forwardRef<HTMLDivElement, TemplateProps>(
             <img
               src={logoUrl}
               alt="logo"
-              crossOrigin="anonymous"
+              referrerPolicy="no-referrer"
               className="h-12 w-12 rounded-full object-cover"
             />
           )}
@@ -67,7 +67,7 @@ const FeedTemplate = forwardRef<HTMLDivElement, TemplateProps>(
               <img
                 src={product.image}
                 alt={product.name}
-                crossOrigin="anonymous"
+                referrerPolicy="no-referrer"
                 className="max-h-[640px] w-auto object-contain"
                 style={{ filter: "drop-shadow(0 16px 30px rgba(0,0,0,0.2))" }}
               />

@@ -704,7 +704,7 @@ export default function DashboardLayout() {
                 src={brandLogo}
                 alt={brandName}
                 className="h-10 w-10 rounded-lg bg-white/5 drop-shadow-lg sm:h-12 sm:w-12"
-                crossOrigin="anonymous"
+                referrerPolicy="no-referrer"
               />
               <div>
                 <h1 className="bg-linear-to-r from-purple-400 to-pink-400 bg-clip-text text-2xl font-bold text-transparent sm:text-3xl">
@@ -873,7 +873,7 @@ export default function DashboardLayout() {
                 src={brandLogo}
                 alt={brandName}
                 className="h-9 w-9 rounded-lg bg-white/5 drop-shadow"
-                crossOrigin="anonymous"
+                referrerPolicy="no-referrer"
               />
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">

@@ -1000,7 +1000,7 @@ export default function Promotions() {
                       src={promo.image.url}
                       alt={promo.name}
                       className="h-full w-full object-cover"
-                      crossOrigin="anonymous"
+                      referrerPolicy="no-referrer"
                     />
                   ) : (
                     <div className="flex h-full items-center justify-center">
@@ -1259,7 +1259,7 @@ export default function Promotions() {
                             src={imagePreview}
                             alt="Preview"
                             className="h-32 w-full rounded-lg object-cover"
-                            crossOrigin="anonymous"
+                            referrerPolicy="no-referrer"
                           />
                           {generatingCollage && (
                             <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/50">
@@ -1606,7 +1606,7 @@ export default function Promotions() {
                                 src={item.productImage}
                                 alt={item.productName}
                                 className="h-10 w-10 rounded object-cover"
-                                crossOrigin="anonymous"
+                                referrerPolicy="no-referrer"
                               />
                             ) : (
                               <div className="flex h-10 w-10 items-center justify-center rounded bg-gray-700">
@@ -1945,7 +1945,7 @@ export default function Promotions() {
                               src={imagePreview}
                               alt="Preview"
                               className="h-16 w-16 rounded-lg object-cover"
-                              crossOrigin="anonymous"
+                              referrerPolicy="no-referrer"
                             />
                           ) : (
                             <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-gray-700">

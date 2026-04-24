@@ -1297,7 +1297,7 @@ export default function StandardSalePage({
                       src={order.paymentProof}
                       alt="Comprobante"
                       className="h-36 w-full rounded-lg object-cover"
-                      crossOrigin="anonymous"
+                      referrerPolicy="no-referrer"
                     />
                     <button
                       type="button"

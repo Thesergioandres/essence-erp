@@ -44,7 +44,7 @@ const StoryTemplate = forwardRef<HTMLDivElement, TemplateProps>(
             <img
               src={logoUrl}
               alt="logo"
-              crossOrigin="anonymous"
+              referrerPolicy="no-referrer"
               className="h-16 w-16 rounded-full border-2 object-cover"
               style={{ borderColor: "rgba(255, 255, 255, 0.4)" }}
             />
@@ -78,7 +78,7 @@ const StoryTemplate = forwardRef<HTMLDivElement, TemplateProps>(
               <img
                 src={product.image}
                 alt={product.name}
-                crossOrigin="anonymous"
+                referrerPolicy="no-referrer"
                 className="max-h-[720px] w-auto rounded-3xl object-contain"
                 style={{ filter: "drop-shadow(0 20px 40px rgba(0,0,0,0.35))" }}
               />

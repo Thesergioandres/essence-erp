@@ -455,7 +455,7 @@ export default function BusinessSettings() {
                             src={form.logoUrl}
                             alt="Logo"
                             className="h-full w-full object-cover"
-                            crossOrigin="anonymous"
+                            referrerPolicy="no-referrer"
                           />
                         ) : (
                           <div className="flex h-full w-full items-center justify-center text-xs text-gray-500">

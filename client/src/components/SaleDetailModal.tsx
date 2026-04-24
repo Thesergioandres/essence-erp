@@ -471,7 +471,7 @@ export default function SaleDetailModal({
                         src={productImageUrl}
                         alt={product?.name || sale.productName || "Producto"}
                         className="h-20 w-20 rounded-xl border border-slate-700 object-cover"
-                        crossOrigin="anonymous"
+                        referrerPolicy="no-referrer"
                       />
                     ) : (
                       <div className="flex h-20 w-20 items-center justify-center rounded-xl border border-dashed border-slate-700 text-xs text-slate-500">
@@ -866,7 +866,7 @@ export default function SaleDetailModal({
                             alt="Comprobante de pago"
                             onClick={() => setIsProofZoomOpen(true)}
                             className="max-h-72 w-full cursor-zoom-in rounded-lg border border-slate-700 object-contain transition hover:border-cyan-400/70"
-                            crossOrigin="anonymous"
+                            referrerPolicy="no-referrer"
                           />
                           <p className="mt-2 text-xs text-slate-500">
                             Haz clic en la imagen para ampliarla.
@@ -916,7 +916,7 @@ export default function SaleDetailModal({
                     alt="Comprobante de pago ampliado"
                     className="max-h-[86vh] w-auto max-w-full rounded-xl border border-slate-600 object-contain shadow-2xl"
                     onClick={event => event.stopPropagation()}
-                    crossOrigin="anonymous"
+                    referrerPolicy="no-referrer"
                   />
                 </div>
               </div>

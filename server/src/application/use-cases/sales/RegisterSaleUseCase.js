@@ -397,7 +397,12 @@ export class RegisterSaleUseCase {
 
       // Anti-Manipulación: Siempre usar el precio real almacenado en la BD
       const requestedSalePrice = resolveRequestedSalePrice(item);
-      const salePrice = resolveCatalogSalePrice(product);
+      let salePrice = resolveCatalogSalePrice(product);
+
+      const isAdminOrGod = user?.role === "admin" || user?.role === "god" || user?.role === "super_admin";
+      if (isAdminOrGod && requestedSalePrice > 0) {
+        salePrice = requestedSalePrice;
+      }
 
       if (salePrice <= 0) {
         throw new Error(
@@ -475,10 +480,14 @@ export class RegisterSaleUseCase {
         : 0;
       let employeePrice = salePrice;
       if (isEmployeeSale) {
-        employeePrice = FinanceService.calculateEmployeePrice(
-          salePrice,
-          effectiveEmployeeProfitPercentage,
-        );
+        if (product.employeePriceManualValue && product.employeePriceManualValue > 0) {
+          employeePrice = product.employeePriceManualValue;
+        } else {
+          employeePrice = FinanceService.calculateEmployeePrice(
+            salePrice,
+            effectiveEmployeeProfitPercentage,
+          );
+        }
       }
       const employeeProfit = isEmployeeSale
         ? FinanceService.calculateEmployeeProfit(
