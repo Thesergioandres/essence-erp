@@ -444,8 +444,7 @@ saleSchema.pre("save", function (next) {
       rawEmployeePrice >= 0 &&
       rawEmployeePrice <= normalizedSalePriceForEmployeeFlow;
 
-    const shouldUsePersistedEmployeePrice =
-      !hasExplicitPercentage && hasPersistedEmployeePrice;
+    const shouldUsePersistedEmployeePrice = hasPersistedEmployeePrice;
 
     const derivedPercentageFromPrice =
       shouldUsePersistedEmployeePrice && normalizedSalePriceForEmployeeFlow > 0

@@ -11,6 +11,7 @@ import EmployeeStock from "../../../infrastructure/database/models/EmployeeStock
 import Membership from "../../../infrastructure/database/models/Membership.js";
 import PaymentMethod from "../../../infrastructure/database/models/PaymentMethod.js";
 import { getEmployeeCommissionInfo } from "../../../infrastructure/services/employeePricing.service.js";
+import { resolveManualEmployeePrice } from "../../../infrastructure/services/productPricing.service.js";
 import { employeeRoleQuery } from "../../../utils/roleAliases.js";
 import CreditRepository from "../repository-gateways/CreditPersistenceUseCase.js";
 import { ProductPersistenceUseCase } from "../repository-gateways/ProductPersistenceUseCase.js";
@@ -479,8 +480,9 @@ export class RegisterSaleUseCase {
         : 0;
       let employeePrice = salePrice;
       if (isEmployeeSale) {
-        if (product.employeePriceManualValue && product.employeePriceManualValue > 0) {
-          employeePrice = product.employeePriceManualValue;
+        const manualEmployeePrice = resolveManualEmployeePrice(product);
+        if (manualEmployeePrice !== null && manualEmployeePrice >= 0) {
+          employeePrice = manualEmployeePrice;
         } else {
           employeePrice = FinanceService.calculateEmployeePrice(
             salePrice,

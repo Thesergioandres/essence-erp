@@ -1,5 +1,7 @@
 import stockPersistenceUseCase from "../../../application/use-cases/repository-gateways/StockPersistenceUseCase.js";
 import { isEmployeeRole } from "../../../utils/roleAliases.js";
+import { getBusinessBaseCommissionPercentage } from "../../../domain/services/FinanceService.js";
+import { applyDynamicEmployeePricingToProduct } from "../../services/productPricing.service.js";
 
 class StockController {
   async assignToEmployee(req, res) {
@@ -165,7 +167,16 @@ class StockController {
         businessId,
         employeeId,
       );
-      res.json({ success: true, data: stock });
+
+      const baseCommissionPercentage = await getBusinessBaseCommissionPercentage(businessId);
+      const stockWithDynamicPricing = stock.map(item => {
+        if (item.product) {
+          item.product = applyDynamicEmployeePricingToProduct(item.product, baseCommissionPercentage);
+        }
+        return item;
+      });
+
+      res.json({ success: true, data: stockWithDynamicPricing });
     } catch (error) {
       console.error("❌ Error in getEmployeeStock:", error);
       console.error("Stack:", error.stack);
@@ -183,7 +194,16 @@ class StockController {
         businessId,
         req.params.branchId,
       );
-      res.json({ success: true, data: stock });
+
+      const baseCommissionPercentage = await getBusinessBaseCommissionPercentage(businessId);
+      const stockWithDynamicPricing = stock.map(item => {
+        if (item.product) {
+          item.product = applyDynamicEmployeePricingToProduct(item.product, baseCommissionPercentage);
+        }
+        return item;
+      });
+
+      res.json({ success: true, data: stockWithDynamicPricing });
     } catch (error) {
       res.status(500).json({ success: false, message: error.message });
     }

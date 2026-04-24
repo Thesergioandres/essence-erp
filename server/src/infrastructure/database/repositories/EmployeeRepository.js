@@ -897,7 +897,7 @@ export class EmployeeRepository {
     })
       .populate({
         path: "product",
-        select: "name description clientPrice employeePrice image category",
+        select: "name description clientPrice employeePrice employeePriceManual employeePriceManualValue image category",
         populate: { path: "category", select: "name slug" },
       })
       .lean();

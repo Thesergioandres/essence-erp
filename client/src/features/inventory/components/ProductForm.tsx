@@ -1,5 +1,5 @@
 import type { ChangeEvent, FormEvent } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Input } from "../../../shared/components/ui/Input";
 import type { ProductFormData } from "../types/product.types";
 
@@ -57,13 +57,17 @@ export const ProductForm = ({
   const [newCategoryName, setNewCategoryName] = useState("");
   const [creatingCategory, setCreatingCategory] = useState(false);
 
+  const automaticEmployeePrice = useMemo(
+    () =>
+      calculateAutomaticEmployeePrice(
+        Number(formData.clientPrice),
+        baseCommissionPercentage
+      ),
+    [formData.clientPrice, baseCommissionPercentage]
+  );
+
   useEffect(() => {
     if (employeeManual) return;
-
-    const automaticEmployeePrice = calculateAutomaticEmployeePrice(
-      Number(formData.clientPrice),
-      baseCommissionPercentage
-    );
 
     if (Number(formData.employeePrice) === automaticEmployeePrice) {
       return;
@@ -73,12 +77,7 @@ export const ProductForm = ({
       ...prev,
       employeePrice: automaticEmployeePrice,
     }));
-  }, [
-    baseCommissionPercentage,
-    employeeManual,
-    formData.clientPrice,
-    formData.employeePrice,
-  ]);
+  }, [employeeManual, automaticEmployeePrice, formData.employeePrice]);
 
   const handleChange = (
     e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -269,7 +268,7 @@ export const ProductForm = ({
             label="Precio Empleado"
             name="employeePrice"
             type="number"
-            value={formData.employeePrice}
+            value={employeeManual ? formData.employeePrice : (automaticEmployeePrice > 0 ? automaticEmployeePrice : "")}
             onChange={handleChange}
             disabled={!employeeManual}
             required={employeeManual}

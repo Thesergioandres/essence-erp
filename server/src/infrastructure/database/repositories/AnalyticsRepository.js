@@ -238,7 +238,7 @@ export class AnalyticsRepository {
       isDeleted: { $ne: true },
     })
       .select(
-        "name warehouseStock purchasePrice averageCost employeePrice clientPrice",
+        "name warehouseStock purchasePrice averageCost employeePrice employeePriceManual employeePriceManualValue clientPrice",
       )
       .lean();
 
@@ -249,7 +249,7 @@ export class AnalyticsRepository {
     })
       .populate(
         "product",
-        "name purchasePrice averageCost clientPrice employeePrice",
+        "name purchasePrice averageCost clientPrice employeePrice employeePriceManual employeePriceManualValue",
       )
       .populate("employee", "name email")
       .lean();
@@ -260,7 +260,7 @@ export class AnalyticsRepository {
     })
       .populate(
         "product",
-        "name purchasePrice averageCost clientPrice employeePrice",
+        "name purchasePrice averageCost clientPrice employeePrice employeePriceManual employeePriceManualValue",
       )
       .populate("branch", "name")
       .lean();
@@ -502,7 +502,7 @@ export class AnalyticsRepository {
       employee: new mongoose.Types.ObjectId(employeeId),
       quantity: { $gt: 0 }, // Only products with stock > 0
     })
-      .populate("product", "name image employeePrice clientPrice")
+      .populate("product", "name image employeePrice employeePriceManual employeePriceManualValue clientPrice")
       .lean();
 
     if (!stock || stock.length === 0) {

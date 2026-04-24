@@ -300,7 +300,7 @@ class StockRepository {
     })
       .populate(
         "product",
-        "name image purchasePrice employeePrice clientPrice",
+        "name image purchasePrice employeePrice employeePriceManual employeePriceManualValue clientPrice",
       )
       .populate("employee", "name email")
       .lean();
@@ -332,7 +332,7 @@ class StockRepository {
         business: businessId,
         isDeleted: { $ne: true },
       })
-        .select("name image purchasePrice employeePrice clientPrice")
+        .select("name image purchasePrice employeePrice employeePriceManual employeePriceManualValue clientPrice")
         .lean();
       missing.forEach((p) =>
         validStock.push({
@@ -366,7 +366,7 @@ class StockRepository {
         isDeleted: { $ne: true },
       })
         .select(
-          "name image purchasePrice employeePrice clientPrice lowStockAlert warehouseStock",
+          "name image purchasePrice employeePrice employeePriceManual employeePriceManualValue clientPrice lowStockAlert warehouseStock",
         )
         .lean();
 
@@ -391,7 +391,7 @@ class StockRepository {
       .populate("branch", "name")
       .populate(
         "product",
-        "name image purchasePrice employeePrice clientPrice",
+        "name image purchasePrice employeePrice employeePriceManual employeePriceManualValue clientPrice",
       )
       .lean();
   }
@@ -507,7 +507,7 @@ class StockRepository {
       business: businessId,
       branch: { $in: branchIds },
     })
-      .populate("product", "name image clientPrice employeePrice")
+      .populate("product", "name image clientPrice employeePrice employeePriceManual employeePriceManualValue")
       .lean();
 
     const stockByBranch = new Map();

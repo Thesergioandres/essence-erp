@@ -1,4 +1,6 @@
 import { EmployeePersistenceUseCase } from "../../../application/use-cases/repository-gateways/EmployeePersistenceUseCase.js";
+import { getBusinessBaseCommissionPercentage } from "../../../domain/services/FinanceService.js";
+import { applyDynamicEmployeePricingToProduct } from "../../services/productPricing.service.js";
 
 const repository = new EmployeePersistenceUseCase();
 
@@ -164,11 +166,19 @@ export class EmployeeController {
         req.query,
       );
 
+      const baseCommissionPercentage = await getBusinessBaseCommissionPercentage(businessId);
+      const stockWithDynamicPricing = result.products.map(item => {
+        if (item.product) {
+          item.product = applyDynamicEmployeePricingToProduct(item.product, baseCommissionPercentage);
+        }
+        return item;
+      });
+
       // V2 API: devolver objeto completo con products, pagination, total
       res.json({
         success: true,
         data: {
-          products: result.products,
+          products: stockWithDynamicPricing,
           pagination: result.pagination,
           total: result.total,
         },
@@ -183,9 +193,19 @@ export class EmployeeController {
     try {
       const { id } = req.params;
       const result = await repository.getPublicCatalog(id);
+      
+      const businessId = result.business?._id;
+      let stockWithDynamicPricing = result.products;
+      if (businessId) {
+        const baseCommissionPercentage = await getBusinessBaseCommissionPercentage(businessId);
+        stockWithDynamicPricing = result.products.map(item => {
+          return applyDynamicEmployeePricingToProduct(item, baseCommissionPercentage);
+        });
+      }
+
       res.json({
         success: true,
-        products: result.products,
+        products: stockWithDynamicPricing,
         employee: result.employee,
         business: result.business || null,
       });
