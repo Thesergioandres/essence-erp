@@ -3,6 +3,7 @@ import BusinessAssistantConfig from "../models/BusinessAssistantConfig.js";
 import Category from "../models/Category.js";
 import Product from "../models/Product.js";
 import Sale from "../models/Sale.js";
+import AnalysisLog from "../models/AnalysisLog.js";
 import { aiService } from "../../services/ai.service.js";
 import { AdvancedAnalyticsRepository } from "./AdvancedAnalyticsRepository.js";
 import stockRepository from "./StockRepository.js";
@@ -885,6 +886,18 @@ export class BusinessAssistantRepository {
       }
     }
 
+    // Persistir en base de datos el resultado del análisis
+    try {
+      await AnalysisLog.create({
+        business: businessObjectId,
+        user: params.userId || null, // Si viene del worker, puede ser nulo
+        type: "business-assistant-recommendations",
+        data: payload,
+      });
+    } catch (saveError) {
+      console.error("Error al persistir AnalysisLog (recommendations):", saveError);
+    }
+
     return payload;
   }
 
@@ -949,5 +962,98 @@ export class BusinessAssistantRepository {
       context,
     );
     return response;
+  }
+
+  async getLatestRecommendations(businessId) {
+    const log = await AnalysisLog.findOne({
+      business: businessId,
+      type: "business-assistant-recommendations",
+    }).sort({ createdAt: -1 });
+
+    if (!log) return null;
+    return log.data;
+  }
+
+  async getLatestStrategicAnalysis(businessId) {
+    const log = await AnalysisLog.findOne({
+      business: businessId,
+      type: "business-assistant-strategic",
+    }).sort({ createdAt: -1 });
+
+    if (!log) return null;
+    return log.data;
+  }
+
+  async generateStrategicAnalysis(businessId, userId = null) {
+    if (!aiService) throw new Error("AI Service no disponible");
+
+    const businessObjectId = new mongoose.Types.ObjectId(String(businessId));
+
+    // Obtener datos base para el contexto
+    const [products, sales, categories, financialKPIs, inventory] =
+      await Promise.all([
+        Product.find({
+          business: businessObjectId,
+          isDeleted: { $ne: true },
+        }).lean(),
+        Sale.find({
+          business: businessObjectId,
+          saleDate: { $gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) },
+          paymentStatus: "confirmado",
+        }).lean(),
+        Category.find({ business: businessObjectId }).lean(),
+        analyticsRepository.getFinancialKPIs(businessId).catch(() => null),
+        stockRepository.getGlobalInventory(businessId).catch(() => []),
+      ]);
+
+    const inventoryMap = this.buildInventoryMap(inventory);
+    const salesSummary = this.buildSalesSummary(
+      sales,
+      new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+      new Date(Date.now() - 60 * 24 * 60 * 60 * 1000),
+    );
+
+    // Contexto simplificado para la IA
+    const context = {
+      totalProducts: products.length,
+      totalSalesRecent: sales.length,
+      financials: financialKPIs,
+      inventorySummary: {
+        totalItems: products.reduce(
+          (sum, p) => sum + (inventoryMap[p._id.toString()]?.total || 0),
+          0,
+        ),
+        lowStockItems: products.filter(
+          (p) =>
+            (inventoryMap[p._id.toString()]?.total || 0) <=
+            (p.lowStockAlert || 5),
+        ).length,
+      },
+      topProducts: products
+        .map((p) => ({
+          name: p.name,
+          sales30d: salesSummary.get(p._id.toString())?.recentUnits || 0,
+          stock: inventoryMap[p._id.toString()]?.total || 0,
+        }))
+        .sort((a, b) => b.sales30d - a.sales30d)
+        .slice(0, 10),
+    };
+
+    const analysisMarkdown = await aiService.analyzeBusinessContext(context);
+
+    const payload = {
+      analysis: analysisMarkdown, // El frontend sabe procesar esto si es un string de Markdown
+      generatedAt: new Date().toISOString(),
+    };
+
+    // Persistir
+    await AnalysisLog.create({
+      business: businessObjectId,
+      user: userId,
+      type: "business-assistant-strategic",
+      data: payload,
+    });
+
+    return payload;
   }
 }

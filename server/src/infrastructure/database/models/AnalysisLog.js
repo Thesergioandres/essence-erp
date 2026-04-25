@@ -15,11 +15,14 @@ const analysisLogSchema = new mongoose.Schema(
     },
     content: {
       type: String,
-      required: true,
+      required: false,
+    },
+    data: {
+      type: mongoose.Schema.Types.Mixed, // Para guardar el JSON completo de recomendaciones/estrategia
     },
     type: {
       type: String,
-      enum: ["daily", "query"],
+      enum: ["daily", "query", "business-assistant-recommendations", "business-assistant-strategic"],
       default: "daily",
     },
     createdAt: {

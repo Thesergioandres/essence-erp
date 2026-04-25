@@ -545,22 +545,22 @@ export const businessAssistantService = {
   },
 
   async getStrategicAnalysis(): Promise<{
-    analysis: {
-      strengths: string[];
-      weaknesses: string[];
-      opportunities: string[];
-      threats: string[];
-      keyMetrics: {
-        healthScore: number;
-        growthRate: number;
-        profitTrend: "up" | "down" | "stable";
-        customerSatisfaction?: number;
-      };
-      recommendations: string[];
-    };
-    generatedAt: Date;
+    analysis: any;
+    generatedAt: string;
+    status: string;
+    message?: string;
   }> {
     const response = await api.get("/business-assistant/strategic-analysis");
+    return businessAssistantService.normalizeResponse(response);
+  },
+
+  async generateStrategicAnalysis(): Promise<{
+    analysis: any;
+    generatedAt: string;
+    status: string;
+    message?: string;
+  }> {
+    const response = await api.post("/business-assistant/strategic-analysis");
     return businessAssistantService.normalizeResponse(response);
   },
 

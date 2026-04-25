@@ -20,6 +20,9 @@ router.get("/analysis/latest", (req, res) =>
 router.get("/strategic-analysis", (req, res) =>
   controller.getStrategicAnalysis(req, res),
 );
+router.post("/strategic-analysis", (req, res) =>
+  controller.handleGenerateStrategicAnalysis(req, res),
+);
 
 router.get(
   "/config",

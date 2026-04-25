@@ -125,6 +125,8 @@ const average = (values: number[]) => {
 
 const isEmptyStrategicAnalysis = (analysis: any) => {
   if (!analysis) return true;
+  if (typeof analysis === "string" && analysis.trim().length > 10) return false;
+
   const hasArrayValues = (arr: any) => Array.isArray(arr) && arr.length > 0;
   const hasMetrics = Boolean(
     analysis.keyMetrics &&
@@ -830,7 +832,7 @@ export default function BusinessAssistant() {
         setAnalystQuestion(customQuestion);
       }
 
-      const res = await businessAssistantService.getStrategicAnalysis();
+      const res = await businessAssistantService.generateStrategicAnalysis();
 
       if (res.analysis) {
         const analysis = isEmptyStrategicAnalysis(res.analysis)

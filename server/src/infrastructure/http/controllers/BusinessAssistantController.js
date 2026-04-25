@@ -176,7 +176,7 @@ export class BusinessAssistantController {
     }
   }
 
-  // Get latest analysis - returns mock data to prevent 404 errors
+  // Get latest analysis - fetches real recommendations from DB
   async getLatestAnalysis(req, res) {
     try {
       const businessId = req.businessId;
@@ -186,16 +186,26 @@ export class BusinessAssistantController {
           .json({ success: false, message: "Falta x-business-id" });
       }
 
-      // Return mock analysis to satisfy frontend request
+      const latest = await repository.getLatestRecommendations(businessId);
+
+      if (!latest) {
+        return res.json({
+          success: true,
+          data: {
+            status: "pending",
+            message: "No hay análisis previos. Por favor genera uno nuevo.",
+            lastAnalysis: null,
+            recommendations: [],
+            generatedAt: null,
+          },
+        });
+      }
+
       res.json({
         success: true,
         data: {
-          status: "pending",
-          message:
-            "Análisis pendiente. Configure el asistente para generar recomendaciones.",
-          lastAnalysis: null,
-          recommendations: [],
-          generatedAt: null,
+          ...latest,
+          status: "completed",
         },
       });
     } catch (error) {
@@ -203,7 +213,7 @@ export class BusinessAssistantController {
     }
   }
 
-  // Get strategic analysis - returns mock data to prevent 404 errors
+  // Get strategic analysis - fetches real AI SWOT analysis from DB
   async getStrategicAnalysis(req, res) {
     try {
       const businessId = req.businessId;
@@ -213,28 +223,49 @@ export class BusinessAssistantController {
           .json({ success: false, message: "Falta x-business-id" });
       }
 
-      // Return mock strategic analysis to satisfy frontend request
+      const latest = await repository.getLatestStrategicAnalysis(businessId);
+
+      if (!latest) {
+        return res.json({
+          success: true,
+          data: {
+            analysis: null,
+            status: "pending",
+            message: "Análisis estratégico pendiente. Haz clic en 'Analizar con IA' para generarlo.",
+          },
+        });
+      }
+
       res.json({
         success: true,
         data: {
-          analysis: {
-            strengths: [],
-            weaknesses: [],
-            opportunities: [],
-            threats: [],
-            keyMetrics: {
-              healthScore: 0,
-              growthRate: 0,
-              profitTrend: "stable",
-              customerSatisfaction: undefined,
-            },
-            recommendations: [],
-          },
-          generatedAt: new Date().toISOString(),
-          status: "pending",
-          message:
-            "Análisis estratégico pendiente. Se requieren más datos para generar estrategias.",
+          ...latest,
+          status: "completed",
         },
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  // Generate strategic analysis - manual trigger for AI analysis
+  async handleGenerateStrategicAnalysis(req, res) {
+    try {
+      const businessId = req.businessId;
+      const userId = req.userId; // Asumimos que el middleware de auth inyecta el userId
+      
+      if (!businessId) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Falta x-business-id" });
+      }
+
+      const result = await repository.generateStrategicAnalysis(businessId, userId);
+
+      res.json({
+        success: true,
+        message: "Análisis estratégico generado exitosamente",
+        data: result,
       });
     } catch (error) {
       res.status(500).json({ success: false, message: error.message });
