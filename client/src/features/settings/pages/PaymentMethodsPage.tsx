@@ -366,7 +366,7 @@ export default function PaymentMethods() {
         {showModal &&
           createPortal(
             <div
-              className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm overflow-y-auto"
+              className="fixed inset-0 z-100 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm overflow-y-auto"
               onClick={e => e.target === e.currentTarget && handleCloseModal()}
             >
               <div className="relative my-auto w-full max-w-md rounded-2xl border border-slate-600/60 bg-slate-900 p-4 shadow-2xl sm:p-6">

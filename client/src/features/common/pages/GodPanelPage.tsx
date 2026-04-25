@@ -118,7 +118,6 @@ export default function GodPanel() {
     defaultPlan,
     setPlanAsDefault,
     planConfigs,
-    activePlans,
     subscriptionSummary,
     isGlobalSettingsDirty,
     isRowDirty,
@@ -442,16 +441,19 @@ export default function GodPanel() {
 
   useEffect(() => {
     const context = gsap.context(() => {
-      gsap.fromTo(
-        ".god-tab-panel",
-        { autoAlpha: 0, y: 16 },
-        {
-          autoAlpha: 1,
-          y: 0,
-          duration: 0.38,
-          ease: "power2.out",
-        },
-      );
+      const target = tabPanelRef.current?.querySelector(".god-tab-panel");
+      if (target) {
+        gsap.fromTo(
+          target,
+          { autoAlpha: 0, y: 16 },
+          {
+            autoAlpha: 1,
+            y: 0,
+            duration: 0.38,
+            ease: "power2.out",
+          },
+        );
+      }
     }, tabPanelRef);
 
     return () => context.revert();
@@ -461,18 +463,21 @@ export default function GodPanel() {
     if (activeTab !== "subscriptions") return;
 
     const context = gsap.context(() => {
-      gsap.fromTo(
-        ".god-plan-card",
-        { autoAlpha: 0, y: 20, scale: 0.98 },
-        {
-          autoAlpha: 1,
-          y: 0,
-          scale: 1,
-          duration: 0.45,
-          stagger: 0.06,
-          ease: "power2.out",
-        },
-      );
+      const targets = planCardsRef.current?.querySelectorAll(".god-plan-card");
+      if (targets && targets.length > 0) {
+        gsap.fromTo(
+          targets,
+          { autoAlpha: 0, y: 20, scale: 0.98 },
+          {
+            autoAlpha: 1,
+            y: 0,
+            scale: 1,
+            duration: 0.45,
+            stagger: 0.06,
+            ease: "power2.out",
+          },
+        );
+      }
     }, planCardsRef);
 
     return () => context.revert();
@@ -1950,8 +1955,6 @@ interface ActionButtonProps {
   onClick: () => void;
 }
 
-interface KpiInsightCardProps extends KpiCardConfig {}
-
 function KpiInsightCard({
   label,
   value,
@@ -1959,7 +1962,7 @@ function KpiInsightCard({
   progress,
   tone,
   icon: Icon,
-}: KpiInsightCardProps) {
+}: KpiCardConfig) {
   return (
     <div className={`bg-linear-to-br rounded-2xl border ${tone} p-4 shadow-lg shadow-black/25`}>
       <div className="flex items-center justify-between gap-3">

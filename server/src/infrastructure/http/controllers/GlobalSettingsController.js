@@ -214,16 +214,17 @@ class GlobalSettingsController {
 
       if (plan !== undefined) {
         if (!normalizedPlanId) {
-          return res
-            .status(400)
-            .json({ success: false, message: "Plan inválido" });
+          return res.status(400).json({
+            success: false,
+            message: `Identificador de plan inválido: "${plan}"`,
+          });
         }
 
         const canAssignPlan = await isBusinessPlanAssignable(normalizedPlanId);
         if (!canAssignPlan) {
           return res.status(400).json({
             success: false,
-            message: "El plan está archivado o no existe",
+            message: `El plan "${normalizedPlanId}" no existe o no está activo para asignación`,
           });
         }
 
