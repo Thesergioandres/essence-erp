@@ -88,6 +88,15 @@ const buildTotalGroupProfitExpression = () => ({
   ],
 });
 
+const buildSaleCostExpression = () => ({
+  $multiply: [
+    {
+      $ifNull: ["$costAtSale", { $ifNull: ["$averageCostAtSale", "$purchasePrice"] }],
+    },
+    { $ifNull: ["$quantity", 0] },
+  ],
+});
+
 const resolveScopedUserObjectId = (options = {}) => {
   const rawId = options.scopeEmployeeId || options.employeeId || options.userId;
 
@@ -146,6 +155,9 @@ const buildSalesMetricsPipeline = ({ match, includeQuantity = false }) => {
     },
     netProfit: {
       $sum: buildAdminNetProfitExpression(),
+    },
+    totalInvested: {
+      $sum: buildSaleCostExpression(),
     },
   };
 
@@ -307,6 +319,7 @@ export class AdvancedAnalyticsRepository {
             profit: { $sum: "$totalProfit" },
             netProfit: { $sum: "$totalProfit" },
             quantity: { $sum: "$quantity" },
+            totalInvested: { $sum: { $multiply: ["$cost", "$quantity"] } },
           },
         },
       ]),
@@ -324,6 +337,7 @@ export class AdvancedAnalyticsRepository {
             revenue: { $sum: { $multiply: ["$specialPrice", "$quantity"] } },
             profit: { $sum: "$totalProfit" },
             netProfit: { $sum: "$totalProfit" },
+            totalInvested: { $sum: { $multiply: ["$cost", "$quantity"] } },
           },
         },
       ]),
@@ -341,6 +355,7 @@ export class AdvancedAnalyticsRepository {
             revenue: { $sum: { $multiply: ["$specialPrice", "$quantity"] } },
             profit: { $sum: "$totalProfit" },
             netProfit: { $sum: "$totalProfit" },
+            totalInvested: { $sum: { $multiply: ["$cost", "$quantity"] } },
           },
         },
       ]),
@@ -358,6 +373,7 @@ export class AdvancedAnalyticsRepository {
             revenue: { $sum: { $multiply: ["$specialPrice", "$quantity"] } },
             profit: { $sum: "$totalProfit" },
             netProfit: { $sum: "$totalProfit" },
+            totalInvested: { $sum: { $multiply: ["$cost", "$quantity"] } },
           },
         },
       ]),
@@ -587,23 +603,8 @@ export class AdvancedAnalyticsRepository {
               },
             },
           ]),
-      // Get total invested (inventory entries)
-      InventoryEntry.aggregate([
-        {
-          $match: {
-            business: businessObjectId,
-            createdAt: dateRange || { $exists: true },
-            type: "entry",
-            deleted: { $ne: true },
-          },
-        },
-        {
-          $group: {
-            _id: null,
-            totalInvested: { $sum: "$totalCost" },
-          },
-        },
-      ]),
+      // Get total invested (COGS) - Removed InventoryEntry aggregation in favor of Sale/SpecialSale aggregation above
+      Promise.resolve({ totalInvested: 0 }),
     ]);
 
     const range = rangeData[0] || {
@@ -702,6 +703,7 @@ export class AdvancedAnalyticsRepository {
       profit: range.profit + rangeSpecial.profit,
       netProfit: range.netProfit + rangeSpecial.netProfit,
       quantity: range.quantity + rangeSpecial.quantity,
+      invested: (range.totalInvested || 0) + (rangeSpecial.totalInvested || 0),
     };
     const combinedDaily = {
       sales: daily.sales + dailySpecial.sales,
@@ -709,6 +711,7 @@ export class AdvancedAnalyticsRepository {
         daily.revenue + dailySpecial.revenue + scopedWarrantyRevenueDaily,
       profit: daily.profit + dailySpecial.profit,
       netProfit: daily.netProfit + dailySpecial.netProfit,
+      invested: (daily.totalInvested || 0) + (dailySpecial.totalInvested || 0),
     };
     const combinedWeekly = {
       sales: weekly.sales + weeklySpecial.sales,
@@ -716,6 +719,7 @@ export class AdvancedAnalyticsRepository {
         weekly.revenue + weeklySpecial.revenue + scopedWarrantyRevenueWeekly,
       profit: weekly.profit + weeklySpecial.profit,
       netProfit: weekly.netProfit + weeklySpecial.netProfit,
+      invested: (weekly.totalInvested || 0) + (weeklySpecial.totalInvested || 0),
     };
     const combinedMonthly = {
       sales: monthly.sales + monthlySpecial.sales,
@@ -723,6 +727,8 @@ export class AdvancedAnalyticsRepository {
         monthly.revenue + monthlySpecial.revenue + scopedWarrantyRevenueMonthly,
       profit: monthly.profit + monthlySpecial.profit,
       netProfit: monthly.netProfit + monthlySpecial.netProfit,
+      invested:
+        (monthly.totalInvested || 0) + (monthlySpecial.totalInvested || 0),
     };
 
     // 🎯 FIX TASK 2: Calculate REAL Net Profit (Admin Profit - Expenses/Losses)
@@ -758,6 +764,10 @@ export class AdvancedAnalyticsRepository {
         totalActiveEmployees: activeEmployees,
         totalExpenses: expenses.totalExpenses,
         expensesCount: expenses.count,
+        todayInvested: combinedDaily.invested,
+        weekInvested: combinedWeekly.invested,
+        monthInvested: combinedMonthly.invested,
+        totalInvested: combinedRange.invested,
       },
       daily: combinedDaily,
       weekly: combinedWeekly,
@@ -774,7 +784,7 @@ export class AdvancedAnalyticsRepository {
             : 0,
         totalExpenses: expenses.totalExpenses,
         accountsReceivable: scopedCreditRange,
-        totalInvested: totalInvested,
+        totalInvested: combinedRange.invested,
       },
     };
 

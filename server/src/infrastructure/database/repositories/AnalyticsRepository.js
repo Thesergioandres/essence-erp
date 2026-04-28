@@ -21,7 +21,6 @@
 import mongoose from "mongoose";
 import BranchStock from "../models/BranchStock.js";
 import EmployeeStock from "../models/EmployeeStock.js";
-import InventoryEntry from "../models/InventoryEntry.js";
 import AnalysisLog from "../models/AnalysisLog.js";
 import {
   applyDynamicEmployeePricingToProduct,
@@ -95,6 +94,27 @@ export class AnalyticsRepository {
           },
           // 📊 COUNT: Ventas por transacción única (saleGroupId/saleId)
           productsSold: { $sum: "$quantity" },
+          totalInvested: {
+            $sum: {
+              $cond: [
+                { $eq: ["$paymentStatus", "confirmado"] },
+                {
+                  $multiply: [
+                    {
+                      $ifNull: [
+                        "$costAtSale",
+                        {
+                          $ifNull: ["$averageCostAtSale", "$purchasePrice"],
+                        },
+                      ],
+                    },
+                    "$quantity",
+                  ],
+                },
+                0,
+              ],
+            },
+          },
         },
       },
       {
@@ -104,41 +124,22 @@ export class AnalyticsRepository {
           totalProfit: 1,
           totalSales: { $size: "$transactionKeys" },
           productsSold: 1,
+          totalInvested: 1,
         },
       },
     ];
 
-    const [salesResult, investmentResult] = await Promise.all([
-      SaleModel.aggregate(pipeline),
-      InventoryEntry.aggregate([
-        {
-          $match: {
-            business: new mongoose.Types.ObjectId(businessId),
-            createdAt: { $gte: startDate, $lte: endDate },
-            type: "entry", // Solo entradas (compras), no ajustes
-            deleted: { $ne: true },
-          },
-        },
-        {
-          $group: {
-            _id: null,
-            totalInvested: { $sum: "$totalCost" },
-          },
-        },
-      ]),
-    ]);
+    const salesResult = await SaleModel.aggregate(pipeline);
 
     const kpi = salesResult[0] || {
       totalRevenue: 0,
       totalProfit: 0,
       totalSales: 0,
       productsSold: 0,
+      totalInvested: 0,
     };
 
-    return {
-      ...kpi,
-      totalInvested: investmentResult[0]?.totalInvested || 0,
-    };
+    return kpi;
   }
 
   /**
