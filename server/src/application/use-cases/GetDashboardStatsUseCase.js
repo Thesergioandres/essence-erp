@@ -50,6 +50,7 @@ export class GetDashboardStatsUseCase {
       totalRevenue: kpi.totalRevenue || 0,
       totalNetProfit: kpi.totalProfit || 0,
       totalSalesCount: totalTransactions,
+      totalInvested: kpi.totalInvested || 0,
       averageTicket,
       salesTimeline,
       topProducts: topProducts || [],

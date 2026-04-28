@@ -86,6 +86,7 @@ export interface MonthlyProfitPeriod {
   totalOPEX?: number;
   revenue: number;
   cost: number;
+  totalInvested?: number;
   salesCount: number;
   ordersCount: number;
   unitsCount: number;

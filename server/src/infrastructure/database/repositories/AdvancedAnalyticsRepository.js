@@ -6,6 +6,7 @@ import Membership from "../models/Membership.js";
 import Product from "../models/Product.js";
 import Sale from "../models/Sale.js";
 import SpecialSale from "../models/SpecialSale.js";
+import InventoryEntry from "../models/InventoryEntry.js";
 
 const buildColombiaRange = (startStr, endStr) => {
   if (!startStr && !endStr) return null;
@@ -288,6 +289,7 @@ export class AdvancedAnalyticsRepository {
       creditPendingMonthData,
       activeEmployees,
       expensesData,
+      investmentResult,
     ] = await Promise.all([
       Sale.aggregate(
         buildSalesMetricsPipeline({
@@ -585,6 +587,23 @@ export class AdvancedAnalyticsRepository {
               },
             },
           ]),
+      // Get total invested (inventory entries)
+      InventoryEntry.aggregate([
+        {
+          $match: {
+            business: businessObjectId,
+            createdAt: dateRange || { $exists: true },
+            type: "entry",
+            deleted: { $ne: true },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalInvested: { $sum: "$totalCost" },
+          },
+        },
+      ]),
     ]);
 
     const range = rangeData[0] || {
@@ -651,6 +670,7 @@ export class AdvancedAnalyticsRepository {
     const creditWeekly = creditPendingWeekData[0]?.totalAmount || 0;
     const creditMonthly = creditPendingMonthData[0]?.totalAmount || 0;
     const expenses = expensesData[0] || { totalExpenses: 0, count: 0 };
+    const totalInvested = investmentResult[0]?.totalInvested || 0;
 
     const scopedWarrantyRange = isScopedFinancialView ? 0 : warrantyRange;
     const scopedWarrantyDaily = isScopedFinancialView ? 0 : warrantyDaily;
@@ -754,6 +774,7 @@ export class AdvancedAnalyticsRepository {
             : 0,
         totalExpenses: expenses.totalExpenses,
         accountsReceivable: scopedCreditRange,
+        totalInvested: totalInvested,
       },
     };
 

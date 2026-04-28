@@ -21,6 +21,7 @@
 import mongoose from "mongoose";
 import BranchStock from "../models/BranchStock.js";
 import EmployeeStock from "../models/EmployeeStock.js";
+import InventoryEntry from "../models/InventoryEntry.js";
 import AnalysisLog from "../models/AnalysisLog.js";
 import {
   applyDynamicEmployeePricingToProduct,
@@ -107,15 +108,37 @@ export class AnalyticsRepository {
       },
     ];
 
-    const result = await SaleModel.aggregate(pipeline);
-    return (
-      result[0] || {
-        totalRevenue: 0,
-        totalProfit: 0,
-        totalSales: 0,
-        productsSold: 0,
-      }
-    );
+    const [salesResult, investmentResult] = await Promise.all([
+      SaleModel.aggregate(pipeline),
+      InventoryEntry.aggregate([
+        {
+          $match: {
+            business: new mongoose.Types.ObjectId(businessId),
+            createdAt: { $gte: startDate, $lte: endDate },
+            type: "entry", // Solo entradas (compras), no ajustes
+            deleted: { $ne: true },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalInvested: { $sum: "$totalCost" },
+          },
+        },
+      ]),
+    ]);
+
+    const kpi = salesResult[0] || {
+      totalRevenue: 0,
+      totalProfit: 0,
+      totalSales: 0,
+      productsSold: 0,
+    };
+
+    return {
+      ...kpi,
+      totalInvested: investmentResult[0]?.totalInvested || 0,
+    };
   }
 
   /**

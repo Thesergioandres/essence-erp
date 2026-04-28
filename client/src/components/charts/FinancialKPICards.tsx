@@ -1,5 +1,6 @@
 import { m as motion } from "framer-motion";
 import {
+    BarChart3,
     DollarSign,
     ShoppingCart,
     Target,
@@ -142,6 +143,15 @@ export const FinancialKPICards: React.FC<{
           ),
           icon: <Target className="h-8 w-8" />,
           color: "bg-orange-500",
+        },
+        {
+          id: "rangeInvested",
+          label: "Total Invertido",
+          tooltip:
+            "Capital total gastado en compras de inventario en el rango seleccionado.",
+          value: formatMoney(range.totalInvested ?? 0),
+          icon: <BarChart3 className="h-8 w-8" />,
+          color: "bg-blue-500",
         },
         {
           id: "activeEmployees",

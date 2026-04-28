@@ -73,6 +73,7 @@ export const analyticsService = {
             range.netProfit ||
             (range.grossProfit || 0) - (range.totalExpenses || 0),
           salesCount: range.sales || monthly.sales || kpis.monthSales || 0,
+          totalInvested: range.totalInvested || 0,
         },
         lastMonth: {
           revenue: 0, // Would need separate call for previous period

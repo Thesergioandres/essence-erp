@@ -156,7 +156,7 @@ export default function Analytics() {
 
       {/* KPI Cards (P&L) */}
       <div
-        className={`grid grid-cols-1 gap-4 transition-opacity lg:grid-cols-4 ${loading ? "opacity-50" : ""}`}
+        className={`grid grid-cols-1 gap-4 transition-opacity lg:grid-cols-5 ${loading ? "opacity-50" : ""}`}
       >
         {hideFinancialData ? (
           <>
@@ -192,6 +192,12 @@ export default function Analytics() {
               subtitle="Recurrentes (OPEX)"
               value={currency(monthly?.currentMonth?.totalOPEX || 0)}
               tone="negative"
+            />
+            <StatCard
+              title="Total Invertido"
+              subtitle="Compras de Inventario"
+              value={currency(monthly?.currentMonth?.totalInvested || 0)}
+              tone="neutral"
             />
             <StatCard
               title="Dinero en la Calle"

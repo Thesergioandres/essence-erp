@@ -106,6 +106,10 @@ const normalizeFeatureListInput = (value: string): string[] => {
   )];
 };
 
+const renderLimitDisplay = (value: number) => {
+  return value === -1 ? "Sin límite" : value;
+};
+
 export default function GodPanel() {
   const currentUser = authService.getCurrentUser();
   const navigate = useNavigate();
@@ -1180,23 +1184,23 @@ export default function GodPanel() {
                             <div className="mt-3 rounded-xl border border-white/10 bg-black/20 p-3">
                               <div className="flex items-center justify-between text-xs text-slate-300">
                                 <span>Sedes</span>
-                                <strong>{plan.limits.branches}</strong>
+                                <strong>{renderLimitDisplay(plan.limits.branches)}</strong>
                               </div>
                               <div className="mt-2 flex items-center justify-between text-xs text-slate-300">
                                 <span>Empleados</span>
-                                <strong>{plan.limits.employees}</strong>
+                                <strong>{renderLimitDisplay(plan.limits.employees)}</strong>
                               </div>
                               <div className="mt-2 flex items-center justify-between text-xs text-slate-300">
                                 <span>Productos</span>
-                                <strong>{plan.limits.products}</strong>
+                                <strong>{renderLimitDisplay(plan.limits.products)}</strong>
                               </div>
                               <div className="mt-2 flex items-center justify-between text-xs text-slate-300">
                                 <span>Ventas /día</span>
-                                <strong>{plan.limits.dailySales}</strong>
+                                <strong>{renderLimitDisplay(plan.limits.dailySales)}</strong>
                               </div>
                               <div className="mt-2 flex items-center justify-between text-xs text-slate-300">
                                 <span>Ventas /semana</span>
-                                <strong>{plan.limits.weeklySales}</strong>
+                                <strong>{renderLimitDisplay(plan.limits.weeklySales)}</strong>
                               </div>
                               <div className="mt-2 flex items-center justify-between text-xs text-slate-300">
                                 <span>Business Assistant</span>
@@ -1441,7 +1445,7 @@ export default function GodPanel() {
                                     <div className="mb-1 flex justify-between text-slate-300">
                                       <span>Sedes</span>
                                       <span>
-                                        {usageBranches}/{effectiveLimits.branches}
+                                        {usageBranches}/{renderLimitDisplay(effectiveLimits.branches)}
                                       </span>
                                     </div>
                                     <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
@@ -1455,7 +1459,7 @@ export default function GodPanel() {
                                     <div className="mb-1 flex justify-between text-slate-300">
                                       <span>Employees</span>
                                       <span>
-                                        {usageEmployees}/{effectiveLimits.employees}
+                                        {usageEmployees}/{renderLimitDisplay(effectiveLimits.employees)}
                                       </span>
                                     </div>
                                     <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
@@ -1471,7 +1475,7 @@ export default function GodPanel() {
                                 <div className="grid gap-2">
                                   <div className="flex items-center gap-1.5">
                                     {row.customLimits?.branches === -1 ? (
-                                      <div className="flex min-h-11 flex-1 items-center rounded-xl border border-white/10 bg-slate-950/40 px-2 text-[10px] italic text-slate-500">Ilimitado (Sedes)</div>
+                                      <div className="flex min-h-11 flex-1 items-center rounded-xl border border-white/10 bg-slate-950/40 px-2 text-[10px] italic text-slate-500">Sin límite (Sedes)</div>
                                     ) : (
                                       <input
                                         type="number"
@@ -1502,7 +1506,7 @@ export default function GodPanel() {
                                   </div>
                                   <div className="flex items-center gap-1.5">
                                     {row.customLimits?.employees === -1 ? (
-                                      <div className="flex min-h-11 flex-1 items-center rounded-xl border border-white/10 bg-slate-950/40 px-2 text-[10px] italic text-slate-500">Ilimitado (Empleados)</div>
+                                      <div className="flex min-h-11 flex-1 items-center rounded-xl border border-white/10 bg-slate-950/40 px-2 text-[10px] italic text-slate-500">Sin límite (Empleados)</div>
                                     ) : (
                                       <input
                                         type="number"
@@ -1533,7 +1537,7 @@ export default function GodPanel() {
                                   </div>
                                   <div className="flex items-center gap-1.5">
                                     {row.customLimits?.products === -1 ? (
-                                      <div className="flex min-h-11 flex-1 items-center rounded-xl border border-white/10 bg-slate-950/40 px-2 text-[10px] italic text-slate-500">Ilimitado (Productos)</div>
+                                      <div className="flex min-h-11 flex-1 items-center rounded-xl border border-white/10 bg-slate-950/40 px-2 text-[10px] italic text-slate-500">Sin límite (Productos)</div>
                                     ) : (
                                       <input
                                         type="number"
@@ -1564,7 +1568,7 @@ export default function GodPanel() {
                                   </div>
                                   <div className="flex items-center gap-1.5">
                                     {row.customLimits?.dailySales === -1 ? (
-                                      <div className="flex min-h-11 flex-1 items-center rounded-xl border border-white/10 bg-slate-950/40 px-2 text-[10px] italic text-slate-500">Ilimitado (Día)</div>
+                                      <div className="flex min-h-11 flex-1 items-center rounded-xl border border-white/10 bg-slate-950/40 px-2 text-[10px] italic text-slate-500">Sin límite (Día)</div>
                                     ) : (
                                       <input
                                         type="number"
@@ -1595,7 +1599,7 @@ export default function GodPanel() {
                                   </div>
                                   <div className="flex items-center gap-1.5">
                                     {row.customLimits?.weeklySales === -1 ? (
-                                      <div className="flex min-h-11 flex-1 items-center rounded-xl border border-white/10 bg-slate-950/40 px-2 text-[10px] italic text-slate-500">Ilimitado (Sem)</div>
+                                      <div className="flex min-h-11 flex-1 items-center rounded-xl border border-white/10 bg-slate-950/40 px-2 text-[10px] italic text-slate-500">Sin límite (Sem)</div>
                                     ) : (
                                       <input
                                         type="number"
@@ -2007,7 +2011,7 @@ export default function GodPanel() {
                       />
                     ) : (
                       <div className="flex min-h-11 w-full items-center rounded-xl border border-white/10 bg-slate-900/40 px-3 text-sm italic text-slate-500">
-                        Ilimitado
+                        Sin límite
                       </div>
                     )}
                   </div>
@@ -2051,7 +2055,7 @@ export default function GodPanel() {
                       />
                     ) : (
                       <div className="flex min-h-11 w-full items-center rounded-xl border border-white/10 bg-slate-900/40 px-3 text-sm italic text-slate-500">
-                        Ilimitado
+                        Sin límite
                       </div>
                     )}
                   </div>
@@ -2097,7 +2101,7 @@ export default function GodPanel() {
                       />
                     ) : (
                       <div className="flex min-h-11 w-full items-center rounded-xl border border-white/10 bg-slate-900/40 px-3 text-sm italic text-slate-500">
-                        Ilimitado
+                        Sin límite
                       </div>
                     )}
                   </div>
@@ -2141,7 +2145,7 @@ export default function GodPanel() {
                       />
                     ) : (
                       <div className="flex min-h-11 w-full items-center rounded-xl border border-white/10 bg-slate-900/40 px-3 text-sm italic text-slate-500">
-                        Ilimitado
+                        Sin límite
                       </div>
                     )}
                   </div>
