@@ -208,29 +208,26 @@ const mergePlanWithDefaults = (planKey, plan) => {
 
 const buildPlanCatalogFromSettings = (settings) => {
   const planEntryMap = new Map();
+  const rawEntries = getPlanEntries(settings?.plans);
 
-  for (const [rawPlanKey, planInput] of getPlanEntries(settings?.plans)) {
+  // Fallback if no plans exist in settings (fresh db)
+  if (rawEntries.length === 0) {
+    const catalog = {};
+    for (const defaultPlanKey of LEGACY_DEFAULT_PLAN_KEYS) {
+      catalog[defaultPlanKey] = mergePlanWithDefaults(defaultPlanKey, null);
+    }
+    return catalog;
+  }
+
+  for (const [rawPlanKey, planInput] of rawEntries) {
     const normalizedKey = normalizePlanId(rawPlanKey || planInput?.id);
     if (!normalizedKey) continue;
     planEntryMap.set(normalizedKey, planInput);
   }
 
   const catalog = {};
-
-  for (const defaultPlanKey of LEGACY_DEFAULT_PLAN_KEYS) {
-    const planInput = planEntryMap.get(defaultPlanKey);
-    catalog[defaultPlanKey] = mergePlanWithDefaults(defaultPlanKey, planInput);
-    planEntryMap.delete(defaultPlanKey);
-  }
-
   for (const [planKey, planInput] of planEntryMap.entries()) {
     catalog[planKey] = mergePlanWithDefaults(planKey, planInput);
-  }
-
-  if (Object.keys(catalog).length === 0) {
-    for (const defaultPlanKey of LEGACY_DEFAULT_PLAN_KEYS) {
-      catalog[defaultPlanKey] = mergePlanWithDefaults(defaultPlanKey, null);
-    }
   }
 
   return catalog;

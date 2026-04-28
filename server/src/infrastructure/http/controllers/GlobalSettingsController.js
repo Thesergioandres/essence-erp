@@ -47,6 +47,7 @@ const normalizePositiveLimit = (value, fallback = 1) => {
   if (!Number.isFinite(numeric)) {
     return Math.max(1, Number(fallback) || 1);
   }
+  if (numeric === -1) return -1;
   return Math.max(1, Math.floor(numeric));
 };
 
@@ -88,7 +89,13 @@ const buildPlanUpdatePayload = (planId, planInput, existingPlan = {}) => {
   };
 
   const nextLimits = {
-    ...(plainExisting.limits || { branches: 1, employees: 1 }),
+    ...(plainExisting.limits || {
+      branches: 1,
+      employees: 1,
+      products: 10,
+      dailySales: 10,
+      weeklySales: 70,
+    }),
     ...(planInput.limits && typeof planInput.limits === "object"
       ? {
           branches: normalizePositiveLimit(
@@ -98,6 +105,18 @@ const buildPlanUpdatePayload = (planId, planInput, existingPlan = {}) => {
           employees: normalizePositiveLimit(
             planInput.limits.employees,
             plainExisting.limits?.employees,
+          ),
+          products: normalizePositiveLimit(
+            planInput.limits.products,
+            plainExisting.limits?.products,
+          ),
+          dailySales: normalizePositiveLimit(
+            planInput.limits.dailySales,
+            plainExisting.limits?.dailySales,
+          ),
+          weeklySales: normalizePositiveLimit(
+            planInput.limits.weeklySales,
+            plainExisting.limits?.weeklySales,
           ),
         }
       : {}),
@@ -234,15 +253,36 @@ class GlobalSettingsController {
       if (customLimits !== undefined) {
         const branches = Number(customLimits?.branches);
         const employees = Number(customLimits?.employees);
+        const products = Number(customLimits?.products);
+        const dailySales = Number(customLimits?.dailySales);
+        const weeklySales = Number(customLimits?.weeklySales);
 
         business.customLimits = {
-          ...(Number.isFinite(branches) && branches > 0 ? { branches } : {}),
-          ...(Number.isFinite(employees) && employees > 0 ? { employees } : {}),
+          ...(Number.isFinite(branches) && (branches > 0 || branches === -1)
+            ? { branches: Math.floor(branches) }
+            : {}),
+          ...(Number.isFinite(employees) && (employees > 0 || employees === -1)
+            ? { employees: Math.floor(employees) }
+            : {}),
+          ...(Number.isFinite(products) && (products > 0 || products === -1)
+            ? { products: Math.floor(products) }
+            : {}),
+          ...(Number.isFinite(dailySales) &&
+          (dailySales > 0 || dailySales === -1)
+            ? { dailySales: Math.floor(dailySales) }
+            : {}),
+          ...(Number.isFinite(weeklySales) &&
+          (weeklySales > 0 || weeklySales === -1)
+            ? { weeklySales: Math.floor(weeklySales) }
+            : {}),
         };
 
         if (
           !business.customLimits?.branches &&
-          !business.customLimits?.employees
+          !business.customLimits?.employees &&
+          !business.customLimits?.products &&
+          !business.customLimits?.dailySales &&
+          !business.customLimits?.weeklySales
         ) {
           business.customLimits = undefined;
         }
