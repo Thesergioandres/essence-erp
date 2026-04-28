@@ -25,11 +25,13 @@ export const analyticsService = {
       totalOPEX: number;
       netOperationProfit: number;
       salesCount: number;
+      totalInvested: number;
     };
     lastMonth: {
       revenue: number;
       totalProfit: number;
       salesCount: number;
+      totalInvested: number;
     };
     growthPercentage: number;
     averageTicket: number;
@@ -43,8 +45,9 @@ export const analyticsService = {
           totalOPEX: 0,
           netOperationProfit: 0,
           salesCount: 0,
+          totalInvested: 0,
         },
-        lastMonth: { revenue: 0, totalProfit: 0, salesCount: 0 },
+        lastMonth: { revenue: 0, totalProfit: 0, salesCount: 0, totalInvested: 0 },
         growthPercentage: 0,
         averageTicket: 0,
       };
@@ -79,6 +82,7 @@ export const analyticsService = {
           revenue: 0, // Would need separate call for previous period
           totalProfit: 0,
           salesCount: 0,
+          totalInvested: 0,
         },
         growthPercentage: 0,
         averageTicket: range.avgTicket || 0,
@@ -94,8 +98,9 @@ export const analyticsService = {
           totalOPEX: 0,
           netOperationProfit: 0,
           salesCount: 0,
+          totalInvested: 0,
         },
-        lastMonth: { revenue: 0, totalProfit: 0, salesCount: 0 },
+        lastMonth: { revenue: 0, totalProfit: 0, salesCount: 0, totalInvested: 0 },
         growthPercentage: 0,
         averageTicket: 0,
       };
