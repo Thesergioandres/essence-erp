@@ -1,7 +1,7 @@
 {
-  "name": "essence-app",
+  "name": "essence-erp",
   "version": "1.0.0",
-  "description": "Essence - Landing Page con React + Node.js Backend",
+  "description": "ESSENCE ERP - Sistema de Gestión Empresarial",
   "scripts": {
     "client": "cd client && npm run dev",
     "server": "cd server && npm run dev",

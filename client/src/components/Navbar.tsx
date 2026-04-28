@@ -34,7 +34,7 @@ export default function Navbar({ logoUrlOverride }: NavbarProps) {
           >
             <img
               src={resolvedLogo}
-              alt="Essence ERP"
+              alt="ESSENCE ERP"
               className="h-12 w-auto sm:h-14"
               loading="lazy"
               referrerPolicy="no-referrer"

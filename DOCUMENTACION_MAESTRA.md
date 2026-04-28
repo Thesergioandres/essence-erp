@@ -1,4 +1,4 @@
-# DOCUMENTACIÓN MAESTRA — Essence ERP
+# DOCUMENTACIÓN MAESTRA — ESSENCE ERP
 
 > Generado automáticamente. Última actualización: 24 de abril de 2026
 
@@ -21,7 +21,7 @@
 
 ## 1. Visión General y Propósito
 
-Esta documentación maestra consolida y reemplaza la documentación histórica del proyecto Essence ERP. Se preserva contenido íntegro en anexos para trazabilidad y se organiza en secciones operativas para mantenimiento.
+Esta documentación maestra consolida y reemplaza la documentación histórica del proyecto ESSENCE ERP. Se preserva contenido íntegro en anexos para trazabilidad y se organiza en secciones operativas para mantenimiento.
 
 Fuentes consolidadas principales:
 
@@ -282,7 +282,7 @@ Fuente: docs/RAILWAY_DEPLOY.md
 
 ### 14.1 Constitución del Código (Manual de Arquitectura y Seguridad)
 
-Este apartado hereda las reglas dogmáticas de desarrollo del proyecto Essence ERP.
+Este apartado hereda las reglas dogmáticas de desarrollo del proyecto ESSENCE ERP.
 
 #### 🏗️ Arquitectura Estricta (Backend Hexagonal & Frontend Clean)
 

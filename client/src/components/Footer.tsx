@@ -60,7 +60,7 @@ export default function Footer({ logoUrlOverride }: FooterProps) {
           <div className="text-center sm:text-left">
             <img
               src={resolvedLogo}
-              alt="Essence ERP"
+              alt="ESSENCE ERP"
               className="mx-auto h-16 w-auto sm:mx-0 sm:h-20"
               loading="lazy"
               referrerPolicy="no-referrer"
@@ -193,7 +193,7 @@ export default function Footer({ logoUrlOverride }: FooterProps) {
 
         <div className="mt-8 border-t border-white/10 pt-6 text-center sm:mt-10 sm:flex sm:items-center sm:justify-between sm:pt-8 sm:text-left">
           <p className="text-sm text-slate-400 sm:text-base">
-            © {new Date().getFullYear()} Essence. Todos los derechos reservados.
+            © {new Date().getFullYear()} ESSENCE ERP. Todos los derechos reservados.
           </p>
           <p className="mt-2 text-xs uppercase tracking-[0.14em] text-slate-500 sm:mt-0">
             Operacion comercial con control y claridad
