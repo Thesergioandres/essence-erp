@@ -81,8 +81,11 @@ export default function RegisterPage() {
     const currentRole = normalizeEmployeeRole(currentSessionUser?.role || "");
 
     if (currentRole === "god") {
-      sessionStorage.removeItem(REGISTER_STEP_STORAGE_KEY);
-      navigate("/onboarding", { replace: true });
+      const targetPath = "/onboarding";
+      if (location.pathname !== targetPath) {
+        sessionStorage.removeItem(REGISTER_STEP_STORAGE_KEY);
+        navigate(targetPath, { replace: true });
+      }
       return;
     }
 
@@ -102,19 +105,29 @@ export default function RegisterPage() {
     } catch {
       sessionStorage.removeItem(REGISTER_STEP_STORAGE_KEY);
     }
-  }, [location.search, navigate, registeredUser]);
+  }, [location.search, location.pathname, navigate, registeredUser]);
 
   useEffect(() => {
     globalSettingsService
       .getPublicSettings()
       .then(settings => {
-        setPlans([
-          settings.plans.starter,
-          settings.plans.pro,
-          settings.plans.enterprise,
-        ] as PlanOption[]);
+        if (settings?.plans) {
+          const starter = settings.plans.starter;
+          const pro = settings.plans.pro;
+          const enterprise = settings.plans.enterprise;
+
+          if (starter || pro || enterprise) {
+            const fetchedPlans: PlanOption[] = [];
+            if (starter) fetchedPlans.push(starter as PlanOption);
+            if (pro) fetchedPlans.push(pro as PlanOption);
+            if (enterprise) fetchedPlans.push(enterprise as PlanOption);
+            setPlans(fetchedPlans);
+          }
+        }
       })
-      .catch(() => undefined);
+      .catch(err => {
+        console.error("[RegisterPage] Error loading plans:", err);
+      });
   }, []);
 
   const handleChange = (
@@ -378,38 +391,41 @@ export default function RegisterPage() {
             </form>
           ) : (
             <div className="space-y-3">
-              {plans.map(plan => (
-                <div
-                  key={plan.id}
-                  className="rounded-xl border border-white/10 bg-white/5 p-4"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <p className="text-base font-semibold text-white">
-                        {plan.name}
-                      </p>
-                      <p className="text-xs text-gray-300">
-                        {plan.description}
+              {plans.map(plan => {
+                if (!plan) return null;
+                return (
+                  <div
+                    key={plan.id}
+                    className="rounded-xl border border-white/10 bg-white/5 p-4"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="text-base font-semibold text-white">
+                          {plan.name}
+                        </p>
+                        <p className="text-xs text-gray-300">
+                          {plan.description}
+                        </p>
+                      </div>
+                      <p className="text-lg font-bold text-fuchsia-200">
+                        {plan.currency} {plan.monthlyPrice}/mes
                       </p>
                     </div>
-                    <p className="text-lg font-bold text-fuchsia-200">
-                      {plan.currency} {plan.monthlyPrice}/mes
+                    <p className="mt-2 text-xs text-gray-300">
+                      Incluye hasta {plan.limits?.branches || 0} sede(s) y{" "}
+                      {plan.limits?.employees || 0} employee(es).
                     </p>
+                    <Button
+                      type="button"
+                      className="mt-3 w-full"
+                      loading={planAction === plan.id}
+                      onClick={() => handleChoosePlan(plan)}
+                    >
+                      Elegir plan y hablar por WhatsApp
+                    </Button>
                   </div>
-                  <p className="mt-2 text-xs text-gray-300">
-                    Incluye hasta {plan.limits.branches} sede(s) y{" "}
-                    {plan.limits.employees} employee(es).
-                  </p>
-                  <Button
-                    type="button"
-                    className="mt-3 w-full"
-                    loading={planAction === plan.id}
-                    onClick={() => handleChoosePlan(plan)}
-                  >
-                    Elegir plan y hablar por WhatsApp
-                  </Button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
