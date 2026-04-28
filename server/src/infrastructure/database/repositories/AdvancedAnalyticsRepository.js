@@ -89,11 +89,9 @@ const buildTotalGroupProfitExpression = () => ({
 });
 
 const buildSaleCostExpression = () => ({
-  $multiply: [
-    {
-      $ifNull: ["$costAtSale", { $ifNull: ["$averageCostAtSale", "$purchasePrice"] }],
-    },
-    { $ifNull: ["$quantity", 0] },
+  $subtract: [
+    buildSaleRevenueExpression(),
+    buildTotalGroupProfitExpression(),
   ],
 });
 

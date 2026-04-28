@@ -99,16 +99,29 @@ export class AnalyticsRepository {
               $cond: [
                 { $eq: ["$paymentStatus", "confirmado"] },
                 {
-                  $multiply: [
+                  $subtract: [
+                    {
+                      $multiply: [
+                        { $ifNull: ["$salePrice", 0] },
+                        { $ifNull: ["$quantity", 0] },
+                      ],
+                    },
                     {
                       $ifNull: [
-                        "$costAtSale",
+                        "$totalProfit",
                         {
-                          $ifNull: ["$averageCostAtSale", "$purchasePrice"],
+                          $ifNull: [
+                            "$netProfit",
+                            {
+                              $add: [
+                                { $ifNull: ["$adminProfit", 0] },
+                                { $ifNull: ["$employeeProfit", 0] },
+                              ],
+                            },
+                          ],
                         },
                       ],
                     },
-                    "$quantity",
                   ],
                 },
                 0,
