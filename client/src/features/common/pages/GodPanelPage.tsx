@@ -1729,12 +1729,28 @@ export default function GodPanel() {
                   <h3 className="text-xl font-bold text-white">{selectedPlan.name}</h3>
                   <p className="text-xs text-slate-400">ID: {selectedPlan.id}</p>
                 </div>
-                <button
-                  onClick={() => setPlanDrawerId(null)}
-                  className="min-h-11 rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-xs font-semibold text-white hover:bg-white/12"
-                >
-                  Cerrar
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => void handleSaveGlobalPlans()}
+                    disabled={
+                      subscriptionAction === "global-settings" || !isGlobalSettingsDirty
+                    }
+                    className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-cyan-300/40 bg-cyan-500/20 px-4 py-2 text-xs font-semibold text-cyan-50 transition-all duration-300 hover:-translate-y-0.5 hover:bg-cyan-500/30 disabled:cursor-not-allowed disabled:opacity-50 shadow-lg shadow-cyan-900/10"
+                  >
+                    {subscriptionAction === "global-settings" ? (
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="h-4 w-4" />
+                    )}
+                    Guardar
+                  </button>
+                  <button
+                    onClick={() => setPlanDrawerId(null)}
+                    className="min-h-11 rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-xs font-semibold text-white hover:bg-white/12 transition-all duration-300"
+                  >
+                    Cerrar
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-4">
@@ -1921,6 +1937,23 @@ export default function GodPanel() {
                     className="inline-flex min-h-11 items-center justify-center rounded-xl border border-amber-300/35 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-100 transition-all duration-300 hover:bg-amber-500/20"
                   >
                     Archivar plan
+                  </button>
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    onClick={() => void handleSaveGlobalPlans()}
+                    disabled={
+                      subscriptionAction === "global-settings" || !isGlobalSettingsDirty
+                    }
+                    className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-cyan-300/45 bg-cyan-500/25 px-4 py-3 text-sm font-bold text-cyan-50 transition-all duration-300 hover:-translate-y-1 hover:border-cyan-200/60 hover:bg-cyan-500/35 disabled:cursor-not-allowed disabled:opacity-50 shadow-xl shadow-cyan-900/20"
+                  >
+                    {subscriptionAction === "global-settings" ? (
+                      <RefreshCw className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="h-5 w-5" />
+                    )}
+                    Guardar Cambios en Plan
                   </button>
                 </div>
 
