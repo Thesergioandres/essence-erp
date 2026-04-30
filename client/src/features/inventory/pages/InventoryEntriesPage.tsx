@@ -1438,8 +1438,24 @@ export default function InventoryEntries() {
                             </div>
 
                             <div>
+                              <label className="mb-2 block text-xs font-medium text-purple-300">
+                                Comisión Base (%)
+                              </label>
+                              <input
+                                type="number"
+                                value={baseCommissionPercentage}
+                                onChange={e =>
+                                  setBaseCommissionPercentage(Number(e.target.value))
+                                }
+                                min="0"
+                                max="100"
+                                className="w-full rounded-lg border border-gray-600 bg-gray-900/50 px-4 py-2 text-white focus:border-transparent focus:outline-none focus:ring-2 focus:ring-purple-500"
+                              />
+                            </div>
+
+                            <div>
                               <label className="mb-2 block text-xs font-medium text-blue-300">
-                                Precio Employee *
+                                Precio empleado *
                               </label>
                               <input
                                 type="number"
@@ -1458,7 +1474,7 @@ export default function InventoryEntries() {
                                 placeholder="Se calcula automáticamente (editable)"
                               />
                               <p className="mt-1 text-xs text-gray-500">
-                                Se calcula segun precio de venta y comision
+                                Se calcula según precio de venta y comisión
                                 base, pero puedes ajustarlo
                               </p>
                             </div>

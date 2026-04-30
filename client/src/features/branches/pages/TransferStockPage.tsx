@@ -19,7 +19,6 @@ const sanitizeIdString = (raw: string): string => {
     return "";
   }
 
-  // Handle MongoDB ObjectId hex strings
   const objectIdMatch = trimmed.match(/[a-fA-F0-9]{24}/);
   if (objectIdMatch) {
     return objectIdMatch[0].toLowerCase();
@@ -49,7 +48,6 @@ const resolveEntityId = (value: unknown): string => {
       toString?: () => string;
     };
 
-    // Try common ID fields
     const directId = 
       resolveEntityId(candidate._id) || 
       resolveEntityId(candidate.id) || 
@@ -70,8 +68,6 @@ const resolveEntityId = (value: unknown): string => {
       }
     }
     
-    // If it's a string representation of an ID but hidden in an object
-    // (some serializers do this)
     try {
       const serialized = JSON.stringify(value);
       const match = serialized.match(/[a-fA-F0-9]{24}/);
@@ -109,18 +105,43 @@ export default function TransferStock() {
     text: string;
   } | null>(null);
 
+  // Debugging logs at render time
+  useEffect(() => {
+    console.log("🛠️ [TransferStock Render]", {
+      sessionLoading,
+      hasSessionUser: !!sessionUser,
+      sessionUserKeys: sessionUser ? Object.keys(sessionUser) : [],
+      localStorageUser: localStorage.getItem("user") ? "Exists" : "Missing",
+      token: localStorage.getItem("token") ? "Exists" : "Missing"
+    });
+  }, [sessionUser, sessionLoading]);
+
   const loadData = useCallback(async () => {
     try {
+      console.log("📥 [TransferStock] loadData called");
       setLoading(true);
       
-      // Try to get user ID from session context, then fallback to direct service call (which checks localStorage)
       const currentUser = sessionUser || authService.getCurrentUser();
       const currentUserId = resolveEntityId(currentUser);
 
-      // Verificar que tengamos un ID de usuario válido
+      console.log("👤 [TransferStock] Identification check:", {
+        currentUserSource: sessionUser ? "sessionContext" : (currentUser ? "localStorage" : "none"),
+        currentUserId,
+        sessionLoading
+      });
+
       if (!currentUserId) {
-        if (sessionLoading) return; // Wait for session if it's still loading
+        if (sessionLoading) {
+          console.log("⏳ [TransferStock] Waiting for session hydration...");
+          return;
+        }
         
+        console.error("❌ [TransferStock] USER NOT FOUND. Full state:", {
+          sessionUser,
+          localStorageUser: localStorage.getItem("user"),
+          currentUser
+        });
+
         setMessage({
           type: "error",
           text: "No se encontró información del usuario. Por favor, inicia sesión nuevamente.",
@@ -129,24 +150,23 @@ export default function TransferStock() {
         return;
       }
 
-      console.log("🚀 [TransferStock] Loading data for user:", currentUserId);
+      console.log("🚀 [TransferStock] Loading business data for user:", currentUserId);
 
       const [employeesData, stockData, allowedBranchesData] = await Promise.all([
         employeeService.getAll({ active: true }).catch(err => {
-          console.error("Error fetching employees:", err);
+          console.error("🔥 [TransferStock] Error fetching employees:", err);
           return { data: [], pagination: {} };
         }),
         stockService.getEmployeeStock(currentUserId).catch(err => {
-          console.error("Error fetching employee stock:", err);
+          console.error("🔥 [TransferStock] Error fetching employee stock:", err);
           return [];
         }),
         stockService.getMyAllowedBranches().catch(err => {
-          console.error("Error fetching allowed branches:", err);
+          console.error("🔥 [TransferStock] Error fetching allowed branches:", err);
           return { branches: [] };
         }),
       ]);
 
-      // Handle employees data format
       const allEmployees = Array.isArray(employeesData)
         ? employeesData
         : (employeesData as any)?.data || [];
@@ -156,10 +176,10 @@ export default function TransferStock() {
         return Boolean(employeeId && employeeId !== currentUserId && d.active);
       });
 
-      console.log("📊 [TransferStock] Data loaded:", {
-        employeesCount: filteredEmployees.length,
-        stockItemsCount: stockData.length,
-        branchesCount: (allowedBranchesData?.branches || []).length
+      console.log("📊 [TransferStock] Data loaded successfully:", {
+        employeesFound: filteredEmployees.length,
+        stockItemsFound: stockData.length,
+        branchesFound: (allowedBranchesData?.branches || []).length
       });
 
       setEmployees(filteredEmployees);
@@ -167,8 +187,8 @@ export default function TransferStock() {
       setMyStock(stockData || []);
       setMessage(null);
     } catch (error) {
-      console.error("Error al cargar datos:", error);
-      setMessage({ type: "error", text: "Error al cargar los datos" });
+      console.error("🔥 [TransferStock] Critical error in loadData:", error);
+      setMessage({ type: "error", text: "Error al cargar los datos. Revisa la consola para más detalles." });
     } finally {
       setLoading(false);
     }
@@ -195,7 +215,6 @@ export default function TransferStock() {
       setMessage(null);
 
       let result;
-
       if (transferType === "employee") {
         result = await stockService.transferStock({
           toEmployeeId: selectedEmployee,
@@ -223,11 +242,10 @@ export default function TransferStock() {
 
       await loadData();
     } catch (error: any) {
-      console.error("Error en transferencia:", error);
+      console.error("🔥 [TransferStock] Transfer error:", error);
       setMessage({
         type: "error",
-        text:
-          error.response?.data?.message || "Error al realizar la transferencia",
+        text: error.response?.data?.message || "Error al realizar la transferencia",
       });
     } finally {
       setSubmitting(false);

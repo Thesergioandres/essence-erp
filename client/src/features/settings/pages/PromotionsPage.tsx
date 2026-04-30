@@ -1747,8 +1747,7 @@ export default function Promotions() {
                                 {/* Alert if employee price below cost */}
                                 {belowCostAlert && (
                                   <div className="mb-3 rounded-lg border border-red-500/50 bg-red-900/30 p-2 text-xs text-red-400 sm:text-sm">
-                                    ⚠️ Precio employee por debajo del margen
-                                    establecido
+                                    ⚠️ por debajo del margen establecido
                                   </div>
                                 )}
 
