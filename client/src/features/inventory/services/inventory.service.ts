@@ -294,8 +294,12 @@ export const stockService = {
   },
 
   async getEmployeeStock(employeeId: string): Promise<EmployeeStock[]> {
-    if (!isContextReady()) return [];
+    const ready = isContextReady();
+    console.log("🛠️ [InventoryService] getEmployeeStock called", { employeeId, isContextReady: ready });
+    if (!ready) return [];
+    
     const response = await api.get(`/stock/employee/${employeeId}`);
+    console.log("🛠️ [InventoryService] getEmployeeStock response:", response.status);
 
     let data: any[] = [];
     if (Array.isArray(response.data)) {

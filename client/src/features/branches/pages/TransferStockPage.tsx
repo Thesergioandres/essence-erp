@@ -7,6 +7,7 @@ import { stockService } from "../../inventory/services/inventory.service";
 import type { EmployeeStock } from "../../inventory/types/product.types";
 import { useSession } from "../../../hooks/useSession";
 import { authService } from "../../auth/services";
+import { isContextReady } from "../../../shared/utils/contextGuard";
 
 const sanitizeIdString = (raw: string): string => {
   const trimmed = String(raw || "").trim();
@@ -39,23 +40,20 @@ const resolveEntityId = (value: unknown): string => {
   }
 
   if (typeof value === "object") {
-    const candidate = value as {
-      _id?: unknown;
-      id?: unknown;
-      $oid?: unknown;
-      oid?: unknown;
-      toHexString?: () => string;
-      toString?: () => string;
-    };
+    const candidate = value as any;
 
+    // 1. Prioridad: Campos directos de ID
     const directId = 
       resolveEntityId(candidate._id) || 
       resolveEntityId(candidate.id) || 
       resolveEntityId(candidate.$oid) || 
-      resolveEntityId(candidate.oid);
+      resolveEntityId(candidate.oid) ||
+      resolveEntityId(candidate.userId) ||
+      resolveEntityId(candidate.uid);
       
     if (directId) return directId;
 
+    // 2. Soporte para Mongoose ObjectId o similares
     if (typeof candidate.toHexString === "function") {
       const hex = sanitizeIdString(candidate.toHexString());
       if (hex) return hex;
@@ -64,10 +62,12 @@ const resolveEntityId = (value: unknown): string => {
     if (typeof candidate.toString === "function") {
       const s = candidate.toString();
       if (s && s !== "[object Object]") {
-        return sanitizeIdString(s);
+        const hex = sanitizeIdString(s);
+        if (hex) return hex;
       }
     }
     
+    // 3. Último recurso: escaneo de la cadena serializada
     try {
       const serialized = JSON.stringify(value);
       const match = serialized.match(/[a-fA-F0-9]{24}/);
@@ -124,7 +124,7 @@ export default function TransferStock() {
       const currentUser = sessionUser || authService.getCurrentUser();
       const currentUserId = resolveEntityId(currentUser);
 
-      console.log("👤 [TransferStock] Identification check:", {
+      console.log("🛠️ [TransferStock] Identification check:", {
         currentUserSource: sessionUser ? "sessionContext" : (currentUser ? "localStorage" : "none"),
         currentUserId,
         sessionLoading
@@ -133,11 +133,10 @@ export default function TransferStock() {
       if (!currentUserId) {
         if (sessionLoading) {
           console.log("⏳ [TransferStock] Waiting for session hydration...");
-          setLoading(false);
           return;
         }
         
-        console.error("[TransferStock] CRITICAL: No currentUserId found. currentUser details:", {
+        console.error("🛠️ [TransferStock] CRITICAL: No currentUserId found. currentUser details:", {
           hasUser: !!currentUser,
           keys: currentUser ? Object.keys(currentUser) : [],
           role: (currentUser as any)?.role,
@@ -152,23 +151,41 @@ export default function TransferStock() {
         return;
       }
 
+      const isReady = isContextReady();
+      console.log("🛠️ [TransferStock] Context check:", { isReady, businessId: localStorage.getItem("businessId") });
+
+      if (!isReady) {
+        console.warn("⚠️ [TransferStock] Context not ready yet. Potential IDOR protection blocking calls.");
+        setMessage({
+          type: "error",
+          text: "El contexto del negocio no está inicializado. Por favor, selecciona un negocio en el selector superior.",
+        });
+        setLoading(false);
+        return;
+      }
+
       console.log("🚀 [TransferStock] Loading business data for user:", currentUserId);
 
       const [employeesData, stockData, allowedBranchesData] = await Promise.all([
         employeeService.getAll({ active: true }).catch(err => {
-          console.error("🔥 [TransferStock] Error fetching employees:", err);
+          console.error("🛠️ [TransferStock] Error fetching employees:", err);
           return { data: [], pagination: {} };
         }),
         stockService.getEmployeeStock(currentUserId).catch(err => {
-          console.error("🔥 [TransferStock] Error fetching employee stock:", err);
+          console.error("🛠️ [TransferStock] Error fetching stock:", err);
           return [];
         }),
         stockService.getMyAllowedBranches().catch(err => {
-          console.error("🔥 [TransferStock] Error fetching allowed branches:", err);
+          console.error("🛠️ [TransferStock] Error fetching branches:", err);
           return { branches: [] };
         }),
       ]);
 
+      console.log("🛠️ [TransferStock] Data fetched:", {
+        employeesRaw: employeesData,
+        stockRaw: stockData,
+        branchesRaw: allowedBranchesData
+      });
       const allEmployees = Array.isArray(employeesData)
         ? employeesData
         : (employeesData as any)?.data || [];
