@@ -20,12 +20,13 @@ const sanitizeIdString = (raw: string): string => {
     return "";
   }
 
+  // SOLO aceptamos strings que contengan un ID hexadecimal de 24 caracteres
   const objectIdMatch = trimmed.match(/[a-fA-F0-9]{24}/);
   if (objectIdMatch) {
     return objectIdMatch[0].toLowerCase();
   }
 
-  return trimmed;
+  return "";
 };
 
 const resolveEntityId = (value: unknown): string => {
