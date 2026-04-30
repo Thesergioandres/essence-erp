@@ -1102,7 +1102,7 @@ const StockManagement = () => {
 
                             <div>
                               <label className="mb-1 block text-xs text-gray-400">
-                                Precio Employee
+                                Precio empleado
                               </label>
                               <div className="flex items-center justify-between rounded-lg border border-gray-600 bg-gray-900/50 px-3 py-2">
                                 <span className="font-bold text-blue-400">

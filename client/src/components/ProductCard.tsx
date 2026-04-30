@@ -138,7 +138,7 @@ export default function ProductCard({
                       ${product.employeePrice?.toFixed(2) || "0.00"}
                     </p>
                     <p className="text-[10px] font-bold uppercase tracking-wider text-green-600">
-                      Precio Employee
+                      Precio empleado
                     </p>
                   </>
                 )}

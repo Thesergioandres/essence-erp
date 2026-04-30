@@ -109,7 +109,7 @@ export default function PriceCatalogModal() {
                         <tr>
                           <th className="px-3 py-2 text-left">Producto</th>
                           <th className="px-3 py-2 text-right">
-                            Precio employee
+                            Precio empleado
                           </th>
                           <th className="px-3 py-2 text-right">
                             Precio público
@@ -123,9 +123,7 @@ export default function PriceCatalogModal() {
                               {item.name}
                             </td>
                             <td className="px-3 py-2 text-right text-blue-200">
-                              {currency.format(
-                                Number(item.employeePrice || 0)
-                              )}
+                              {currency.format(Number(item.employeePrice || 0))}
                             </td>
                             <td className="px-3 py-2 text-right text-gray-100">
                               {currency.format(Number(item.clientPrice || 0))}

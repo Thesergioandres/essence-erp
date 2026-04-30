@@ -1,12 +1,12 @@
-import { Check, Loader2, Pencil, X } from "lucide-react";
 import { gsap } from "gsap";
+import { Check, Loader2, Pencil, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ConfidentialBadge } from "../../../shared/components/ui";
 import { useFinancialPrivacy } from "../../auth/utils/financialPrivacy";
 import { promotionService } from "../../settings/services";
 import type { Promotion } from "../../settings/types/promotion.types";
 import { productService } from "../services/inventory.service";
 import type { Product } from "../types/product.types";
-import { ConfidentialBadge } from "../../../shared/components/ui";
 
 type RowDraft = {
   price: string;
@@ -282,7 +282,7 @@ export default function PriceListPage() {
 
   return (
     <div className="space-y-6 rounded-2xl border border-white/10 bg-[radial-gradient(circle_at_top,rgba(71,85,105,0.2),rgba(3,7,18,0.96)_42%,rgba(2,6,23,0.99)_100%)] p-4 shadow-[0_24px_70px_rgba(2,6,23,0.55)] backdrop-blur-[10px] sm:p-5">
-      <div className="rounded-2xl border border-white/10 bg-white/4 p-5 backdrop-blur-[10px]">
+      <div className="bg-white/4 rounded-2xl border border-white/10 p-5 backdrop-blur-[10px]">
         <h1 className="text-2xl font-bold text-white">Lista de Precios</h1>
         <p className="mt-2 text-sm text-gray-300">
           Edita precios en línea y controla el margen proyectado por producto.
@@ -296,7 +296,7 @@ export default function PriceListPage() {
         </div>
       ) : null}
 
-      <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/4 backdrop-blur-[10px]">
+      <div className="bg-white/4 overflow-hidden rounded-2xl border border-white/10 backdrop-blur-[10px]">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-white/10 text-sm">
             <thead className="bg-black/20 text-xs uppercase tracking-wide text-gray-300">
@@ -304,7 +304,7 @@ export default function PriceListPage() {
                 <th className="px-4 py-3 text-left">Producto</th>
                 <th className="px-4 py-3 text-right">Costo adquisición</th>
                 <th className="px-4 py-3 text-right">Precio público</th>
-                <th className="px-4 py-3 text-right">Precio employee</th>
+                <th className="px-4 py-3 text-right">Precio empleado</th>
                 <th className="px-4 py-3 text-right">Margen proyectado</th>
                 <th className="px-4 py-3 text-center">Acción</th>
               </tr>
@@ -469,7 +469,7 @@ export default function PriceListPage() {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-white/4 p-5 backdrop-blur-[10px]">
+      <div className="bg-white/4 rounded-2xl border border-white/10 p-5 backdrop-blur-[10px]">
         <h2 className="text-xl font-semibold text-white">
           Información de Promociones
         </h2>
@@ -479,7 +479,7 @@ export default function PriceListPage() {
         </p>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/4 backdrop-blur-[10px]">
+      <div className="bg-white/4 overflow-hidden rounded-2xl border border-white/10 backdrop-blur-[10px]">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-white/10 text-sm">
             <thead className="bg-black/20 text-xs uppercase tracking-wide text-gray-300">
@@ -490,7 +490,7 @@ export default function PriceListPage() {
                 <th className="px-4 py-3 text-left">Vigencia</th>
                 <th className="px-4 py-3 text-right">Precio original</th>
                 <th className="px-4 py-3 text-right">Precio promo</th>
-                <th className="px-4 py-3 text-right">Precio employee</th>
+                <th className="px-4 py-3 text-right">Precio empleado</th>
                 <th className="px-4 py-3 text-left">Descuento</th>
                 <th className="px-4 py-3 text-left">Reglas e items</th>
                 <th className="px-4 py-3 text-right">Stock / Uso</th>
@@ -566,9 +566,7 @@ export default function PriceListPage() {
                       </td>
                       <td className="px-4 py-3 text-right text-gray-200">
                         {promo.employeePrice
-                          ? currency.format(
-                              toSafeNumber(promo.employeePrice)
-                            )
+                          ? currency.format(toSafeNumber(promo.employeePrice))
                           : "-"}
                       </td>
                       <td className="px-4 py-3 text-gray-200">

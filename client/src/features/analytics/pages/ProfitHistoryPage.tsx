@@ -7,10 +7,10 @@ import type { Expense } from "../../common/types/common.types";
 import { creditService } from "../../credits/services";
 import { defectiveProductService } from "../../sales/services";
 import type {
-    CreditMetrics,
-    ProfitHistoryAdminEmployee,
-    ProfitHistoryAdminEntry,
-    ProfitHistoryAdminOverview,
+  CreditMetrics,
+  ProfitHistoryAdminEmployee,
+  ProfitHistoryAdminEntry,
+  ProfitHistoryAdminOverview,
 } from "../types/analytics.types";
 
 interface DefectiveStats {
@@ -356,7 +356,9 @@ export default function ProfitHistory() {
               </div>
               {employeesEnabled && (
                 <div className="rounded-xl border border-gray-800 bg-gray-900/60 p-4 text-white">
-                  <p className="text-sm text-gray-300">Comisiones de empleados</p>
+                  <p className="text-sm text-gray-300">
+                    Comisiones de empleados
+                  </p>
                   <p className="mt-2 text-xl font-semibold text-cyan-300">
                     {formatCurrency(overview?.totalEmployeeCommissions ?? 0)}
                   </p>
@@ -697,7 +699,7 @@ export default function ProfitHistory() {
                               </span>
                             </h4>
                             <p className="mb-2 text-xs text-gray-400">
-                              Tu ganancia es solo el margen (precio employee -
+                              Tu ganancia es solo el margen (precio empleado -
                               costo)
                             </p>
                             <div className="space-y-2">
