@@ -1,5 +1,5 @@
 # Build stage
-FROM node:18-alpine as build
+FROM node:18-alpine AS builder
 WORKDIR /app
 
 ARG RAILWAY_GIT_COMMIT_SHA

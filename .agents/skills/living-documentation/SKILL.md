@@ -1,32 +1,56 @@
 ---
 name: living-documentation
-description: Automatically updates project documentation and inline comments whenever code is modified. Use this as the final step after writing, modifying, or refactoring any code.
+description: Synchronizes project documentation, inline comments, and API specs with code changes. Use this as the MANDATORY final step after implementing, modifying, or refactoring any feature, endpoint, or environment configuration.
 ---
 
 # Living Documentation Protocol
 
-El código y la documentación deben evolucionar en paralelo. Nunca des por terminada una tarea sin actualizar la documentación correspondiente.
+Code and documentation must evolve synchronously. You MUST NEVER consider a coding task complete without updating its corresponding documentation.
 
-## Reglas de Actualización Estricta
+## Execution Triggers & Rules
 
-1. **JSDoc / TSDoc (Nivel de Código):**
-   - Si alteras una firma (parámetros, tipos de retorno) de una función, interfaz o clase, actualiza inmediatamente su comentario JSDoc/TSDoc.
-   - Documenta el "Por qué" (regla de negocio) y los casos extremos, no el "Cómo" obvio.
+### 1. Code-Level (JSDoc / TSDoc)
 
-2. **Capa de Infraestructura (API / Webhooks):**
-   - Si modificas un endpoint (controlador) o un webhook de n8n, actualiza el archivo de documentación de la API (ej. `docs/api.md`, `swagger.yaml` o colección de Postman/Bruno).
-   - Registra cambios exactos en payloads esperados, query params, headers (ej. `tenantId`) y códigos de estado HTTP.
+- **Trigger:** Changing a function signature, interface, or class.
+- **Rule:** Immediately update its JSDoc/TSDoc comment.
+- **Content:** Document the "Why" (business rule, edge cases, e.g., B2B pricing overrides) and the "What" (parameters/returns). Do not document the obvious "How".
 
-3. **Capa de Dominio / Casos de Uso (Arquitectura):**
-   - Si agregas una nueva entidad, puerto o caso de uso en la Arquitectura Hexagonal/Limpia, actualiza el `README.md` principal o el archivo `docs/architecture.md`.
-   - Mantén un registro del flujo de datos si la lógica transaccional o de negocio cambia (ej. reglas de deducción de inventario o precios B2B).
+### 2. Infrastructure Layer (API / Webhooks)
 
-4. **Gestión de Dependencias y Variables de Entorno:**
-   - Si instalas una nueva librería o agregas una variable en el `.env`, añádela instantáneamente a la sección de "Instalación/Configuración" del `README.md` y al `.env.example`.
+- **Trigger:** Modifying an Express controller, route, or external integration (e.g., n8n webhooks).
+- **Rule:** Update the API documentation files (e.g., `docs/api.md`, `swagger.yaml`, or API collection files).
+- **Content:** Precisely record changes in expected payloads, query params, specific HTTP status codes, and mandatory headers (e.g., `businessId`, authorization tokens).
 
-## Flujo de Ejecución (Paso a Paso)
+### 3. Domain Layer & Architecture
 
-1. Termina de escribir/refactorizar el código y pasa la auditoría de seguridad.
-2. Identifica todos los archivos de texto/markdown vinculados a esa parte del sistema.
-3. Aplica los cambios en la documentación en el mismo commit o iteración de respuesta.
-4. Muestra un resumen ultra-conciso de los archivos de documentación modificados.
+- **Trigger:** Adding a new Domain Entity, Use Case, or shifting logic in the Hexagonal/Clean Architecture.
+- **Rule:** Update the main `README.md` or specific `docs/architecture.md`.
+- **Content:** Maintain a log of data flows, specially if transactional logic or multi-tenant business rules change.
+
+### 4. Dependencies & Environment
+
+- **Trigger:** Installing a new npm package or adding a new variable to `.env`.
+- **Rule:** Instantaneously append the new requirement to the "Installation/Setup" section of `README.md` and add the mock key to `.env.example`.
+
+## Mandatory Execution Protocol (Step-by-Step)
+
+Whenever you finish writing or refactoring code:
+
+1. Identify all documentation artifacts linked to the modified system area.
+2. Apply the documentation updates in the SAME commit or response iteration.
+3. You MUST output a `Documentation Sync Report` at the very end of your response.
+
+## Reporting Format
+
+End your responses with:
+**[Living Docs Sync]**:
+
+- 📝 `file_name.ts`: Updated JSDoc for `functionName`.
+- 📖 `docs/api.md`: Added `newField` to payload spec.
+- ⚙️ `.env.example`: Added `NEW_VAR_NAME`.
+
+## QA Checklist
+
+- [ ] Is the `.env.example` perfectly synced with `.env`?
+- [ ] Are API changes reflected in the markdown/YAML specs?
+- [ ] Did I explain the business logic in the TSDoc?
