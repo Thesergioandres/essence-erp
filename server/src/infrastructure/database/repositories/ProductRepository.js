@@ -40,53 +40,77 @@ export class ProductRepository {
    * ⚠️ NOTE: This updates totalStock (global counter) only.
    * For warehouse-specific updates, use updateWarehouseStock().
    *
+  /**
+   * Update stock atomically.
+   *
    * @param {string} productId
    * @param {number} quantityChange - Negative to reduce, Positive to add
-   * @param {mongoose.ClientSession} session - Optional (required for replica sets)
+   * @param {mongoose.ClientSession} session - Optional
    * @returns {Promise<Object>} Updated document
    */
   async updateStock(productId, quantityChange, session) {
-    const query = Product.findById(productId);
-    const product = session ? await query.session(session) : await query;
-    if (!product) throw new Error("Product not found");
+    const update = {
+      $inc: {
+        totalStock: quantityChange,
+      },
+    };
 
-    const cost = product.averageCost || product.purchasePrice || 0;
-    const valueChange = quantityChange * cost;
+    const query = { _id: productId };
+    if (quantityChange < 0) {
+      query.totalStock = { $gte: Math.abs(quantityChange) };
+    }
 
-    product.totalStock = (product.totalStock || 0) + quantityChange;
-    product.totalInventoryValue =
-      (product.totalInventoryValue || 0) + valueChange;
+    const options = { new: true, runValidators: true };
+    if (session) options.session = session;
 
-    // ℹ️ averageCost intentionally remains unchanged during sales.
-    // It only updates when NEW inventory is received at a different price.
+    const product = await Product.findOneAndUpdate(query, update, options);
 
-    await product.save(session ? { session } : {});
+    if (!product) {
+      if (quantityChange < 0) {
+        throw new Error(
+          "No se pudo actualizar el stock global: Producto no encontrado o stock insuficiente.",
+        );
+      }
+      throw new Error("Producto no encontrado.");
+    }
+
     return product.toObject();
   }
 
   /**
    * Update warehouse stock specifically (for admin sales).
-   * 🎯 FIX TASK 1: Deduct from warehouse when admin makes direct sales.
    *
    * @param {string} productId
    * @param {number} quantityChange - Negative to reduce, Positive to add
-   * @param {mongoose.ClientSession} session - Optional (required for replica sets)
+   * @param {mongoose.ClientSession} session - Optional
    * @returns {Promise<Object>} Updated document
    */
   async updateWarehouseStock(productId, quantityChange, session) {
-    const query = Product.findById(productId);
-    const product = session ? await query.session(session) : await query;
-    if (!product) throw new Error("Product not found");
+    const update = {
+      $inc: {
+        warehouseStock: quantityChange,
+      },
+    };
 
-    product.warehouseStock = (product.warehouseStock || 0) + quantityChange;
-
-    if (product.warehouseStock < 0) {
-      throw new Error(
-        `Insufficient warehouse stock for ${product.name}. Available: ${product.warehouseStock + Math.abs(quantityChange)}, Requested: ${Math.abs(quantityChange)}`,
-      );
+    const query = { _id: productId };
+    if (quantityChange < 0) {
+      query.warehouseStock = { $gte: Math.abs(quantityChange) };
     }
 
-    await product.save(session ? { session } : {});
+    const options = { new: true, runValidators: true };
+    if (session) options.session = session;
+
+    const product = await Product.findOneAndUpdate(query, update, options);
+
+    if (!product) {
+      if (quantityChange < 0) {
+        throw new Error(
+          "Stock insuficiente en bodega o producto no encontrado.",
+        );
+      }
+      throw new Error("Producto no encontrado.");
+    }
+
     return product.toObject();
   }
 

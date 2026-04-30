@@ -66,7 +66,6 @@ export class RegisterSaleUseCase {
       discount = 0,
       additionalCosts = [],
       warranties = [],
-      employeeProfitPercentage = 20,
     } = input;
 
     const resolveSaleDate = (rawDate) => {
@@ -84,24 +83,6 @@ export class RegisterSaleUseCase {
     };
 
     const resolvedSaleDate = resolveSaleDate(saleDate);
-
-    const resolveRequestedSalePrice = (item) => {
-      const candidates = [
-        item?.salePrice,
-        item?.unitPrice,
-        item?.finalPrice,
-        item?.price,
-      ];
-
-      for (const value of candidates) {
-        const numeric = Number(value);
-        if (Number.isFinite(numeric) && numeric > 0) {
-          return numeric;
-        }
-      }
-
-      return 0;
-    };
 
     const resolveCatalogSalePrice = (product) => {
       const candidates = [
@@ -184,8 +165,11 @@ export class RegisterSaleUseCase {
     // 2. PHASE 1: Validate ALL items BEFORE making any changes
     const validatedItems = [];
 
+    const defaultCommissionRate =
+      CommissionPolicyService.getDefaultBaseCommission();
+
     let commissionPolicy = CommissionPolicyService.resolveEmployeeCommission({
-      requestedCommissionRate: employeeProfitPercentage,
+      requestedCommissionRate: defaultCommissionRate,
     });
 
     // === GAMIFICATION: Resolve tier bonus for commission ===
@@ -217,7 +201,8 @@ export class RegisterSaleUseCase {
           .lean();
 
         const isEligible =
-          employeeMembershipForGamification?.eligibleForGamificationBonus !== false;
+          employeeMembershipForGamification?.eligibleForGamificationBonus !==
+          false;
 
         // Get current points to determine tier
         const employeePointsDoc = await EmployeePoints.findOne({
@@ -248,10 +233,9 @@ export class RegisterSaleUseCase {
         });
       } else {
         commissionPolicy = CommissionPolicyService.resolveEmployeeCommission({
-          requestedCommissionRate: employeeProfitPercentage,
+          requestedCommissionRate: defaultCommissionRate,
           baseCommissionRate:
-            commissionInfo?.baseCommissionPercentage ??
-            employeeProfitPercentage,
+            commissionInfo?.baseCommissionPercentage ?? defaultCommissionRate,
           bonusCommission: gamificationTierBonus,
         });
       }
@@ -445,17 +429,12 @@ export class RegisterSaleUseCase {
         );
       }
 
-      // Usar el precio modificado si se envía desde el frontend
-      const requestedSalePrice = resolveRequestedSalePrice(item);
+      // 🛡️ RECALCULAR PRECIO DESDE DB (Muro Anti-Fraude)
       let salePrice = resolveCatalogSalePrice(product);
-
-      if (requestedSalePrice > 0) {
-        salePrice = requestedSalePrice;
-      }
 
       if (salePrice <= 0) {
         throw new Error(
-          `Precio de venta inválido para ${product.name}. Configura clientPrice en catálogo antes de vender. Precio recibido en payload: ${requestedSalePrice}.`,
+          `Precio de venta inválido para ${product.name}. Configura clientPrice en catálogo antes de vender.`,
         );
       }
 
@@ -810,6 +789,7 @@ export class RegisterSaleUseCase {
             business: businessId,
             employee: employeeId,
             product: productId,
+            quantity: { $gte: quantity },
           },
           { $inc: { quantity: -quantity } },
           session ? { session, new: true } : { new: true },
@@ -817,7 +797,7 @@ export class RegisterSaleUseCase {
 
         if (!distStock) {
           throw new Error(
-            `Employee stock not found for product ${productId}. Ensure stock is assigned first.`,
+            `Stock insuficiente en el employee para ${product.name}.`,
           );
         }
 

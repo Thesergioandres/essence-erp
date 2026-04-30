@@ -18,6 +18,7 @@
 - [12. Plan de Acción y Deuda Técnica](#12-plan-de-acción-y-deuda-técnica)
 - [13. Guía de Despliegue (Deploy)](#13-guía-de-despliegue-deploy)
 - [14. Secciones Adicionales](#14-secciones-adicionales)
+- [15. Parches de Integridad y Seguridad (Abril 2026)](#15-parches-de-integridad-y-seguridad-abril-2026)
 
 ## 1. Visión General y Propósito
 
@@ -120,6 +121,8 @@ Fuente: docs/ESPECIFICACION_API_REST.md
 
 - Base actual en frontend (`client/src/api/axios.ts`): `VITE_API_URL` o fallback `http://localhost:5000/api/v2`.
 - Contratos confirmados: `POST /auth/refresh`, `POST /auth/logout`, `GET /business/my-memberships`, `GET /global-settings/public`.
+- Seguridad Business: `GET /business` solo `super_admin/god`; `GET /business/:id` exige `x-business-id` que coincida con el `:id` solicitado.
+- Ventas: el payload incluye `warranties[]` y el backend recalcula precios desde el catálogo (no confía en precios del cliente).
 - Endpoints críticos v2 confirmados en backend:
   - Ventas: `GET/POST /sales`, `POST /sales/standard`, `POST /sales/promotion`, `PUT /sales/:saleId/confirm-payment`, `DELETE /sales/group/:saleGroupId`.
   - Stock: `/stock/assign`, `/stock/withdraw`, `/stock/transfer`, `/stock/transfer-to-branch`, `/stock/transfers`, `/stock/reconcile`, `/stock/sync`.
@@ -4972,3 +4975,23 @@ Example production values:
 ## 6) Nota operativa
 
 No se ejecutaron tests en esta etapa. Este documento define el plan de ejecucion y la priorizacion para QA/Engineering.
+
+## 15. Parches de Integridad y Seguridad (Abril 2026)
+
+### 15.1 Atomicidad de Inventario (Blindaje Concurrente)
+
+- **ProductRepository:** Se han refactorizado los métodos `updateStock` y `updateWarehouseStock` para utilizar operaciones atómicas de MongoDB (`findOneAndUpdate` con `$inc`).
+- **Guardas de Suficiencia:** Todas las deducciones de stock incluyen ahora una guarda `$gte` en la consulta (ej. `quantity: { $gte: requested }`). Esto garantiza que el stock nunca sea negativo, incluso si múltiples peticiones llegan simultáneamente fuera de una transacción.
+- **Transaccionalidad:** Se mantiene el uso obligatorio de `session` en todos los Casos de Uso de ventas.
+
+### 15.2 Verificación de Precios en Backend (Muro Anti-Fraude)
+
+- **RegisterSaleUseCase:** El sistema ya no confía en el `salePrice` enviado desde el frontend. El precio se recalcula estrictamente consultando el `clientPrice` o `employeePrice` del producto en la base de datos durante la ejecución del caso de uso.
+- **RegisterPromotionSaleUseCase:** Los precios de los items en promociones se validan contra el modelo `Promotion` (`comboItems.unitPrice` o `promotionPrice`). Cualquier discrepancia en el payload del frontend es ignorada en favor de los valores configurados en el sistema.
+
+### 15.3 Consolidación de Garantías y Defectuosos
+
+- **Payload Unificado:** Los reportes de productos defectuosos (garantías) asociados a una venta se integran ahora en el payload principal de la orden (`warranties[]`).
+- **Integridad Transaccional:** Al ser parte de la misma petición, la creación del reporte de garantía y la deducción de stock ocurren dentro de la misma transacción de Mongoose que la venta, eliminando el riesgo de reportes huérfanos o ventas sin registro de garantía.
+- **Cleanup de Frontend:** Se han eliminado las llamadas secundarias a servicios externos para reportar garantías durante el flujo de venta, centralizando todo en el endpoint v2 de ventas.
+

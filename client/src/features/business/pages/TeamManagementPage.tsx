@@ -1,3 +1,4 @@
+import { useGSAP } from "@gsap/react";
 import { gsap } from "gsap";
 import { ChevronDown, Shield, Trash2, UserPlus, Users } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -185,16 +186,18 @@ export default function TeamManagement() {
       customCommissionRate: "20",
     });
 
+  const { contextSafe } = useGSAP({ scope: permissionsModalRef });
+
   useEffect(() => {
     if (business) {
       loadMembers();
     }
   }, [business]);
 
-  useEffect(() => {
-    if (!showPermissionsModal || !permissionsModalRef.current) return;
+  useGSAP(
+    () => {
+      if (!showPermissionsModal || !permissionsModalRef.current) return;
 
-    const ctx = gsap.context(() => {
       gsap.fromTo(
         ".permission-module-card",
         { autoAlpha: 0, y: 18 },
@@ -219,10 +222,12 @@ export default function TeamManagement() {
           ease: "power2.out",
         }
       );
-    }, permissionsModalRef);
-
-    return () => ctx.revert();
-  }, [showPermissionsModal, selectedMember?._id]);
+    },
+    {
+      dependencies: [showPermissionsModal, selectedMember?._id],
+      scope: permissionsModalRef,
+    }
+  );
 
   const loadMembers = async () => {
     if (!business) return;
@@ -370,7 +375,7 @@ export default function TeamManagement() {
     }));
   };
 
-  const animatePermissionCell = (target: HTMLElement | null) => {
+  const animatePermissionCell = contextSafe((target: HTMLElement | null) => {
     if (!target) return;
 
     gsap.fromTo(
@@ -389,28 +394,32 @@ export default function TeamManagement() {
         ease: "power2.out",
       }
     );
-  };
+  });
 
   const savePermissions = async () => {
     if (!business || !selectedMember) return;
     try {
       setSavingPermissions(true);
-      gsap.fromTo(
-        ".permission-save-button",
-        {
-          scale: 1,
-          boxShadow: "0 0 0 rgba(226,232,240,0)",
-        },
-        {
-          scale: 1.03,
-          boxShadow:
-            "0 0 0 1px rgba(226,232,240,0.35), 0 0 24px rgba(203,213,225,0.4)",
-          duration: 0.22,
-          yoyo: true,
-          repeat: 1,
-          ease: "power2.out",
-        }
-      );
+      
+      const animateSave = contextSafe(() => {
+        gsap.fromTo(
+          ".permission-save-button",
+          {
+            scale: 1,
+            boxShadow: "0 0 0 rgba(226,232,240,0)",
+          },
+          {
+            scale: 1.03,
+            boxShadow:
+              "0 0 0 1px rgba(226,232,240,0.35), 0 0 24px rgba(203,213,225,0.4)",
+            duration: 0.22,
+            yoyo: true,
+            repeat: 1,
+            ease: "power2.out",
+          }
+        );
+      });
+      animateSave();
 
       if (
         puedeGestionarComisionFija &&

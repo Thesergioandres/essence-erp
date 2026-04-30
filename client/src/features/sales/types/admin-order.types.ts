@@ -173,6 +173,12 @@ export interface ProductWithStock {
 
 // ==================== PAYLOAD FOR BACKEND ====================
 export interface AdminOrderPayload {
+  // Business Context (Mandatory for multi-tenant isolation)
+  businessId: string;
+  branchId?: string; // If selling from branch
+  employeeId: string;
+  locationType: LocationType;
+
   // Items
   items: Array<{
     productId: string;
@@ -182,11 +188,6 @@ export interface AdminOrderPayload {
     employeePrice?: number;
     isPromotion?: boolean;
   }>;
-
-  // Location
-  locationType?: LocationType;
-  employeeId?: string;
-  branchId?: string; // If selling from branch
 
   // Customer & Payment
   customerId?: string;
@@ -209,7 +210,7 @@ export interface AdminOrderPayload {
     amount: number;
   }>;
 
-  // Warranties (processed separately as defective products)
+  // Warranties (processed with the sale payload)
   warranties?: Array<{
     productId: string;
     quantity: number;

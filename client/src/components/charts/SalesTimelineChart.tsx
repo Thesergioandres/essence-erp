@@ -1,5 +1,6 @@
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
+import { useGSAP } from "@gsap/react";
 import { gsap } from "gsap";
 import {
   BarElement,
@@ -439,10 +440,10 @@ export const SalesTimelineChart: React.FC<SalesTimelineChartProps> = ({
     [canShowAdminFinancials, canShowOwnEarnings, isCompactScreen, isSmallScreen]
   );
 
-  useEffect(() => {
-    if (!containerRef.current || preparedData.length === 0) return;
+  useGSAP(
+    () => {
+      if (!containerRef.current || preparedData.length === 0) return;
 
-    const context = gsap.context(() => {
       gsap.fromTo(
         containerRef.current,
         { autoAlpha: 0, y: 24 },
@@ -453,79 +454,84 @@ export const SalesTimelineChart: React.FC<SalesTimelineChartProps> = ({
           ease: "power3.out",
         }
       );
-    }, containerRef);
-
-    return () => {
-      context.revert();
-    };
-  }, [preparedData.length, reloadKey]);
-
-  useEffect(() => {
-    const chart = chartRef.current;
-    if (!chart || preparedData.length === 0) return;
-
-    if (
-      typeof window !== "undefined" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    ) {
-      chart.update();
-      return;
+    },
+    {
+      dependencies: [preparedData.length, reloadKey],
+      scope: containerRef,
     }
+  );
 
-    let rafId: number | null = null;
-    const scheduleUpdate = () => {
-      if (rafId !== null) return;
-      rafId = window.requestAnimationFrame(() => {
-        chart.update("none");
-        rafId = null;
-      });
-    };
+  useGSAP(
+    () => {
+      const chart = chartRef.current;
+      if (!chart || preparedData.length === 0) return;
 
-    const animatedDatasets = chart.data.datasets.map(dataset => {
-      const targetValues = (dataset.data as number[]).map(value =>
-        safeNumber(value)
-      );
-      return {
-        dataset,
-        targetValues,
-        proxies: targetValues.map(() => ({ value: 0 })),
-      };
-    });
-
-    animatedDatasets.forEach(({ dataset, targetValues }) => {
-      dataset.data = targetValues.map(() => 0);
-    });
-    chart.update("none");
-
-    const timeline = gsap.timeline();
-
-    animatedDatasets.forEach((set, datasetIndex) => {
-      set.proxies.forEach((proxy, pointIndex) => {
-        timeline.to(
-          proxy,
-          {
-            value: set.targetValues[pointIndex],
-            duration: 0.74,
-            ease: "elastic.out(1,0.62)",
-            onUpdate: () => {
-              (set.dataset.data as number[])[pointIndex] = Number(
-                proxy.value.toFixed(2)
-              );
-              scheduleUpdate();
-            },
-          },
-          datasetIndex * 0.08 + pointIndex * 0.04
-        );
-      });
-    });
-
-    return () => {
-      if (rafId !== null) {
-        window.cancelAnimationFrame(rafId);
+      if (
+        typeof window !== "undefined" &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      ) {
+        chart.update();
+        return;
       }
-      timeline.kill();
-    };
-  }, [chartData, preparedData.length]);
+
+      let rafId: number | null = null;
+      const scheduleUpdate = () => {
+        if (rafId !== null) return;
+        rafId = window.requestAnimationFrame(() => {
+          chart.update("none");
+          rafId = null;
+        });
+      };
+
+      const animatedDatasets = chart.data.datasets.map(dataset => {
+        const targetValues = (dataset.data as number[]).map(value =>
+          safeNumber(value)
+        );
+        return {
+          dataset,
+          targetValues,
+          proxies: targetValues.map(() => ({ value: 0 })),
+        };
+      });
+
+      animatedDatasets.forEach(({ dataset, targetValues }) => {
+        dataset.data = targetValues.map(() => 0);
+      });
+      chart.update("none");
+
+      const timeline = gsap.timeline();
+
+      animatedDatasets.forEach((set, datasetIndex) => {
+        set.proxies.forEach((proxy, pointIndex) => {
+          timeline.to(
+            proxy,
+            {
+              value: set.targetValues[pointIndex],
+              duration: 0.74,
+              ease: "elastic.out(1,0.62)",
+              onUpdate: () => {
+                (set.dataset.data as number[])[pointIndex] = Number(
+                  proxy.value.toFixed(2)
+                );
+                scheduleUpdate();
+              },
+            },
+            datasetIndex * 0.08 + pointIndex * 0.04
+          );
+        });
+      });
+
+      return () => {
+        if (rafId !== null) {
+          window.cancelAnimationFrame(rafId);
+        }
+      };
+    },
+    {
+      dependencies: [chartData, preparedData.length],
+      scope: containerRef,
+    }
+  );
 
   if (loading) {
     return (

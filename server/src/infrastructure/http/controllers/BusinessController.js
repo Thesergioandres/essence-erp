@@ -87,6 +87,14 @@ export class BusinessController {
 
   async getAll(req, res) {
     try {
+      const role = req.user?.role;
+      if (role !== "super_admin" && role !== "god") {
+        return res.status(403).json({
+          success: false,
+          message: "Acceso denegado",
+        });
+      }
+
       const businesses = await repository.findAll();
       res.json({ success: true, data: businesses });
     } catch (error) {
@@ -96,7 +104,26 @@ export class BusinessController {
 
   async getById(req, res) {
     try {
-      const result = await repository.findWithMembers(req.params.id);
+      const requestedId = req.params.id;
+      const resolvedBusinessId = req.businessId || requestedId;
+
+      if (!resolvedBusinessId) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Falta x-business-id" });
+      }
+
+      if (
+        requestedId &&
+        req.businessId &&
+        String(requestedId) !== String(req.businessId)
+      ) {
+        return res
+          .status(403)
+          .json({ success: false, message: "Acceso denegado" });
+      }
+
+      const result = await repository.findWithMembers(resolvedBusinessId);
       if (!result.business) {
         return res
           .status(404)

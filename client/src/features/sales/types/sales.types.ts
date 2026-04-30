@@ -146,6 +146,10 @@ export interface SaleItem {
 }
 
 export interface BulkSalePayload {
+  businessId: string;
+  branchId: string;
+  employeeId: string;
+  locationType: "warehouse" | "branch" | "employee";
   items: Array<{
     productId: string;
     quantity: number;

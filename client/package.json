@@ -19,6 +19,7 @@
     "build:analyze": "npm run build && npx vite-bundle-analyzer"
   },
   "dependencies": {
+    "@gsap/react": "^2.1.2",
     "@tailwindcss/vite": "^4.1.6",
     "@types/react-window": "^1.8.8",
     "axios": "^1.13.2",

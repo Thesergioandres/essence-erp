@@ -8,6 +8,7 @@ import {
   type ChartData,
   type ChartOptions,
 } from "chart.js";
+import { useGSAP } from "@gsap/react";
 import { gsap } from "gsap";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Bar } from "react-chartjs-2";
@@ -342,10 +343,10 @@ export const TopProductsChart: React.FC<TopProductsChartProps> = ({
     [effectiveMetric, isCompactScreen, isSmallScreen, metricLabel]
   );
 
-  useEffect(() => {
-    if (!containerRef.current || preparedData.length === 0) return;
+  useGSAP(
+    () => {
+      if (!containerRef.current || preparedData.length === 0) return;
 
-    const context = gsap.context(() => {
       gsap.fromTo(
         containerRef.current,
         { autoAlpha: 0, y: 22 },
@@ -356,67 +357,74 @@ export const TopProductsChart: React.FC<TopProductsChartProps> = ({
           ease: "power3.out",
         }
       );
-    }, containerRef);
-
-    return () => {
-      context.revert();
-    };
-  }, [preparedData.length, reloadKey]);
-
-  useEffect(() => {
-    const chart = chartRef.current;
-    if (!chart || preparedData.length === 0) return;
-
-    if (
-      typeof window !== "undefined" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    ) {
-      chart.update();
-      return;
+    },
+    {
+      dependencies: [preparedData.length, reloadKey],
+      scope: containerRef,
     }
+  );
 
-    const dataset = chart.data.datasets[0];
-    const targetValues = (dataset.data as number[]).map(value =>
-      safeNumber(value)
-    );
-    const proxies = targetValues.map(() => ({ value: 0 }));
+  useGSAP(
+    () => {
+      const chart = chartRef.current;
+      if (!chart || preparedData.length === 0) return;
 
-    dataset.data = targetValues.map(() => 0);
-    chart.update("none");
-
-    let rafId: number | null = null;
-    const scheduleUpdate = () => {
-      if (rafId !== null) return;
-      rafId = window.requestAnimationFrame(() => {
-        chart.update("none");
-        rafId = null;
-      });
-    };
-
-    const timeline = gsap.timeline();
-    proxies.forEach((proxy, index) => {
-      timeline.to(
-        proxy,
-        {
-          value: targetValues[index],
-          duration: 0.76,
-          ease: "elastic.out(1,0.64)",
-          onUpdate: () => {
-            (dataset.data as number[])[index] = Number(proxy.value.toFixed(2));
-            scheduleUpdate();
-          },
-        },
-        index * 0.06
-      );
-    });
-
-    return () => {
-      if (rafId !== null) {
-        window.cancelAnimationFrame(rafId);
+      if (
+        typeof window !== "undefined" &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      ) {
+        chart.update();
+        return;
       }
-      timeline.kill();
-    };
-  }, [chartData, preparedData.length]);
+
+      const dataset = chart.data.datasets[0];
+      const targetValues = (dataset.data as number[]).map(value =>
+        safeNumber(value)
+      );
+      const proxies = targetValues.map(() => ({ value: 0 }));
+
+      dataset.data = targetValues.map(() => 0);
+      chart.update("none");
+
+      let rafId: number | null = null;
+      const scheduleUpdate = () => {
+        if (rafId !== null) return;
+        rafId = window.requestAnimationFrame(() => {
+          chart.update("none");
+          rafId = null;
+        });
+      };
+
+      const timeline = gsap.timeline();
+      proxies.forEach((proxy, index) => {
+        timeline.to(
+          proxy,
+          {
+            value: targetValues[index],
+            duration: 0.76,
+            ease: "elastic.out(1,0.64)",
+            onUpdate: () => {
+              (dataset.data as number[])[index] = Number(proxy.value.toFixed(2));
+              scheduleUpdate();
+            },
+          },
+          index * 0.06
+        );
+      });
+
+      return () => {
+        if (rafId !== null) {
+          window.cancelAnimationFrame(rafId);
+        }
+        // useGSAP handles timeline cleanup if we return correctly, 
+        // but explicit cleanup for RAF is still good.
+      };
+    },
+    {
+      dependencies: [chartData, preparedData.length],
+      scope: containerRef,
+    }
+  );
 
   if (loading) {
     return (

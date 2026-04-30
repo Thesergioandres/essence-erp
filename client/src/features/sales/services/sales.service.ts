@@ -142,8 +142,8 @@ export const saleService = {
       quantity: number;
       salePrice: number;
     }>;
-    employeeId?: string;
-    businessId?: string;
+    employeeId: string;
+    businessId: string;
     branchId?: string;
     notes?: string;
     saleDate?: string;
@@ -164,7 +164,7 @@ export const saleService = {
     }>;
     discount?: number;
     saleGroupId?: string;
-    locationType?: "warehouse" | "branch" | "employee";
+    locationType: "warehouse" | "branch" | "employee";
     warranties?: Array<{
       productId: string;
       quantity: number;
@@ -197,8 +197,8 @@ export const saleService = {
       salePrice: number;
       isPromotion?: boolean;
     }>;
-    employeeId?: string;
-    businessId?: string;
+    employeeId: string;
+    businessId: string;
     branchId?: string;
     notes?: string;
     saleDate?: string;
@@ -219,7 +219,7 @@ export const saleService = {
     }>;
     discount?: number;
     saleGroupId?: string;
-    locationType?: "warehouse" | "branch" | "employee";
+    locationType: "warehouse" | "branch" | "employee";
     warranties?: Array<{
       productId: string;
       quantity: number;

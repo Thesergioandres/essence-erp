@@ -38,7 +38,6 @@ import {
   WarrantySection,
 } from "../components/admin-order";
 import { initialOrderState, orderReducer } from "../reducers/orderReducer";
-import { defectiveProductService } from "../services/sales.service";
 import type {
   AdminOrderPayload,
   ProductWithStock,
@@ -148,7 +147,7 @@ const resolveSessionMembershipRole = (sessionUser: unknown): string => {
 
 export default function PromotionSalePage() {
   const { user, loading: userLoading } = useSession();
-  const { businessId: contextBusinessId, hydrating: businessHydrating } =
+  const { businessId: contextBusinessId } =
     useBusiness();
   const isEmployee =
     isEmployeeRole(user?.role) ||
@@ -694,6 +693,8 @@ export default function PromotionSalePage() {
 
       // Build payload for sale items
       const payload: AdminOrderPayload = {
+        businessId: effectiveBusinessId || "unknown",
+        employeeId: currentUserId || "unknown",
         items: order.items.map(item => ({
           productId: item.productId,
           promotionId: item.promotionId,
@@ -726,10 +727,6 @@ export default function PromotionSalePage() {
         payload.employeeId = order.locationId;
       }
 
-      if (isEmployee && currentUserId) {
-        payload.employeeId = currentUserId;
-      }
-
       // Add customer if selected
       if (order.customerId) {
         payload.customerId = order.customerId;
@@ -753,6 +750,15 @@ export default function PromotionSalePage() {
           type: c.type || "other",
           description: c.description,
           amount: c.amount,
+        }));
+      }
+
+      if (order.warranties.length > 0) {
+        payload.warranties = order.warranties.map(warranty => ({
+          productId: warranty.productId,
+          quantity: warranty.quantity,
+          type: warranty.type,
+          reason: warranty.reason,
         }));
       }
 
@@ -794,6 +800,7 @@ export default function PromotionSalePage() {
           additionalCosts: payload.additionalCosts,
           paymentProof: payload.paymentProof,
           paymentProofMimeType: payload.paymentProofMimeType,
+          warranties: payload.warranties,
         };
 
         await salesWriteUseCases.registerPromotionBulk(promotionPayload);
@@ -813,25 +820,6 @@ export default function PromotionSalePage() {
         );
       }
 
-      // Process warranty items as defective products
-      for (const warranty of order.warranties) {
-        try {
-          await defectiveProductService.reportAdmin({
-            productId: warranty.productId,
-            quantity: warranty.quantity,
-            reason:
-              warranty.reason ||
-              `${warranty.type === "supplier_replacement" ? "Reemplazo proveedor" : "Pérdida total"} - Orden ${saleGroupId}`,
-          });
-        } catch (err) {
-          console.error(
-            `Error processing warranty for ${warranty.productName}:`,
-            err
-          );
-          // Don't fail the whole order for warranty errors
-        }
-      }
-
       // Success!
       setSaleResult({
         success: true,
@@ -845,7 +833,7 @@ export default function PromotionSalePage() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [currentUserId, effectiveBusinessId, isEmployee, order]);
+  }, [currentUserId, effectiveBusinessId, order]);
 
   const handleNewOrder = useCallback(() => {
     dispatch({ type: "CLEAR_ORDER" });

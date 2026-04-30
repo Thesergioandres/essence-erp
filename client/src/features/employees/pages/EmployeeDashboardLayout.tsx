@@ -1,4 +1,5 @@
 import { AnimatePresence, m } from "framer-motion";
+import { useGSAP } from "@gsap/react";
 import { gsap } from "gsap";
 import {
   Activity,
@@ -23,7 +24,7 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import BusinessGate from "../../../components/BusinessGate";
 import BusinessSelector from "../../../components/BusinessSelector";
@@ -141,6 +142,7 @@ export default function EmployeeDashboardLayout() {
   const isImpersonating = authService.isImpersonating();
   const viewAnimationKey = `${location.pathname}${location.search}`;
   const { motionProfile } = useMotionProfile();
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const activeMemberships = memberships.filter(
     membership => membership.status === "active"
@@ -598,64 +600,61 @@ export default function EmployeeDashboardLayout() {
     };
   }, [businessId]);
 
-  useEffect(() => {
-    const isFinePointer = window.matchMedia("(pointer:fine)").matches;
-    if (!isFinePointer) return;
+  useGSAP(
+    () => {
+      const isFinePointer = window.matchMedia("(pointer:fine)").matches;
+      if (!isFinePointer) return;
 
-    const links = Array.from(
-      document.querySelectorAll<HTMLElement>(".magnetic-nav-link")
-    );
+      const links = Array.from(
+        document.querySelectorAll<HTMLElement>(".magnetic-nav-link")
+      );
 
-    const cleanups = links.map(link => {
-      const icon = link.querySelector<SVGElement>("svg");
-      if (!icon) return () => undefined;
+      links.forEach(link => {
+        const icon = link.querySelector<SVGElement>("svg");
+        if (!icon) return;
 
-      const handleMove = (event: MouseEvent) => {
-        const bounds = link.getBoundingClientRect();
-        const offsetX =
-          ((event.clientX - bounds.left) / bounds.width - 0.5) * 8;
-        const offsetY =
-          ((event.clientY - bounds.top) / bounds.height - 0.5) * 7;
+        const handleMove = (event: MouseEvent) => {
+          const bounds = link.getBoundingClientRect();
+          const offsetX =
+            ((event.clientX - bounds.left) / bounds.width - 0.5) * 8;
+          const offsetY =
+            ((event.clientY - bounds.top) / bounds.height - 0.5) * 7;
 
-        gsap.to(icon, {
-          x: offsetX,
-          y: offsetY,
-          duration: 0.22,
-          ease: "power2.out",
-          overwrite: "auto",
-        });
-      };
+          gsap.to(icon, {
+            x: offsetX,
+            y: offsetY,
+            duration: 0.22,
+            ease: "power2.out",
+            overwrite: "auto",
+          });
+        };
 
-      const handleLeave = () => {
-        gsap.to(icon, {
-          x: 0,
-          y: 0,
-          duration: 0.4,
-          ease: "power3.out",
-          overwrite: "auto",
-        });
-      };
+        const handleLeave = () => {
+          gsap.to(icon, {
+            x: 0,
+            y: 0,
+            duration: 0.4,
+            ease: "power3.out",
+            overwrite: "auto",
+          });
+        };
 
-      link.addEventListener("mousemove", handleMove);
-      link.addEventListener("mouseleave", handleLeave);
-
-      return () => {
-        link.removeEventListener("mousemove", handleMove);
-        link.removeEventListener("mouseleave", handleLeave);
-      };
-    });
-
-    return () => {
-      cleanups.forEach(cleanup => cleanup());
-    };
-  }, [desktopSidebarOpen, sidebarOpen, visibleSections, searchTerm]);
+        link.addEventListener("mousemove", handleMove);
+        link.addEventListener("mouseleave", handleLeave);
+      });
+    },
+    {
+      dependencies: [desktopSidebarOpen, sidebarOpen, visibleSections, searchTerm],
+      scope: containerRef,
+    }
+  );
 
   if (!user) {
     return null;
   }
 
   return (
-    <div className="bg-app-employee-shell max-w-screen h-screen overflow-hidden overflow-x-hidden bg-[radial-gradient(circle_at_14%_16%,rgba(14,116,144,0.2),transparent_42%),radial-gradient(circle_at_88%_14%,rgba(30,58,138,0.2),transparent_46%),linear-gradient(140deg,#04070d_0%,#090f1b_46%,#050912_100%)]">
+    <div ref={containerRef} className="bg-app-employee-shell max-w-screen h-screen overflow-hidden overflow-x-hidden bg-[radial-gradient(circle_at_14%_16%,rgba(14,116,144,0.2),transparent_42%),radial-gradient(circle_at_88%_14%,rgba(30,58,138,0.2),transparent_46%),linear-gradient(140deg,#04070d_0%,#090f1b_46%,#050912_100%)]">
       {/* Mobile Overlay */}
       {sidebarOpen && (
         <div

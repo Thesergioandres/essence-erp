@@ -19,6 +19,8 @@ import LoadingSpinner from "../../../shared/components/ui/LoadingSpinner";
 import { branchService } from "../../branches/services/branch.service";
 import type { Branch } from "../../business/types/business.types";
 import { employeeService } from "../../employees/services/employee.service";
+import { gamificationService } from "../../gamification/services/gamification.service";
+import type { GamificationConfig } from "../../gamification/types/gamification.types";
 import { productsService } from "../../inventory/api/products.service";
 import { stockService } from "../../inventory/services/inventory.service";
 import type { Product } from "../../inventory/types/product.types";
@@ -32,16 +34,11 @@ import {
   WarrantySection,
 } from "../components/admin-order";
 import { initialOrderState, orderReducer } from "../reducers/orderReducer";
-import {
-  defectiveProductService,
-  saleService,
-} from "../services/sales.service";
+import { saleService } from "../services/sales.service";
 import type {
   AdminOrderPayload,
   ProductWithStock,
 } from "../types/admin-order.types";
-import { gamificationService } from "../../gamification/services/gamification.service";
-import type { GamificationConfig } from "../../gamification/types/gamification.types";
 
 type RegisterStandardSaleHandler = (
   data: RegisterStandardSaleInput
@@ -332,7 +329,8 @@ export default function StandardSalePage({
   const [productSelectorId, setProductSelectorId] = useState("");
 
   // State: Loading/Error/Success
-  const [gamificationConfig, setGamificationConfig] = useState<GamificationConfig | null>(null);
+  const [gamificationConfig, setGamificationConfig] =
+    useState<GamificationConfig | null>(null);
   const [dataLoading, setDataLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -368,7 +366,8 @@ export default function StandardSalePage({
       setDataLoading(true);
       try {
         // Fetch gamification config
-        gamificationService.getConfig()
+        gamificationService
+          .getConfig()
           .then(res => setGamificationConfig(res.enabled ? res : null))
           .catch(() => setGamificationConfig(null));
 
@@ -862,6 +861,8 @@ export default function StandardSalePage({
 
       // Build payload for sale items
       const payload: AdminOrderPayload = {
+        businessId: effectiveBusinessId || "unknown", // Fallback for type safety, should be caught by validation
+        employeeId: currentUserId || "unknown",
         items: order.items.map(item => ({
           productId: item.productId,
           quantity: item.quantity,
@@ -877,10 +878,6 @@ export default function StandardSalePage({
           undefined,
         saleGroupId,
       };
-
-      if (isEmployee && currentUserId) {
-        payload.employeeId = currentUserId;
-      }
 
       if (order.paymentProof) {
         payload.paymentProof = order.paymentProof;
@@ -918,6 +915,15 @@ export default function StandardSalePage({
         }));
       }
 
+      if (order.warranties.length > 0) {
+        payload.warranties = order.warranties.map(warranty => ({
+          productId: warranty.productId,
+          quantity: warranty.quantity,
+          type: warranty.type,
+          reason: warranty.reason,
+        }));
+      }
+
       // Process all sale items in a single batch request (V2 API)
       let totalProcessedItems = 0;
       let totalAmount = 0;
@@ -945,6 +951,7 @@ export default function StandardSalePage({
           additionalCosts: payload.additionalCosts,
           paymentProof: payload.paymentProof,
           paymentProofMimeType: payload.paymentProofMimeType,
+          warranties: payload.warranties,
         });
 
         totalProcessedItems = payload.items.reduce(
@@ -960,25 +967,6 @@ export default function StandardSalePage({
         throw new Error(
           err.response?.data?.message || "Error al procesar el pedido"
         );
-      }
-
-      // Process warranty items as defective products
-      for (const warranty of order.warranties) {
-        try {
-          await defectiveProductService.reportAdmin({
-            productId: warranty.productId,
-            quantity: warranty.quantity,
-            reason:
-              warranty.reason ||
-              `${warranty.type === "supplier_replacement" ? "Reemplazo proveedor" : "Pérdida total"} - Orden ${saleGroupId}`,
-          });
-        } catch (err) {
-          console.error(
-            `Error processing warranty for ${warranty.productName}:`,
-            err
-          );
-          // Don't fail the whole order for warranty errors
-        }
       }
 
       // Success!
@@ -997,7 +985,6 @@ export default function StandardSalePage({
   }, [
     currentUserId,
     effectiveBusinessId,
-    isEmployee,
     order,
     registerStandardSale,
   ]);

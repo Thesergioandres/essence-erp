@@ -494,8 +494,47 @@ export class RegisterPromotionSaleUseCase {
     });
 
     for (const item of items) {
-      const { productId, quantity, salePrice, promotionId } = item;
-      const itemSubtotal = Number(salePrice || 0) * Number(quantity || 0);
+      const { productId, quantity, promotionId } = item;
+      
+      if (quantity <= 0)
+        throw new Error(`Invalid quantity for product ${productId}`);
+
+      const product = await this.productRepository.findById(productId);
+      if (!product) throw new Error(`Product not found: ${productId}`);
+
+      const promotionKey = promotionId
+        ? String(
+            typeof promotionId === "object"
+              ? promotionId._id || promotionId
+              : promotionId,
+          )
+        : null;
+
+      if (!promotionKey) {
+        throw new Error("Promocion requerida para venta promocional.");
+      }
+
+      const promotionData = promotionMap.get(promotionKey);
+      if (!promotionData) {
+        throw new Error(`Promocion ${promotionKey} no encontrada.`);
+      }
+
+      // 🛡️ RECALCULAR PRECIO DESDE PROMOCIÓN (Muro Anti-Fraude)
+      // Si es un combo, el precio unitario del item es el definido en comboItems o su share del promotionPrice
+      let validatedSalePrice = 0;
+      
+      const promoItem = promotionData.comboItems?.find(ci => String(ci.product) === String(productId));
+      if (promoItem && promoItem.unitPrice > 0) {
+        validatedSalePrice = promoItem.unitPrice;
+      } else {
+        // Fallback: Si no hay unitPrice específico, usamos el catalogPrice (pero esto es raro en promos)
+        // O mejor, calculamos un share si es bundle. 
+        // Para simplificar y asegurar: si no hay precio en promo, usamos el del catálogo pero validamos.
+        const catalogPrice = product.clientPrice || product.salePrice || 0;
+        validatedSalePrice = catalogPrice;
+      }
+
+      const itemSubtotal = Number(validatedSalePrice || 0) * Number(quantity || 0);
       const discountShare =
         totalSubtotal > 0 ? (itemSubtotal / totalSubtotal) * discountTotal : 0;
       const additionalShare =
@@ -506,12 +545,6 @@ export class RegisterPromotionSaleUseCase {
         0,
         itemSubtotal - discountShare - additionalShare,
       );
-
-      if (quantity <= 0)
-        throw new Error(`Invalid quantity for product ${productId}`);
-
-      const product = await this.productRepository.findById(productId);
-      if (!product) throw new Error(`Product not found: ${productId}`);
 
       productCache.set(String(productId), product);
 
@@ -568,49 +601,21 @@ export class RegisterPromotionSaleUseCase {
       // Calculate financials
       const costBasis = product.averageCost || product.purchasePrice || 0;
       const isEmployeeSale = Boolean(employeeId);
-      const rawEffectiveEmployeeProfitPercentage =
-        baseCommissionPercentage + employeeCommissionBonus;
-      const effectiveEmployeeProfitPercentage = isEmployeeSale
-        ? Math.max(0, Math.min(95, rawEffectiveEmployeeProfitPercentage))
-        : 0;
-      const appliedCommissionBonus = isEmployeeSale
-        ? Math.max(
-            0,
-            effectiveEmployeeProfitPercentage - baseCommissionPercentage,
-          )
-        : 0;
-      const promotionKey = promotionId
-        ? String(
-            typeof promotionId === "object"
-              ? promotionId._id || promotionId
-              : promotionId,
-          )
-        : null;
-      const promotionData = promotionKey
-        ? promotionMap.get(promotionKey)
-        : null;
-      const promotionTotal = promotionKey
-        ? Number(promotionTotals[promotionKey] || 0)
-        : 0;
-      const promotionEmployeeTotal = promotionData
-        ? Number(promotionData.employeePrice || 0)
-        : 0;
-      const promotionShare =
+      
+      const promotionTotal = Number(promotionTotals[promotionKey] || 0);
+      const promotionEmployeeTotal = Number(promotionData.employeePrice || 0);
+      
+      // Share based on RECALCULATED subtotal
+      const validatedPromotionShare =
         promotionTotal > 0 ? itemSubtotal / promotionTotal : 0;
+        
       const promotionEmployeeUnitPrice =
-        promotionEmployeeTotal > 0 && promotionShare > 0
-          ? (promotionEmployeeTotal * promotionShare) /
+        promotionEmployeeTotal > 0 && validatedPromotionShare > 0
+          ? (promotionEmployeeTotal * validatedPromotionShare) /
             Math.max(1, Number(quantity || 0))
           : 0;
-      if (promotionKey && !promotionData) {
-        throw new Error("Promocion no encontrada para aplicar precio B2B.");
-      }
 
-      if (!promotionKey) {
-        throw new Error("Promocion requerida para venta promocional.");
-      }
-
-      let employeePrice = salePrice;
+      let employeePrice = validatedSalePrice;
       if (isEmployeeSale) {
         if (promotionEmployeeUnitPrice <= 0) {
           throw new Error(
@@ -619,19 +624,22 @@ export class RegisterPromotionSaleUseCase {
         }
         employeePrice = promotionEmployeeUnitPrice;
       }
+      
       const employeeProfit = isEmployeeSale
         ? FinanceService.calculateEmployeeProfit(
-            salePrice,
+            validatedSalePrice,
             employeePrice,
             quantity,
           )
         : 0;
+        
       const adminProfit = FinanceService.calculateAdminProfit(
-        salePrice,
+            validatedSalePrice,
         costBasis,
         employeeProfit,
         quantity,
       );
+      
       const totalProfit = employeeProfit + adminProfit;
       const adminNetProfit = adminProfit - additionalShare - discountShare;
 
@@ -639,7 +647,7 @@ export class RegisterPromotionSaleUseCase {
         productId,
         product,
         quantity,
-        salePrice,
+        salePrice: validatedSalePrice,
         itemSubtotal,
         discountShare,
         actualPayment,
@@ -650,15 +658,10 @@ export class RegisterPromotionSaleUseCase {
         adminProfit,
         totalProfit,
         adminNetProfit,
-        isPromotion: true,
-        promotionId: promotionId || null,
-        employeeProfitPercentage: effectiveEmployeeProfitPercentage,
-        commissionBonus: appliedCommissionBonus,
-        commissionBonusAmount: isEmployeeSale
-          ? (salePrice * quantity * appliedCommissionBonus) / 100
-          : 0,
+        promotionId: promotionKey,
       });
     }
+
 
     const validatedProductIds = new Set(
       validatedItems.map((item) => String(item.productId)),
@@ -873,6 +876,7 @@ export class RegisterPromotionSaleUseCase {
             business: businessId,
             employee: employeeId,
             product: productId,
+            quantity: { $gte: quantity },
           },
           { $inc: { quantity: -quantity } },
           session ? { session, new: true } : { new: true },
@@ -880,7 +884,7 @@ export class RegisterPromotionSaleUseCase {
 
         if (!distStock) {
           throw new Error(
-            `Employee stock not found for product ${productId}. Ensure stock is assigned first.`,
+            `Stock insuficiente en el employee para ${product.name}.`,
           );
         }
 
@@ -1151,6 +1155,7 @@ export class RegisterPromotionSaleUseCase {
     if (shouldConfirmNow && promotionUsageSummary.size > 0) {
       for (const [promotionKey, summary] of promotionUsageSummary.entries()) {
         const promotionData = promotionMap.get(promotionKey);
+        
         const update = {
           $inc: {
             usageCount: summary.usageCount,
@@ -1159,24 +1164,26 @@ export class RegisterPromotionSaleUseCase {
           },
         };
 
+        const query = { _id: promotionKey, business: businessId };
+
         if (promotionData) {
           const currentStock =
             promotionData.currentStock ?? promotionData.totalStock ?? null;
           if (currentStock !== null) {
-            update.$set = {
-              currentStock: Math.max(
-                0,
-                Number(currentStock) - summary.usageCount,
-              ),
-            };
+            update.$inc.currentStock = -summary.usageCount;
+            query.currentStock = { $gte: summary.usageCount };
           }
         }
 
-        await Promotion.updateOne(
-          { _id: promotionKey, business: businessId },
+        const updateResult = await Promotion.updateOne(
+          query,
           update,
           session ? { session } : undefined,
         );
+
+        if (updateResult.matchedCount === 0 && promotionData?.currentStock !== null) {
+            throw new Error(`No se pudo actualizar la promoción ${promotionData?.name}: Stock insuficiente o promoción no encontrada.`);
+        }
 
         await Sale.updateMany(
           {

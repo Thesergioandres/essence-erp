@@ -1,3 +1,4 @@
+import { useGSAP } from "@gsap/react";
 import { gsap } from "gsap";
 import { Check, Loader2, Pencil, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -79,26 +80,32 @@ export default function PriceListPage() {
     return [...products].sort((a, b) => a.name.localeCompare(b.name));
   }, [products]);
 
-  useEffect(() => {
-    if (loading || !productRowsRef.current || sortedProducts.length === 0) {
-      return;
-    }
-
-    const rows = productRowsRef.current.querySelectorAll("tr[data-price-row]");
-
-    gsap.fromTo(
-      rows,
-      { autoAlpha: 0, y: 14 },
-      {
-        autoAlpha: 1,
-        y: 0,
-        duration: 0.36,
-        stagger: 0.03,
-        ease: "power2.out",
-        overwrite: "auto",
+  useGSAP(
+    () => {
+      if (loading || !productRowsRef.current || sortedProducts.length === 0) {
+        return;
       }
-    );
-  }, [loading, sortedProducts]);
+
+      const rows = productRowsRef.current.querySelectorAll("tr[data-price-row]");
+
+      gsap.fromTo(
+        rows,
+        { autoAlpha: 0, y: 14 },
+        {
+          autoAlpha: 1,
+          y: 0,
+          duration: 0.36,
+          stagger: 0.03,
+          ease: "power2.out",
+          overwrite: "auto",
+        }
+      );
+    },
+    {
+      dependencies: [loading, sortedProducts],
+      scope: productRowsRef,
+    }
+  );
 
   const sortedPromotions = useMemo(() => {
     return [...promotions].sort((a, b) => a.name.localeCompare(b.name));

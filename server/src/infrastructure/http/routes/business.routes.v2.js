@@ -3,6 +3,7 @@ import { protect } from "../../../../middleware/auth.middleware.js";
 import {
   businessContext,
   requirePermission,
+  requireRole,
 } from "../../../../middleware/business.middleware.js";
 import { BusinessController } from "../controllers/BusinessController.js";
 import DataExportController from "../controllers/DataExportController.js";
@@ -24,7 +25,9 @@ router.get(
   (req, res) => DataExportController.exportFullData(req, res),
 );
 
-router.get("/", protect, (req, res) => controller.getAll(req, res));
+router.get("/", protect, requireRole(["super_admin"]), (req, res) =>
+  controller.getAll(req, res),
+);
 router.get(
   "/:id/slug-availability",
   protect,
