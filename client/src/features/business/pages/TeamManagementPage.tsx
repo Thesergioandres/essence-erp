@@ -1,7 +1,7 @@
 import { useGSAP } from "@gsap/react";
 import { gsap } from "gsap";
 import { ChevronDown, Shield, Trash2, UserPlus, Users } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useBusiness } from "../../../context/BusinessContext";
 import { useSession } from "../../../hooks/useSession";
@@ -188,11 +188,23 @@ export default function TeamManagement() {
 
   const { contextSafe } = useGSAP({ scope: permissionsModalRef });
 
-  useEffect(() => {
-    if (business) {
-      loadMembers();
+  const loadMembers = useCallback(async () => {
+    if (!business) return;
+    try {
+      setLoading(true);
+      const response = await businessService.listMembers(business._id);
+      setMembers((response.members || []) as TeamMember[]);
+    } catch (err) {
+      console.error("Error al cargar miembros:", err);
+      setError("Error al cargar el equipo");
+    } finally {
+      setLoading(false);
     }
   }, [business]);
+
+  useEffect(() => {
+    loadMembers();
+  }, [loadMembers]);
 
   useGSAP(
     () => {
@@ -229,19 +241,7 @@ export default function TeamManagement() {
     }
   );
 
-  const loadMembers = async () => {
-    if (!business) return;
-    try {
-      setLoading(true);
-      const response = await businessService.listMembers(business._id);
-      setMembers((response.members || []) as TeamMember[]);
-    } catch (err) {
-      console.error("Error al cargar miembros:", err);
-      setError("Error al cargar el equipo");
-    } finally {
-      setLoading(false);
-    }
-  };
+
 
   const searchUser = async () => {
     if (!business || !email.trim()) return;
