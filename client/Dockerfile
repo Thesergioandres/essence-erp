@@ -24,7 +24,7 @@ ENV PORT=8080
 COPY nginx.conf /etc/nginx/templates/default.conf.template
 
 # Copiar el build del frontend a la carpeta servida por Nginx
-COPY --from=build /app/dist /usr/share/nginx/html
+COPY --from=builder /app/dist /usr/share/nginx/html
 
 # Exponer el puerto por el que Nginx atiende
 EXPOSE 8080
