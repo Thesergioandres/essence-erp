@@ -133,13 +133,15 @@ export default function TransferStock() {
       if (!currentUserId) {
         if (sessionLoading) {
           console.log("⏳ [TransferStock] Waiting for session hydration...");
+          setLoading(false);
           return;
         }
         
-        console.error("❌ [TransferStock] USER NOT FOUND. Full state:", {
-          sessionUser,
-          localStorageUser: localStorage.getItem("user"),
-          currentUser
+        console.error("[TransferStock] CRITICAL: No currentUserId found. currentUser details:", {
+          hasUser: !!currentUser,
+          keys: currentUser ? Object.keys(currentUser) : [],
+          role: (currentUser as any)?.role,
+          id: (currentUser as any)?._id || (currentUser as any)?.id
         });
 
         setMessage({

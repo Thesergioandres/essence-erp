@@ -101,7 +101,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return null;
       }
 
-      setUser(profile);
+      setUser(prev => {
+        const currentStr = JSON.stringify(prev);
+        const nextStr = JSON.stringify(profile);
+        if (currentStr === nextStr) return prev;
+        return profile;
+      });
       setLoading(false);
       setError(null);
       window.dispatchEvent(new Event("auth-changed"));
@@ -138,7 +143,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const storedUser = getStoredUser();
-      setUser(storedUser);
+      setUser(prev => {
+        const currentStr = JSON.stringify(prev);
+        const nextStr = JSON.stringify(storedUser);
+        if (currentStr === nextStr) return prev;
+        return storedUser;
+      });
     };
 
     window.addEventListener("auth-changed", syncAuthState);

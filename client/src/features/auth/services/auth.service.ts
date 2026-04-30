@@ -472,28 +472,8 @@ export const authService = {
       const parsedUser = JSON.parse(userRaw) as AuthResponse & {
         token: string;
       };
-      const normalizedUser = normalizeSessionUser(
-        parsedUser
-      ) as AuthResponse & {
-        token: string;
-      };
-
-      localStorage.setItem("user", JSON.stringify(normalizedUser));
-
-      const resolvedBusinessId = resolveBusinessIdFromUser(normalizedUser);
-      const currentBusinessId = resolveEntityId(
-        localStorage.getItem("businessId")
-      );
-
-      if (resolvedBusinessId && currentBusinessId !== resolvedBusinessId) {
-        localStorage.setItem("businessId", resolvedBusinessId);
-      }
-
-      if (!resolvedBusinessId && !currentBusinessId) {
-        localStorage.removeItem("businessId");
-      }
-
-      return normalizedUser;
+      // Note: We don't re-normalize here to avoid new object identity and side effects
+      return parsedUser;
     } catch {
       localStorage.removeItem("user");
       return null;
