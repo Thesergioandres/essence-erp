@@ -29,6 +29,7 @@ export const authService = {
     localStorage.removeItem("refreshToken");
     localStorage.removeItem("user");
     localStorage.removeItem("businessId");
+    localStorage.removeItem("accessHoldReason");
   },
 
   getCurrentUser: () => {

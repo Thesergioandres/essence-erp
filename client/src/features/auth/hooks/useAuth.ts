@@ -141,6 +141,8 @@ export const useAuth = () => {
 
   const logout = () => {
     authService.logout();
+    // 🔔 Notify AuthContext that session was cleared
+    window.dispatchEvent(new Event("auth-changed"));
     navigate("/login", { replace: true });
   };
 

@@ -1,7 +1,10 @@
-import { Link, useLocation } from "react-router-dom";
+import React from "react";
+import { useLocation } from "react-router-dom";
+import { useAuth } from "../hooks/useAuth";
 
 export default function AccountHold() {
   const location = useLocation();
+  const { logout } = useAuth();
   const reasonFromState = (location.state as { reason?: string } | null)
     ?.reason;
   const reasonFromQuery = new URLSearchParams(location.search).get("reason");
@@ -13,12 +16,9 @@ export default function AccountHold() {
   const isOwnerInactive = reason === "owner_inactive";
   const isOwnerExpired = reason === "owner_expired";
 
-  const handleBackToLogin = () => {
-    // Limpia sesión y bandera de hold para evitar redirección automática de nuevo
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    localStorage.removeItem("businessId");
-    localStorage.removeItem("accessHoldReason");
+  const handleBackToLogin = (e: React.MouseEvent) => {
+    e.preventDefault();
+    logout();
   };
 
   return (
@@ -43,14 +43,12 @@ export default function AccountHold() {
                 : "Tu cuenta está pendiente de activación manual. Envía tu comprobante de pago al WhatsApp 3185753007 para activar tu plan por 30 días."}
         </p>
         <div className="mt-6">
-          <Link
-            to="/login"
+          <button
             onClick={handleBackToLogin}
-            replace
-            className="rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 px-4 py-2 text-white"
+            className="rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 px-4 py-2 text-white hover:opacity-90 transition-opacity"
           >
             Volver al login
-          </Link>
+          </button>
         </div>
       </div>
     </div>

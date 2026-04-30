@@ -396,6 +396,7 @@ export const authService = {
     localStorage.removeItem("user");
     localStorage.removeItem("businessId");
     localStorage.removeItem(ADMIN_ORIGINAL_TOKEN_KEY);
+    localStorage.removeItem("accessHoldReason");
     notifySessionChange();
   },
 
