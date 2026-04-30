@@ -150,8 +150,19 @@ export default function TransferStock() {
         console.error("🛠️ [TransferStock] CRITICAL: No currentUserId found.", {
           hasUser: !!currentUser,
           role: (currentUser as any)?.role,
-          fullUser: currentUser
+          fullUser: currentUser,
+          serializedUser: JSON.stringify(currentUser)
         });
+        
+        // Log keys and types of the 'id' field specifically
+        if (currentUser && (currentUser as any).id) {
+           const idObj = (currentUser as any).id;
+           console.log("🛠️ [TransferStock] Detailed 'id' object check:", {
+             type: typeof idObj,
+             keys: Object.keys(idObj),
+             asString: String(idObj)
+           });
+        }
 
         setMessage({
           type: "error",
