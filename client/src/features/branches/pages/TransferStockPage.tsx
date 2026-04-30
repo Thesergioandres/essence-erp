@@ -256,12 +256,13 @@ export default function TransferStock() {
     }
   }, [sessionUser, sessionLoading]);
 
+  const hasMessage = !!message;
   useEffect(() => {
     // Solo cargamos si no estamos cargando ya y si no hay un mensaje de error crítico previo
-    if (!sessionLoading && !message) {
+    if (!sessionLoading && !hasMessage) {
       loadData();
     }
-  }, [loadData, sessionLoading, !!message]);
+  }, [loadData, sessionLoading, hasMessage]);
 
   const getAvailableStock = () => {
     if (!selectedProduct) return 0;
