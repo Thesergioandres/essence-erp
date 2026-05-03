@@ -133,19 +133,20 @@ export const businessContext = async (req, res, next) => {
     );
 
     if (!isSuperAdmin && !isGod) {
-      membership = await Membership.findOne({
-        business: businessId,
-        user: requesterUserId,
-        status: "active",
-      });
+      if (requesterUserId) {
+        membership = await Membership.findOne({
+          business: businessId,
+          user: requesterUserId,
+          status: "active",
+        });
+      }
 
       addDebugLog(
         `[businessContext] Membership lookup result: ${membership ? `Found (role: ${membership.role}, status: ${membership.status})` : "NOT FOUND"}`,
       );
 
       if (!membership) {
-        const isOwner =
-          business.createdBy?.toString() === requesterUserId?.toString();
+        const isOwner = requesterUserId && business.createdBy?.toString() === requesterUserId?.toString();
         addDebugLog(`[businessContext] Is business owner: ${isOwner}`);
 
         // Permitir al creador del negocio actuar como admin aunque no exista membership explícita
@@ -159,7 +160,7 @@ export const businessContext = async (req, res, next) => {
           addDebugLog(
             `[businessContext] Created virtual admin membership for owner`,
           );
-        } else {
+        } else if (requesterUserId) {
           addDebugLog(
             `[businessContext] ❌ ERROR: User has no membership and is not owner`,
           );
