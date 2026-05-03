@@ -15,6 +15,18 @@ router.get("/public", businessContext, requireFeature("promotions"), (req, res) 
   controller.getActive(req, res),
 );
 
+// Support legacy/public calls to /?status=active
+router.get("/", (req, res, next) => {
+  if (req.query.status === "active" && !req.headers.authorization) {
+    return businessContext(req, res, () => {
+      requireFeature("promotions")(req, res, () => {
+        controller.getAll(req, res);
+      });
+    });
+  }
+  next();
+});
+
 router.use(protect, businessContext, requireFeature("promotions"));
 
 router.post(
