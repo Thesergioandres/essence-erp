@@ -72,6 +72,13 @@ export const suspiciousRequestDetector = (req, _res, next) => {
 
   const checkValue = (value, key) => {
     if (typeof value !== "string") return false;
+
+    // 🔑 OPTIMIZATION: Skip XSS checks for large Data URIs (Base64 images)
+    // These strings are large and often contain random patterns that trigger false positives
+    if (value.length > 500 && value.startsWith("data:image/")) {
+      return false;
+    }
+
     return suspiciousPatterns.some((pattern) => {
       if (pattern.test(value)) {
         console.warn(

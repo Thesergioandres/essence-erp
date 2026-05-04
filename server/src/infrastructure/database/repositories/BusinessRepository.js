@@ -189,9 +189,13 @@ export class BusinessRepository {
       business.contactWhatsapp = data.contactWhatsapp;
     if (data.contactLocation !== undefined)
       business.contactLocation = data.contactLocation;
-    if (data.logoUrl !== undefined) business.logoUrl = data.logoUrl;
-    if (data.logoPublicId !== undefined)
+    if (data.logoUrl !== undefined) {
+      console.log(`[BusinessRepository] Updating logoUrl for ${id}`);
+      business.logoUrl = data.logoUrl;
+    }
+    if (data.logoPublicId !== undefined) {
       business.logoPublicId = data.logoPublicId;
+    }
     if (data.slug !== undefined || data.name !== undefined) {
       business.slug = await this.generateUniqueSlug({
         desiredSlug: data.slug,

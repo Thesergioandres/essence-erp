@@ -53,7 +53,19 @@ const hasSameMembershipSnapshot = (
     const nextMembership = next[index];
     if (!nextMembership) return false;
 
+    // 🔑 FIX: Also check for changes in the business object (name, logo, etc.)
+    // Otherwise, updates to business settings won't be reflected in the context
+    // because the membership ID and status remain the same.
+    const currentBusiness = typeof membership.business === 'object' ? membership.business : null;
+    const nextBusiness = typeof nextMembership.business === 'object' ? nextMembership.business : null;
+
+    const businessDataChanged = 
+      currentBusiness?.name !== nextBusiness?.name ||
+      currentBusiness?.logoUrl !== nextBusiness?.logoUrl ||
+      currentBusiness?.plan !== nextBusiness?.plan;
+
     return (
+      !businessDataChanged &&
       membership._id === nextMembership._id &&
       membership.status === nextMembership.status &&
       membership.role === nextMembership.role &&
