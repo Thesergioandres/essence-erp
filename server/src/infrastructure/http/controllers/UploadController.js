@@ -23,11 +23,17 @@ class UploadController {
       }
 
       // Verify image size (max 5MB for Base64)
-      if (req.file.size > 5 * 1024 * 1024) {
+      console.log("📂 Archivo:", {
+        name: req.file.originalname,
+        size: `${(req.file.size / 1024 / 1024).toFixed(2)}MB`,
+        mimetype: req.file.mimetype,
+      });
+
+      if (req.file.size > 10 * 1024 * 1024) {
         console.log("❌ File too large:", req.file.size);
         return res.status(400).json({
           success: false,
-          message: "La imagen es muy grande. Máximo 5MB.",
+          message: "La imagen es muy grande. Máximo 10MB.",
         });
       }
 
